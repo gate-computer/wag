@@ -25,6 +25,6 @@ func test(t *testing.T, filename string) {
 	function := &module.Functions[0]
 	t.Logf("function = %v", function)
 
-	result := function.expr([]interface{}{int32(1), int32(2)})
+	result := function.execute([]int64{1, 2})
 	t.Logf("result = %v", result)
 }

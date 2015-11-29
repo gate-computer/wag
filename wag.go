@@ -180,7 +180,7 @@ type Function struct {
 	Flags     FunctionFlags
 	Signature *Signature
 
-	expr func(vars []interface{}) interface{}
+	expr func(*functionExecution) int64
 }
 
 func loadFunction(l *loader, m *Module) (f Function) {
@@ -206,15 +206,23 @@ func loadFunction(l *loader, m *Module) (f Function) {
 	return
 }
 
-func (f *Function) Execute(args []interface{}) (result interface{}, err error) {
+func (f *Function) Execute(args []int64) (result int64, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = asError(x)
 		}
 	}()
 
-	result = f.expr(args)
+	result = f.execute(args)
 	return
+}
+
+func (f *Function) execute(args []int64) int64 {
+	fe := functionExecution{
+		vars: args,
+	}
+
+	return f.expr(&fe)
 }
 
 func (f *Function) String() string {
@@ -476,25 +484,25 @@ type parser struct {
 	loader
 }
 
-func (p *parser) parse() func([]interface{}) interface{} {
+func (p *parser) parse() func(*functionExecution) int64 {
 	op := p.uint8()
 
 	switch op {
 	case opNop:
-		return func([]interface{}) interface{} {
-			return nil
+		return func(*functionExecution) int64 {
+			return 0
 		}
 
 	case opBlock, opLoop:
-		exprs := make([]func([]interface{}) interface{}, p.uint8())
+		exprs := make([]func(*functionExecution) int64, p.uint8())
 
 		for i := range exprs {
 			exprs[i] = p.parse()
 		}
 
-		return func(vars []interface{}) (result interface{}) {
+		return func(fe *functionExecution) (result int64) {
 			for _, expr := range exprs {
-				result = expr(vars)
+				result = expr(fe)
 			}
 			return
 		}
@@ -503,11 +511,11 @@ func (p *parser) parse() func([]interface{}) interface{} {
 		expr0 := p.parse()
 		expr1 := p.parse()
 
-		return func(vars []interface{}) interface{} {
-			if nonzero(expr0(vars)) {
-				expr1(vars)
+		return func(fe *functionExecution) int64 {
+			if expr0(fe) != 0 {
+				expr1(fe)
 			}
-			return nil
+			return 0
 		}
 
 	case opIfElse:
@@ -515,11 +523,11 @@ func (p *parser) parse() func([]interface{}) interface{} {
 		expr1 := p.parse()
 		expr2 := p.parse()
 
-		return func(vars []interface{}) (result interface{}) {
-			if nonzero(expr0(vars)) {
-				return expr1(vars)
+		return func(fe *functionExecution) (result int64) {
+			if expr0(fe) != 0 {
+				return expr1(fe)
 			} else {
-				return expr2(vars)
+				return expr2(fe)
 			}
 		}
 
@@ -533,9 +541,9 @@ func (p *parser) parse() func([]interface{}) interface{} {
 		opNotImplemented(op)
 
 	case opI8_Const:
-		value := int32(p.uint8())
+		value := int64(p.uint8())
 
-		return func([]interface{}) interface{} {
+		return func(*functionExecution) int64 {
 			return value
 		}
 
@@ -551,8 +559,8 @@ func (p *parser) parse() func([]interface{}) interface{} {
 	case opGetLocal:
 		index := p.uint8()
 
-		return func(vars []interface{}) interface{} {
-			return vars[index]
+		return func(fe *functionExecution) int64 {
+			return fe.vars[index]
 		}
 
 	case opSetLocal:
@@ -624,8 +632,8 @@ func (p *parser) parse() func([]interface{}) interface{} {
 		expr0 := p.parse()
 		expr1 := p.parse()
 
-		return func(vars []interface{}) interface{} {
-			return expr0(vars).(int32) + expr1(vars).(int32)
+		return func(fe *functionExecution) int64 {
+			return expr0(fe) + expr1(fe)
 		}
 
 	case opI32_Sub:
@@ -867,21 +875,15 @@ func (p *parser) parse() func([]interface{}) interface{} {
 	panic(fmt.Errorf("unsupported opcode: %d", op))
 }
 
-func nonzero(x interface{}) bool {
-	switch v := x.(type) {
-	case int32:
-		return v != 0
-	case int64:
-		return v != 0
-	case float32:
-		return v != 0
-	case float64:
-		return v != 0
-	default:
-		panic(v)
-	}
-}
-
 func opNotImplemented(op uint8) {
 	panic(fmt.Errorf("opcode not implemented: 0x%02x", op))
+}
+
+type execution struct {
+	mem []byte
+}
+
+type functionExecution struct {
+	e    *execution
+	vars []int64
 }
