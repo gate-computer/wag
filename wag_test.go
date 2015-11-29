@@ -6,7 +6,15 @@ import (
 )
 
 func TestHelloWorld(t *testing.T) {
-	data, err := ioutil.ReadFile("hello_world.wasm")
+	test(t, "hello_world.wasm")
+}
+
+func TestLowerIfElse(t *testing.T) {
+	test(t, "lower-if-else.wasm")
+}
+
+func test(t *testing.T, filename string) {
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		panic(err)
 	}
@@ -17,6 +25,6 @@ func TestHelloWorld(t *testing.T) {
 	function := &module.Functions[0]
 	t.Logf("function = %v", function)
 
-	result := function.execute([]interface{}{int32(1), int32(2)})
+	result := function.expr([]interface{}{int32(1), int32(2)})
 	t.Logf("result = %v", result)
 }
