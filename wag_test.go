@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-func TestHelloWorld(t *testing.T) {
-	test(t, "hello_world.wasm")
+func TestLowerIfElse(t *testing.T) {
+	test(t, "testsuite/lower-if-else.wasm")
 }
 
-func TestLowerIfElse(t *testing.T) {
-	test(t, "lower-if-else.wasm")
+func TestHelloWorld(t *testing.T) {
+	test(t, "testsuite/hello_world.wasm")
 }
 
 func test(t *testing.T, filename string) {
