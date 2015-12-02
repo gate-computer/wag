@@ -18,6 +18,15 @@ func (l *loader) data(size int) (data []byte) {
 	return
 }
 
+func (l *loader) int8() (value int8) {
+	if len(l.buf) < 1 {
+		panic(io.EOF)
+	}
+	value = int8(l.buf[0])
+	l.buf = l.buf[1:]
+	return
+}
+
 func (l *loader) uint8() (value uint8) {
 	if len(l.buf) < 1 {
 		panic(io.EOF)

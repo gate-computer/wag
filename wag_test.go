@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-func TestLowerIfElse(t *testing.T) {
-	test(t, "testsuite/lower-if-else.wasm")
-}
-
 func TestHelloWorld(t *testing.T) {
 	test(t, "testsuite/hello_world.wasm")
 }
@@ -19,17 +15,22 @@ func test(t *testing.T, filename string) {
 		t.Fatal(err)
 	}
 
-	module := loadModule(data)
-	t.Logf("module = %v", module)
+	m := loadModule(data)
+	t.Logf("module = %v", m)
 
-	function := &module.Functions[0]
-	t.Logf("function = %v", function)
+	for i := range m.Functions {
+		f := &m.Functions[i]
 
-	execution, err := module.NewExecution()
-	if err != nil {
-		t.Fatal(err)
+		if f.Flags&FunctionFlagExport != 0 && len(f.Signature.ArgTypes) == 0 {
+			t.Logf("function = %v", f)
+
+			e, err := m.NewExecution()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result := f.execute(e, nil)
+			t.Logf("result = %v", result)
+		}
 	}
-
-	result := function.execute(execution, []int64{1, 2})
-	t.Logf("result = %v", result)
 }

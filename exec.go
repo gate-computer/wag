@@ -1,20 +1,30 @@
 package wag
 
 import (
+	"encoding/binary"
 	"fmt"
 )
+
+var native = binary.LittleEndian
+
+type branch struct {
+	label int
+	value int64
+}
 
 type Execution struct {
 	mem []byte
 }
 
 type functionExecution struct {
-	e    *Execution
-	vars []int64
+	e      *Execution
+	locals []int64
 }
 
 type functionParser struct {
 	loader
+	m      *Module
+	labels int
 }
 
 func (p *functionParser) parse() func(*functionExecution) int64 {
@@ -23,21 +33,81 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 	switch op {
 	case opNop:
 		return func(*functionExecution) (result int64) {
+			println(opcodeNames[op])
 			return
 		}
 
-	case opBlock, opLoop:
-		exprs := make([]func(*functionExecution) int64, p.uint8())
+	case opBlock:
+		label := p.labels
+		p.labels++
 
+		exprs := make([]func(*functionExecution) int64, p.uint8())
 		for i := range exprs {
 			exprs[i] = p.parse()
 		}
 
 		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			defer func() {
+				if x := recover(); x != nil {
+					if b, ok := x.(branch); ok && b.label == label {
+						result = b.value
+					} else {
+						panic(x)
+					}
+				}
+			}()
+
 			for _, expr := range exprs {
 				result = expr(fe)
 			}
 			return
+		}
+
+	case opLoop:
+		labelBegin := p.labels
+		p.labels++
+		labelEnd := p.labels
+		p.labels++
+
+		exprs := make([]func(*functionExecution) int64, p.uint8())
+		for i := range exprs {
+			exprs[i] = p.parse()
+		}
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			for {
+				restart := false
+
+				func() {
+					defer func() {
+						if x := recover(); x != nil {
+							if b, ok := x.(branch); ok {
+								switch b.label {
+								case labelBegin:
+									restart = true
+									return
+
+								case labelEnd:
+									result = b.value
+									return
+								}
+							}
+
+							panic(x)
+						}
+					}()
+
+					for _, expr := range exprs {
+						result = expr(fe)
+					}
+				}()
+
+				if !restart {
+					return
+				}
+			}
 		}
 
 	case opIf:
@@ -45,6 +115,7 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		exprThen := p.parse()
 
 		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
 			if exprIf(fe) != 0 {
 				exprThen(fe)
 			}
@@ -57,6 +128,7 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		exprElse := p.parse()
 
 		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
 			if exprIf(fe) != 0 {
 				return exprThen(fe)
 			} else {
@@ -66,22 +138,38 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 
 	case opSelect:
 		opNotImplemented(op)
+
 	case opBr:
-		opNotImplemented(op)
+		label := int(p.uint8())
+		expr := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			value := expr(fe)
+			panic(branch{label, value})
+		}
+
 	case opBrIf:
 		opNotImplemented(op)
 	case opTableswitch:
 		opNotImplemented(op)
 
 	case opI8_Const:
-		value := int64(p.uint8())
+		value := int64(p.int8())
 
 		return func(*functionExecution) int64 {
+			println(opcodeNames[op])
 			return value
 		}
 
 	case opI32_Const:
-		opNotImplemented(op)
+		value := int64(p.uint32())
+
+		return func(*functionExecution) int64 {
+			println(opcodeNames[op])
+			return value
+		}
+
 	case opI64_Const:
 		opNotImplemented(op)
 	case opF64_Const:
@@ -93,25 +181,71 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		index := p.uint8()
 
 		return func(fe *functionExecution) int64 {
-			return fe.vars[index]
+			println(opcodeNames[op])
+			return fe.locals[index]
 		}
 
 	case opSetLocal:
-		opNotImplemented(op)
+		index := p.uint8()
+		expr := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			result = expr(fe)
+			fe.locals[index] = result
+			return
+		}
+
 	case opGetGlobal:
 		opNotImplemented(op)
 	case opSetGlobal:
 		opNotImplemented(op)
+
 	case opCall:
-		opNotImplemented(op)
+		funIndex := int(p.uint8())
+		fun := &p.m.Functions[funIndex]
+		numArgs := len(fun.Signature.ArgTypes)
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			return fun.execute(fe.e, make([]int64, numArgs))
+		}
+
 	case opCallIndirect:
-		opNotImplemented(op)
+		sigIndex := int(p.uint8())
+		funExpr := p.parse()
+		sig := &p.m.Signatures[sigIndex]
+		numArgs := len(sig.ArgTypes)
+		mainTable := p.m.Functions
+		indirectTable := p.m.FunctionTable
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			indirectIndex := int32(funExpr(fe))
+			mainIndex := indirectTable[indirectIndex]
+			fun := mainTable[mainIndex]
+			return fun.execute(fe.e, make([]int64, numArgs))
+		}
+
 	case opReturn:
 		opNotImplemented(op)
 	case opUnreachable:
 		opNotImplemented(op)
+
 	case opI32_LoadMem8S:
-		opNotImplemented(op)
+		operand := int64(p.uint8())
+		expr := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			offset := expr(fe)
+			address := offset + operand
+			if address < offset {
+				address = int64(cap(fe.e.mem))
+			}
+			return int64(int8(fe.e.mem[address]))
+		}
+
 	case opI32_LoadMem8U:
 		opNotImplemented(op)
 	case opI32_LoadMem16S:
@@ -130,16 +264,45 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		opNotImplemented(op)
 	case opI64_LoadMem32U:
 		opNotImplemented(op)
+
 	case opI32_LoadMem:
-		opNotImplemented(op)
+		operand := int64(p.uint8())
+		expr := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			offset := expr(fe)
+			address := offset + operand
+			if address < offset {
+				address = int64(cap(fe.e.mem))
+			}
+			return int64(native.Uint32(fe.e.mem[address : address+4]))
+		}
+
 	case opI64_LoadMem:
 		opNotImplemented(op)
 	case opF32_LoadMem:
 		opNotImplemented(op)
 	case opF64_LoadMem:
 		opNotImplemented(op)
+
 	case opI32_StoreMem8:
-		opNotImplemented(op)
+		operand := int64(p.uint8())
+		offsetExpr := p.parse()
+		valueExpr := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			offset := offsetExpr(fe)
+			address := offset + operand
+			if address < offset {
+				address = int64(cap(fe.e.mem))
+			}
+			result = valueExpr(fe)
+			fe.e.mem[address] = uint8(result)
+			return
+		}
+
 	case opI32_StoreMem16:
 		opNotImplemented(op)
 	case opI64_StoreMem8:
@@ -148,8 +311,24 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		opNotImplemented(op)
 	case opI64_StoreMem32:
 		opNotImplemented(op)
+
 	case opI32_StoreMem:
-		opNotImplemented(op)
+		operand := int64(p.uint8())
+		offsetExpr := p.parse()
+		valueExpr := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			offset := offsetExpr(fe)
+			address := offset + operand
+			if address < offset {
+				address = int64(cap(fe.e.mem))
+			}
+			result = valueExpr(fe)
+			native.PutUint32(fe.e.mem[address:address+4], uint32(result))
+			return
+		}
+
 	case opI64_StoreMem:
 		opNotImplemented(op)
 	case opF32_StoreMem:
@@ -166,15 +345,34 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		exprR := p.parse()
 
 		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
 			valueL := exprL(fe)
 			valueR := exprR(fe)
-			return valueL + valueR
+			return int64(uint32(valueL) + uint32(valueR))
 		}
 
 	case opI32_Sub:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) - uint32(valueR))
+		}
+
 	case opI32_Mul:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) * uint32(valueR))
+		}
+
 	case opI32_SDiv:
 		opNotImplemented(op)
 	case opI32_UDiv:
@@ -183,38 +381,213 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		opNotImplemented(op)
 	case opI32_URem:
 		opNotImplemented(op)
+
 	case opI32_AND:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) & uint32(valueR))
+		}
+
 	case opI32_OR:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) | uint32(valueR))
+		}
+
 	case opI32_XOR:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) ^ uint32(valueR))
+		}
+
 	case opI32_SHL:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) << uint(valueR))
+		}
+
 	case opI32_SHR:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(uint32(valueL) >> uint(valueR))
+		}
+
 	case opI32_SAR:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) int64 {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			return int64(int32(valueL) >> uint(valueR))
+		}
+
 	case opI32_EQ:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if uint32(valueL) == uint32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_NE:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if uint32(valueL) != uint32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_SLT:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if int32(valueL) < int32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_SLE:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if int32(valueL) <= int32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_ULT:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if uint32(valueL) < uint32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_ULE:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if uint32(valueL) <= uint32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_SGT:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if int32(valueL) > int32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_SGE:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if int32(valueL) >= int32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_UGT:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if uint32(valueL) > uint32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_UGE:
-		opNotImplemented(op)
+		exprL := p.parse()
+		exprR := p.parse()
+
+		return func(fe *functionExecution) (result int64) {
+			println(opcodeNames[op])
+			valueL := exprL(fe)
+			valueR := exprR(fe)
+			if uint32(valueL) >= uint32(valueR) {
+				result = 1
+			}
+			return
+		}
+
 	case opI32_CLZ:
 		opNotImplemented(op)
 	case opI32_CTZ:
@@ -407,9 +780,13 @@ func (p *functionParser) parse() func(*functionExecution) int64 {
 		opNotImplemented(op)
 	}
 
-	panic(fmt.Errorf("unsupported opcode: %d", op))
+	panic(fmt.Errorf("unsupported opcode: 0x%02x", op))
 }
 
 func opNotImplemented(op uint8) {
-	panic(fmt.Errorf("opcode not implemented: 0x%02x", op))
+	if name := opcodeNames[op]; name != "" {
+		panic(fmt.Errorf("opcode not implemented: %s", name))
+	} else {
+		panic(fmt.Errorf("opcode not implemented: 0x%02x", op))
+	}
 }

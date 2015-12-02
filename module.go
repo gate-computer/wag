@@ -50,6 +50,8 @@ const (
 	FunctionFlagImport = FunctionFlags(2)
 	FunctionFlagLocals = FunctionFlags(4)
 	FunctionFlagExport = FunctionFlags(8)
+
+	functionFlagMask = FunctionFlagName | FunctionFlagImport | FunctionFlagLocals | FunctionFlagExport
 )
 
 func (flags FunctionFlags) String() (s string) {
@@ -68,13 +70,18 @@ func (flags FunctionFlags) String() (s string) {
 		tokens = append(tokens, "export")
 	}
 
+	if extra := flags &^ functionFlagMask; extra != 0 {
+		tokens = append(tokens, fmt.Sprintf("0x%02x", int(extra)))
+	}
+
 	return strings.Join(tokens, "|")
 }
 
 type Module struct {
-	Memory     Memory
-	Signatures []Signature
-	Functions  []Function
+	Memory        Memory
+	Signatures    []Signature
+	Functions     []Function
+	FunctionTable []uint16
 }
 
 func LoadModule(data []byte) (m *Module, err error) {
@@ -109,8 +116,19 @@ func loadModule(data []byte) (m *Module) {
 
 		case sectionFunctions:
 			num := l.leb128size()
+			m.Functions = make([]Function, num)
 			for i := 0; i < num; i++ {
-				m.Functions = append(m.Functions, loadFunction(l, m))
+				m.Functions[i].load(l, m)
+			}
+			for i := 0; i < num; i++ {
+				m.Functions[i].parse(m)
+			}
+
+		case sectionFunctionTable:
+			num := l.leb128size()
+			m.FunctionTable = make([]uint16, num)
+			for i := 0; i < num; i++ {
+				m.FunctionTable[i] = l.uint16()
 			}
 
 		case sectionEnd:
@@ -172,33 +190,51 @@ func (sig *Signature) String() (s string) {
 }
 
 type Function struct {
-	Flags     FunctionFlags
-	Signature *Signature
+	Flags       FunctionFlags
+	Signature   *Signature
+	NumLocalI32 int
+	NumLocalI64 int
+	NumLocalF32 int
+	NumLocalF64 int
 
+	body []byte
 	expr func(*functionExecution) int64
 }
 
-func loadFunction(l *loader, m *Module) (f Function) {
-	flags := FunctionFlags(l.uint8())
+func (f *Function) load(l *loader, m *Module) {
+	f.Flags = FunctionFlags(l.uint8())
+
 	sigIndex := int(l.uint16())
-	l.uint32() // name offset
-	bodySize := int(l.uint16())
-
 	if sigIndex >= len(m.Signatures) {
-		panic("function signature index out of bounds")
+		panic(fmt.Errorf("function signature index out of bounds: %d", sigIndex))
+	}
+	f.Signature = &m.Signatures[sigIndex]
+
+	l.uint32() // name offset
+
+	if f.Flags&FunctionFlagLocals != 0 {
+		f.NumLocalI32 = int(l.uint16())
+		f.NumLocalI64 = int(l.uint16())
+		f.NumLocalF32 = int(l.uint16())
+		f.NumLocalF64 = int(l.uint16())
 	}
 
-	f = Function{
-		Flags:     flags,
-		Signature: &m.Signatures[sigIndex],
+	if f.Flags&FunctionFlagImport == 0 {
+		bodySize := int(l.uint16())
+		f.body = l.data(bodySize)
 	}
+}
 
-	if bodySize > 0 {
-		p := functionParser{loader{l.data(bodySize)}}
+func (f *Function) parse(m *Module) {
+	if f.body != nil {
+		p := functionParser{
+			loader: loader{f.body},
+			m:      m,
+		}
+
 		f.expr = p.parse()
+		f.body = nil
 	}
-
-	return
 }
 
 func (f *Function) Execute(e *Execution, args []int64) (result int64, err error) {
@@ -213,10 +249,14 @@ func (f *Function) Execute(e *Execution, args []int64) (result int64, err error)
 }
 
 func (f *Function) execute(e *Execution, args []int64) int64 {
+	numLocals := f.NumLocalI32 + f.NumLocalI64 + f.NumLocalF32 + f.NumLocalF64
+
 	fe := functionExecution{
-		e:    e,
-		vars: args,
+		e:      e,
+		locals: make([]int64, numLocals),
 	}
+
+	copy(fe.locals, args)
 
 	return f.expr(&fe)
 }
