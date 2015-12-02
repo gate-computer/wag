@@ -16,7 +16,7 @@ func TestHelloWorld(t *testing.T) {
 func test(t *testing.T, filename string) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	module := loadModule(data)
@@ -25,6 +25,11 @@ func test(t *testing.T, filename string) {
 	function := &module.Functions[0]
 	t.Logf("function = %v", function)
 
-	result := function.execute([]int64{1, 2})
+	execution, err := module.NewExecution()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := function.execute(execution, []int64{1, 2})
 	t.Logf("result = %v", result)
 }
