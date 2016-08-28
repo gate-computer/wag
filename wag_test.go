@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+type fun func() int32
+
+type startFunc struct {
+	f *fun
+}
+
+type startFuncPtr *startFunc
+
 func TestHelloWorld(t *testing.T) {
 	test(t, "testdata/test.wast")
 }
@@ -26,21 +34,38 @@ func test(t *testing.T, filename string) {
 
 	binary := m.GenCode()
 
-	f, err := ioutil.TempFile("", "")
+	f, err := os.Create("testdata/code")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
+
 	if _, err := f.Write(binary); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
 
-	cmd := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", f.Name())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", "testdata/code")
+	dump.Stdout = os.Stdout
+	dump.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := dump.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	cc := exec.Command("cc", "-g", "-o", "testdata/exec", "testdata/exec.c")
+	cc.Stdout = os.Stdout
+	cc.Stderr = os.Stderr
+
+	if err := cc.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	// exec := exec.Command("gdb", "-ex", "run", "-ex", "bt", "-ex", "quit", "--args", "testdata/exec", "testdata/code")
+	exec := exec.Command("testdata/exec", "testdata/code")
+	exec.Stdin = f
+	exec.Stdout = os.Stdout
+	exec.Stderr = os.Stderr
+
+	if err := exec.Run(); err != nil {
 		t.Fatal(err)
 	}
 }

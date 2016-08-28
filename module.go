@@ -198,7 +198,8 @@ func (f *Function) getVarOffset(name string) (offset int, found bool) {
 	if !found {
 		num, found = f.Params[name]
 		if found {
-			num = f.NumLocals + (f.NumParams - num - 1)
+			// function's return address is between locals and params
+			num = f.NumLocals + 1 + (f.NumParams - num - 1)
 		}
 	}
 	offset = num * WordSize
