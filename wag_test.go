@@ -1,10 +1,17 @@
 package wag
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/tsavola/wag/sexp"
+)
+
+const (
+	magic = 0x54fd3985
 )
 
 type fun func() int32
@@ -25,7 +32,82 @@ func test(t *testing.T, filename string) {
 		t.Fatal(err)
 	}
 
-	m := loadModule(data)
+	module, data := sexp.ParsePanic(data)
+
+	exports := make(map[string]string)
+
+	for i := 1; i < len(module); {
+		item := module[i].([]interface{})
+		if item[0].(string) == "export" {
+			exports[item[1].(string)] = item[2].(string)
+			module = append(module[:i], module[i+1:]...)
+		} else {
+			i++
+		}
+	}
+
+	testFunc := []interface{}{
+		"func",
+		"$test",
+		[]interface{}{"result", "i32"},
+	}
+
+	var testId int64
+
+	for len(bytes.TrimSpace(data)) > 0 {
+		testId++
+
+		var assert []interface{}
+		assert, data = sexp.ParsePanic(data)
+
+		invoke2call(exports, assert[1:])
+
+		name := assert[0].(string)
+
+		var test []interface{}
+
+		switch name {
+		case "assert_return":
+			test = []interface{}{
+				"if",
+				append([]interface{}{"i32.ne"}, assert[1:]...),
+				[]interface{}{
+					[]interface{}{
+						"return",
+						[]interface{}{
+							"i32.const",
+							testId,
+						},
+					},
+				},
+			}
+
+		default:
+			t.Logf("%s skipped", name)
+			continue
+		}
+
+		testFunc = append(testFunc, test)
+	}
+
+	testFunc = append(testFunc, []interface{}{
+		"return",
+		[]interface{}{
+			"i32.const",
+			int64(magic),
+		},
+	})
+
+	module = append(module, testFunc)
+
+	module = append(module, []interface{}{
+		"start",
+		"$test",
+	})
+
+	t.Log(sexp.Stringify(module))
+
+	m := loadModule(module)
 	t.Logf("module = %v", m)
 
 	for _, f := range m.Functions {
@@ -67,5 +149,18 @@ func test(t *testing.T, filename string) {
 
 	if err := exec.Run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func invoke2call(exports map[string]string, x interface{}) {
+	if item, ok := x.([]interface{}); ok {
+		if s, ok := item[0].(string); ok && s == "invoke" {
+			item[0] = "call"
+			item[1] = exports[item[1].(string)]
+		}
+
+		for _, e := range item {
+			invoke2call(exports, e)
+		}
 	}
 }

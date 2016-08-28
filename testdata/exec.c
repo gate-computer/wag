@@ -5,6 +5,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#define MAGIC 0x54fd3985
+
 typedef int32_t (*start_func)(void);
 
 const int32_t ref = ((int32_t) 1 + (int32_t) 2) + ((int32_t) 0x7fffffff + (int32_t) 3);
@@ -28,7 +30,7 @@ int main(int argc, char **argv)
 	int32_t result = start();
 	printf("result = %d\n", result);
 
-	if (result != ref)
+	if (result != MAGIC)
 		return 4;
 
 	return 0;

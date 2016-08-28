@@ -1,7 +1,7 @@
 package ins
 
 type Stub struct {
-	Name      string
-	Address   int
-	CallSites []int
+	Sites   []int // call or branch sites
+	Address int
+	Name    string
 }

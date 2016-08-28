@@ -70,15 +70,12 @@ func LoadModule(data []byte) (m *Module, err error) {
 		}
 	}()
 
-	m = loadModule(data)
+	top, _ := sexp.ParsePanic(data)
+	m = loadModule(top)
 	return
 }
 
-func loadModule(data []byte) (m *Module) {
-	top := sexp.ParsePanic(data)
-
-	fmt.Println(sexp.Stringify(top))
-
+func loadModule(top []interface{}) (m *Module) {
 	if s := top[0].(string); s != "module" {
 		panic(errors.New("not a module"))
 	}

@@ -3,6 +3,7 @@ package sexp
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"unicode"
@@ -20,7 +21,7 @@ func (r reader) readRune() (c rune) {
 	return
 }
 
-func Parse(data []byte) (exp interface{}, err error) {
+func Parse(data []byte) (exp interface{}, rest []byte, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			if err, _ = x.(error); err == nil {
@@ -29,17 +30,25 @@ func Parse(data []byte) (exp interface{}, err error) {
 		}
 	}()
 
-	exp = ParsePanic(data)
+	exp, rest = ParsePanic(data)
 	return
 }
 
-func ParsePanic(data []byte) (list []interface{}) {
-	r := reader{strings.NewReader(string(data))}
+func ParsePanic(data []byte) (list []interface{}, rest []byte) {
+	sr := strings.NewReader(string(data))
+	r := reader{sr}
 
 	for {
 		exp, ok, _ := parse(r)
 		if ok {
 			list = exp.([]interface{})
+
+			var err error
+			rest, err = ioutil.ReadAll(sr)
+			if err != nil {
+				panic(err)
+			}
+
 			return
 		}
 	}

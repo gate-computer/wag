@@ -16,6 +16,8 @@ const (
 	modDisp16 = (1 << 1) | (0 << 0)
 	modReg    = (1 << 1) | (1 << 0)
 
+	stackReg = 4
+
 	paddingByte = 0xf4 // HLT instruction
 )
 
@@ -52,8 +54,28 @@ func (Assembler) Encode(x interface{}) []byte {
 			return []byte{rexW, 0x01, modRM(modReg, x.SourceReg, x.TargetReg)}
 		}
 
+	case ins.AddSP:
+		return append([]byte{rexW, 0x81, modRM(modReg, 0, stackReg)}, encodeI32(int64(x.Offset))...)
+
+	case ins.Br:
+		return []byte{
+			0xeb, 0, // jmp // TODO
+		}
+
+	case ins.BrIfNot:
+		return []byte{
+			0x89, modRM(modReg, x.Reg, x.Reg), // mov to update status register
+			0x74, 0, // jz // TODO
+		}
+
 	case ins.Call:
 		return []byte{0xe8, 0, 0, 0, 0}
+
+	case ins.Invalid:
+		return []byte{0x0f, 0x0b}
+
+	case ins.Label:
+		return nil
 
 	case ins.MovImmToReg:
 		switch x.Type {
@@ -90,6 +112,18 @@ func (Assembler) Encode(x interface{}) []byte {
 
 		return append([]byte{rexW, 0x8b, modRM(mod, x.TargetReg, rm), sib(0, sp, sp)}, offset...)
 
+	case ins.NE:
+		switch x.Type {
+		case ins.TypeI32:
+			return []byte{
+				rexW, 0x89, modRM(modReg, x.TargetReg, x.ScratchReg), // mov target, scratch
+				rexW, 0x31, modRM(modReg, x.TargetReg, x.TargetReg), // xor target, target
+				0xff, modRM(modReg, 0, x.TargetReg), // inc target
+				rexW, 0x29, modRM(modReg, x.SourceReg, x.ScratchReg), // sub source, scratch
+				rexW, 0x0f, 0x44, modRM(modReg, x.TargetReg, x.ScratchReg), // cmove scratch, target
+			}
+		}
+
 	case ins.Pop:
 		return []byte{0x58 + x.TargetReg}
 
@@ -106,10 +140,20 @@ func (Assembler) Encode(x interface{}) []byte {
 	panic(fmt.Errorf("instruction not supported by assembler: %#v", x))
 }
 
-func (Assembler) UpdateCalls(f *ins.Stub, code []byte) {
-	for _, pos := range f.CallSites {
-		offset := f.Address - (pos + 5)
-		binary.LittleEndian.PutUint32(code[pos+1:pos+5], uint32(int32(offset)))
+func (Assembler) UpdateBranches(stub *ins.Stub, code []byte) {
+	for _, pos := range stub.Sites {
+		offset := stub.Address - pos
+		if offset < -128 || offset > 127 {
+			panic(fmt.Errorf("branch offset too large: %d (FIXME)", offset))
+		}
+		code[pos-1] = byte(offset)
+	}
+}
+
+func (Assembler) UpdateCalls(stub *ins.Stub, code []byte) {
+	for _, pos := range stub.Sites {
+		offset := stub.Address - pos
+		binary.LittleEndian.PutUint32(code[pos-4:pos], uint32(int32(offset)))
 	}
 }
 
