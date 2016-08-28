@@ -53,7 +53,7 @@ func (Assembler) Encode(x interface{}) []byte {
 		}
 
 	case ins.Call:
-		return []byte{0xe8, 0x22, 0x44, 0x66, 0x88} // TODO
+		return []byte{0xe8, 0, 0, 0, 0}
 
 	case ins.MovImmToReg:
 		switch x.Type {
@@ -104,6 +104,13 @@ func (Assembler) Encode(x interface{}) []byte {
 	}
 
 	panic(fmt.Errorf("instruction not supported by assembler: %#v", x))
+}
+
+func (Assembler) UpdateCalls(f *ins.Stub, code []byte) {
+	for _, pos := range f.CallSites {
+		offset := f.Address - (pos + 5)
+		binary.LittleEndian.PutUint32(code[pos+1:pos+5], uint32(int32(offset)))
+	}
 }
 
 func (Assembler) PaddingByte() byte {

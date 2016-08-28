@@ -10,7 +10,6 @@ import (
 const (
 	WordSize          = 8
 	FunctionAlignment = 16
-	BaseAddress       = 0x40000
 )
 
 func (m *Module) GenCode() []byte {
@@ -35,17 +34,26 @@ func (code *moduleCodeGen) binary() (binary []byte) {
 		}
 	}
 
+	for _, stub := range code.stubs {
+		native.UpdateCalls(stub, binary)
+	}
+
 	return
 }
 
 func (code *moduleCodeGen) binaryFunction(binary []byte, name string, assembly []interface{}) []byte {
 	fmt.Println("FUNCTION BINARY:", name)
 
-	code.stubs[name].Address = uint64(BaseAddress + len(binary))
+	code.stubs[name].Address = len(binary)
 
 	for _, inst := range assembly {
 		b := native.Encode(inst)
 		fmt.Printf("\t%v\n", b)
+
+		switch x := inst.(type) {
+		case ins.Call:
+			x.Function.CallSites = append(x.Function.CallSites, len(binary))
+		}
 
 		binary = append(binary, b...)
 	}
