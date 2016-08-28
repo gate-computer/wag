@@ -1,7 +1,6 @@
 package wag
 
 import (
-	"bytes"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -11,7 +10,9 @@ import (
 )
 
 const (
-	magic = 0x54fd3985
+	magic   = 0x54fd3985
+	idBase  = 556231
+	objdump = true
 )
 
 type fun func() int32
@@ -22,9 +23,11 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-func TestHelloWorld(t *testing.T) {
-	test(t, "testdata/test.wast")
-}
+func TestI32(t *testing.T) { test(t, "testdata/i32.wast") }
+
+var (
+	execCompiled bool
+)
 
 func test(t *testing.T, filename string) {
 	data, err := ioutil.ReadFile(filename)
@@ -52,13 +55,14 @@ func test(t *testing.T, filename string) {
 		[]interface{}{"result", "i32"},
 	}
 
-	var testId int64
+	testId := int64(idBase)
 
-	for len(bytes.TrimSpace(data)) > 0 {
-		testId++
-
+	for {
 		var assert []interface{}
 		assert, data = sexp.ParsePanic(data)
+		if assert == nil {
+			break
+		}
 
 		invoke2call(exports, assert[1:])
 
@@ -88,6 +92,7 @@ func test(t *testing.T, filename string) {
 		}
 
 		testFunc = append(testFunc, test)
+		testId++
 	}
 
 	testFunc = append(testFunc, []interface{}{
@@ -125,20 +130,26 @@ func test(t *testing.T, filename string) {
 		t.Fatal(err)
 	}
 
-	dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", "testdata/code")
-	dump.Stdout = os.Stdout
-	dump.Stderr = os.Stderr
+	if objdump {
+		dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", "testdata/code")
+		dump.Stdout = os.Stdout
+		dump.Stderr = os.Stderr
 
-	if err := dump.Run(); err != nil {
-		t.Fatal(err)
+		if err := dump.Run(); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	cc := exec.Command("cc", "-g", "-o", "testdata/exec", "testdata/exec.c")
-	cc.Stdout = os.Stdout
-	cc.Stderr = os.Stderr
+	if !execCompiled {
+		cc := exec.Command("cc", "-g", "-o", "testdata/exec", "testdata/exec.c")
+		cc.Stdout = os.Stdout
+		cc.Stderr = os.Stderr
 
-	if err := cc.Run(); err != nil {
-		t.Fatal(err)
+		if err := cc.Run(); err != nil {
+			t.Fatal(err)
+		}
+
+		execCompiled = true
 	}
 
 	// exec := exec.Command("gdb", "-ex", "run", "-ex", "bt", "-ex", "quit", "--args", "testdata/exec", "testdata/code")
@@ -155,8 +166,13 @@ func test(t *testing.T, filename string) {
 func invoke2call(exports map[string]string, x interface{}) {
 	if item, ok := x.([]interface{}); ok {
 		if s, ok := item[0].(string); ok && s == "invoke" {
+			name, found := exports[item[1].(string)]
+			if !found {
+				panic(name)
+			}
+
 			item[0] = "call"
-			item[1] = exports[item[1].(string)]
+			item[1] = name
 		}
 
 		for _, e := range item {

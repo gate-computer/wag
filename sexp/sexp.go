@@ -3,6 +3,7 @@ package sexp
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -36,6 +37,33 @@ func Parse(data []byte) (exp interface{}, rest []byte, err error) {
 
 func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 	sr := strings.NewReader(string(data))
+
+	inComment := false
+
+	for {
+		c, _, err := sr.ReadRune()
+		if err != nil {
+			if err == io.EOF {
+				return
+			}
+			panic(err)
+		}
+		if inComment {
+			if c == '\n' {
+				inComment = false
+			}
+		} else {
+			if c == ';' {
+				inComment = true
+			} else if !unicode.IsSpace(c) {
+				if err := sr.UnreadRune(); err != nil {
+					panic(err)
+				}
+				break
+			}
+		}
+	}
+
 	r := reader{sr}
 
 	for {
@@ -126,18 +154,11 @@ func parseNumber(r reader, c rune) (exp interface{}, end bool) {
 		exp, err = strconv.ParseUint(s, 0, 64)
 	}
 
-	switch err {
-	case nil:
-
-	case strconv.ErrSyntax, strconv.ErrRange:
-		f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		exp, err = strconv.ParseFloat(s, 64)
 		if err != nil {
 			panic(err)
 		}
-		exp = f
-
-	default:
-		panic(err)
 	}
 
 	return

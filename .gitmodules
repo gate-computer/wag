@@ -1,0 +1,3 @@
+[submodule "testdata/spec"]
+	path = testdata/spec
+	url = https://github.com/WebAssembly/spec.git

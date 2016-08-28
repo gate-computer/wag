@@ -13,7 +13,7 @@ func ImmI32(x interface{}) uint32 {
 		return uint32(v)
 
 	default:
-		panic(fmt.Errorf("bad immediate operand for i32: %v", x))
+		panic(fmt.Errorf("bad immediate operand for i32: %t", x))
 	}
 }
 
@@ -26,6 +26,6 @@ func ImmI64(x interface{}) uint64 {
 		return v
 
 	default:
-		panic(fmt.Errorf("bad immediate operand for i64: %v", x))
+		panic(fmt.Errorf("bad immediate operand for i64: %t", x))
 	}
 }

@@ -122,6 +122,16 @@ func (x Ret) String() string {
 	return "\tret"
 }
 
+type Sub struct {
+	Type      Type
+	SourceReg byte
+	TargetReg byte
+}
+
+func (x Sub) String() string {
+	return fmt.Sprintf("\tsub.%v\tr%d, r%d", x.Type, x.SourceReg, x.TargetReg)
+}
+
 type XOR struct {
 	SourceReg byte
 	TargetReg byte

@@ -207,6 +207,19 @@ func (code *codeGen) expr(x interface{}) {
 		code.offset -= WordSize
 		code.inst(ins.NE{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0, ScratchReg: 2})
 
+	case "i32.sub":
+		if len(item) != 3 {
+			panic(errors.New("add: wrong number of operands"))
+		}
+		code.expr(item[1])
+		code.inst(ins.Push{SourceReg: 0})
+		code.offset += WordSize
+		code.expr(item[2])
+		code.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
+		code.inst(ins.Pop{TargetReg: 0})
+		code.offset -= WordSize
+		code.inst(ins.Sub{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0})
+
 	case "if":
 		if len(item) < 3 {
 			panic(errors.New("if: too few operands"))

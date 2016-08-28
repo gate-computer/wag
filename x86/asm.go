@@ -133,6 +133,15 @@ func (Assembler) Encode(x interface{}) []byte {
 	case ins.Ret:
 		return []byte{0xc3}
 
+	case ins.Sub:
+		switch x.Type {
+		case ins.TypeI32:
+			return []byte{0x29, modRM(modReg, x.SourceReg, x.TargetReg)}
+
+		case ins.TypeI64:
+			return []byte{rexW, 0x29, modRM(modReg, x.SourceReg, x.TargetReg)}
+		}
+
 	case ins.XOR:
 		return []byte{rexW, 0x31, modRM(modReg, x.SourceReg, x.TargetReg)}
 	}

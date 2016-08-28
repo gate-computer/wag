@@ -5,11 +5,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define MAGIC 0x54fd3985
+#define MAGIC   0x54fd3985
+#define ID_BASE 556231
 
 typedef int32_t (*start_func)(void);
-
-const int32_t ref = ((int32_t) 1 + (int32_t) 2) + ((int32_t) 0x7fffffff + (int32_t) 3);
 
 int main(int argc, char **argv)
 {
@@ -25,13 +24,12 @@ int main(int argc, char **argv)
 		return 3;
 
 	start_func start = (start_func) ptr;
-	printf("start = %p\n", start);
-
 	int32_t result = start();
-	printf("result = %d\n", result);
 
-	if (result != MAGIC)
+	if (result != MAGIC) {
+		printf("failed test: %d\n", result - ID_BASE);
 		return 4;
+	}
 
 	return 0;
 }
