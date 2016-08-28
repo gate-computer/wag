@@ -84,6 +84,7 @@ func test(t *testing.T, filename string) {
 						},
 					},
 				},
+				// []interface{}{},
 			}
 
 		default:

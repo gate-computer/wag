@@ -240,7 +240,7 @@ func (code *codeGen) expr(x interface{}) {
 		}
 		code.inst(ins.Label{afterThen})
 		if haveElse {
-			for _, e := range item[2].([]interface{}) {
+			for _, e := range item[3].([]interface{}) {
 				code.expr(e)
 			}
 			code.inst(ins.Label{afterElse})
