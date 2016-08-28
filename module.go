@@ -1,9 +1,12 @@
 package wag
 
 import (
+	"errors"
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/tsavola/wag/ins"
+	"github.com/tsavola/wag/sexp"
 )
 
 const (
@@ -15,33 +18,6 @@ const (
 	sectionFunctionTable
 	sectionEnd
 )
-
-type Type int
-
-const (
-	TypeVoid = Type(0)
-	TypeI32  = Type(1)
-	TypeI64  = Type(2)
-	TypeF32  = Type(4)
-	TypeF64  = Type(8)
-)
-
-func (t Type) String() string {
-	switch t {
-	case TypeVoid:
-		return "void"
-	case TypeI32:
-		return "i32"
-	case TypeI64:
-		return "i64"
-	case TypeF32:
-		return "f32"
-	case TypeF64:
-		return "f64"
-	default:
-		return strconv.Itoa(int(t))
-	}
-}
 
 type FunctionFlags int
 
@@ -78,16 +54,19 @@ func (flags FunctionFlags) String() (s string) {
 }
 
 type Module struct {
-	Memory        Memory
-	Signatures    []Signature
-	Functions     []Function
-	FunctionTable []uint16
+	Memory    Memory
+	Functions map[string]*Function
+	Start     string
+
+	code []byte
 }
 
 func LoadModule(data []byte) (m *Module, err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = asError(x)
+			if err, _ = x.(error); err == nil {
+				panic(x)
+			}
 		}
 	}()
 
@@ -96,85 +75,64 @@ func LoadModule(data []byte) (m *Module, err error) {
 }
 
 func loadModule(data []byte) (m *Module) {
-	l := &loader{data}
-	m = &Module{}
+	top := sexp.ParsePanic(data)
 
-	for end := false; len(data) > 0 && !end; {
-		section := int(l.uint8())
+	fmt.Println(sexp.Stringify(top))
 
-		switch section {
-		case sectionMemory:
-			m.Memory.MinSize = l.uint8log2int()
-			m.Memory.MaxSize = l.uint8log2int()
-			m.Memory.DefaultExport = (l.uint8() != 0)
+	if s := top[0].(string); s != "module" {
+		panic(errors.New("not a module"))
+	}
 
-		case sectionSignatures:
-			num := l.leb128size()
-			for i := 0; i < num; i++ {
-				m.Signatures = append(m.Signatures, loadSignature(l, m))
+	m = &Module{
+		Functions: make(map[string]*Function),
+	}
+
+	startSet := false
+
+	for _, x := range top[1:] {
+		item := x.([]interface{})
+		name := item[0].(string)
+
+		switch name {
+		case "memory":
+			if len(item) > 1 {
+				m.Memory.MinSize = int(item[1].(uint64))
+			}
+			if len(item) > 2 {
+				m.Memory.MaxSize = int(item[2].(uint64))
 			}
 
-		case sectionFunctions:
-			num := l.leb128size()
-			m.Functions = make([]Function, num)
-			for i := 0; i < num; i++ {
-				m.Functions[i].load(l, m)
-			}
-			for i := 0; i < num; i++ {
-				m.Functions[i].parse(m)
-			}
+		case "func":
+			f := newFunction(item)
+			m.Functions[f.Name] = f
 
-		case sectionFunctionTable:
-			num := l.leb128size()
-			m.FunctionTable = make([]uint16, num)
-			for i := 0; i < num; i++ {
-				m.FunctionTable[i] = l.uint16()
-			}
-
-		case sectionEnd:
-			end = true
+		case "start":
+			m.Start = item[1].(string)
+			startSet = true
 
 		default:
-			panic(fmt.Errorf("unsupported section: %d", section))
+			panic(fmt.Errorf("unknown module child: %s", name))
 		}
 	}
 
-	// XXX: end data
-
-	return
-}
-
-func (m *Module) NewExecution() (e *Execution, err error) {
-	e = &Execution{
-		mem: make([]byte, m.Memory.MinSize),
+	if !startSet {
+		panic(errors.New("start function not defined"))
 	}
+	if _, found := m.Functions[m.Start]; !found {
+		panic(fmt.Errorf("start function not found: %s", m.Start))
+	}
+
 	return
 }
 
 type Memory struct {
-	MinSize       int
-	MaxSize       int
-	DefaultExport bool
+	MinSize int
+	MaxSize int
 }
 
 type Signature struct {
-	ArgTypes   []Type
-	ResultType Type
-}
-
-func loadSignature(l *loader, m *Module) (s Signature) {
-	numArgs := int(l.uint8())
-	resultType := Type(l.uint8())
-
-	s = Signature{
-		ResultType: resultType,
-	}
-
-	for j := 0; j < numArgs; j++ {
-		s.ArgTypes = append(s.ArgTypes, Type(l.uint8()))
-	}
-
-	return
+	ArgTypes   []ins.Type
+	ResultType ins.Type
 }
 
 func (sig *Signature) String() (s string) {
@@ -190,77 +148,63 @@ func (sig *Signature) String() (s string) {
 }
 
 type Function struct {
-	Flags       FunctionFlags
-	Signature   *Signature
-	NumLocalI32 int
-	NumLocalI64 int
-	NumLocalF32 int
-	NumLocalF64 int
+	Name      string
+	Signature *Signature
+	Params    map[string]int
+	NumParams int
+	Locals    map[string]int
+	NumLocals int
 
-	body []byte
-	expr func(*functionExecution) int64
+	body []interface{}
 }
 
-func (f *Function) load(l *loader, m *Module) {
-	f.Flags = FunctionFlags(l.uint8())
-
-	sigIndex := int(l.uint16())
-	if sigIndex >= len(m.Signatures) {
-		panic(fmt.Errorf("function signature index out of bounds: %d", sigIndex))
-	}
-	f.Signature = &m.Signatures[sigIndex]
-
-	l.uint32() // name offset
-
-	if f.Flags&FunctionFlagLocals != 0 {
-		f.NumLocalI32 = int(l.uint16())
-		f.NumLocalI64 = int(l.uint16())
-		f.NumLocalF32 = int(l.uint16())
-		f.NumLocalF64 = int(l.uint16())
+func newFunction(list []interface{}) (f *Function) {
+	f = &Function{
+		Name:      list[1].(string),
+		Signature: &Signature{},
+		Params:    make(map[string]int),
+		Locals:    make(map[string]int),
 	}
 
-	if f.Flags&FunctionFlagImport == 0 {
-		bodySize := int(l.uint16())
-		f.body = l.data(bodySize)
-	}
-}
+	for i, x := range list[2:] {
+		item := x.([]interface{})
+		name := item[0].(string)
 
-func (f *Function) parse(m *Module) {
-	if f.body != nil {
-		p := functionParser{
-			loader: loader{f.body},
-			m:      m,
+		switch name {
+		case "param":
+			f.Signature.ArgTypes = append(f.Signature.ArgTypes, ins.Types[item[2].(string)])
+
+			f.Params[item[1].(string)] = f.NumParams
+			f.NumParams++
+
+		case "result":
+			f.Signature.ResultType = ins.Types[item[1].(string)]
+
+		case "local":
+			f.Params[item[1].(string)] = f.NumLocals
+			f.NumLocals++
+
+		default:
+			f.body = list[2+i:]
+			return
 		}
-
-		f.expr = p.parse()
-		f.body = nil
 	}
-}
 
-func (f *Function) Execute(e *Execution, args []int64) (result int64, err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = asError(x)
-		}
-	}()
-
-	result = f.execute(e, args)
 	return
 }
 
-func (f *Function) execute(e *Execution, args []int64) int64 {
-	numLocals := f.NumLocalI32 + f.NumLocalI64 + f.NumLocalF32 + f.NumLocalF64
-
-	fe := functionExecution{
-		e:      e,
-		locals: make([]int64, numLocals),
+func (f *Function) getVarOffset(name string) (offset int, found bool) {
+	num, found := f.Locals[name]
+	if !found {
+		num, found = f.Params[name]
+		if found {
+			num = f.NumLocals + (f.NumParams - num - 1)
+		}
 	}
-
-	copy(fe.locals, args)
-
-	return f.expr(&fe)
+	offset = num * WordSize
+	return
 }
 
 func (f *Function) String() string {
-	return fmt.Sprintf("%s %s", f.Flags, f.Signature)
+	return fmt.Sprintf("%s%s", f.Name, f.Signature)
 }

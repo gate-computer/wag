@@ -2,11 +2,13 @@ package wag
 
 import (
 	"io/ioutil"
+	"os"
+	"os/exec"
 	"testing"
 )
 
 func TestHelloWorld(t *testing.T) {
-	test(t, "testsuite/hello_world.wasm")
+	test(t, "testdata/test.wast")
 }
 
 func test(t *testing.T, filename string) {
@@ -18,19 +20,27 @@ func test(t *testing.T, filename string) {
 	m := loadModule(data)
 	t.Logf("module = %v", m)
 
-	for i := range m.Functions {
-		f := &m.Functions[i]
+	for _, f := range m.Functions {
+		t.Logf("function = %#v", f)
+	}
 
-		if f.Flags&FunctionFlagExport != 0 && len(f.Signature.ArgTypes) == 0 {
-			t.Logf("function = %v", f)
+	binary := m.GenCode()
 
-			e, err := m.NewExecution()
-			if err != nil {
-				t.Fatal(err)
-			}
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(binary); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
 
-			result := f.execute(e, nil)
-			t.Logf("result = %v", result)
-		}
+	cmd := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", f.Name())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
 	}
 }

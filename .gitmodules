@@ -1,6 +1,0 @@
-[submodule "src/github.com/WebAssembly/build-suite"]
-	path = src/github.com/WebAssembly/build-suite
-	url = https://github.com/WebAssembly/build-suite.git
-[submodule "src/github.com/WebAssembly/sexpr-wasm-prototype"]
-	path = src/github.com/WebAssembly/sexpr-wasm-prototype
-	url = https://github.com/WebAssembly/sexpr-wasm-prototype.git
