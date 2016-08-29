@@ -111,7 +111,7 @@ func (f *functionCodeGen) expr(x interface{}) {
 		instName := tokens[1]
 
 		switch instName {
-		case "add", "ne", "sub":
+		case "add", "and", "ne", "or", "sub", "xor":
 			if len(args) != 2 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}

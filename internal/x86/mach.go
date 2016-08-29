@@ -49,6 +49,8 @@ const (
 
 var simpleTypedBinaryOps = map[string]byte{
 	"add": 0x01,
+	"and": 0x21,
+	"or":  0x09,
 	"sub": 0x29,
 	"xor": opcodeXOR,
 }

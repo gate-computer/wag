@@ -24,6 +24,7 @@ type startFunc struct {
 type startFuncPtr *startFunc
 
 func TestI32(t *testing.T) { test(t, "testdata/i32.wast") }
+func TestI64(t *testing.T) { test(t, "testdata/i64.wast") }
 
 var (
 	execCompiled bool
@@ -111,15 +112,7 @@ func test(t *testing.T, filename string) {
 		"$test",
 	})
 
-	t.Log(sexp.Stringify(module))
-
 	m := loadModule(module)
-	t.Logf("module = %v", m)
-
-	for _, f := range m.Functions {
-		t.Logf("function = %#v", f)
-	}
-
 	binary := m.GenCode()
 
 	f, err := os.Create("testdata/code")
@@ -167,13 +160,14 @@ func test(t *testing.T, filename string) {
 func invoke2call(exports map[string]string, x interface{}) {
 	if item, ok := x.([]interface{}); ok {
 		if s, ok := item[0].(string); ok && s == "invoke" {
-			name, found := exports[item[1].(string)]
+			name1 := item[1].(string)
+			name2, found := exports[name1]
 			if !found {
-				panic(name)
+				panic(name1)
 			}
 
 			item[0] = "call"
-			item[1] = name
+			item[1] = name2
 		}
 
 		for _, e := range item {
