@@ -27,18 +27,17 @@ func sib(scale, index, base byte) byte {
 	return (scale << 6) | (index << 3) | base
 }
 
-func getTypePrefix(t types.Type) (prefix []byte) {
+func getTypePrefix(t types.Type) []byte {
 	switch t {
 	case types.I32:
+		return nil
 
 	case types.I64:
-		prefix = []byte{rexW}
+		return []byte{rexW}
 
 	default:
 		panic(t)
 	}
-
-	return
 }
 
 type Mach struct{}
@@ -85,7 +84,7 @@ func (Mach) BranchPlaceholder() []byte {
 func (Mach) BranchIfNotPlaceholder(reg byte) []byte {
 	return []byte{
 		0x89, modRM(modReg, reg, reg), // mov to update status register
-		0x74, 0, // jz // TODO
+		0x74, 0, // jz
 	}
 }
 
