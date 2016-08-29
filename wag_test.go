@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 
 	"github.com/tsavola/wag/internal/sexp"
@@ -56,7 +57,7 @@ func test(t *testing.T, filename, typeHack string) {
 		[]interface{}{"result", "i32"},
 	}
 
-	testId := int64(idBase)
+	testId := idBase
 
 	for {
 		var assert []interface{}
@@ -81,7 +82,7 @@ func test(t *testing.T, filename, typeHack string) {
 						"return",
 						[]interface{}{
 							"i32.const",
-							testId,
+							strconv.Itoa(testId),
 						},
 					},
 				},
@@ -100,7 +101,7 @@ func test(t *testing.T, filename, typeHack string) {
 		"return",
 		[]interface{}{
 			"i32.const",
-			int64(magic),
+			strconv.Itoa(magic),
 		},
 	})
 

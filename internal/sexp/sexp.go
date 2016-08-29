@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"strconv"
 	"strings"
 	"unicode"
 )
 
-type reader struct {
+type panicReader struct {
 	sr *strings.Reader
 }
 
-func (r reader) readRune() (c rune) {
-	c, _, err := r.sr.ReadRune()
+func (pr panicReader) readRune() (c rune) {
+	c, _, err := pr.sr.ReadRune()
 	if err != nil {
 		panic(err)
 	}
@@ -48,6 +47,7 @@ func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 			}
 			panic(err)
 		}
+
 		if inComment {
 			if c == '\n' {
 				inComment = false
@@ -64,10 +64,10 @@ func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 		}
 	}
 
-	r := reader{sr}
+	pr := panicReader{sr}
 
 	for {
-		exp, ok, _ := parse(r)
+		exp, ok, _ := parse(pr)
 		if ok {
 			list = exp.([]interface{})
 
@@ -82,51 +82,44 @@ func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 	}
 }
 
-func parse(r reader) (exp interface{}, ok, end bool) {
+func parse(pr panicReader) (exp interface{}, ok, end bool) {
 	var c rune
 
 	for {
-		c = r.readRune()
+		c = pr.readRune()
 		if !unicode.IsSpace(c) {
 			break
 		}
 	}
 
 	switch {
+	case c == ';':
+		skipComment(pr)
+
 	case c == '(':
-		exp = parseList(r)
-		ok = true
-
-	case unicode.IsLetter(c) || c == '$' || c == '_':
-		exp, end = parseSymbol(r, c)
-		ok = true
-
-	case unicode.IsDigit(c) || c == '-':
-		exp, end = parseNumber(r, c)
-		ok = true
-
-	case c == '"':
-		exp, end = parseString(r)
+		exp = parseList(pr)
 		ok = true
 
 	case c == ')':
 		end = true
 
-	case c == ';':
-		skipComment(r)
+	case c == '"':
+		exp, end = parseString(pr)
+		ok = true
 
 	default:
-		panic(fmt.Errorf("unexpected '%c'", c))
+		exp, end = parseToken(pr, c)
+		ok = true
 	}
 
 	return
 }
 
-func parseList(r reader) interface{} {
+func parseList(pr panicReader) interface{} {
 	var list []interface{}
 
 	for {
-		item, ok, end := parse(r)
+		item, ok, end := parse(pr)
 		if ok {
 			list = append(list, item)
 		}
@@ -138,44 +131,18 @@ func parseList(r reader) interface{} {
 	return list
 }
 
-func parseSymbol(r reader, c rune) (exp interface{}, end bool) {
-	exp, end = parseToken(r, c)
-	return
-}
-
-func parseNumber(r reader, c rune) (exp interface{}, end bool) {
-	s, end := parseToken(r, c)
-
-	var err error
-
-	if c == '-' {
-		exp, err = strconv.ParseInt(s, 0, 64)
-	} else {
-		exp, err = strconv.ParseUint(s, 0, 64)
-	}
-
-	if err != nil {
-		exp, err = strconv.ParseFloat(s, 64)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	return
-}
-
-func parseString(r reader) (exp interface{}, end bool) {
+func parseString(pr panicReader) (s string, end bool) {
 	var buf []rune
 
 	for {
-		c := r.readRune()
+		c := pr.readRune()
 
 		if c == '"' {
 			break
 		}
 
 		if c == '\\' {
-			c = r.readRune()
+			c = pr.readRune()
 
 			switch c {
 			case '"', '\\':
@@ -197,7 +164,7 @@ func parseString(r reader) (exp interface{}, end bool) {
 		buf = append(buf, c)
 	}
 
-	c := r.readRune()
+	c := pr.readRune()
 	switch {
 	case c == ')':
 		end = true
@@ -208,15 +175,15 @@ func parseString(r reader) (exp interface{}, end bool) {
 		panic(errors.New("trailing data after string literal"))
 	}
 
-	exp = string(buf)
+	s = string(buf)
 	return
 }
 
-func parseToken(r reader, c rune) (s string, end bool) {
+func parseToken(pr panicReader, c rune) (s string, end bool) {
 	buf := []rune{c}
 
 	for {
-		c := r.readRune()
+		c := pr.readRune()
 
 		if c == ')' {
 			end = true
@@ -234,9 +201,9 @@ func parseToken(r reader, c rune) (s string, end bool) {
 	return
 }
 
-func skipComment(r reader) {
+func skipComment(pr panicReader) {
 	for {
-		c := r.readRune()
+		c := pr.readRune()
 		if c == '\n' {
 			break
 		}

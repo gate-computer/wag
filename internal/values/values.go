@@ -1,31 +1,37 @@
 package values
 
 import (
-	"fmt"
+	"strconv"
 )
 
 func I32(x interface{}) uint32 {
-	switch v := x.(type) {
-	case int64:
-		return uint32(v)
+	s := x.(string)
 
-	case uint64:
-		return uint32(v)
-
-	default:
-		panic(fmt.Errorf("bad immediate operand for i32: %t", x))
+	signed64, err := strconv.ParseInt(s, 0, 32)
+	if err == nil {
+		return uint32(signed64)
 	}
+
+	unsigned64, err := strconv.ParseUint(s, 0, 32)
+	if err == nil {
+		return uint32(unsigned64)
+	}
+
+	panic(err)
 }
 
 func I64(x interface{}) uint64 {
-	switch v := x.(type) {
-	case int64:
-		return uint64(v)
+	s := x.(string)
 
-	case uint64:
-		return v
-
-	default:
-		panic(fmt.Errorf("bad immediate operand for i64: %t", x))
+	signed64, err := strconv.ParseInt(s, 0, 64)
+	if err == nil {
+		return uint64(signed64)
 	}
+
+	unsigned64, err := strconv.ParseUint(s, 0, 64)
+	if err == nil {
+		return unsigned64
+	}
+
+	panic(err)
 }
