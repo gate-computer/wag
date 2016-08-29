@@ -12,131 +12,89 @@ const (
 	FunctionAlignment = 16
 )
 
-func (m *Module) GenCode() []byte {
-	code := moduleCodeGen{
-		m:         m,
-		stubs:     make(map[string]*ins.Stub),
-		functions: make(map[string][]interface{}),
+func (mo *Module) GenCode() []byte {
+	m := &moduleCodeGen{
+		Module:        mo,
+		functionStubs: make(map[string]*ins.Stub),
 	}
 
-	code.module()
+	m.module()
 
-	return code.binary()
+	return m.binary
 }
 
-func (code *moduleCodeGen) binary() (binary []byte) {
-	assembly := code.functions[code.m.Start]
-	binary = code.binaryFunction(binary, code.m.Start, assembly)
+type moduleCodeGen struct {
+	*Module
+	functionStubs map[string]*ins.Stub
+	binary        []byte
+}
 
-	for name, assembly := range code.functions {
-		if name != code.m.Start {
-			binary = code.binaryFunction(binary, name, assembly)
+func (m *moduleCodeGen) module() (binary []byte) {
+	for _, f := range m.Functions {
+		m.functionStubs[f.Name] = &ins.Stub{Name: f.Name}
+	}
+
+	m.function(m.Functions[m.Start])
+
+	for name, f := range m.Functions {
+		if name != m.Start {
+			m.function(f)
 		}
 	}
 
-	for _, stub := range code.stubs {
-		native.UpdateCalls(stub, binary)
+	for _, stub := range m.functionStubs {
+		native.UpdateCalls(stub, m.binary)
 	}
 
 	return
 }
 
-func (code *moduleCodeGen) binaryFunction(binary []byte, name string, assembly []interface{}) []byte {
-	code.stubs[name].Address = len(binary)
-
-	var branchTargets []*ins.Stub
-
-	for _, inst := range assembly {
-		b := native.Encode(inst)
-		binary = append(binary, b...)
-
-		switch x := inst.(type) {
-		case ins.Br:
-			x.Target.Sites = append(x.Target.Sites, len(binary))
-			branchTargets = append(branchTargets, x.Target)
-
-		case ins.BrIfNot:
-			x.Target.Sites = append(x.Target.Sites, len(binary))
-			branchTargets = append(branchTargets, x.Target)
-
-		case ins.Call:
-			x.Target.Sites = append(x.Target.Sites, len(binary))
-
-		case ins.Label:
-			x.Stub.Address = len(binary)
-		}
+func (m *moduleCodeGen) function(fu *Function) {
+	f := functionCodeGen{
+		Function: fu,
+		m:        m,
 	}
 
-	for _, stub := range branchTargets {
-		native.UpdateBranches(stub, binary)
-	}
+	m.functionStubs[f.Name].Address = len(m.binary)
 
-	paddingSize := FunctionAlignment - (len(binary) & (FunctionAlignment - 1))
-	for i := 0; i < paddingSize; i++ {
-		binary = append(binary, native.PaddingByte())
-	}
-
-	return binary
-}
-
-type moduleCodeGen struct {
-	m         *Module
-	stubs     map[string]*ins.Stub
-	functions map[string][]interface{}
-}
-
-func (code *moduleCodeGen) module() {
-	for _, f := range code.m.Functions {
-		code.stubs[f.Name] = &ins.Stub{Name: f.Name}
-	}
-
-	for _, f := range code.m.Functions {
-		code.function(f)
-	}
-}
-
-func (parent *moduleCodeGen) function(f *Function) {
-	code := codeGen{
-		moduleCodeGen: parent,
-		f:             f,
-	}
-
-	code.inst(ins.XOR{SourceReg: 0, TargetReg: 0})
+	f.inst(ins.XOR{SourceReg: 0, TargetReg: 0})
 
 	for i := 0; i < f.NumLocals; i++ {
-		code.inst(ins.Push{SourceReg: 0})
+		f.inst(ins.Push{SourceReg: 0})
 	}
 
 	for _, x := range f.body {
-		code.expr(x)
+		f.expr(x)
 	}
 
-	if code.offset != 0 {
+	if f.stackOffset != 0 {
 		panic(errors.New("internal: stack offset is non-zero at end of function"))
 	}
 
 	if n := f.NumLocals * WordSize; n > 0 {
-		code.inst(ins.AddSP{n})
+		f.inst(ins.AddSP{n})
 	}
 
-	code.inst(ins.Ret{})
+	f.inst(ins.Ret{})
 
-	code.functions[f.Name] = code.assembly
+	for _, stub := range f.branchStubs {
+		native.UpdateBranches(stub, m.binary)
+	}
 
-	fmt.Printf("%s:\n", f.Name)
-	for _, inst := range code.assembly {
-		fmt.Printf("%v\n", inst)
+	paddingSize := FunctionAlignment - (len(m.binary) & (FunctionAlignment - 1))
+	for i := 0; i < paddingSize; i++ {
+		m.binary = append(m.binary, native.PaddingByte())
 	}
 }
 
-type codeGen struct {
-	*moduleCodeGen
-	f        *Function
-	offset   int
-	assembly []interface{}
+type functionCodeGen struct {
+	*Function
+	m           *moduleCodeGen
+	stackOffset int
+	branchStubs []*ins.Stub
 }
 
-func (code *codeGen) expr(x interface{}) {
+func (f *functionCodeGen) expr(x interface{}) {
 	item := x.([]interface{})
 
 	switch item[0].(string) {
@@ -145,7 +103,7 @@ func (code *codeGen) expr(x interface{}) {
 			panic(errors.New("call: too few operands"))
 		}
 		name := item[1].(string)
-		target, found := code.m.Functions[name]
+		target, found := f.m.Functions[name]
 		if !found {
 			panic(fmt.Errorf("call: function not found: %s", name))
 		}
@@ -154,14 +112,14 @@ func (code *codeGen) expr(x interface{}) {
 		}
 		args := item[2:]
 		for _, arg := range args {
-			code.expr(arg)
-			code.inst(ins.Push{SourceReg: 0})
-			code.offset += WordSize
+			f.expr(arg)
+			f.inst(ins.Push{SourceReg: 0})
+			f.stackOffset += WordSize
 		}
-		code.inst(ins.Call{Target: code.stubs[target.Name]})
+		f.inst(ins.Call{Target: f.m.functionStubs[target.Name]})
 		for range args {
-			code.inst(ins.Pop{TargetReg: 1})
-			code.offset -= WordSize
+			f.inst(ins.Pop{TargetReg: 1})
+			f.stackOffset -= WordSize
 		}
 
 	case "get_local":
@@ -169,56 +127,56 @@ func (code *codeGen) expr(x interface{}) {
 			panic(errors.New("get_local: wrong number of operands"))
 		}
 		name := item[1].(string)
-		offset, found := code.f.getVarOffset(name)
+		offset, found := f.getVarOffset(name)
 		if !found {
 			panic(fmt.Errorf("get_local: variable not found: %s", name))
 		}
-		code.inst(ins.MovVarToReg{SourceOffset: code.offset + offset, TargetReg: 0})
+		f.inst(ins.MovVarToReg{SourceOffset: f.stackOffset + offset, TargetReg: 0})
 
 	case "i32.add":
 		if len(item) != 3 {
 			panic(errors.New("add: wrong number of operands"))
 		}
-		code.expr(item[1])
-		code.inst(ins.Push{SourceReg: 0})
-		code.offset += WordSize
-		code.expr(item[2])
-		code.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
-		code.inst(ins.Pop{TargetReg: 0})
-		code.offset -= WordSize
-		code.inst(ins.Add{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0})
+		f.expr(item[1])
+		f.inst(ins.Push{SourceReg: 0})
+		f.stackOffset += WordSize
+		f.expr(item[2])
+		f.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
+		f.inst(ins.Pop{TargetReg: 0})
+		f.stackOffset -= WordSize
+		f.inst(ins.Add{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0})
 
 	case "i32.const":
 		if len(item) != 2 {
 			panic(errors.New("const: wrong number of operands"))
 		}
-		code.inst(ins.MovImmToReg{Type: ins.TypeI32, SourceImm: item[1], TargetReg: 0})
+		f.inst(ins.MovImmToReg{Type: ins.TypeI32, SourceImm: item[1], TargetReg: 0})
 
 	case "i32.ne":
 		if len(item) != 3 {
 			panic(errors.New("ne: wrong number of operands"))
 		}
-		code.expr(item[1])
-		code.inst(ins.Push{SourceReg: 0})
-		code.offset += WordSize
-		code.expr(item[2])
-		code.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
-		code.inst(ins.Pop{TargetReg: 0})
-		code.offset -= WordSize
-		code.inst(ins.NE{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0, ScratchReg: 2})
+		f.expr(item[1])
+		f.inst(ins.Push{SourceReg: 0})
+		f.stackOffset += WordSize
+		f.expr(item[2])
+		f.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
+		f.inst(ins.Pop{TargetReg: 0})
+		f.stackOffset -= WordSize
+		f.inst(ins.NE{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0, ScratchReg: 2})
 
 	case "i32.sub":
 		if len(item) != 3 {
 			panic(errors.New("add: wrong number of operands"))
 		}
-		code.expr(item[1])
-		code.inst(ins.Push{SourceReg: 0})
-		code.offset += WordSize
-		code.expr(item[2])
-		code.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
-		code.inst(ins.Pop{TargetReg: 0})
-		code.offset -= WordSize
-		code.inst(ins.Sub{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0})
+		f.expr(item[1])
+		f.inst(ins.Push{SourceReg: 0})
+		f.stackOffset += WordSize
+		f.expr(item[2])
+		f.inst(ins.MovRegToReg{SourceReg: 0, TargetReg: 1})
+		f.inst(ins.Pop{TargetReg: 0})
+		f.stackOffset -= WordSize
+		f.inst(ins.Sub{Type: ins.TypeI32, SourceReg: 1, TargetReg: 0})
 
 	case "if":
 		if len(item) < 3 {
@@ -230,24 +188,24 @@ func (code *codeGen) expr(x interface{}) {
 		}
 		afterThen := new(ins.Stub)
 		afterElse := new(ins.Stub)
-		code.expr(item[1])
-		code.inst(ins.BrIfNot{Reg: 0, Target: afterThen})
+		f.expr(item[1])
+		f.inst(ins.BrIfNot{Reg: 0, Target: afterThen})
 		for _, e := range item[2].([]interface{}) {
-			code.expr(e)
+			f.expr(e)
 		}
 		if haveElse {
-			code.inst(ins.Br{Target: afterElse})
+			f.inst(ins.Br{Target: afterElse})
 		}
-		code.inst(ins.Label{afterThen})
+		f.inst(ins.Label{afterThen})
 		if haveElse {
 			for _, e := range item[3].([]interface{}) {
-				code.expr(e)
+				f.expr(e)
 			}
-			code.inst(ins.Label{afterElse})
+			f.inst(ins.Label{afterElse})
 		}
 
 	case "return":
-		if code.f.Signature.ResultType == ins.TypeVoid {
+		if f.Signature.ResultType == ins.TypeVoid {
 			if len(item) != 1 {
 				panic(errors.New("return: wrong number of operands"))
 			}
@@ -255,19 +213,37 @@ func (code *codeGen) expr(x interface{}) {
 			if len(item) != 2 {
 				panic(errors.New("return: wrong number of operands"))
 			}
-			code.expr(item[1])
+			f.expr(item[1])
 		}
-		if n := code.offset + code.f.NumLocals*WordSize; n > 0 {
-			code.inst(ins.AddSP{n})
+		if n := f.stackOffset + f.NumLocals*WordSize; n > 0 {
+			f.inst(ins.AddSP{n})
 		}
-		code.inst(ins.Ret{})
+		f.inst(ins.Ret{})
 
 	default:
 		fmt.Printf("expression not supported: %v\n", item)
-		code.inst(ins.Invalid{})
+		f.inst(ins.Invalid{})
 	}
 }
 
-func (code *codeGen) inst(x interface{}) {
-	code.assembly = append(code.assembly, x)
+func (f *functionCodeGen) inst(x interface{}) {
+	b := native.Encode(x)
+	f.m.binary = append(f.m.binary, b...)
+	pos := len(f.m.binary)
+
+	switch x := x.(type) {
+	case ins.Br:
+		x.Target.Sites = append(x.Target.Sites, pos)
+		f.branchStubs = append(f.branchStubs, x.Target)
+
+	case ins.BrIfNot:
+		x.Target.Sites = append(x.Target.Sites, pos)
+		f.branchStubs = append(f.branchStubs, x.Target)
+
+	case ins.Call:
+		x.Target.Sites = append(x.Target.Sites, pos)
+
+	case ins.Label:
+		x.Stub.Address = pos
+	}
 }
