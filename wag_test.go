@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/tsavola/wag/internal/sexp"
@@ -24,14 +25,14 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-func TestI32(t *testing.T) { test(t, "testdata/i32.wast", "i32") }
-func TestI64(t *testing.T) { test(t, "testdata/i64.wast", "i64") }
+func TestI32(t *testing.T) { test(t, "testdata/i32.wast") }
+func TestI64(t *testing.T) { test(t, "testdata/i64.wast") }
 
 var (
 	execCompiled bool
 )
 
-func test(t *testing.T, filename, typeHack string) {
+func test(t *testing.T, filename string) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -66,17 +67,32 @@ func test(t *testing.T, filename, typeHack string) {
 			break
 		}
 
-		invoke2call(exports, assert[1:])
+		assertName := assert[0].(string)
 
-		name := assert[0].(string)
+		var exprType string
+
+		for _, x := range assert[1:] {
+			expr := x.([]interface{})
+			exprName := expr[0].(string)
+			if strings.Contains(exprName, ".") {
+				exprType = strings.SplitN(exprName, ".", 2)[0]
+				break
+			}
+		}
+
+		if exprType == "" {
+			t.Fatalf("can't figure out type of %s", assertName)
+		}
+
+		invoke2call(exports, assert[1:])
 
 		var test []interface{}
 
-		switch name {
+		switch assertName {
 		case "assert_return":
 			test = []interface{}{
 				"if",
-				append([]interface{}{typeHack + ".ne"}, assert[1:]...),
+				append([]interface{}{exprType + ".ne"}, assert[1:]...),
 				[]interface{}{
 					[]interface{}{
 						"return",
@@ -89,7 +105,7 @@ func test(t *testing.T, filename, typeHack string) {
 			}
 
 		default:
-			t.Logf("%s skipped", name)
+			t.Logf("%s skipped", assertName)
 			continue
 		}
 
