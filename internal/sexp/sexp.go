@@ -21,6 +21,12 @@ func (pr panicReader) readRune() (c rune) {
 	return
 }
 
+func (pr panicReader) unreadRune() {
+	if err := pr.sr.UnreadRune(); err != nil {
+		panic(err)
+	}
+}
+
 func Parse(data []byte) (exp interface{}, rest []byte, err error) {
 	defer func() {
 		if x := recover(); x != nil {
@@ -36,6 +42,7 @@ func Parse(data []byte) (exp interface{}, rest []byte, err error) {
 
 func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 	sr := strings.NewReader(string(data))
+	pr := panicReader{sr}
 
 	inComment := false
 
@@ -56,15 +63,11 @@ func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 			if c == ';' {
 				inComment = true
 			} else if !unicode.IsSpace(c) {
-				if err := sr.UnreadRune(); err != nil {
-					panic(err)
-				}
+				pr.unreadRune()
 				break
 			}
 		}
 	}
-
-	pr := panicReader{sr}
 
 	for {
 		exp, ok, _ := parse(pr)
@@ -82,33 +85,32 @@ func ParsePanic(data []byte) (list []interface{}, rest []byte) {
 	}
 }
 
-func parse(pr panicReader) (exp interface{}, ok, end bool) {
-	var c rune
-
+func parse(pr panicReader) (x interface{}, ok, end bool) {
 	for {
-		c = pr.readRune()
-		if !unicode.IsSpace(c) {
+		if !unicode.IsSpace(pr.readRune()) {
+			pr.unreadRune()
 			break
 		}
 	}
 
-	switch {
-	case c == ';':
+	switch pr.readRune() {
+	case ';':
 		skipComment(pr)
 
-	case c == '(':
-		exp = parseList(pr)
+	case '(':
+		x = parseList(pr)
 		ok = true
 
-	case c == ')':
+	case ')':
 		end = true
 
-	case c == '"':
-		exp, end = parseString(pr)
+	case '"':
+		x = parseString(pr)
 		ok = true
 
 	default:
-		exp, end = parseToken(pr, c)
+		pr.unreadRune()
+		x = parseToken(pr)
 		ok = true
 	}
 
@@ -131,11 +133,16 @@ func parseList(pr panicReader) interface{} {
 	return list
 }
 
-func parseString(pr panicReader) (s string, end bool) {
+func parseString(pr panicReader) string {
 	var buf []rune
 
 	for {
 		c := pr.readRune()
+
+		if c == ';' {
+			skipComment(pr)
+			continue
+		}
 
 		if c == '"' {
 			break
@@ -165,9 +172,10 @@ func parseString(pr panicReader) (s string, end bool) {
 	}
 
 	c := pr.readRune()
+
 	switch {
 	case c == ')':
-		end = true
+		pr.unreadRune()
 
 	case unicode.IsSpace(c):
 
@@ -175,19 +183,22 @@ func parseString(pr panicReader) (s string, end bool) {
 		panic(errors.New("trailing data after string literal"))
 	}
 
-	s = string(buf)
-	return
+	return string(buf)
 }
 
-func parseToken(pr panicReader, c rune) (s string, end bool) {
-	buf := []rune{c}
+func parseToken(pr panicReader) string {
+	var buf []rune
 
 	for {
 		c := pr.readRune()
 
 		if c == ')' {
-			end = true
+			pr.unreadRune()
 			break
+		}
+
+		if c == '"' {
+			panic(errors.New("invalid character inside token: '\"'"))
 		}
 
 		if unicode.IsSpace(c) {
@@ -197,15 +208,12 @@ func parseToken(pr panicReader, c rune) (s string, end bool) {
 		buf = append(buf, c)
 	}
 
-	s = string(buf)
-	return
+	return string(buf)
 }
 
 func skipComment(pr panicReader) {
-	for {
-		c := pr.readRune()
-		if c == '\n' {
-			break
-		}
+	for pr.readRune() != '\n' {
 	}
+
+	pr.unreadRune()
 }
