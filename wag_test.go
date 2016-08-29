@@ -85,7 +85,6 @@ func test(t *testing.T, filename string) {
 						},
 					},
 				},
-				// []interface{}{},
 			}
 
 		default:
@@ -146,7 +145,6 @@ func test(t *testing.T, filename string) {
 		execCompiled = true
 	}
 
-	// exec := exec.Command("gdb", "-ex", "run", "-ex", "bt", "-ex", "quit", "--args", "testdata/exec", "testdata/code")
 	exec := exec.Command("testdata/exec", "testdata/code")
 	exec.Stdin = f
 	exec.Stdout = os.Stdout

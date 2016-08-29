@@ -43,16 +43,12 @@ func getTypePrefix(t types.Type) (prefix []byte) {
 
 type Mach struct{}
 
-const (
-	opcodeXOR = 0x31
-)
-
 var simpleTypedBinaryOps = map[string]byte{
 	"add": 0x01,
 	"and": 0x21,
 	"or":  0x09,
 	"sub": 0x29,
-	"xor": opcodeXOR,
+	"xor": 0x31,
 }
 
 func (m Mach) TypedBinaryInst(t types.Type, name string, sourceReg, targetReg, scratchReg byte) []byte {
@@ -123,8 +119,7 @@ func (Mach) MoveVarToReg(sourceOffset int, targetReg byte) []byte {
 	var offset []byte
 
 	if sourceOffset < 0 {
-		// this is an internal error
-		panic(fmt.Errorf("local variable has negative stack offset: %d", sourceOffset))
+		panic(fmt.Errorf("internal: local variable has negative stack offset: %d", sourceOffset))
 	} else if sourceOffset < 0x80 {
 		mod = modDisp8
 		offset = []byte{uint8(sourceOffset)}
@@ -155,7 +150,7 @@ func (Mach) Ret() []byte {
 }
 
 func (m Mach) Clear(reg byte) []byte {
-	return []byte{rexW, opcodeXOR, modRM(modReg, reg, reg)} // xor
+	return []byte{rexW, 0x31, modRM(modReg, reg, reg)} // xor
 }
 
 func (Mach) UpdateBranches(l *links.L, code []byte) {
