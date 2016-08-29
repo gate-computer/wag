@@ -1,10 +1,10 @@
-package ins
+package values
 
 import (
 	"fmt"
 )
 
-func ImmI32(x interface{}) uint32 {
+func I32(x interface{}) uint32 {
 	switch v := x.(type) {
 	case int64:
 		return uint32(v)
@@ -17,7 +17,7 @@ func ImmI32(x interface{}) uint32 {
 	}
 }
 
-func ImmI64(x interface{}) uint64 {
+func I64(x interface{}) uint64 {
 	switch v := x.(type) {
 	case int64:
 		return uint64(v)

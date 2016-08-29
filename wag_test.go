@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/tsavola/wag/sexp"
+	"github.com/tsavola/wag/internal/sexp"
 )
 
 const (

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tsavola/wag/ins"
-	"github.com/tsavola/wag/sexp"
+	"github.com/tsavola/wag/internal/sexp"
+	"github.com/tsavola/wag/internal/types"
 )
 
 const (
@@ -18,6 +18,14 @@ const (
 	sectionFunctionTable
 	sectionEnd
 )
+
+var typeMap = map[string]types.Type{
+	"void": types.Void,
+	"i32":  types.I32,
+	"i64":  types.I64,
+	"f32":  types.F32,
+	"f64":  types.F64,
+}
 
 type FunctionFlags int
 
@@ -128,8 +136,8 @@ type Memory struct {
 }
 
 type Signature struct {
-	ArgTypes   []ins.Type
-	ResultType ins.Type
+	ArgTypes   []types.Type
+	ResultType types.Type
 }
 
 func (sig *Signature) String() (s string) {
@@ -169,13 +177,13 @@ func newFunction(list []interface{}) (f *Function) {
 
 		switch name {
 		case "param":
-			f.Signature.ArgTypes = append(f.Signature.ArgTypes, ins.Types[item[2].(string)])
+			f.Signature.ArgTypes = append(f.Signature.ArgTypes, typeMap[item[2].(string)])
 
 			f.Params[item[1].(string)] = f.NumParams
 			f.NumParams++
 
 		case "result":
-			f.Signature.ResultType = ins.Types[item[1].(string)]
+			f.Signature.ResultType = typeMap[item[1].(string)]
 
 		case "local":
 			f.Params[item[1].(string)] = f.NumLocals
@@ -187,19 +195,6 @@ func newFunction(list []interface{}) (f *Function) {
 		}
 	}
 
-	return
-}
-
-func (f *Function) getVarOffset(name string) (offset int, found bool) {
-	num, found := f.Locals[name]
-	if !found {
-		num, found = f.Params[name]
-		if found {
-			// function's return address is between locals and params
-			num = f.NumLocals + 1 + (f.NumParams - num - 1)
-		}
-	}
-	offset = num * WordSize
 	return
 }
 
