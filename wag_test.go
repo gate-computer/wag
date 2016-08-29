@@ -23,14 +23,14 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-func TestI32(t *testing.T) { test(t, "testdata/i32.wast") }
-func TestI64(t *testing.T) { test(t, "testdata/i64.wast") }
+func TestI32(t *testing.T) { test(t, "testdata/i32.wast", "i32") }
+func TestI64(t *testing.T) { test(t, "testdata/i64.wast", "i64") }
 
 var (
 	execCompiled bool
 )
 
-func test(t *testing.T, filename string) {
+func test(t *testing.T, filename, typeHack string) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func test(t *testing.T, filename string) {
 		case "assert_return":
 			test = []interface{}{
 				"if",
-				append([]interface{}{"i32.ne"}, assert[1:]...),
+				append([]interface{}{typeHack + ".ne"}, assert[1:]...),
 				[]interface{}{
 					[]interface{}{
 						"return",

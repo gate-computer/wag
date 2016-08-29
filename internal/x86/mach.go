@@ -60,12 +60,12 @@ func (m Mach) TypedBinaryInst(t types.Type, name string, sourceReg, targetReg, s
 	switch name {
 	case "ne":
 		return append(append([]byte{
-			rexW, 0x89, modRM(modReg, targetReg, scratchReg), // mov target, scratch
-			rexW, 0x31, modRM(modReg, targetReg, targetReg), // xor target, target
-			0xff, modRM(modReg, 0, targetReg), // inc target
+			rexW, 0x89, modRM(modReg, targetReg, scratchReg), // movq target, scratch
+			rexW, 0x31, modRM(modReg, targetReg, targetReg), // xorq target, target
+			0xff, modRM(modReg, 0, targetReg), // incl target
 		}, prefix...), []byte{
-			rexW, 0x29, modRM(modReg, sourceReg, scratchReg), // sub source, scratch
-			rexW, 0x0f, 0x44, modRM(modReg, targetReg, scratchReg), // cmove scratch, target
+			0x29, modRM(modReg, sourceReg, scratchReg), // subl/q source, scratch
+			rexW, 0x0f, 0x44, modRM(modReg, targetReg, scratchReg), // cmoveq scratch, target
 		}...)
 
 	default:
@@ -149,7 +149,7 @@ func (Mach) Ret() []byte {
 }
 
 func (m Mach) Clear(reg byte) []byte {
-	return []byte{rexW, 0x31, modRM(modReg, reg, reg)} // xor
+	return []byte{rexW, 0x31, modRM(modReg, reg, reg)} // xorq
 }
 
 func (Mach) UpdateBranches(l *links.L, code []byte) {
