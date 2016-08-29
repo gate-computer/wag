@@ -19,14 +19,6 @@ const (
 	sectionEnd
 )
 
-var typeMap = map[string]types.Type{
-	"void": types.Void,
-	"i32":  types.I32,
-	"i64":  types.I64,
-	"f32":  types.F32,
-	"f64":  types.F64,
-}
-
 type FunctionFlags int
 
 const (
@@ -177,13 +169,13 @@ func newFunction(list []interface{}) (f *Function) {
 
 		switch name {
 		case "param":
-			f.Signature.ArgTypes = append(f.Signature.ArgTypes, typeMap[item[2].(string)])
+			f.Signature.ArgTypes = append(f.Signature.ArgTypes, types.ByString[item[2].(string)])
 
 			f.Params[item[1].(string)] = f.NumParams
 			f.NumParams++
 
 		case "result":
-			f.Signature.ResultType = typeMap[item[1].(string)]
+			f.Signature.ResultType = types.ByString[item[1].(string)]
 
 		case "local":
 			f.Params[item[1].(string)] = f.NumLocals

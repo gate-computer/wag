@@ -2,12 +2,10 @@
 package x86
 
 import (
-	"encoding/binary"
 	"fmt"
 
-	"github.com/tsavola/wag/internal/stubs"
+	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/types"
-	"github.com/tsavola/wag/internal/values"
 )
 
 const (
@@ -21,8 +19,6 @@ const (
 	stackReg = 4
 )
 
-var byteOrder = binary.LittleEndian
-
 func modRM(mod, ro, rm byte) byte {
 	return (mod << 6) | (ro << 3) | rm
 }
@@ -31,42 +27,64 @@ func sib(scale, index, base byte) byte {
 	return (scale << 6) | (index << 3) | base
 }
 
-func encodeI32(x interface{}) (b []byte) {
-	b = make([]byte, 4)
-	byteOrder.PutUint32(b, values.I32(x))
-	return
-}
+func getTypePrefix(t types.Type) (prefix []byte) {
+	switch t {
+	case types.I32:
 
-func encodeI64(x interface{}) (b []byte) {
-	b = make([]byte, 8)
-	byteOrder.PutUint64(b, values.I64(x))
+	case types.I64:
+		prefix = []byte{rexW}
+
+	default:
+		panic(t)
+	}
+
 	return
 }
 
 type Mach struct{}
 
-func (Mach) Add(t types.Type, sourceReg, targetReg byte) []byte {
-	switch t {
-	case types.I32:
-		return []byte{0x01, modRM(modReg, sourceReg, targetReg)}
+const (
+	opcodeXOR = 0x31
+)
 
-	case types.I64:
-		return []byte{rexW, 0x01, modRM(modReg, sourceReg, targetReg)}
+var simpleTypedBinaryOps = map[string]byte{
+	"add": 0x01,
+	"sub": 0x29,
+	"xor": opcodeXOR,
+}
+
+func (m Mach) TypedBinaryInst(t types.Type, name string, sourceReg, targetReg, scratchReg byte) []byte {
+	prefix := getTypePrefix(t)
+
+	if opcode, found := simpleTypedBinaryOps[name]; found {
+		return append(prefix, []byte{opcode, modRM(modReg, sourceReg, targetReg)}...)
+	}
+
+	switch name {
+	case "ne":
+		return append(append([]byte{
+			rexW, 0x89, modRM(modReg, targetReg, scratchReg), // mov target, scratch
+			rexW, 0x31, modRM(modReg, targetReg, targetReg), // xor target, target
+			0xff, modRM(modReg, 0, targetReg), // inc target
+		}, prefix...), []byte{
+			rexW, 0x29, modRM(modReg, sourceReg, scratchReg), // sub source, scratch
+			rexW, 0x0f, 0x44, modRM(modReg, targetReg, scratchReg), // cmove scratch, target
+		}...)
 
 	default:
-		panic(t)
+		panic(name)
 	}
 }
 
-func (Mach) AddSP(offset int) []byte {
-	return append([]byte{rexW, 0x81, modRM(modReg, 0, stackReg)}, encodeI32(int64(offset))...)
+func (Mach) AddToStackPtr(offset int) []byte {
+	return append([]byte{rexW, 0x81, modRM(modReg, 0, stackReg)}, encodeUint32(uint32(offset))...)
 }
 
-func (Mach) BrPlaceholder() []byte {
+func (Mach) BranchPlaceholder() []byte {
 	return []byte{0xeb, 0} // jmp
 }
 
-func (Mach) BrIfNotPlaceholder(reg byte) []byte {
+func (Mach) BranchIfNotPlaceholder(reg byte) []byte {
 	return []byte{
 		0x89, modRM(modReg, reg, reg), // mov to update status register
 		0x74, 0, // jz // TODO
@@ -81,7 +99,7 @@ func (Mach) Invalid() []byte {
 	return []byte{0x0f, 0x0b}
 }
 
-func (Mach) MovImmToReg(t types.Type, sourceImm interface{}, targetReg byte) []byte {
+func (Mach) MoveImmToReg(t types.Type, sourceImm interface{}, targetReg byte) []byte {
 	switch t {
 	case types.I32:
 		return append([]byte{0xb8 + targetReg}, encodeI32(sourceImm)...)
@@ -94,11 +112,11 @@ func (Mach) MovImmToReg(t types.Type, sourceImm interface{}, targetReg byte) []b
 	}
 }
 
-func (Mach) MovRegToReg(sourceReg, targetReg byte) []byte {
+func (Mach) MoveRegToReg(sourceReg, targetReg byte) []byte {
 	return []byte{rexW, 0x89, modRM(modReg, sourceReg, targetReg)}
 }
 
-func (Mach) MovVarToReg(sourceOffset int, targetReg byte) []byte {
+func (Mach) MoveVarToReg(sourceOffset int, targetReg byte) []byte {
 	var mod byte
 	var offset []byte
 
@@ -122,22 +140,6 @@ func (Mach) MovVarToReg(sourceOffset int, targetReg byte) []byte {
 	return append([]byte{rexW, 0x8b, modRM(mod, targetReg, rm), sib(0, sp, sp)}, offset...)
 }
 
-func (Mach) NE(t types.Type, sourceReg, targetReg, scratchReg byte) []byte {
-	switch t {
-	case types.I32:
-		return []byte{
-			rexW, 0x89, modRM(modReg, targetReg, scratchReg), // mov target, scratch
-			rexW, 0x31, modRM(modReg, targetReg, targetReg), // xor target, target
-			0xff, modRM(modReg, 0, targetReg), // inc target
-			rexW, 0x29, modRM(modReg, sourceReg, scratchReg), // sub source, scratch
-			rexW, 0x0f, 0x44, modRM(modReg, targetReg, scratchReg), // cmove scratch, target
-		}
-
-	default:
-		panic(t)
-	}
-}
-
 func (Mach) Pop(reg byte) []byte {
 	return []byte{0x58 + reg}
 }
@@ -150,26 +152,13 @@ func (Mach) Ret() []byte {
 	return []byte{0xc3}
 }
 
-func (Mach) Sub(t types.Type, sourceReg, targetReg byte) []byte {
-	switch t {
-	case types.I32:
-		return []byte{0x29, modRM(modReg, sourceReg, targetReg)}
-
-	case types.I64:
-		return []byte{rexW, 0x29, modRM(modReg, sourceReg, targetReg)}
-
-	default:
-		panic(t)
-	}
+func (m Mach) Clear(reg byte) []byte {
+	return []byte{rexW, opcodeXOR, modRM(modReg, reg, reg)} // xor
 }
 
-func (Mach) XOR(sourceReg, targetReg byte) []byte {
-	return []byte{rexW, 0x31, modRM(modReg, sourceReg, targetReg)}
-}
-
-func (Mach) UpdateBranches(stub *stubs.Label, code []byte) {
-	for _, pos := range stub.BranchSites {
-		offset := stub.Address - pos
+func (Mach) UpdateBranches(l *links.L, code []byte) {
+	for _, pos := range l.Sites {
+		offset := l.Address - pos
 		if offset < -128 || offset > 127 {
 			panic(fmt.Errorf("branch offset too large: %d (FIXME)", offset))
 		}
@@ -177,9 +166,9 @@ func (Mach) UpdateBranches(stub *stubs.Label, code []byte) {
 	}
 }
 
-func (Mach) UpdateCalls(stub *stubs.Function, code []byte) {
-	for _, pos := range stub.CallSites {
-		offset := stub.Address - pos
+func (Mach) UpdateCalls(l *links.L, code []byte) {
+	for _, pos := range l.Sites {
+		offset := l.Address - pos
 		byteOrder.PutUint32(code[pos-4:pos], uint32(int32(offset)))
 	}
 }
