@@ -115,7 +115,7 @@ func (parent *moduleCodeGen) function(f *Function) {
 		panic(errors.New("internal: stack offset is non-zero at end of function"))
 	}
 
-	if n := f.NumLocals * WordSize; n > 0 || true { // XXX
+	if n := f.NumLocals * WordSize; n > 0 {
 		code.inst(ins.AddSP{n})
 	}
 
@@ -257,7 +257,7 @@ func (code *codeGen) expr(x interface{}) {
 			}
 			code.expr(item[1])
 		}
-		if n := code.offset + code.f.NumLocals*WordSize; n > 0 || true { // XXX
+		if n := code.offset + code.f.NumLocals*WordSize; n > 0 {
 			code.inst(ins.AddSP{n})
 		}
 		code.inst(ins.Ret{})
