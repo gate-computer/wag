@@ -25,6 +25,8 @@ type machineCoder interface {
 	UpdateBranches(*links.L)
 	UpdateCalls(*links.L)
 
+	PadFunction()
+
 	Bytes() []byte
 	Len() int
 }

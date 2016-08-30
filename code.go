@@ -86,6 +86,8 @@ func (program *programCoder) function(m *Module, f *Function) {
 	for _, link := range code.labelLinks {
 		code.mach.UpdateBranches(link)
 	}
+
+	code.mach.PadFunction()
 }
 
 type functionCoder struct {
