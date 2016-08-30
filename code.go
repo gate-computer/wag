@@ -118,12 +118,10 @@ func (code *functionCoder) expr(x interface{}) {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			code.expr(args[0])
-			code.mach.InstPush(regs.R0)
-			code.stackOffset += wordSize
+			code.instPush(regs.R0)
 			code.expr(args[1])
 			code.mach.InstMoveRegToReg(regs.R0, regs.R1)
-			code.mach.InstPop(regs.R0)
-			code.stackOffset -= wordSize
+			code.instPop(regs.R0)
 			code.mach.TypedBinaryInst(exprType, instName, regs.R1, regs.R0)
 
 		case "const":
@@ -153,13 +151,11 @@ func (code *functionCoder) expr(x interface{}) {
 			funcArgs := args[1:]
 			for _, arg := range funcArgs {
 				code.expr(arg)
-				code.mach.InstPush(regs.R0)
-				code.stackOffset += wordSize
+				code.instPush(regs.R0)
 			}
 			code.instCall(code.program.functionLinks[target])
 			for range funcArgs {
-				code.mach.InstPop(regs.R1)
-				code.stackOffset -= wordSize
+				code.instPop(regs.R1)
 			}
 
 		case "get_local":
@@ -246,6 +242,16 @@ func (code *functionCoder) instBranchIfNot(reg regs.R, l *links.L) {
 func (code *functionCoder) instCall(l *links.L) {
 	code.mach.InstCallStub()
 	l.Sites = append(l.Sites, code.mach.Len())
+}
+
+func (code *functionCoder) instPop(reg regs.R) {
+	code.mach.InstPop(reg)
+	code.stackOffset -= wordSize
+}
+
+func (code *functionCoder) instPush(reg regs.R) {
+	code.mach.InstPush(reg)
+	code.stackOffset += wordSize
 }
 
 func (code *functionCoder) label(l *links.L) {
