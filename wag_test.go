@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,6 +26,7 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
+//func TestFunc(t *testing.T) { test(t, "testdata/spec/ml-proto/test/func.wast") }
 func TestI32(t *testing.T) { test(t, "testdata/i32.wast") }
 func TestI64(t *testing.T) { test(t, "testdata/i64.wast") }
 
@@ -69,19 +71,28 @@ func test(t *testing.T, filename string) {
 
 		assertName := assert[0].(string)
 
+		var argCount int
 		var exprType string
 
 		for _, x := range assert[1:] {
-			expr := x.([]interface{})
-			exprName := expr[0].(string)
-			if strings.Contains(exprName, ".") {
-				exprType = strings.SplitN(exprName, ".", 2)[0]
-				break
+			if expr, ok := x.([]interface{}); ok {
+				argCount++
+
+				exprName := expr[0].(string)
+				if strings.Contains(exprName, ".") {
+					exprType = strings.SplitN(exprName, ".", 2)[0]
+					break
+				}
 			}
 		}
 
+		if argCount == 1 {
+			t.Logf("skipping %s", sexp.Stringify(assert, false))
+			continue
+		}
+
 		if exprType == "" {
-			t.Fatalf("can't figure out type of %s", assertName)
+			t.Fatalf("can't figure out type of %s", sexp.Stringify(assert, true))
 		}
 
 		invoke2call(exports, assert[1:])
@@ -105,7 +116,7 @@ func test(t *testing.T, filename string) {
 			}
 
 		default:
-			t.Logf("%s skipped", assertName)
+			t.Logf("skipping %s", assertName)
 			continue
 		}
 
@@ -131,7 +142,9 @@ func test(t *testing.T, filename string) {
 	m := loadModule(module)
 	binary := m.GenCode()
 
-	f, err := os.Create("testdata/code")
+	name := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", ".bin", -1))
+
+	f, err := os.Create(name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +154,7 @@ func test(t *testing.T, filename string) {
 	}
 
 	if objdump {
-		dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", "testdata/code")
+		dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", name)
 		dump.Stdout = os.Stdout
 		dump.Stderr = os.Stderr
 
@@ -162,7 +175,7 @@ func test(t *testing.T, filename string) {
 		execCompiled = true
 	}
 
-	exec := exec.Command("testdata/exec", "testdata/code")
+	exec := exec.Command("testdata/exec", name)
 	exec.Stdin = f
 	exec.Stdout = os.Stdout
 	exec.Stderr = os.Stderr
@@ -175,14 +188,11 @@ func test(t *testing.T, filename string) {
 func invoke2call(exports map[string]string, x interface{}) {
 	if item, ok := x.([]interface{}); ok {
 		if s, ok := item[0].(string); ok && s == "invoke" {
-			name1 := item[1].(string)
-			name2, found := exports[name1]
-			if !found {
-				panic(name1)
-			}
-
 			item[0] = "call"
-			item[1] = name2
+
+			if name, found := exports[item[1].(string)]; found {
+				item[1] = name
+			}
 		}
 
 		for _, e := range item {

@@ -4,17 +4,21 @@ import (
 	"strconv"
 )
 
-type Type int
+type T int
 
 const (
-	Void = Type(0)
-	I32  = Type(1)
-	I64  = Type(2)
-	F32  = Type(4)
-	F64  = Type(8)
+	maskScalar = 1 << 0
+	maskSize64 = 1 << 1
+	maskFloat  = 1 << 2
+
+	Void = T(0)
+	I32  = T(maskScalar)
+	I64  = T(maskScalar | maskSize64)
+	F32  = T(maskScalar | maskFloat)
+	F64  = T(maskScalar | maskSize64 | maskFloat)
 )
 
-func (t Type) String() string {
+func (t T) String() string {
 	switch t {
 	case Void:
 		return "void"
@@ -36,7 +40,23 @@ func (t Type) String() string {
 	}
 }
 
-var ByString = map[string]Type{
+func (t T) Scalar32() bool {
+	return (t & (maskScalar | maskSize64)) == maskScalar
+}
+
+func (t T) Scalar64() bool {
+	return (t & maskSize64) != 0
+}
+
+func (t T) Int() bool {
+	return (t & (maskScalar | maskFloat)) == maskScalar
+}
+
+func (t T) Float() bool {
+	return (t & maskFloat) != 0
+}
+
+var ByString = map[string]T{
 	"void": Void,
 	"i32":  I32,
 	"i64":  I64,

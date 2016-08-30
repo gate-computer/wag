@@ -3,6 +3,7 @@ package wag
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/tsavola/wag/internal/sexp"
@@ -54,9 +55,11 @@ func (flags FunctionFlags) String() (s string) {
 }
 
 type Module struct {
-	Memory    Memory
-	Functions map[string]*Function
-	Start     string
+	Memory       Memory
+	Signatures   map[string]*Signature
+	FunctionList []*Function
+	Functions    map[string]*Function
+	Start        string
 
 	code []byte
 }
@@ -81,31 +84,42 @@ func loadModule(top []interface{}) (m *Module) {
 	}
 
 	m = &Module{
-		Functions: make(map[string]*Function),
+		Signatures: make(map[string]*Signature),
+		Functions:  make(map[string]*Function),
 	}
 
 	startSet := false
 
 	for _, x := range top[1:] {
-		item := x.([]interface{})
-		name := item[0].(string)
+		expr := x.([]interface{})
+		name := expr[0].(string)
 
 		switch name {
 		case "memory":
-			if len(item) > 1 {
-				m.Memory.MinSize = int(item[1].(uint64))
+			if len(expr) > 1 {
+				m.Memory.MinSize = int(expr[1].(uint64))
 			}
-			if len(item) > 2 {
-				m.Memory.MaxSize = int(item[2].(uint64))
+			if len(expr) > 2 {
+				m.Memory.MaxSize = int(expr[2].(uint64))
 			}
 
 		case "func":
-			f := newFunction(item)
-			m.Functions[f.Name] = f
+			f := newFunction(m, expr)
+			m.FunctionList = append(m.FunctionList, f)
+			for _, name := range f.Names {
+				m.Functions[name] = f
+			}
 
 		case "start":
-			m.Start = item[1].(string)
+			m.Start = expr[1].(string)
 			startSet = true
+
+		case "type":
+			sig := newSignature(m, expr)
+			m.Signatures[sig.Name] = sig
+
+		case "table":
+			// TODO
 
 		default:
 			panic(fmt.Errorf("unknown module child: %s", name))
@@ -128,12 +142,22 @@ type Memory struct {
 }
 
 type Signature struct {
-	ArgTypes   []types.Type
-	ResultType types.Type
+	Name       string
+	ArgTypes   []types.T
+	ResultType types.T
+}
+
+func newSignature(m *Module, list []interface{}) (sig *Signature) {
+	f := newFunction(m, list[2].([]interface{}))
+
+	sig = f.Signature
+	sig.Name = list[1].(string)
+
+	return
 }
 
 func (sig *Signature) String() (s string) {
-	s = "("
+	s = sig.Name + "("
 	for i, t := range sig.ArgTypes {
 		if i > 0 {
 			s += ","
@@ -144,45 +168,122 @@ func (sig *Signature) String() (s string) {
 	return
 }
 
+type Var struct {
+	Param bool // param or local?
+	Index int
+}
+
 type Function struct {
-	Name      string
+	Names     []string
 	Signature *Signature
-	Params    map[string]int
-	NumParams int
-	Locals    map[string]int
 	NumLocals int
+	NumParams int
+	Vars      map[string]Var
 
 	body []interface{}
 }
 
-func newFunction(list []interface{}) (f *Function) {
+func newFunction(m *Module, list []interface{}) (f *Function) {
+	list = list[1:] // skip "func" token
+
 	f = &Function{
-		Name:      list[1].(string),
 		Signature: &Signature{},
-		Params:    make(map[string]int),
-		Locals:    make(map[string]int),
+		Vars:      make(map[string]Var),
 	}
 
-	for i, x := range list[2:] {
-		item := x.([]interface{})
-		name := item[0].(string)
+	for len(list) > 0 {
+		name, ok := list[0].(string)
+		if !ok {
+			break
+		}
 
-		switch name {
-		case "param":
-			f.Signature.ArgTypes = append(f.Signature.ArgTypes, types.ByString[item[2].(string)])
+		f.Names = append(f.Names, name)
 
-			f.Params[item[1].(string)] = f.NumParams
-			f.NumParams++
+		list = list[1:]
+	}
+
+	for i, x := range list {
+		expr := x.([]interface{})
+		exprName := expr[0].(string)
+		args := expr[1:]
+
+		switch exprName {
+		case "local", "param":
+			var varName string
+
+			if len(args) > 0 {
+				s := args[0].(string)
+				if strings.HasPrefix(s, "$") {
+					varName = s
+					args = args[1:]
+				}
+			}
+
+			var varTypes []types.T
+
+			for len(args) > 0 {
+				s := args[0].(string)
+				t, found := types.ByString[s]
+				if !found {
+					panic(s)
+				}
+				varTypes = append(varTypes, t)
+				args = args[1:]
+			}
+
+			for _, varType := range varTypes {
+				numName := strconv.Itoa(f.NumLocals + f.NumParams)
+
+				var v Var
+
+				switch exprName {
+				case "local":
+					v.Param = false
+					v.Index = f.NumLocals
+					f.NumLocals++
+
+				case "param":
+					f.Signature.ArgTypes = append(f.Signature.ArgTypes, varType)
+
+					v.Param = true
+					v.Index = f.NumParams
+					f.NumParams++
+				}
+
+				if varName != "" {
+					f.Vars[varName] = v
+					varName = ""
+				}
+
+				f.Vars[numName] = v
+			}
+
+		case "type":
+			sigName := args[0].(string)
+			sig, found := m.Signatures[sigName]
+			if !found {
+				panic(sigName)
+			}
+
+			for range sig.ArgTypes {
+				numName := strconv.Itoa(f.NumLocals + f.NumParams)
+
+				f.Vars[numName] = Var{
+					Param: true,
+					Index: f.NumParams,
+				}
+
+				f.NumParams++
+			}
+
+			f.Signature.ArgTypes = append(f.Signature.ArgTypes, sig.ArgTypes...)
+			f.Signature.ResultType = sig.ResultType
 
 		case "result":
-			f.Signature.ResultType = types.ByString[item[1].(string)]
-
-		case "local":
-			f.Params[item[1].(string)] = f.NumLocals
-			f.NumLocals++
+			f.Signature.ResultType = types.ByString[args[0].(string)]
 
 		default:
-			f.body = list[2+i:]
+			f.body = list[i:]
 			return
 		}
 	}
@@ -191,5 +292,9 @@ func newFunction(list []interface{}) (f *Function) {
 }
 
 func (f *Function) String() string {
-	return fmt.Sprintf("%s%s", f.Name, f.Signature)
+	var name string
+	if len(f.Names) > 0 {
+		name = f.Names[0]
+	}
+	return fmt.Sprintf("%s%s", name, f.Signature)
 }

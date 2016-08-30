@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 )
 
@@ -17,51 +18,59 @@ func (mo *Module) GenCode() []byte {
 	m := &moduleCodeGen{
 		Module:        mo,
 		functionLinks: make(map[*Function]*links.L),
+		code:          machine.NewCoder(),
 	}
 
 	m.module()
 
-	return m.binary
+	return m.code.Bytes()
 }
 
 type moduleCodeGen struct {
 	*Module
 	functionLinks map[*Function]*links.L
-	binary        []byte
+	code          coder
 }
 
-func (m *moduleCodeGen) module() (binary []byte) {
-	for _, f := range m.Functions {
+func (m *moduleCodeGen) module() {
+	code := m.code
+
+	for _, f := range m.FunctionList {
 		m.functionLinks[f] = new(links.L)
 	}
 
-	m.function(m.Functions[m.Start])
+	start := m.Functions[m.Start]
+	m.function(start)
 
-	for name, f := range m.Functions {
-		if name != m.Start {
+	for _, f := range m.FunctionList {
+		if f != start {
 			m.function(f)
 		}
 	}
 
 	for _, link := range m.functionLinks {
-		mach.UpdateCalls(link, m.binary)
+		code.UpdateCalls(link)
 	}
 
 	return
 }
 
 func (m *moduleCodeGen) function(fu *Function) {
-	f := functionCodeGen{
+	code := m.code
+
+	f := &functionCodeGen{
 		Function: fu,
 		module:   m,
 	}
 
-	m.functionLinks[f.Function].Address = len(m.binary)
+	m.functionLinks[f.Function].Address = code.Len()
 
-	f.inst(mach.Clear(0))
-
-	for i := 0; i < f.NumLocals; i++ {
-		f.inst(mach.Push(0))
+	if f.NumLocals > 0 {
+		// TODO: decrement stack pointer and check bounds instead
+		code.InstClear(regs.R0)
+		for i := 0; i < f.NumLocals; i++ {
+			code.InstPush(regs.R0)
+		}
 	}
 
 	for _, x := range f.body {
@@ -72,19 +81,14 @@ func (m *moduleCodeGen) function(fu *Function) {
 		panic(errors.New("internal: stack offset is non-zero at end of function"))
 	}
 
-	if n := f.NumLocals * wordSize; n > 0 {
-		f.inst(mach.AddToStackPtr(n))
+	if offset := f.getLocalsEndOffset(); offset > 0 {
+		code.InstAddToStackPtr(offset)
 	}
 
-	f.inst(mach.Ret())
+	code.InstRet()
 
 	for _, link := range f.labelLinks {
-		mach.UpdateBranches(link, m.binary)
-	}
-
-	paddingSize := mach.FunctionAlign() - (len(m.binary) & (mach.FunctionAlign() - 1))
-	for i := 0; i < paddingSize; i++ {
-		m.binary = append(m.binary, mach.PaddingByte())
+		code.UpdateBranches(link)
 	}
 }
 
@@ -96,6 +100,8 @@ type functionCodeGen struct {
 }
 
 func (f *functionCodeGen) expr(x interface{}) {
+	code := f.module.code
+
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
@@ -116,23 +122,23 @@ func (f *functionCodeGen) expr(x interface{}) {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			f.expr(args[0])
-			f.inst(mach.Push(0))
+			code.InstPush(regs.R0)
 			f.stackOffset += wordSize
 			f.expr(args[1])
-			f.inst(mach.MoveRegToReg(0, 1))
-			f.inst(mach.Pop(0))
+			code.InstMoveRegToReg(regs.R0, regs.R1)
+			code.InstPop(regs.R0)
 			f.stackOffset -= wordSize
-			f.inst(mach.TypedBinaryInst(exprType, instName, 1, 0, 2))
+			code.TypedBinaryInst(exprType, instName, regs.R1, regs.R0)
 
 		case "const":
 			if len(args) != 1 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
-			f.inst(mach.MoveImmToReg(exprType, args[0], 0))
+			code.InstMoveImmToReg(exprType, args[0], regs.R0)
 
 		default:
 			fmt.Printf("operation not supported: %v\n", exprName)
-			f.inst(mach.Invalid())
+			code.InstInvalid()
 		}
 	} else {
 		switch exprName {
@@ -151,12 +157,12 @@ func (f *functionCodeGen) expr(x interface{}) {
 			funcArgs := args[1:]
 			for _, arg := range funcArgs {
 				f.expr(arg)
-				f.inst(mach.Push(0))
+				code.InstPush(regs.R0)
 				f.stackOffset += wordSize
 			}
 			f.instCall(f.module.functionLinks[target])
 			for range funcArgs {
-				f.inst(mach.Pop(1))
+				code.InstPop(regs.R1)
 				f.stackOffset -= wordSize
 			}
 
@@ -169,7 +175,7 @@ func (f *functionCodeGen) expr(x interface{}) {
 			if !found {
 				panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 			}
-			f.inst(mach.MoveVarToReg(f.stackOffset+offset, 0))
+			code.InstMoveVarToReg(offset, regs.R0)
 
 		case "if":
 			if len(args) < 2 {
@@ -199,7 +205,10 @@ func (f *functionCodeGen) expr(x interface{}) {
 
 		case "return":
 			if f.Signature.ResultType == types.Void {
-				if len(args) != 0 {
+				if len(args) == 1 {
+					// this should return a void...
+					f.expr(args[0])
+				} else if len(args) != 0 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
 			} else {
@@ -208,52 +217,68 @@ func (f *functionCodeGen) expr(x interface{}) {
 				}
 				f.expr(args[0])
 			}
-			if n := f.stackOffset + f.NumLocals*wordSize; n > 0 {
-				f.inst(mach.AddToStackPtr(n))
+			if offset := f.getLocalsEndOffset(); offset > 0 {
+				code.InstAddToStackPtr(offset)
 			}
-			f.inst(mach.Ret())
+			code.InstRet()
+
+		case "unreachable":
+			if len(args) != 0 {
+				panic(fmt.Errorf("%s: wrong number of operands", exprName))
+			}
+			code.InstInvalid()
 
 		default:
 			fmt.Printf("operation not supported: %v\n", exprName)
-			f.inst(mach.Invalid())
+			code.InstInvalid()
 		}
 	}
 }
 
-func (f *functionCodeGen) inst(code []byte) {
-	f.module.binary = append(f.module.binary, code...)
-}
-
 func (f *functionCodeGen) instBranch(l *links.L) {
-	f.inst(mach.BranchPlaceholder())
-	l.Sites = append(l.Sites, len(f.module.binary))
+	code := f.module.code
+
+	code.InstBranchPlaceholder()
+	l.Sites = append(l.Sites, code.Len())
 	f.labelLinks = append(f.labelLinks, l)
 }
 
-func (f *functionCodeGen) instBranchIfNot(reg byte, l *links.L) {
-	f.inst(mach.BranchIfNotPlaceholder(reg))
-	l.Sites = append(l.Sites, len(f.module.binary))
+func (f *functionCodeGen) instBranchIfNot(reg regs.R, l *links.L) {
+	code := f.module.code
+
+	code.InstBranchIfNotPlaceholder(reg)
+	l.Sites = append(l.Sites, code.Len())
 	f.labelLinks = append(f.labelLinks, l)
 }
 
 func (f *functionCodeGen) instCall(l *links.L) {
-	f.inst(mach.CallPlaceholder())
-	l.Sites = append(l.Sites, len(f.module.binary))
+	code := f.module.code
+
+	code.InstCallPlaceholder()
+	l.Sites = append(l.Sites, code.Len())
 }
 
 func (f *functionCodeGen) label(l *links.L) {
-	l.Address = len(f.module.binary)
+	l.Address = f.module.code.Len()
 }
 
 func (f *functionCodeGen) getVarOffset(name string) (offset int, found bool) {
-	num, found := f.Locals[name]
+	v, found := f.Vars[name]
 	if !found {
-		num, found = f.Params[name]
-		if found {
-			// function's return address is between locals and params
-			num = f.NumLocals + 1 + (f.NumParams - num - 1)
-		}
+		return
 	}
-	offset = num * wordSize
+
+	index := v.Index
+
+	if v.Param {
+		// function's return address is between locals and params
+		index = f.NumLocals + 1 + (f.NumParams - index - 1)
+	}
+
+	offset = f.stackOffset + index*wordSize
 	return
+}
+
+func (f *functionCodeGen) getLocalsEndOffset() int {
+	return f.stackOffset + f.NumLocals*wordSize
 }

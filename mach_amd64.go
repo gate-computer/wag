@@ -4,4 +4,4 @@ import (
 	"github.com/tsavola/wag/internal/x86"
 )
 
-var mach x86.Mach
+var machine x86.Machine

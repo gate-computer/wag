@@ -2,10 +2,14 @@
 package x86
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 )
 
 const (
@@ -17,22 +21,41 @@ const (
 	modReg    = (1 << 1) | (1 << 0)
 
 	stackReg = 4
+
+	functionAlign = 16
+	paddingByte   = 0xf4 // hlt
 )
 
-func modRM(mod, ro, rm byte) byte {
-	return (mod << 6) | (ro << 3) | rm
+var (
+	byteOrder = binary.LittleEndian
+
+	zero32 = make([]byte, 4)
+)
+
+type Machine struct{}
+
+func (Machine) NewCoder() *Coder {
+	return new(Coder)
+}
+
+type Coder struct {
+	bytes.Buffer
+}
+
+func modRM(mod byte, ro, rm regs.R) byte {
+	return (mod << 6) | (byte(ro) << 3) | byte(rm)
 }
 
 func sib(scale, index, base byte) byte {
 	return (scale << 6) | (index << 3) | base
 }
 
-func getTypePrefix(t types.Type) []byte {
-	switch t {
-	case types.I32:
+func sizePrefix(t types.T) []byte {
+	switch {
+	case t.Scalar32():
 		return nil
 
-	case types.I64:
+	case t.Scalar64():
 		return []byte{rexW}
 
 	default:
@@ -40,9 +63,20 @@ func getTypePrefix(t types.Type) []byte {
 	}
 }
 
-type Mach struct{}
+func (code *Coder) TypedBinaryInst(t types.T, name string, source, target regs.R) {
+	switch {
+	case t.Int():
+		code.intBinaryInst(t, name, source, target)
 
-var simpleTypedBinaryOps = map[string]byte{
+	case t.Float():
+		code.floatBinaryInst(t, name, source, target)
+
+	default:
+		panic(t)
+	}
+}
+
+var simpleIntBinaryOpcodes = map[string]byte{
 	"add": 0x01,
 	"and": 0x21,
 	"or":  0x09,
@@ -50,129 +84,180 @@ var simpleTypedBinaryOps = map[string]byte{
 	"xor": 0x31,
 }
 
-func (m Mach) TypedBinaryInst(t types.Type, name string, sourceReg, targetReg, scratchReg byte) []byte {
-	prefix := getTypePrefix(t)
+func (code *Coder) intBinaryInst(t types.T, name string, source, target regs.R) {
+	prefix := sizePrefix(t)
 
-	if opcode, found := simpleTypedBinaryOps[name]; found {
-		return append(prefix, []byte{opcode, modRM(modReg, sourceReg, targetReg)}...)
+	// simple implementations
+
+	if opcode, found := simpleIntBinaryOpcodes[name]; found {
+		code.Write(prefix)
+		code.WriteByte(opcode)
+		code.WriteByte(modRM(modReg, source, target))
+		return
 	}
+
+	// custom implementations
 
 	switch name {
 	case "ne":
-		return append(append([]byte{
-			rexW, 0x89, modRM(modReg, targetReg, scratchReg), // movq target, scratch
-			rexW, 0x31, modRM(modReg, targetReg, targetReg), // xorq target, target
-			0xff, modRM(modReg, 0, targetReg), // incl target
-		}, prefix...), []byte{
-			0x29, modRM(modReg, sourceReg, scratchReg), // subl/q source, scratch
-			rexW, 0x0f, 0x44, modRM(modReg, targetReg, scratchReg), // cmoveq scratch, target
-		}...)
+		code.InstMoveRegToReg(target, regs.Scratch)
+		code.InstClear(target)
+
+		code.WriteByte(0xff) // inc
+		code.WriteByte(modRM(modReg, 0, target))
+
+		code.Write(prefix)
+		code.WriteByte(0x29) // sub
+		code.WriteByte(modRM(modReg, source, regs.Scratch))
+
+		code.WriteByte(rexW)
+		code.WriteByte(0x0f) // cmove
+		code.WriteByte(0x44) //
+		code.WriteByte(modRM(modReg, target, regs.Scratch))
+		return
 
 	default:
 		panic(name)
 	}
 }
 
-func (Mach) AddToStackPtr(offset int) []byte {
-	return append([]byte{rexW, 0x81, modRM(modReg, 0, stackReg)}, encodeUint32(uint32(offset))...)
-}
-
-func (Mach) BranchPlaceholder() []byte {
-	return []byte{0xeb, 0} // jmp
-}
-
-func (Mach) BranchIfNotPlaceholder(reg byte) []byte {
-	return []byte{
-		0x89, modRM(modReg, reg, reg), // mov to update status register
-		0x74, 0, // jz
+func (code *Coder) floatBinaryInst(t types.T, name string, source, target regs.R) {
+	switch name {
+	case "ne":
+		// TODO
 	}
+
+	panic(fmt.Errorf("TODO: %s.%s", t, name))
 }
 
-func (Mach) CallPlaceholder() []byte {
-	return []byte{0xe8, 0, 0, 0, 0}
+func (code *Coder) InstAddToStackPtr(offset int) {
+	if offset < -0x80000000 || offset > 0x7fffffff {
+		panic(fmt.Errorf("stack offset too large: %d", offset))
+	}
+
+	code.WriteByte(rexW)
+	code.WriteByte(0x81) // add
+	code.WriteByte(modRM(modReg, 0, stackReg))
+	binary.Write(code, byteOrder, uint32(offset))
 }
 
-func (Mach) Invalid() []byte {
-	return []byte{0x0f, 0x0b}
+func (code *Coder) InstBranchPlaceholder() {
+	code.WriteByte(0xeb) // jmp
+	code.WriteByte(0)    // dummy
 }
 
-func (Mach) MoveImmToReg(t types.Type, sourceImm interface{}, targetReg byte) []byte {
-	switch t {
-	case types.I32:
-		return append([]byte{0xb8 + targetReg}, encodeI32(sourceImm)...)
+func (code *Coder) InstBranchIfNotPlaceholder(reg regs.R) {
+	code.WriteByte(0x89) // mov
+	code.WriteByte(modRM(modReg, reg, reg))
 
-	case types.I64:
-		return append([]byte{rexW, 0xb8 + targetReg}, encodeI64(sourceImm)...)
+	code.WriteByte(0x74) // jz
+	code.WriteByte(0)    // dummy
+}
+
+func (code *Coder) InstCallPlaceholder() {
+	code.WriteByte(0xe8) // call
+	code.Write(zero32)   // dummy
+}
+
+func (code *Coder) InstClear(reg regs.R) {
+	code.WriteByte(rexW)
+	code.WriteByte(0x31) // xor
+	code.WriteByte(modRM(modReg, reg, reg))
+}
+
+func (code *Coder) InstInvalid() {
+	code.WriteByte(0x0f) // ub2
+	code.WriteByte(0x0b) //
+}
+
+func (code *Coder) InstMoveImmToReg(t types.T, source interface{}, target regs.R) {
+	prefix := sizePrefix(t)
+
+	code.Write(prefix)
+	code.WriteByte(0xb8 + byte(target)) // mov
+	values.Write(code, byteOrder, t, source)
+
+	switch {
+	case t.Int():
+
+	case t.Float():
+		code.Write(prefix)
+		code.WriteByte(0x0f) // movd
+		code.WriteByte(0x6e) //
+		code.WriteByte(modRM(modReg, target, target))
 
 	default:
 		panic(t)
 	}
 }
 
-func (Mach) MoveRegToReg(sourceReg, targetReg byte) []byte {
-	return []byte{rexW, 0x89, modRM(modReg, sourceReg, targetReg)}
+func (code *Coder) InstMoveRegToReg(source, target regs.R) {
+	code.WriteByte(rexW)
+	code.WriteByte(0x89) // mov
+	code.WriteByte(modRM(modReg, source, target))
 }
 
-func (Mach) MoveVarToReg(sourceOffset int, targetReg byte) []byte {
-	var mod byte
-	var offset []byte
+func (code *Coder) InstMoveVarToReg(sourceOffset int, target regs.R) {
+	var disp byte
+	var fixedOffset interface{}
 
 	if sourceOffset < 0 {
 		panic(fmt.Errorf("internal: local variable has negative stack offset: %d", sourceOffset))
 	} else if sourceOffset < 0x80 {
-		mod = modDisp8
-		offset = []byte{uint8(sourceOffset)}
+		disp = modDisp8
+		fixedOffset = uint8(sourceOffset)
 	} else if sourceOffset < 0x8000 {
-		mod = modDisp16
-		offset = make([]byte, 2)
-		byteOrder.PutUint16(offset, uint16(sourceOffset))
+		disp = modDisp16
+		fixedOffset = uint16(sourceOffset)
 	} else {
 		panic(fmt.Errorf("local variable has too large stack offset: %d", sourceOffset))
 	}
 
-	rm := byte(1 << 2) // [SI]
-	sp := byte(4)
-
-	return append([]byte{rexW, 0x8b, modRM(mod, targetReg, rm), sib(0, sp, sp)}, offset...)
+	code.WriteByte(rexW)
+	code.WriteByte(0x8b)                              // mov
+	code.WriteByte(modRM(disp, target, regs.R(1<<2))) // si
+	code.WriteByte(sib(0, 4, 4))                      // sp
+	binary.Write(code, byteOrder, fixedOffset)
 }
 
-func (Mach) Pop(reg byte) []byte {
-	return []byte{0x58 + reg}
+func (code *Coder) InstPop(reg regs.R) {
+	code.WriteByte(0x58 + byte(reg))
 }
 
-func (Mach) Push(reg byte) []byte {
-	return []byte{0x50 + reg}
+func (code *Coder) InstPush(reg regs.R) {
+	code.WriteByte(0x50 + byte(reg))
 }
 
-func (Mach) Ret() []byte {
-	return []byte{0xc3}
+func (code *Coder) InstRet() {
+	code.WriteByte(0xc3)
 }
 
-func (m Mach) Clear(reg byte) []byte {
-	return []byte{rexW, 0x31, modRM(modReg, reg, reg)} // xorq
-}
-
-func (Mach) UpdateBranches(l *links.L, code []byte) {
+func (code *Coder) UpdateBranches(l *links.L) {
 	for _, pos := range l.Sites {
 		offset := l.Address - pos
 		if offset < -128 || offset > 127 {
 			panic(fmt.Errorf("branch offset too large: %d (FIXME)", offset))
 		}
-		code[pos-1] = byte(offset)
+
+		code.Bytes()[pos-1] = byte(offset)
 	}
 }
 
-func (Mach) UpdateCalls(l *links.L, code []byte) {
+func (code *Coder) UpdateCalls(l *links.L) {
 	for _, pos := range l.Sites {
 		offset := l.Address - pos
-		byteOrder.PutUint32(code[pos-4:pos], uint32(int32(offset)))
+		if offset < -0x80000000 || offset > 0x7fffffff {
+			panic(fmt.Errorf("call offset too large: %d", offset))
+		}
+
+		byteOrder.PutUint32(code.Bytes()[pos-4:pos], uint32(int32(offset)))
 	}
 }
 
-func (Mach) PaddingByte() byte {
-	return 0xf4 // hlt
-}
+func (code *Coder) PadFunction() {
+	size := functionAlign - (code.Len() & (functionAlign - 1))
 
-func (Mach) FunctionAlign() int {
-	return 16
+	for i := 0; i < size; i++ {
+		code.WriteByte(paddingByte)
+	}
 }

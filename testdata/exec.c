@@ -27,9 +27,10 @@ int main(int argc, char **argv)
 	int32_t result = start();
 
 	if (result != MAGIC) {
-		printf("failed test: %d\n", result - ID_BASE);
+		fprintf(stderr, "exec: failed test: %d\n", result - ID_BASE);
 		return 4;
 	}
 
+	fprintf(stderr, "exec: ok\n");
 	return 0;
 }

@@ -4,11 +4,11 @@ import (
 	"fmt"
 )
 
-func Stringify(x interface{}) string {
-	return stringify(x, "")
+func Stringify(x interface{}, multiline bool) string {
+	return stringify(x, multiline, "")
 }
 
-func stringify(x interface{}, indent string) (s string) {
+func stringify(x interface{}, multiline bool, indent string) (s string) {
 	indent += "  "
 
 	switch x := x.(type) {
@@ -22,13 +22,13 @@ func stringify(x interface{}, indent string) (s string) {
 				wrap = true
 			}
 
-			if wrap {
+			if wrap && multiline {
 				s += "\n" + indent
 			} else if i > 0 {
 				s += " "
 			}
 
-			s += stringify(item, indent)
+			s += stringify(item, multiline, indent)
 		}
 
 		s += ")"
