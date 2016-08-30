@@ -140,7 +140,7 @@ func test(t *testing.T, filename string) {
 	})
 
 	m := loadModule(module)
-	binary := m.GenCode()
+	binary := m.Code()
 
 	name := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", ".bin", -1))
 

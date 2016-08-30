@@ -6,7 +6,7 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-type coder interface {
+type machineCoder interface {
 	TypedBinaryInst(t types.T, name string, source, target regs.R)
 
 	InstAddToStackPtr(int)
