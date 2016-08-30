@@ -141,12 +141,12 @@ func (code *Coder) InstAddToStackPtr(offset int) {
 	binary.Write(code, byteOrder, uint32(offset))
 }
 
-func (code *Coder) InstBranchPlaceholder() {
+func (code *Coder) InstBranchStub() {
 	code.WriteByte(0xeb) // jmp
 	code.WriteByte(0)    // dummy
 }
 
-func (code *Coder) InstBranchIfNotPlaceholder(reg regs.R) {
+func (code *Coder) InstBranchIfNotStub(reg regs.R) {
 	code.WriteByte(0x89) // mov
 	code.WriteByte(modRM(modReg, reg, reg))
 
@@ -154,7 +154,7 @@ func (code *Coder) InstBranchIfNotPlaceholder(reg regs.R) {
 	code.WriteByte(0)    // dummy
 }
 
-func (code *Coder) InstCallPlaceholder() {
+func (code *Coder) InstCallStub() {
 	code.WriteByte(0xe8) // call
 	code.Write(zero32)   // dummy
 }

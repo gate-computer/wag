@@ -10,9 +10,9 @@ type machineCoder interface {
 	TypedBinaryInst(t types.T, name string, source, target regs.R)
 
 	InstAddToStackPtr(int)
-	InstBranchPlaceholder()
-	InstBranchIfNotPlaceholder(regs.R)
-	InstCallPlaceholder()
+	InstBranchStub()
+	InstBranchIfNotStub(regs.R)
+	InstCallStub()
 	InstClear(regs.R)
 	InstInvalid()
 	InstMoveImmToReg(t types.T, source interface{}, target regs.R)

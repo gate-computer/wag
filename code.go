@@ -232,19 +232,19 @@ func (code *functionCoder) expr(x interface{}) {
 }
 
 func (code *functionCoder) instBranch(l *links.L) {
-	code.mach.InstBranchPlaceholder()
+	code.mach.InstBranchStub()
 	l.Sites = append(l.Sites, code.mach.Len())
 	code.labelLinks = append(code.labelLinks, l)
 }
 
 func (code *functionCoder) instBranchIfNot(reg regs.R, l *links.L) {
-	code.mach.InstBranchIfNotPlaceholder(reg)
+	code.mach.InstBranchIfNotStub(reg)
 	l.Sites = append(l.Sites, code.mach.Len())
 	code.labelLinks = append(code.labelLinks, l)
 }
 
 func (code *functionCoder) instCall(l *links.L) {
-	code.mach.InstCallPlaceholder()
+	code.mach.InstCallStub()
 	l.Sites = append(l.Sites, code.mach.Len())
 }
 
