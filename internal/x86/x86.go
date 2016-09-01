@@ -31,8 +31,6 @@ const (
 
 var (
 	byteOrder = binary.LittleEndian
-
-	zero32 = make([]byte, 4)
 )
 
 type Machine struct{}
@@ -43,29 +41,6 @@ func (Machine) NewCoder() *Coder {
 
 type Coder struct {
 	bytes.Buffer
-}
-
-func modRM(mod byte, ro, rm regs.R) byte {
-	return (mod << 6) | (byte(ro) << 3) | byte(rm)
-}
-
-func sib(scale, index, base byte) byte {
-	return (scale << 6) | (index << 3) | base
-}
-
-func (code *Coder) fromStack(mod byte, target regs.R) {
-	code.WriteByte(modRM(mod, target, segSI))
-	code.WriteByte(sib(0, regStackPtr, regStackPtr))
-}
-
-func (code *Coder) fromStackDisp(dispMod byte, disp interface{}, target regs.R) {
-	code.fromStack(dispMod, target)
-	binary.Write(code, byteOrder, disp)
-}
-
-func (code *Coder) toStack(mod byte, source regs.R) {
-	code.WriteByte(modRM(mod, source, segSI))
-	code.WriteByte(sib(0, regStackPtr, regStackPtr))
 }
 
 // regOp operates on a single register.
@@ -115,9 +90,7 @@ func (code *Coder) OpAddToStackPtr(offset int) {
 }
 
 func (code *Coder) OpInvalid() {
-	// ub2
-	code.WriteByte(0x0f)
-	code.WriteByte(0x0b)
+	code.instrUb2()
 }
 
 func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
@@ -170,7 +143,7 @@ func (code *Coder) OpMoveImm(t types.T, value interface{}, target regs.R) {
 }
 
 func (code *Coder) OpNop() {
-	code.WriteByte(0x90)
+	code.instrNop()
 }
 
 func (code *Coder) OpPop(t types.T, target regs.R) {
@@ -182,26 +155,20 @@ func (code *Coder) OpPush(t types.T, source regs.R) {
 }
 
 func (code *Coder) OpReturn() {
-	code.WriteByte(0xc3)
+	code.instrRet()
 }
 
 func (code *Coder) StubOpBranch() {
-	// jmp
-	code.WriteByte(0xeb)
-	code.WriteByte(0)
+	code.instrJmpDisp8Value0()
 }
 
 func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
 	code.UnaryOp("eflags", t, subject)
-
-	// jz
-	code.WriteByte(0x74)
-	code.WriteByte(0)
+	code.instrJzDisp8Value0()
 }
 
 func (code *Coder) StubOpCall() {
-	code.WriteByte(0xe8)
-	code.Write(zero32)
+	code.instrCallDisp32Value0()
 }
 
 func (code *Coder) UpdateBranches(l *links.L) {
@@ -211,7 +178,7 @@ func (code *Coder) UpdateBranches(l *links.L) {
 			panic(offset)
 		}
 
-		code.Bytes()[pos-1] = byte(offset)
+		code.updateJDisp8(pos, int8(offset))
 	}
 }
 
@@ -222,7 +189,7 @@ func (code *Coder) UpdateCalls(l *links.L) {
 			panic(offset)
 		}
 
-		byteOrder.PutUint32(code.Bytes()[pos-4:pos], uint32(int32(offset)))
+		code.updateCallDisp32(pos, int32(offset))
 	}
 }
 
@@ -233,4 +200,72 @@ func (code *Coder) Align() {
 			code.WriteByte(paddingByte)
 		}
 	}
+}
+
+func modRM(mod byte, ro, rm regs.R) byte {
+	return (mod << 6) | (byte(ro) << 3) | byte(rm)
+}
+
+func sib(scale, index, base byte) byte {
+	return (scale << 6) | (index << 3) | base
+}
+
+func (code *Coder) fromStack(mod byte, target regs.R) {
+	code.WriteByte(modRM(mod, target, segSI))
+	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+}
+
+func (code *Coder) fromStackDisp(dispMod byte, disp interface{}, target regs.R) {
+	code.fromStack(dispMod, target)
+	binary.Write(code, byteOrder, disp)
+}
+
+func (code *Coder) toStack(mod byte, source regs.R) {
+	code.WriteByte(modRM(mod, source, segSI))
+	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+}
+
+// call
+func (code *Coder) instrCallDisp32Value0() {
+	code.WriteByte(0xe8)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+}
+
+func (code *Coder) updateCallDisp32(pos int, disp int32) {
+	byteOrder.PutUint32(code.Bytes()[pos-4:pos], uint32(disp))
+}
+
+// jmp
+func (code *Coder) instrJmpDisp8Value0() {
+	code.WriteByte(0xeb)
+	code.WriteByte(0)
+}
+
+// jz
+func (code *Coder) instrJzDisp8Value0() {
+	code.WriteByte(0x74)
+	code.WriteByte(0)
+}
+
+func (code *Coder) updateJDisp8(pos int, disp int8) {
+	code.Bytes()[pos-1] = byte(disp)
+}
+
+// nop
+func (code *Coder) instrNop() {
+	code.WriteByte(0x90)
+}
+
+// ret
+func (code *Coder) instrRet() {
+	code.WriteByte(0xc3)
+}
+
+// ub2
+func (code *Coder) instrUb2() {
+	code.WriteByte(0x0f)
+	code.WriteByte(0x0b)
 }

@@ -36,19 +36,6 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 	}
 }
 
-func intSizePrefix(t types.T) []byte {
-	switch t.Size() {
-	case types.Size32:
-		return nil
-
-	case types.Size64:
-		return []byte{rexW}
-
-	default:
-		panic(t)
-	}
-}
-
 var intBinaryOpcodes = map[string]byte{
 	"add": 0x01,
 	"and": 0x21,
@@ -64,11 +51,6 @@ func (code *Coder) intBinaryInstr(t types.T, opcodeIntBinary byte, source, targe
 	code.WriteByte(modRM(modReg, source, target))
 }
 
-func (code *Coder) opIntMoveImmValue1(t types.T, target regs.R) {
-	code.intBinaryOp("xor", t, target, target)
-	code.instrIntInc32(target)
-}
-
 func (code *Coder) opIntAdd64Imm(value int, target regs.R) {
 	switch {
 	case -0x80 <= value && value < 0x80:
@@ -79,6 +61,24 @@ func (code *Coder) opIntAdd64Imm(value int, target regs.R) {
 
 	default:
 		panic(value)
+	}
+}
+
+func (code *Coder) opIntMoveImmValue1(t types.T, target regs.R) {
+	code.intBinaryOp("xor", t, target, target)
+	code.instrIntInc32(target)
+}
+
+func intSizePrefix(t types.T) []byte {
+	switch t.Size() {
+	case types.Size32:
+		return nil
+
+	case types.Size64:
+		return []byte{rexW}
+
+	default:
+		panic(t)
 	}
 }
 
