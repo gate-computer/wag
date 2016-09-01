@@ -38,6 +38,11 @@ func (code *Coder) floatBinaryOp(name string, t types.T, source, target regs.R) 
 	}
 }
 
+func (code *Coder) opFloatMoveImm(t types.T, value interface{}, target regs.R) {
+	code.instrIntMoveImm(t, value, regScratch)
+	code.instrFloatMoveFromIntReg(t, regScratch, target)
+}
+
 func (code *Coder) opFloatPop(target regs.R) {
 	code.instrFloatMoveFromStack(target)
 	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, 8, regStackPtr)

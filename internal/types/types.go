@@ -5,19 +5,29 @@ import (
 )
 
 type T int
+type Category int
+type Size int
 
 const (
-	maskScalar      = 1 << 0
-	maskSize64      = 1 << 1
-	maskFloat       = 1 << 2
-	maskUnreachable = 1 << 3
+	maskInt   = 1
+	maskFloat = 2
+	mask32    = 4 // value is significant
+	mask64    = 8 // value is significant
 
-	Void        = T(0)
-	I32         = T(maskScalar)
-	I64         = T(maskScalar | maskSize64)
-	F32         = T(maskScalar | maskFloat)
-	F64         = T(maskScalar | maskSize64 | maskFloat)
-	Unreachable = T(maskUnreachable)
+	maskCategory = maskInt | maskFloat
+	maskSize     = mask32 | mask64
+
+	Void = T(0)
+	I32  = T(maskInt | mask32)
+	I64  = T(maskInt | mask64)
+	F32  = T(maskFloat | mask32)
+	F64  = T(maskFloat | mask64)
+
+	Int   = Category(maskInt)
+	Float = Category(maskFloat)
+
+	Size32 = Size(mask32)
+	Size64 = Size(mask64)
 )
 
 func (t T) String() string {
@@ -37,28 +47,17 @@ func (t T) String() string {
 	case F64:
 		return "f64"
 
-	case Unreachable:
-		return "unreachable"
-
 	default:
 		return strconv.Itoa(int(t))
 	}
 }
 
-func (t T) Scalar32() bool {
-	return (t & (maskScalar | maskSize64)) == maskScalar
+func (t T) Category() Category {
+	return Category(t & maskCategory)
 }
 
-func (t T) Scalar64() bool {
-	return (t & maskSize64) != 0
-}
-
-func (t T) Int() bool {
-	return (t & (maskScalar | maskFloat)) == maskScalar
-}
-
-func (t T) Float() bool {
-	return (t & maskFloat) != 0
+func (t T) Size() Size {
+	return Size(t & maskSize)
 }
 
 var ByString = map[string]T{

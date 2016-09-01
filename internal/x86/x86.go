@@ -70,11 +70,11 @@ func (code *Coder) toStack(mod byte, source regs.R) {
 
 // regOp operates on a single register.
 func regOp(intOp, floatOp func(regs.R), t types.T, subject regs.R) {
-	switch {
-	case t.Int():
+	switch t.Category() {
+	case types.Int:
 		intOp(subject)
 
-	case t.Float():
+	case types.Float:
 		floatOp(subject)
 
 	default:
@@ -84,11 +84,11 @@ func regOp(intOp, floatOp func(regs.R), t types.T, subject regs.R) {
 
 // UnaryOp operates on a single typed register.
 func (code *Coder) UnaryOp(name string, t types.T, subject regs.R) {
-	switch {
-	case t.Int():
+	switch t.Category() {
+	case types.Int:
 		code.intUnaryOp(name, t, subject)
 
-	case t.Float():
+	case types.Float:
 		code.floatUnaryOp(name, t, subject)
 
 	default:
@@ -98,11 +98,11 @@ func (code *Coder) UnaryOp(name string, t types.T, subject regs.R) {
 
 // BinaryOp operates on two typed registers.
 func (code *Coder) BinaryOp(name string, t types.T, source, target regs.R) {
-	switch {
-	case t.Int():
+	switch t.Category() {
+	case types.Int:
 		code.intBinaryOp(name, t, source, target)
 
-	case t.Float():
+	case types.Float:
 		code.floatBinaryOp(name, t, source, target)
 
 	default:
@@ -140,11 +140,11 @@ func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
 		panic(sourceOffset)
 	}
 
-	switch {
-	case t.Int():
+	switch t.Category() {
+	case types.Int:
 		code.instrIntMoveFromStackDisp(t, dispMod, dispOffset, target)
 
-	case t.Float():
+	case types.Float:
 		code.instrFloatMoveFromStackDisp(t, dispMod, dispOffset, target)
 
 	default:
@@ -156,14 +156,13 @@ func (code *Coder) OpMove(t types.T, source, target regs.R) {
 	code.BinaryOp("mov", t, source, target)
 }
 
-func (code *Coder) OpMoveImm(t types.T, source interface{}, target regs.R) {
-	switch {
-	case t.Int():
-		code.instrIntMoveImm(t, source, target)
+func (code *Coder) OpMoveImm(t types.T, value interface{}, target regs.R) {
+	switch t.Category() {
+	case types.Int:
+		code.instrIntMoveImm(t, value, target)
 
-	case t.Float():
-		code.instrIntMoveImm(t, source, regScratch)
-		code.instrFloatMoveFromIntReg(t, regScratch, target)
+	case types.Float:
+		code.opFloatMoveImm(t, value, target)
 
 	default:
 		panic(t)

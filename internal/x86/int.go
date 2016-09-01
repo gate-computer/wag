@@ -37,11 +37,11 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 }
 
 func intSizePrefix(t types.T) []byte {
-	switch {
-	case t.Scalar32():
+	switch t.Size() {
+	case types.Size32:
 		return nil
 
-	case t.Scalar64():
+	case types.Size64:
 		return []byte{rexW}
 
 	default:
