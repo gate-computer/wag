@@ -29,7 +29,7 @@ func (code *Coder) floatBinaryOp(name string, t types.T, source, target regs.R) 
 	switch name {
 	case "ne":
 		code.intBinaryOp("xor", types.I32, regScratch, regScratch)
-		code.opIntMoveImmValue1(types.I32, target)        // int target reg
+		code.instrIntMove32Imm(1, target)                 // int target reg
 		code.instrFloatCompare(t, source, target)         // float target reg
 		code.instrIntCmove(types.I32, regScratch, target) // int target reg
 
@@ -118,11 +118,11 @@ func (code *Coder) instrFloatMoveFromStack(target regs.R) {
 }
 
 // movdqa
-func (code *Coder) instrFloatMoveFromStackDisp(t types.T, mod byte, disp interface{}, target regs.R) {
+func (code *Coder) instrFloatMoveFromBaseDisp(t types.T, mod byte, disp interface{}, target regs.R) {
 	code.WriteByte(floatSizeCode(t))
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6f)
-	code.fromStackDisp(mod, disp, target)
+	code.fromBaseDisp(mod, disp, target)
 }
 
 // movdqa

@@ -52,6 +52,8 @@ func (code *programCoder) module(m *Module) {
 }
 
 func (program *programCoder) function(m *Module, f *Function) {
+	fmt.Println(f.Names, f.body)
+
 	code := functionCoder{
 		program:  program,
 		module:   m,
@@ -62,6 +64,8 @@ func (program *programCoder) function(m *Module, f *Function) {
 	code.mach.Align()
 
 	program.functionLinks[f].Address = code.mach.Len()
+
+	code.mach.FunctionPrologue()
 
 	if f.NumLocals > 0 {
 		code.mach.BinaryOp("xor", types.I64, regs.R1, regs.R1)
@@ -91,15 +95,11 @@ func (program *programCoder) function(m *Module, f *Function) {
 		panic(fmt.Errorf("last expression of function %s returns incorrect type: %s", f, finalType))
 	}
 
-	if code.stackOffset != 0 {
-		panic(errors.New("internal: stack offset is non-zero at end of function"))
+	if len(code.labelStack) != 0 {
+		panic(errors.New("internal: label stack is not empty at end of function"))
 	}
 
-	if offset := code.getLocalsEndOffset(); offset > 0 {
-		code.mach.OpAddToStackPtr(offset) // don't update stackOffset
-	}
-
-	code.mach.OpReturn()
+	code.mach.FunctionEpilogue()
 
 	for _, link := range code.labelLinks {
 		code.mach.UpdateBranches(link)
@@ -107,12 +107,12 @@ func (program *programCoder) function(m *Module, f *Function) {
 }
 
 type functionCoder struct {
-	module      *Module
-	program     *programCoder
-	function    *Function
-	mach        machineCoder
-	stackOffset int
-	labelLinks  []*links.L
+	module     *Module
+	program    *programCoder
+	function   *Function
+	mach       machineCoder
+	labelStack []*links.L
+	labelLinks []*links.L
 }
 
 func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType types.T) {
@@ -169,6 +169,15 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 		}
 	} else {
 		switch exprName {
+		case "block":
+			after := new(links.L)
+			code.pushLabel(after)
+			for _, arg := range args[1:] {
+				resultType = code.expr(arg, types.Any)
+			}
+			code.popLabel()
+			code.label(after)
+
 		case "call":
 			if len(args) < 1 {
 				panic(fmt.Errorf("%s: too few operands", exprName))
@@ -189,7 +198,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			}
 			code.opCall(code.program.functionLinks[target])
 			if len(funcArgs) > 0 {
-				code.opAddToStackPtr(len(funcArgs) * wordSize)
+				code.mach.OpAddToStackPtr(len(funcArgs) * wordSize)
 			}
 			resultType = target.Signature.ResultType
 
@@ -202,7 +211,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			if !found {
 				panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 			}
-			code.mach.OpLoadStack(varType, offset, regs.R0)
+			code.mach.OpLoadLocal(varType, offset, regs.R0)
 			resultType = varType
 
 		case "if":
@@ -245,9 +254,13 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			code.mach.OpNop()
 
 		case "return":
+			t := code.function.Signature.ResultType
+			if t == types.Void {
+				t = types.Any
+			}
 			if code.function.Signature.ResultType == types.Void {
 				if len(args) == 1 {
-					code.expr(args[0], types.Void)
+					code.expr(args[0], t)
 				} else if len(args) != 0 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
@@ -255,12 +268,9 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 				if len(args) != 1 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
-				code.expr(args[0], code.function.Signature.ResultType)
+				code.expr(args[0], t)
 			}
-			if offset := code.getLocalsEndOffset(); offset > 0 {
-				code.mach.OpAddToStackPtr(offset)
-			}
-			code.mach.OpReturn()
+			code.mach.FunctionEpilogue()
 			resultType = code.function.Signature.ResultType
 
 		case "unreachable":
@@ -274,6 +284,8 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			panic(exprName)
 		}
 	}
+
+	fmt.Println(" ", expr)
 
 	switch expectType {
 	case types.Any:
@@ -292,11 +304,6 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	}
 
 	panic(fmt.Errorf("result type %s does not match expected type %s", resultType, expectType))
-}
-
-func (code *functionCoder) opAddToStackPtr(offset int) {
-	code.mach.OpAddToStackPtr(offset)
-	code.stackOffset -= offset
 }
 
 func (code *functionCoder) opBranch(l *links.L) {
@@ -318,16 +325,22 @@ func (code *functionCoder) opCall(l *links.L) {
 
 func (code *functionCoder) opPop(t types.T, reg regs.R) {
 	code.mach.OpPop(t, reg)
-	code.stackOffset -= wordSize
 }
 
 func (code *functionCoder) opPush(t types.T, reg regs.R) {
 	code.mach.OpPush(t, reg)
-	code.stackOffset += wordSize
 }
 
 func (code *functionCoder) label(l *links.L) {
 	l.Address = code.mach.Len()
+}
+
+func (code *functionCoder) pushLabel(l *links.L) {
+	code.labelStack = append(code.labelStack, l)
+}
+
+func (code *functionCoder) popLabel() {
+	code.labelStack = code.labelStack[:len(code.labelStack)-1]
 }
 
 func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType types.T, found bool) {
@@ -336,18 +349,16 @@ func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType
 		return
 	}
 
-	index := v.Index
-
 	if v.Param {
-		// function's return address is between locals and params
-		index = code.function.NumLocals + 1 + (code.function.NumParams - index - 1)
+		offset = machine.FunctionCallStackOverhead() + (code.function.NumParams-v.Index-1)*wordSize
+	} else {
+		offset = -(v.Index + 1) * wordSize
 	}
 
-	offset = code.stackOffset + index*wordSize
 	varType = v.Type
 	return
 }
 
-func (code *functionCoder) getLocalsEndOffset() int {
-	return code.stackOffset + code.function.NumLocals*wordSize
+func (code *functionCoder) getLocalsSize() int {
+	return code.function.NumLocals * wordSize
 }

@@ -10,15 +10,17 @@ type machineCoder interface {
 	UnaryOp(name string, t types.T, reg regs.R)
 	BinaryOp(name string, t types.T, source, target regs.R)
 
+	FunctionPrologue()
+	FunctionEpilogue()
+
 	OpAddToStackPtr(int)
 	OpInvalid()
-	OpLoadStack(t types.T, sourceOffset int, target regs.R)
+	OpLoadLocal(t types.T, sourceOffset int, target regs.R)
 	OpMove(t types.T, source, target regs.R)
 	OpMoveImm(t types.T, source interface{}, target regs.R)
 	OpNop()
 	OpPop(types.T, regs.R)
 	OpPush(types.T, regs.R)
-	OpReturn()
 
 	StubOpBranch()
 	StubOpBranchIfNot(types.T, regs.R)

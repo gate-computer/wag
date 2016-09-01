@@ -14,7 +14,7 @@ func (code *Coder) intUnaryOp(name string, t types.T, subject regs.R) {
 		code.intBinaryOp("mov", t, subject, subject)
 
 	case "eqz":
-		code.opIntMoveImmValue1(types.I64, regScratch)
+		code.instrIntMove32Imm(1, regScratch)
 		code.intBinaryOp("mov", t, subject, subject)
 		code.instrIntCmove(types.I32, regScratch, subject)
 
@@ -32,7 +32,7 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 	switch name {
 	case "ne":
 		code.OpMove(t, target, regScratch)
-		code.opIntMoveImmValue1(types.I64, target)
+		code.instrIntMove32Imm(1, target)
 		code.intBinaryOp("sub", t, source, regScratch)
 		code.instrIntCmove(types.I32, regScratch, target)
 
@@ -69,11 +69,6 @@ func (code *Coder) opIntAdd64Imm(value int, target regs.R) {
 	}
 }
 
-func (code *Coder) opIntMoveImmValue1(t types.T, target regs.R) {
-	code.intBinaryOp("xor", t, target, target)
-	code.instrIntInc32(target)
-}
-
 func intSizePrefix(t types.T) []byte {
 	switch t.Size() {
 	case types.Size32:
@@ -108,24 +103,24 @@ func (code *Coder) instrIntCmove(t types.T, source, target regs.R) {
 	code.WriteByte(modRM(modReg, target, source))
 }
 
-// inc
-func (code *Coder) instrIntInc32(subject regs.R) {
-	code.WriteByte(0xff)
-	code.WriteByte(modRM(modReg, 0, subject))
-}
-
 // mov
-func (code *Coder) instrIntMoveImm(t types.T, source interface{}, target regs.R) {
+func (code *Coder) instrIntMoveImm(t types.T, value interface{}, target regs.R) {
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0xb8 + byte(target))
-	values.Write(code, byteOrder, t, source)
+	values.Write(code, byteOrder, t, value)
 }
 
 // mov
-func (code *Coder) instrIntMoveFromStackDisp(t types.T, mod byte, offset interface{}, target regs.R) {
+func (code *Coder) instrIntMove32Imm(value int32, target regs.R) {
+	code.WriteByte(0xb8 + byte(target))
+	binary.Write(code, byteOrder, value)
+}
+
+// mov
+func (code *Coder) instrIntMoveFromBaseDisp(t types.T, mod byte, offset interface{}, target regs.R) {
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0x8b)
-	code.fromStackDisp(mod, offset, target)
+	code.fromBaseDisp(mod, offset, target)
 }
 
 // pop
