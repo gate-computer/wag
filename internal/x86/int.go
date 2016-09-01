@@ -13,6 +13,11 @@ func (code *Coder) intUnaryOp(name string, t types.T, subject regs.R) {
 	case "eflags": // internal
 		code.intBinaryOp("mov", t, subject, subject)
 
+	case "eqz":
+		code.opIntMoveImmValue1(types.I64, regScratch)
+		code.intBinaryOp("mov", t, subject, subject)
+		code.instrIntCmove(types.I32, regScratch, subject)
+
 	default:
 		panic(name)
 	}
@@ -27,7 +32,7 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 	switch name {
 	case "ne":
 		code.OpMove(t, target, regScratch)
-		code.opIntMoveImmValue1(types.I32, target)
+		code.opIntMoveImmValue1(types.I64, target)
 		code.intBinaryOp("sub", t, source, regScratch)
 		code.instrIntCmove(types.I32, regScratch, target)
 

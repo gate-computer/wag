@@ -73,11 +73,21 @@ func (program *programCoder) function(m *Module, f *Function) {
 
 	var finalType types.T
 
-	for _, x := range f.body {
-		finalType = code.expr(x)
+	for i, x := range f.body {
+		var expectType types.T
+
+		if i == len(f.body)-1 {
+			expectType = f.Signature.ResultType
+		}
+
+		if expectType == types.Void {
+			expectType = types.Any
+		}
+
+		finalType = code.expr(x, expectType)
 	}
 
-	if finalType != f.Signature.ResultType {
+	if f.Signature.ResultType != types.Void && finalType != f.Signature.ResultType {
 		panic(fmt.Errorf("last expression of function %s returns incorrect type: %s", f, finalType))
 	}
 
@@ -105,7 +115,7 @@ type functionCoder struct {
 	labelLinks  []*links.L
 }
 
-func (code *functionCoder) expr(x interface{}) types.T {
+func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType types.T) {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
@@ -113,23 +123,25 @@ func (code *functionCoder) expr(x interface{}) types.T {
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
 
-		exprType, found := types.ByString[tokens[0]]
+		opType, found := types.ByString[tokens[0]]
 		if !found {
 			panic(fmt.Errorf("unknown operand type: %s", exprName))
 		}
 
 		opName := tokens[1]
-
-		resultType := exprType
+		resultType = opType
 
 		switch opName {
+		case "eqz":
+			resultType = types.I32
+			fallthrough
+
 		case "neg":
 			if len(args) != 1 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
-			code.expr(args[0])
-			code.mach.UnaryOp(opName, exprType, regs.R0)
-			return resultType
+			code.expr(args[0], opType)
+			code.mach.UnaryOp(opName, opType, regs.R0)
 
 		case "ne":
 			resultType = types.I32
@@ -139,20 +151,21 @@ func (code *functionCoder) expr(x interface{}) types.T {
 			if len(args) != 2 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
-			code.expr(args[0])
-			code.opPush(exprType, regs.R0)
-			code.expr(args[1])
-			code.mach.OpMove(exprType, regs.R0, regs.R1)
-			code.opPop(exprType, regs.R0)
-			code.mach.BinaryOp(opName, exprType, regs.R1, regs.R0)
-			return resultType
+			code.expr(args[0], opType)
+			code.opPush(opType, regs.R0)
+			code.expr(args[1], opType)
+			code.mach.OpMove(opType, regs.R0, regs.R1)
+			code.opPop(opType, regs.R0)
+			code.mach.BinaryOp(opName, opType, regs.R1, regs.R0)
 
 		case "const":
 			if len(args) != 1 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
-			code.mach.OpMoveImm(exprType, args[0], regs.R0)
-			return resultType
+			code.mach.OpMoveImm(opType, args[0], regs.R0)
+
+		default:
+			panic(exprName)
 		}
 	} else {
 		switch exprName {
@@ -170,17 +183,15 @@ func (code *functionCoder) expr(x interface{}) types.T {
 				panic(fmt.Errorf("%s: wrong number of arguments", exprName))
 			}
 			for i, arg := range funcArgs {
-				t := code.expr(arg)
-				if t != target.Signature.ArgTypes[i] {
-					panic(t)
-				}
+				t := target.Signature.ArgTypes[i]
+				code.expr(arg, t)
 				code.opPush(t, regs.R0)
 			}
 			code.opCall(code.program.functionLinks[target])
 			if len(funcArgs) > 0 {
 				code.opAddToStackPtr(len(funcArgs) * wordSize)
 			}
-			return target.Signature.ResultType
+			resultType = target.Signature.ResultType
 
 		case "get_local":
 			if len(args) != 1 {
@@ -192,7 +203,7 @@ func (code *functionCoder) expr(x interface{}) types.T {
 				panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 			}
 			code.mach.OpLoadStack(varType, offset, regs.R0)
-			return varType
+			resultType = varType
 
 		case "if":
 			if len(args) < 2 {
@@ -204,11 +215,11 @@ func (code *functionCoder) expr(x interface{}) types.T {
 			}
 			afterThen := new(links.L)
 			afterElse := new(links.L)
-			predicateType := code.expr(args[0])
-			code.opBranchIfNot(predicateType, 0, afterThen)
+			t := code.expr(args[0], types.AnyScalar)
+			code.opBranchIfNot(t, 0, afterThen)
 			var thenType types.T
 			for _, e := range args[1].([]interface{}) {
-				thenType = code.expr(e)
+				thenType = code.expr(e, types.Any)
 			}
 			if haveElse {
 				code.opBranch(afterElse)
@@ -218,29 +229,25 @@ func (code *functionCoder) expr(x interface{}) types.T {
 			if haveElse {
 				var elseType types.T
 				for _, e := range args[2].([]interface{}) {
-					elseType = code.expr(e)
+					elseType = code.expr(e, types.Any)
 				}
 				code.label(afterElse)
 				if thenType != elseType {
 					panic(fmt.Errorf("%s: then and else expressions return distinct types: %s vs. %s", exprName, thenType, elseType))
 				}
 			}
-			return thenType
+			resultType = thenType
 
 		case "nop":
 			if len(args) != 0 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			code.mach.OpNop()
-			return types.Void
 
 		case "return":
 			if code.function.Signature.ResultType == types.Void {
 				if len(args) == 1 {
-					t := code.expr(args[0])
-					if t != types.Void {
-						panic(t)
-					}
+					code.expr(args[0], types.Void)
 				} else if len(args) != 0 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
@@ -248,30 +255,43 @@ func (code *functionCoder) expr(x interface{}) types.T {
 				if len(args) != 1 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
-				t := code.expr(args[0])
-				if t != code.function.Signature.ResultType {
-					panic(t)
-				}
+				code.expr(args[0], code.function.Signature.ResultType)
 			}
 			if offset := code.getLocalsEndOffset(); offset > 0 {
 				code.mach.OpAddToStackPtr(offset)
 			}
 			code.mach.OpReturn()
-			return code.function.Signature.ResultType
+			resultType = code.function.Signature.ResultType
 
 		case "unreachable":
 			if len(args) != 0 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			code.mach.OpInvalid()
-			return types.Void
+			resultType = expectType
+
+		default:
+			panic(exprName)
 		}
 	}
 
-	// TODO: panic
-	fmt.Printf("operation not supported: %v\n", exprName)
-	code.mach.OpInvalid()
-	return types.Void
+	switch expectType {
+	case types.Any:
+		return
+
+	case types.AnyScalar:
+		switch resultType {
+		case types.I32, types.I64, types.F32, types.F64:
+			return
+		}
+
+	default:
+		if resultType == expectType {
+			return
+		}
+	}
+
+	panic(fmt.Errorf("result type %s does not match expected type %s", resultType, expectType))
 }
 
 func (code *functionCoder) opAddToStackPtr(offset int) {
