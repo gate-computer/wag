@@ -59,18 +59,25 @@ func (program *programCoder) function(m *Module, f *Function) {
 		mach:     program.mach,
 	}
 
+	code.mach.Align()
+
 	program.functionLinks[f].Address = code.mach.Len()
 
 	if f.NumLocals > 0 {
-		// TODO: decrement stack pointer and check bounds instead
-		code.mach.InstClear(regs.R0)
+		code.mach.OpClear(regs.R0)
 		for i := 0; i < f.NumLocals; i++ {
-			code.mach.InstPush(regs.R0)
+			code.mach.OpPush(types.I64, regs.R0)
 		}
 	}
 
+	var finalType types.T
+
 	for _, x := range f.body {
-		code.expr(x)
+		finalType = code.expr(x)
+	}
+
+	if finalType != f.Signature.ResultType {
+		panic(fmt.Errorf("last expression of function %s returns incorrect type: %s", f, finalType))
 	}
 
 	if code.stackOffset != 0 {
@@ -78,16 +85,14 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 
 	if offset := code.getLocalsEndOffset(); offset > 0 {
-		code.mach.InstAddToStackPtr(offset)
+		code.mach.OpAddToStackPtr(offset)
 	}
 
-	code.mach.InstRet()
+	code.mach.OpReturn()
 
 	for _, link := range code.labelLinks {
 		code.mach.UpdateBranches(link)
 	}
-
-	code.mach.PadFunction()
 }
 
 type functionCoder struct {
@@ -99,7 +104,7 @@ type functionCoder struct {
 	labelLinks  []*links.L
 }
 
-func (code *functionCoder) expr(x interface{}) {
+func (code *functionCoder) expr(x interface{}) types.T {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
@@ -112,29 +117,41 @@ func (code *functionCoder) expr(x interface{}) {
 			panic(fmt.Errorf("unknown operand type: %s", exprName))
 		}
 
-		instName := tokens[1]
+		opName := tokens[1]
 
-		switch instName {
-		case "add", "and", "ne", "or", "sub", "xor":
+		resultType := exprType
+
+		switch opName {
+		case "neg":
+			if len(args) != 1 {
+				panic(fmt.Errorf("%s: wrong number of operands", exprName))
+			}
+			code.expr(args[0])
+			code.mach.UnaryOp(exprType, opName, regs.R0)
+			return resultType
+
+		case "ne":
+			resultType = types.I32
+			fallthrough
+
+		case "add", "and", "or", "sub", "xor":
 			if len(args) != 2 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			code.expr(args[0])
-			code.instPush(regs.R0)
+			code.opPush(exprType, regs.R0)
 			code.expr(args[1])
-			code.mach.InstMoveRegToReg(regs.R0, regs.R1)
-			code.instPop(regs.R0)
-			code.mach.TypedBinaryInst(exprType, instName, regs.R1, regs.R0)
+			code.mach.OpMove(exprType, regs.R0, regs.R1)
+			code.opPop(exprType, regs.R0)
+			code.mach.BinaryOp(exprType, opName, regs.R1, regs.R0)
+			return resultType
 
 		case "const":
 			if len(args) != 1 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
-			code.mach.InstMoveImmToReg(exprType, args[0], regs.R0)
-
-		default:
-			fmt.Printf("operation not supported: %v\n", exprName)
-			code.mach.InstInvalid()
+			code.mach.OpMoveImm(exprType, args[0], regs.R0)
+			return resultType
 		}
 	} else {
 		switch exprName {
@@ -147,29 +164,34 @@ func (code *functionCoder) expr(x interface{}) {
 			if !found {
 				panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
 			}
-			if len(target.Signature.ArgTypes) != len(args)-1 {
+			funcArgs := args[1:]
+			if len(target.Signature.ArgTypes) != len(funcArgs) {
 				panic(fmt.Errorf("%s: wrong number of arguments", exprName))
 			}
-			funcArgs := args[1:]
-			for _, arg := range funcArgs {
-				code.expr(arg)
-				code.instPush(regs.R0)
+			for i, arg := range funcArgs {
+				t := code.expr(arg)
+				if t != target.Signature.ArgTypes[i] {
+					panic(t)
+				}
+				code.opPush(t, regs.R0)
 			}
-			code.instCall(code.program.functionLinks[target])
-			for range funcArgs {
-				code.instPop(regs.R1)
+			code.opCall(code.program.functionLinks[target])
+			for range funcArgs { // TODO: replace with single add
+				code.opPop(types.I64, regs.R1)
 			}
+			return target.Signature.ResultType
 
 		case "get_local":
 			if len(args) != 1 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			varName := args[0].(string)
-			offset, found := code.getVarOffset(varName)
+			offset, varType, found := code.getVarOffsetAndType(varName)
 			if !found {
 				panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 			}
-			code.mach.InstMoveVarToReg(offset, regs.R0)
+			code.mach.OpLoadStack(varType, offset, regs.R0)
+			return varType
 
 		case "if":
 			if len(args) < 2 {
@@ -181,27 +203,43 @@ func (code *functionCoder) expr(x interface{}) {
 			}
 			afterThen := new(links.L)
 			afterElse := new(links.L)
-			code.expr(args[0])
-			code.instBranchIfNot(0, afterThen)
+			predicateType := code.expr(args[0])
+			code.opBranchIfNot(predicateType, 0, afterThen)
+			var thenType types.T
 			for _, e := range args[1].([]interface{}) {
-				code.expr(e)
+				thenType = code.expr(e)
 			}
 			if haveElse {
-				code.instBranch(afterElse)
+				code.opBranch(afterElse)
+				code.mach.Align()
 			}
 			code.label(afterThen)
 			if haveElse {
+				var elseType types.T
 				for _, e := range args[2].([]interface{}) {
-					code.expr(e)
+					elseType = code.expr(e)
 				}
 				code.label(afterElse)
+				if thenType != elseType {
+					panic(fmt.Errorf("%s: then and else expressions return distinct types: %s vs. %s", exprName, thenType, elseType))
+				}
 			}
+			return thenType
+
+		case "nop":
+			if len(args) != 0 {
+				panic(fmt.Errorf("%s: wrong number of operands", exprName))
+			}
+			code.mach.OpNop()
+			return types.Void
 
 		case "return":
 			if code.function.Signature.ResultType == types.Void {
 				if len(args) == 1 {
-					// this should return a void...
-					code.expr(args[0])
+					t := code.expr(args[0])
+					if t != types.Void {
+						panic(t)
+					}
 				} else if len(args) != 0 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
@@ -209,50 +247,56 @@ func (code *functionCoder) expr(x interface{}) {
 				if len(args) != 1 {
 					panic(fmt.Errorf("%s: wrong number of operands", exprName))
 				}
-				code.expr(args[0])
+				t := code.expr(args[0])
+				if t != code.function.Signature.ResultType {
+					panic(t)
+				}
 			}
 			if offset := code.getLocalsEndOffset(); offset > 0 {
-				code.mach.InstAddToStackPtr(offset)
+				code.mach.OpAddToStackPtr(offset)
 			}
-			code.mach.InstRet()
+			code.mach.OpReturn()
+			return code.function.Signature.ResultType
 
 		case "unreachable":
 			if len(args) != 0 {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
-			code.mach.InstInvalid()
-
-		default:
-			fmt.Printf("operation not supported: %v\n", exprName)
-			code.mach.InstInvalid()
+			code.mach.OpInvalid()
+			return types.Void
 		}
 	}
+
+	// TODO: panic
+	fmt.Printf("operation not supported: %v\n", exprName)
+	code.mach.OpInvalid()
+	return types.Void
 }
 
-func (code *functionCoder) instBranch(l *links.L) {
-	code.mach.InstBranchStub()
+func (code *functionCoder) opBranch(l *links.L) {
+	code.mach.StubOpBranch()
 	l.Sites = append(l.Sites, code.mach.Len())
 	code.labelLinks = append(code.labelLinks, l)
 }
 
-func (code *functionCoder) instBranchIfNot(reg regs.R, l *links.L) {
-	code.mach.InstBranchIfNotStub(reg)
+func (code *functionCoder) opBranchIfNot(t types.T, reg regs.R, l *links.L) {
+	code.mach.StubOpBranchIfNot(t, reg)
 	l.Sites = append(l.Sites, code.mach.Len())
 	code.labelLinks = append(code.labelLinks, l)
 }
 
-func (code *functionCoder) instCall(l *links.L) {
-	code.mach.InstCallStub()
+func (code *functionCoder) opCall(l *links.L) {
+	code.mach.StubOpCall()
 	l.Sites = append(l.Sites, code.mach.Len())
 }
 
-func (code *functionCoder) instPop(reg regs.R) {
-	code.mach.InstPop(reg)
+func (code *functionCoder) opPop(t types.T, reg regs.R) {
+	code.mach.OpPop(t, reg)
 	code.stackOffset -= wordSize
 }
 
-func (code *functionCoder) instPush(reg regs.R) {
-	code.mach.InstPush(reg)
+func (code *functionCoder) opPush(t types.T, reg regs.R) {
+	code.mach.OpPush(t, reg)
 	code.stackOffset += wordSize
 }
 
@@ -260,7 +304,7 @@ func (code *functionCoder) label(l *links.L) {
 	l.Address = code.mach.Len()
 }
 
-func (code *functionCoder) getVarOffset(name string) (offset int, found bool) {
+func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType types.T, found bool) {
 	v, found := code.function.Vars[name]
 	if !found {
 		return
@@ -274,6 +318,7 @@ func (code *functionCoder) getVarOffset(name string) (offset int, found bool) {
 	}
 
 	offset = code.stackOffset + index*wordSize
+	varType = v.Type
 	return
 }
 

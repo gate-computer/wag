@@ -171,6 +171,7 @@ func (sig *Signature) String() (s string) {
 type Var struct {
 	Param bool // param or local?
 	Index int
+	Type  types.T
 }
 
 type Function struct {
@@ -234,7 +235,9 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 			for _, varType := range varTypes {
 				numName := strconv.Itoa(f.NumLocals + f.NumParams)
 
-				var v Var
+				v := Var{
+					Type: varType,
+				}
 
 				switch exprName {
 				case "local":
@@ -265,12 +268,13 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 				panic(sigName)
 			}
 
-			for range sig.ArgTypes {
+			for _, varType := range sig.ArgTypes {
 				numName := strconv.Itoa(f.NumLocals + f.NumParams)
 
 				f.Vars[numName] = Var{
 					Param: true,
 					Index: f.NumParams,
+					Type:  varType,
 				}
 
 				f.NumParams++

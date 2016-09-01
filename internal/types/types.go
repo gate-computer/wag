@@ -7,15 +7,17 @@ import (
 type T int
 
 const (
-	maskScalar = 1 << 0
-	maskSize64 = 1 << 1
-	maskFloat  = 1 << 2
+	maskScalar      = 1 << 0
+	maskSize64      = 1 << 1
+	maskFloat       = 1 << 2
+	maskUnreachable = 1 << 3
 
-	Void = T(0)
-	I32  = T(maskScalar)
-	I64  = T(maskScalar | maskSize64)
-	F32  = T(maskScalar | maskFloat)
-	F64  = T(maskScalar | maskSize64 | maskFloat)
+	Void        = T(0)
+	I32         = T(maskScalar)
+	I64         = T(maskScalar | maskSize64)
+	F32         = T(maskScalar | maskFloat)
+	F64         = T(maskScalar | maskSize64 | maskFloat)
+	Unreachable = T(maskUnreachable)
 )
 
 func (t T) String() string {
@@ -34,6 +36,9 @@ func (t T) String() string {
 
 	case F64:
 		return "f64"
+
+	case Unreachable:
+		return "unreachable"
 
 	default:
 		return strconv.Itoa(int(t))

@@ -175,6 +175,7 @@ func test(t *testing.T, filename string) {
 		execCompiled = true
 	}
 
+	// exec := exec.Command("gdb", "-ex", "run", "-ex", "bt", "-ex", "quit", "--args", "testdata/exec", name)
 	exec := exec.Command("testdata/exec", name)
 	exec.Stdin = f
 	exec.Stdout = os.Stdout
