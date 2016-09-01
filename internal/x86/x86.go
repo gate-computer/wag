@@ -19,9 +19,9 @@ const (
 
 	segSI = 1 << 2
 
-	//           regs.R0      rax
-	//           regs.R1      rcx
-	//           -            rdx
+	//            regs.R0      rax
+	//            regs.R1      rcx
+	//            -            rdx
 	regScratch  = regs.R(3) // rbx
 	regStackPtr = 4         // rsp
 

@@ -85,7 +85,7 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 
 	if offset := code.getLocalsEndOffset(); offset > 0 {
-		code.mach.OpAddToStackPtr(offset)
+		code.mach.OpAddToStackPtr(offset) // don't update stackOffset
 	}
 
 	code.mach.OpReturn()
@@ -176,8 +176,8 @@ func (code *functionCoder) expr(x interface{}) types.T {
 				code.opPush(t, regs.R0)
 			}
 			code.opCall(code.program.functionLinks[target])
-			for range funcArgs { // TODO: replace with single add
-				code.opPop(types.I64, regs.R1)
+			if len(funcArgs) > 0 {
+				code.opAddToStackPtr(len(funcArgs) * wordSize)
 			}
 			return target.Signature.ResultType
 
@@ -271,6 +271,11 @@ func (code *functionCoder) expr(x interface{}) types.T {
 	fmt.Printf("operation not supported: %v\n", exprName)
 	code.mach.OpInvalid()
 	return types.Void
+}
+
+func (code *functionCoder) opAddToStackPtr(offset int) {
+	code.mach.OpAddToStackPtr(offset)
+	code.stackOffset -= offset
 }
 
 func (code *functionCoder) opBranch(l *links.L) {
