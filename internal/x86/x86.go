@@ -53,26 +53,57 @@ func sib(scale, index, base byte) byte {
 	return (scale << 6) | (index << 3) | base
 }
 
-func (code *Coder) UnaryOp(t types.T, name string, reg regs.R) {
+func (code *Coder) fromStack(mod byte, target regs.R) {
+	code.WriteByte(modRM(mod, target, segSI))
+	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+}
+
+func (code *Coder) fromStackDisp(dispMod byte, disp interface{}, target regs.R) {
+	code.fromStack(dispMod, target)
+	binary.Write(code, byteOrder, disp)
+}
+
+func (code *Coder) toStack(mod byte, source regs.R) {
+	code.WriteByte(modRM(mod, source, segSI))
+	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+}
+
+// regOp operates on a single register.
+func regOp(intOp, floatOp func(regs.R), t types.T, subject regs.R) {
 	switch {
 	case t.Int():
-		code.intUnaryOp(t, name, reg)
+		intOp(subject)
 
 	case t.Float():
-		code.floatUnaryOp(t, name, reg)
+		floatOp(subject)
 
 	default:
 		panic(t)
 	}
 }
 
-func (code *Coder) BinaryOp(t types.T, name string, source, target regs.R) {
+// UnaryOp operates on a single typed register.
+func (code *Coder) UnaryOp(name string, t types.T, subject regs.R) {
 	switch {
 	case t.Int():
-		code.intBinaryOp(t, name, source, target)
+		code.intUnaryOp(name, t, subject)
 
 	case t.Float():
-		code.floatBinaryOp(t, name, source, target)
+		code.floatUnaryOp(name, t, subject)
+
+	default:
+		panic(t)
+	}
+}
+
+// BinaryOp operates on two typed registers.
+func (code *Coder) BinaryOp(name string, t types.T, source, target regs.R) {
+	switch {
+	case t.Int():
+		code.intBinaryOp(name, t, source, target)
+
+	case t.Float():
+		code.floatBinaryOp(name, t, source, target)
 
 	default:
 		panic(t)
@@ -80,20 +111,7 @@ func (code *Coder) BinaryOp(t types.T, name string, source, target regs.R) {
 }
 
 func (code *Coder) OpAddToStackPtr(offset int) {
-	switch {
-	case -0x80 <= offset && offset < 0x80:
-		code.instIntAddImm8(types.I64, int8(offset), regStackPtr)
-
-	case -0x80000000 <= offset && offset < 0x80000000:
-		code.instIntAddImm32(types.I64, int32(offset), regStackPtr)
-
-	default:
-		panic(offset)
-	}
-}
-
-func (code *Coder) OpClear(reg regs.R) {
-	code.instIntXor(types.I64, reg, reg)
+	code.opIntAdd64Imm(offset, regStackPtr)
 }
 
 func (code *Coder) OpInvalid() {
@@ -104,7 +122,7 @@ func (code *Coder) OpInvalid() {
 
 func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
 	var dispMod byte
-	var fixedOffset interface{}
+	var dispOffset interface{}
 
 	switch {
 	case sourceOffset < 0:
@@ -112,11 +130,11 @@ func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
 
 	case sourceOffset < 0x80:
 		dispMod = modDisp8
-		fixedOffset = uint8(sourceOffset)
+		dispOffset = uint8(sourceOffset)
 
 	case sourceOffset < 0x8000:
 		dispMod = modDisp16
-		fixedOffset = uint16(sourceOffset)
+		dispOffset = uint16(sourceOffset)
 
 	default:
 		panic(sourceOffset)
@@ -124,10 +142,10 @@ func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
 
 	switch {
 	case t.Int():
-		code.instIntMoveFromStackDisp(t, dispMod, fixedOffset, target)
+		code.instrIntMoveFromStackDisp(t, dispMod, dispOffset, target)
 
 	case t.Float():
-		code.instFloatMoveFromStackDisp(t, dispMod, fixedOffset, target)
+		code.instrFloatMoveFromStackDisp(t, dispMod, dispOffset, target)
 
 	default:
 		panic(t)
@@ -135,26 +153,17 @@ func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
 }
 
 func (code *Coder) OpMove(t types.T, source, target regs.R) {
-	switch {
-	case t.Int():
-		code.instIntMove(t, source, target)
-
-	case t.Float():
-		code.instFloatMove(t, source, target)
-
-	default:
-		panic(t)
-	}
+	code.BinaryOp("mov", t, source, target)
 }
 
 func (code *Coder) OpMoveImm(t types.T, source interface{}, target regs.R) {
 	switch {
 	case t.Int():
-		code.instIntMoveImm(t, source, target)
+		code.instrIntMoveImm(t, source, target)
 
 	case t.Float():
-		code.instIntMoveImm(t, source, regScratch)
-		code.instFloatMoveFromInt(t, regScratch, target)
+		code.instrIntMoveImm(t, source, regScratch)
+		code.instrFloatMoveFromIntReg(t, regScratch, target)
 
 	default:
 		panic(t)
@@ -165,30 +174,12 @@ func (code *Coder) OpNop() {
 	code.WriteByte(0x90)
 }
 
-func (code *Coder) OpPop(t types.T, reg regs.R) {
-	switch {
-	case t.Int():
-		code.instIntPop(reg)
-
-	case t.Float():
-		code.opFloatPop(reg)
-
-	default:
-		panic(t)
-	}
+func (code *Coder) OpPop(t types.T, target regs.R) {
+	regOp(code.instrIntPop, code.opFloatPop, t, target)
 }
 
-func (code *Coder) OpPush(t types.T, reg regs.R) {
-	switch {
-	case t.Int():
-		code.instIntPush(reg)
-
-	case t.Float():
-		code.opFloatPush(reg)
-
-	default:
-		panic(t)
-	}
+func (code *Coder) OpPush(t types.T, source regs.R) {
+	regOp(code.instrIntPush, code.opFloatPush, t, source)
 }
 
 func (code *Coder) OpReturn() {
@@ -201,15 +192,8 @@ func (code *Coder) StubOpBranch() {
 	code.WriteByte(0)
 }
 
-func (code *Coder) StubOpBranchIfNot(t types.T, reg regs.R) {
-	// update flags
-	switch {
-	case t.Int():
-		code.instIntMove(t, reg, reg)
-
-	case t.Float():
-		code.instFloatEFLAGS(t, reg)
-	}
+func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
+	code.UnaryOp("eflags", t, subject)
 
 	// jz
 	code.WriteByte(0x74)

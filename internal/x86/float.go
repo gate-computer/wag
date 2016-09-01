@@ -1,11 +1,52 @@
 package x86
 
 import (
-	"encoding/binary"
-
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 )
+
+func (code *Coder) floatUnaryOp(name string, t types.T, subject regs.R) {
+	switch name {
+	case "eflags": // internal
+		code.OpInvalid() // TODO
+
+	case "neg":
+		code.floatBinaryOp("mov", t, subject, regScratch)
+		code.floatBinaryOp("xor", t, subject, subject)
+		code.floatBinaryOp("sub", t, regScratch, subject)
+
+	default:
+		panic(name)
+	}
+}
+
+func (code *Coder) floatBinaryOp(name string, t types.T, source, target regs.R) {
+	if opcode, found := floatBinaryOpcodes[name]; found {
+		code.floatBinaryInstr(t, opcode, source, target)
+		return
+	}
+
+	switch name {
+	case "ne":
+		code.intBinaryOp("xor", types.I32, regScratch, regScratch)
+		code.opIntMoveImmValue1(types.I32, target)        // int target reg
+		code.instrFloatCompare(t, source, target)         // float target reg
+		code.instrIntCmove(types.I32, regScratch, target) // int target reg
+
+	default:
+		panic(name)
+	}
+}
+
+func (code *Coder) opFloatPop(target regs.R) {
+	code.instrFloatMoveFromStack(target)
+	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, 8, regStackPtr)
+}
+
+func (code *Coder) opFloatPush(source regs.R) {
+	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, -8, regStackPtr)
+	code.instrFloatMoveToStack(source)
+}
 
 func floatSizeCode(t types.T) byte {
 	switch t {
@@ -33,67 +74,29 @@ func floatSizePrefix(t types.T) []byte {
 	}
 }
 
-func (code *Coder) floatUnaryOp(t types.T, name string, reg regs.R) {
-	switch name {
-	case "neg":
-		code.instFloatMove(t, reg, regScratch)
-		code.instFloatXor(reg, reg)
-		code.instFloatSub(t, regScratch, reg)
-		return
-	}
-
-	// TODO: panic
-	code.OpInvalid()
+var floatBinaryOpcodes = map[string]byte{
+	"mov": 0x11, // internal
+	"sub": 0x5c,
+	"xor": 0xef,
 }
 
-func (code *Coder) floatBinaryOp(t types.T, name string, source, target regs.R) {
-	switch name {
-	case "ne":
-		code.instIntXor(types.I32, regScratch, regScratch)
-		code.instIntXor(types.I64, target, target)
-		code.instIntInc32(target)
-		code.instFloatCompare(t, source, target)
-		code.instIntCmove(types.I32, regScratch, target)
-		return
-	}
-
-	// TODO: panic
-	code.OpInvalid()
-}
-
-func (code *Coder) opFloatPop(reg regs.R) {
-	code.instFloatMoveFromStack(reg)
-	code.instIntAddImm8(types.I64, 8, regStackPtr)
-}
-
-func (code *Coder) opFloatPush(reg regs.R) {
-	code.instIntAddImm8(types.I64, -8, regStackPtr)
-	code.instFloatMoveToStack(reg)
+func (code *Coder) floatBinaryInstr(t types.T, opcodeFloatBinary byte, source, target regs.R) {
+	code.WriteByte(floatSizeCode(t))
+	code.WriteByte(0x0f)
+	code.WriteByte(opcodeFloatBinary)
+	code.WriteByte(modRM(modReg, target, source))
 }
 
 // ucomiss, ucomisd
-func (code *Coder) instFloatCompare(t types.T, source, target regs.R) {
+func (code *Coder) instrFloatCompare(t types.T, source, target regs.R) {
 	code.Write(floatSizePrefix(t))
 	code.WriteByte(0x0f)
 	code.WriteByte(0x2e)
 	code.WriteByte(modRM(modReg, target, source))
 }
 
-// ?
-func (code *Coder) instFloatEFLAGS(t types.T, reg regs.R) {
-	code.OpInvalid()
-}
-
-// movss, movsd
-func (code *Coder) instFloatMove(t types.T, source, target regs.R) {
-	code.WriteByte(floatSizeCode(t))
-	code.WriteByte(0x0f)
-	code.WriteByte(0x11)
-	code.WriteByte(modRM(modReg, target, source))
-}
-
 // movd, movq
-func (code *Coder) instFloatMoveFromInt(t types.T, source, target regs.R) {
+func (code *Coder) instrFloatMoveFromIntReg(t types.T, source, target regs.R) {
 	code.WriteByte(0x66)
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0x0f)
@@ -102,45 +105,25 @@ func (code *Coder) instFloatMoveFromInt(t types.T, source, target regs.R) {
 }
 
 // movdqa
-func (code *Coder) instFloatMoveFromStack(source regs.R) {
+func (code *Coder) instrFloatMoveFromStack(target regs.R) {
 	code.WriteByte(0x66)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6f)
-	code.WriteByte(modRM(0, source, segSI))
-	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+	code.fromStack(0, target)
 }
 
 // movdqa
-func (code *Coder) instFloatMoveFromStackDisp(t types.T, dispMod byte, offset interface{}, source regs.R) {
+func (code *Coder) instrFloatMoveFromStackDisp(t types.T, mod byte, disp interface{}, target regs.R) {
 	code.WriteByte(floatSizeCode(t))
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6f)
-	code.WriteByte(modRM(dispMod, source, segSI))
-	code.WriteByte(sib(0, regStackPtr, regStackPtr))
-	binary.Write(code, byteOrder, offset)
+	code.fromStackDisp(mod, disp, target)
 }
 
 // movdqa
-func (code *Coder) instFloatMoveToStack(source regs.R) {
+func (code *Coder) instrFloatMoveToStack(source regs.R) {
 	code.WriteByte(0x66)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x7f)
-	code.WriteByte(modRM(0, source, segSI))
-	code.WriteByte(sib(0, regStackPtr, regStackPtr))
-}
-
-// subss, subsd
-func (code *Coder) instFloatSub(t types.T, source, target regs.R) {
-	code.WriteByte(floatSizeCode(t))
-	code.WriteByte(0x0f)
-	code.WriteByte(0x5c)
-	code.WriteByte(modRM(modReg, target, source))
-}
-
-// pxor
-func (code *Coder) instFloatXor(source, target regs.R) {
-	code.WriteByte(0x66)
-	code.WriteByte(0x0f)
-	code.WriteByte(0xef)
-	code.WriteByte(modRM(modReg, target, source)) // XXX: check order
+	code.toStack(0, source)
 }

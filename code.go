@@ -64,9 +64,10 @@ func (program *programCoder) function(m *Module, f *Function) {
 	program.functionLinks[f].Address = code.mach.Len()
 
 	if f.NumLocals > 0 {
-		code.mach.OpClear(regs.R0)
+		code.mach.BinaryOp("xor", types.I64, regs.R1, regs.R1)
+
 		for i := 0; i < f.NumLocals; i++ {
-			code.mach.OpPush(types.I64, regs.R0)
+			code.mach.OpPush(types.I64, regs.R1)
 		}
 	}
 
@@ -127,7 +128,7 @@ func (code *functionCoder) expr(x interface{}) types.T {
 				panic(fmt.Errorf("%s: wrong number of operands", exprName))
 			}
 			code.expr(args[0])
-			code.mach.UnaryOp(exprType, opName, regs.R0)
+			code.mach.UnaryOp(opName, exprType, regs.R0)
 			return resultType
 
 		case "ne":
@@ -143,7 +144,7 @@ func (code *functionCoder) expr(x interface{}) types.T {
 			code.expr(args[1])
 			code.mach.OpMove(exprType, regs.R0, regs.R1)
 			code.opPop(exprType, regs.R0)
-			code.mach.BinaryOp(exprType, opName, regs.R1, regs.R0)
+			code.mach.BinaryOp(opName, exprType, regs.R1, regs.R0)
 			return resultType
 
 		case "const":
