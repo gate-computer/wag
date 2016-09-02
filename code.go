@@ -241,9 +241,18 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			}
 			delta := code.stackOffset - target.stackOffset
 			if condExpr != nil {
-				t := code.expr(condExpr, types.AnyScalar)
+				if resultType != types.Void {
+					code.opPush(resultType, regs.R0)
+				}
+				condType := code.expr(condExpr, types.AnyScalar)
+				condReg := regs.R0
+				if resultType != types.Void {
+					code.mach.OpMove(condType, condReg, regs.R1)
+					condReg = regs.R1
+					code.opPop(resultType, regs.R0)
+				}
 				code.opAddToStackPtr(delta)
-				code.opBranchIf(t, regs.R0, target.label)
+				code.opBranchIf(condType, condReg, target.label)
 				code.opAddToStackPtr(-delta)
 			} else {
 				code.opAddToStackPtr(delta)
