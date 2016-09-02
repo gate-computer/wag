@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 #define MAGIC   0x54fd3985
-#define ID_BASE 556231
+#define ID_BASE 0x700000
 
 typedef int32_t (*start_func)(void);
 

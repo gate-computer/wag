@@ -8,13 +8,13 @@ import (
 
 func (code *Coder) intUnaryOp(name string, t types.T, subject regs.R) {
 	switch name {
-	case "eflags": // internal
-		code.intBinaryOp("mov", t, subject, subject)
-
 	case "eqz":
 		code.instrIntMov32Imm(1, regScratch)
-		code.intBinaryOp("mov", t, subject, subject)
+		code.instrIntTest(t, subject, subject)
 		code.instrIntCmove(types.I32, regScratch, subject)
+
+	case "test": // internal
+		code.instrIntTest(t, subject, subject)
 
 	default:
 		panic(name)
@@ -115,10 +115,10 @@ func (code *Coder) instrIntMov32Imm(value int32, target regs.R) {
 }
 
 // mov
-func (code *Coder) instrIntMovFromBaseDisp(t types.T, mod byte, offset interface{}, target regs.R) {
+func (code *Coder) instrIntMovFromStackDisp(t types.T, mod byte, offset interface{}, target regs.R) {
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0x8b)
-	code.fromBaseDisp(mod, offset, target)
+	code.fromStackDisp(mod, offset, target)
 }
 
 // pop
@@ -129,4 +129,11 @@ func (code *Coder) instrIntPop(target regs.R) {
 // push
 func (code *Coder) instrIntPush(source regs.R) {
 	code.WriteByte(0x50 + byte(source))
+}
+
+// test
+func (code *Coder) instrIntTest(t types.T, source, target regs.R) {
+	code.Write(intSizePrefix(t))
+	code.WriteByte(0x85)
+	code.WriteByte(modRM(modReg, target, source))
 }

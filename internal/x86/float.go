@@ -7,9 +7,6 @@ import (
 
 func (code *Coder) floatUnaryOp(name string, t types.T, subject regs.R) {
 	switch name {
-	case "eflags": // internal
-		code.OpInvalid() // TODO
-
 	case "neg":
 		code.instrFloatMov(t, subject, regScratch)
 		code.instrFloatXor(subject, subject)
@@ -49,11 +46,11 @@ func (code *Coder) opFloatMoveImm(t types.T, value interface{}, target regs.R) {
 
 func (code *Coder) opFloatPop(target regs.R) {
 	code.instrFloatMovFromStack(types.F64, target)
-	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(8), regStackPtr)
+	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(wordSize), regStackPtr)
 }
 
 func (code *Coder) opFloatPush(source regs.R) {
-	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(-8), regStackPtr)
+	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(-wordSize), regStackPtr)
 	code.instrFloatMovToStack(types.F64, source)
 }
 
@@ -118,11 +115,11 @@ func (code *Coder) instrFloatMovFromStack(t types.T, target regs.R) {
 }
 
 // movdqu
-func (code *Coder) instrFloatMovFromBaseDisp(mod byte, disp interface{}, target regs.R) {
+func (code *Coder) instrFloatMovFromStackDisp(mod byte, disp interface{}, target regs.R) {
 	code.WriteByte(0xf3)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6f)
-	code.fromBaseDisp(mod, disp, target)
+	code.fromStackDisp(mod, disp, target)
 }
 
 // movdqu

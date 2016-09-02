@@ -22,8 +22,8 @@ const (
 	//            -            rdx
 	regScratch  = regs.R(3) // rbx
 	regStackPtr = 4         // rsp
-	regBasePtr  = 5         // rbp
 
+	wordSize      = 8
 	codeAlignment = 16
 	paddingByte   = 0xf4 // hlt
 )
@@ -39,7 +39,7 @@ func (Machine) NewCoder() *Coder {
 }
 
 func (Machine) FunctionCallStackOverhead() int {
-	return 2 * 8 // return address + caller's base ptr
+	return wordSize // return address
 }
 
 type Coder struct {
@@ -50,17 +50,6 @@ func (code *Coder) immediate(value interface{}) {
 	if err := binary.Write(code, byteOrder, value); err != nil {
 		panic(err)
 	}
-}
-
-func (code *Coder) FunctionPrologue() {
-	code.instrIntPush(regBasePtr)
-	code.intBinaryOp("mov", types.I64, regStackPtr, regBasePtr)
-}
-
-func (code *Coder) FunctionEpilogue() {
-	code.intBinaryOp("mov", types.I64, regBasePtr, regStackPtr)
-	code.instrIntPop(regBasePtr)
-	code.instrRet()
 }
 
 // regOp operates on a single register.
@@ -113,16 +102,22 @@ func (code *Coder) OpInvalid() {
 	code.instrUb2()
 }
 
-func (code *Coder) OpLoadLocal(t types.T, sourceOffset int, target regs.R) {
+func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
 	var dispMod byte
 	var dispOffset interface{}
 
 	switch {
-	case -0x80 <= sourceOffset && sourceOffset < 0x80:
+	case sourceOffset < 0:
+		panic(sourceOffset)
+
+	case (sourceOffset & 7) != 0:
+		panic(sourceOffset)
+
+	case sourceOffset < 0x80:
 		dispMod = modDisp8
 		dispOffset = int8(sourceOffset)
 
-	case -0x80000000 <= sourceOffset && sourceOffset < 0x80000000:
+	case sourceOffset < 0x80000000:
 		dispMod = modDisp32
 		dispOffset = int32(sourceOffset)
 
@@ -132,10 +127,10 @@ func (code *Coder) OpLoadLocal(t types.T, sourceOffset int, target regs.R) {
 
 	switch t.Category() {
 	case types.Int:
-		code.instrIntMovFromBaseDisp(t, dispMod, dispOffset, target)
+		code.instrIntMovFromStackDisp(t, dispMod, dispOffset, target)
 
 	case types.Float:
-		code.instrFloatMovFromBaseDisp(dispMod, dispOffset, target)
+		code.instrFloatMovFromStackDisp(dispMod, dispOffset, target)
 
 	default:
 		panic(t)
@@ -171,17 +166,21 @@ func (code *Coder) OpPush(t types.T, source regs.R) {
 	regOp(code.instrIntPush, code.opFloatPush, t, source)
 }
 
+func (code *Coder) OpReturn() {
+	code.instrRet()
+}
+
 func (code *Coder) StubOpBranch() {
 	code.instrJmpDisp8Value0()
 }
 
 func (code *Coder) StubOpBranchIf(t types.T, subject regs.R) {
-	code.UnaryOp("eflags", t, subject)
+	code.UnaryOp("test", t, subject)
 	code.instrJneDisp8Value0()
 }
 
 func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
-	code.UnaryOp("eflags", t, subject)
+	code.UnaryOp("test", t, subject)
 	code.instrJeDisp8Value0()
 }
 
@@ -233,8 +232,8 @@ func (code *Coder) fromStack(mod byte, target regs.R) {
 	code.WriteByte(sib(0, regStackPtr, regStackPtr))
 }
 
-func (code *Coder) fromBaseDisp(mod byte, disp interface{}, target regs.R) {
-	code.WriteByte(modRM(mod, target, (1<<2)|(1<<0)))
+func (code *Coder) fromStackDisp(mod byte, disp interface{}, target regs.R) {
+	code.fromStack(mod, target)
 	code.immediate(disp)
 }
 

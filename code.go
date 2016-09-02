@@ -66,8 +66,6 @@ func (program *programCoder) function(m *Module, f *Function) {
 
 	program.functionLinks[f].Address = code.mach.Len()
 
-	code.mach.FunctionPrologue()
-
 	if f.NumLocals > 0 {
 		code.mach.BinaryOp("xor", types.I64, regs.R1, regs.R1)
 
@@ -109,7 +107,8 @@ func (program *programCoder) function(m *Module, f *Function) {
 		panic(errors.New("internal: branch target stack is not empty at end of function"))
 	}
 
-	code.mach.FunctionEpilogue()
+	code.opAddToStackPtr(code.getLocalsEndOffset())
+	code.mach.OpReturn()
 
 	for _, link := range code.labelLinks {
 		code.mach.UpdateBranches(link)
@@ -290,7 +289,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			if !found {
 				panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 			}
-			code.mach.OpLoadLocal(varType, offset, regs.R0)
+			code.mach.OpLoadStack(varType, offset, regs.R0)
 			resultType = varType
 
 		case "if":
@@ -349,7 +348,8 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 				}
 				code.expr(args[0], t)
 			}
-			code.mach.FunctionEpilogue()
+			code.opAddToStackPtr(code.getLocalsEndOffset())
+			code.mach.OpReturn()
 			resultType = code.function.Signature.ResultType
 
 		case "unreachable":
@@ -444,15 +444,16 @@ func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType
 	}
 
 	if v.Param {
-		offset = machine.FunctionCallStackOverhead() + (code.function.NumParams-v.Index-1)*wordSize
+		paramPos := code.function.NumParams - v.Index - 1
+		offset = code.getLocalsEndOffset() + machine.FunctionCallStackOverhead() + paramPos*wordSize
 	} else {
-		offset = -(v.Index + 1) * wordSize
+		offset = code.stackOffset + v.Index*wordSize
 	}
 
 	varType = v.Type
 	return
 }
 
-func (code *functionCoder) getLocalsSize() int {
-	return code.function.NumLocals * wordSize
+func (code *functionCoder) getLocalsEndOffset() int {
+	return code.stackOffset + code.function.NumLocals*wordSize
 }

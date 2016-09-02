@@ -14,7 +14,7 @@ import (
 
 const (
 	magic   = 0x54fd3985
-	idBase  = 556231
+	idBase  = 0x700000
 	objdump = true
 )
 
