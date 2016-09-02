@@ -23,6 +23,7 @@ type machineCoder interface {
 	OpPush(types.T, regs.R)
 
 	StubOpBranch()
+	StubOpBranchIf(types.T, regs.R)
 	StubOpBranchIfNot(types.T, regs.R)
 	StubOpCall()
 

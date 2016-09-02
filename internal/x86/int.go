@@ -1,8 +1,6 @@
 package x86
 
 import (
-	"encoding/binary"
-
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
@@ -14,7 +12,7 @@ func (code *Coder) intUnaryOp(name string, t types.T, subject regs.R) {
 		code.intBinaryOp("mov", t, subject, subject)
 
 	case "eqz":
-		code.instrIntMove32Imm(1, regScratch)
+		code.instrIntMov32Imm(1, regScratch)
 		code.intBinaryOp("mov", t, subject, subject)
 		code.instrIntCmove(types.I32, regScratch, subject)
 
@@ -32,7 +30,7 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 	switch name {
 	case "ne":
 		code.OpMove(t, target, regScratch)
-		code.instrIntMove32Imm(1, target)
+		code.instrIntMov32Imm(1, target)
 		code.intBinaryOp("sub", t, source, regScratch)
 		code.instrIntCmove(types.I32, regScratch, target)
 
@@ -92,7 +90,7 @@ func (code *Coder) instrIntAdd64Imm(opcodeIntAdd64Imm byte, value interface{}, t
 	code.WriteByte(rexW)
 	code.WriteByte(opcodeIntAdd64Imm)
 	code.WriteByte(modRM(modReg, 0, target))
-	binary.Write(code, byteOrder, value)
+	code.immediate(value)
 }
 
 // cmove
@@ -104,20 +102,20 @@ func (code *Coder) instrIntCmove(t types.T, source, target regs.R) {
 }
 
 // mov
-func (code *Coder) instrIntMoveImm(t types.T, value interface{}, target regs.R) {
+func (code *Coder) instrIntMovImm(t types.T, value interface{}, target regs.R) {
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0xb8 + byte(target))
-	values.Write(code, byteOrder, t, value)
+	code.immediate(values.Parse(t, value))
 }
 
 // mov
-func (code *Coder) instrIntMove32Imm(value int32, target regs.R) {
+func (code *Coder) instrIntMov32Imm(value int32, target regs.R) {
 	code.WriteByte(0xb8 + byte(target))
-	binary.Write(code, byteOrder, value)
+	code.immediate(value)
 }
 
 // mov
-func (code *Coder) instrIntMoveFromBaseDisp(t types.T, mod byte, offset interface{}, target regs.R) {
+func (code *Coder) instrIntMovFromBaseDisp(t types.T, mod byte, offset interface{}, target regs.R) {
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0x8b)
 	code.fromBaseDisp(mod, offset, target)

@@ -1,8 +1,6 @@
 package values
 
 import (
-	"encoding/binary"
-	"io"
 	"strconv"
 
 	"github.com/tsavola/wag/internal/types"
@@ -62,25 +60,21 @@ func F64(x interface{}) float64 {
 	panic(err)
 }
 
-func Write(w io.Writer, byteOrder binary.ByteOrder, t types.T, x interface{}) error {
-	var value interface{}
-
+func Parse(t types.T, x interface{}) interface{} {
 	switch t {
 	case types.I32:
-		value = I32(x)
+		return I32(x)
 
 	case types.I64:
-		value = I64(x)
+		return I64(x)
 
 	case types.F32:
-		value = F32(x)
+		return F32(x)
 
 	case types.F64:
-		value = F64(x)
+		return F64(x)
 
 	default:
 		panic(t)
 	}
-
-	return binary.Write(w, byteOrder, value)
 }

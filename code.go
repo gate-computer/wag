@@ -8,6 +8,7 @@ import (
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 )
 
 const (
@@ -52,7 +53,7 @@ func (code *programCoder) module(m *Module) {
 }
 
 func (program *programCoder) function(m *Module, f *Function) {
-	fmt.Println(f.Names, f.body)
+	// fmt.Println(f.Names, f.body)
 
 	code := functionCoder{
 		program:  program,
@@ -75,28 +76,37 @@ func (program *programCoder) function(m *Module, f *Function) {
 		}
 	}
 
+	expectType := f.Signature.ResultType
+	if expectType == types.Void {
+		expectType = types.Any
+	}
+
+	end := new(links.L)
+	code.pushTarget(end, expectType)
+
 	var finalType types.T
 
 	for i, x := range f.body {
-		var expectType types.T
-
+		t := types.Any
 		if i == len(f.body)-1 {
-			expectType = f.Signature.ResultType
+			t = expectType
 		}
-
-		if expectType == types.Void {
-			expectType = types.Any
-		}
-
-		finalType = code.expr(x, expectType)
+		finalType = code.expr(x, t)
 	}
 
 	if f.Signature.ResultType != types.Void && finalType != f.Signature.ResultType {
 		panic(fmt.Errorf("last expression of function %s returns incorrect type: %s", f, finalType))
 	}
 
-	if len(code.labelStack) != 0 {
-		panic(errors.New("internal: label stack is not empty at end of function"))
+	code.popTarget()
+	code.label(end)
+
+	if code.stackOffset != 0 {
+		panic(errors.New("internal: stack offset is non-zero at end of function"))
+	}
+
+	if len(code.targetStack) != 0 {
+		panic(errors.New("internal: branch target stack is not empty at end of function"))
 	}
 
 	code.mach.FunctionEpilogue()
@@ -106,13 +116,20 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 }
 
+type branchTarget struct {
+	label       *links.L
+	expectType  types.T
+	stackOffset int
+}
+
 type functionCoder struct {
-	module     *Module
-	program    *programCoder
-	function   *Function
-	mach       machineCoder
-	labelStack []*links.L
-	labelLinks []*links.L
+	module      *Module
+	program     *programCoder
+	function    *Function
+	mach        machineCoder
+	stackOffset int
+	targetStack []branchTarget
+	labelLinks  []*links.L
 }
 
 func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType types.T) {
@@ -171,12 +188,67 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 		switch exprName {
 		case "block":
 			after := new(links.L)
-			code.pushLabel(after)
-			for _, arg := range args[1:] {
+			code.pushTarget(after, expectType)
+			for _, arg := range args {
 				resultType = code.expr(arg, types.Any)
 			}
-			code.popLabel()
+			code.popTarget()
 			code.label(after)
+
+		case "br", "br_if":
+			var indexToken interface{}
+			var resultExpr interface{}
+			var condExpr interface{}
+
+			switch exprName {
+			case "br":
+				switch len(args) {
+				case 1:
+					indexToken = args[0]
+
+				case 2:
+					indexToken = args[0]
+					resultExpr = args[1]
+
+				default:
+					panic(fmt.Errorf("%s: wrong number of operands", exprName))
+				}
+
+			case "br_if":
+				switch len(args) {
+				case 2:
+					indexToken = args[0]
+					condExpr = args[1]
+
+				case 3:
+					indexToken = args[0]
+					resultExpr = args[1]
+					condExpr = args[2]
+
+				default:
+					panic(fmt.Errorf("%s: wrong number of operands", exprName))
+				}
+			}
+
+			index := int(values.I32(indexToken))
+			if index < 0 || index >= len(code.targetStack) {
+				panic(index)
+			}
+			target := code.targetStack[len(code.targetStack)-index-1]
+			if resultExpr != nil {
+				// br doesn't actually return anything...
+				resultType = code.expr(resultExpr, target.expectType)
+			}
+			delta := code.stackOffset - target.stackOffset
+			if condExpr != nil {
+				t := code.expr(condExpr, types.AnyScalar)
+				code.opAddToStackPtr(delta)
+				code.opBranchIf(t, regs.R0, target.label)
+				code.opAddToStackPtr(-delta)
+			} else {
+				code.opAddToStackPtr(delta)
+				code.opBranch(target.label)
+			}
 
 		case "call":
 			if len(args) < 1 {
@@ -197,9 +269,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 				code.opPush(t, regs.R0)
 			}
 			code.opCall(code.program.functionLinks[target])
-			if len(funcArgs) > 0 {
-				code.mach.OpAddToStackPtr(len(funcArgs) * wordSize)
-			}
+			code.opAddToStackPtr(len(funcArgs) * wordSize)
 			resultType = target.Signature.ResultType
 
 		case "get_local":
@@ -225,7 +295,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			afterThen := new(links.L)
 			afterElse := new(links.L)
 			t := code.expr(args[0], types.AnyScalar)
-			code.opBranchIfNot(t, 0, afterThen)
+			code.opBranchIfNot(t, regs.R0, afterThen)
 			var thenType types.T
 			for _, e := range args[1].([]interface{}) {
 				thenType = code.expr(e, types.Any)
@@ -285,7 +355,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 		}
 	}
 
-	fmt.Println(" ", expr)
+	// fmt.Println(" ", expr)
 
 	switch expectType {
 	case types.Any:
@@ -306,8 +376,21 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	panic(fmt.Errorf("result type %s does not match expected type %s", resultType, expectType))
 }
 
+func (code *functionCoder) opAddToStackPtr(offset int) {
+	if offset != 0 {
+		code.mach.OpAddToStackPtr(offset)
+		code.stackOffset -= offset
+	}
+}
+
 func (code *functionCoder) opBranch(l *links.L) {
 	code.mach.StubOpBranch()
+	l.Sites = append(l.Sites, code.mach.Len())
+	code.labelLinks = append(code.labelLinks, l)
+}
+
+func (code *functionCoder) opBranchIf(t types.T, reg regs.R, l *links.L) {
+	code.mach.StubOpBranchIf(t, reg)
 	l.Sites = append(l.Sites, code.mach.Len())
 	code.labelLinks = append(code.labelLinks, l)
 }
@@ -325,22 +408,24 @@ func (code *functionCoder) opCall(l *links.L) {
 
 func (code *functionCoder) opPop(t types.T, reg regs.R) {
 	code.mach.OpPop(t, reg)
+	code.stackOffset -= wordSize
 }
 
 func (code *functionCoder) opPush(t types.T, reg regs.R) {
 	code.mach.OpPush(t, reg)
+	code.stackOffset += wordSize
 }
 
 func (code *functionCoder) label(l *links.L) {
 	l.Address = code.mach.Len()
 }
 
-func (code *functionCoder) pushLabel(l *links.L) {
-	code.labelStack = append(code.labelStack, l)
+func (code *functionCoder) pushTarget(l *links.L, expectType types.T) {
+	code.targetStack = append(code.targetStack, branchTarget{l, expectType, code.stackOffset})
 }
 
-func (code *functionCoder) popLabel() {
-	code.labelStack = code.labelStack[:len(code.labelStack)-1]
+func (code *functionCoder) popTarget() {
+	code.targetStack = code.targetStack[:len(code.targetStack)-1]
 }
 
 func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType types.T, found bool) {

@@ -46,6 +46,12 @@ type Coder struct {
 	bytes.Buffer
 }
 
+func (code *Coder) immediate(value interface{}) {
+	if err := binary.Write(code, byteOrder, value); err != nil {
+		panic(err)
+	}
+}
+
 func (code *Coder) FunctionPrologue() {
 	code.instrIntPush(regBasePtr)
 	code.intBinaryOp("mov", types.I64, regStackPtr, regBasePtr)
@@ -126,10 +132,10 @@ func (code *Coder) OpLoadLocal(t types.T, sourceOffset int, target regs.R) {
 
 	switch t.Category() {
 	case types.Int:
-		code.instrIntMoveFromBaseDisp(t, dispMod, dispOffset, target)
+		code.instrIntMovFromBaseDisp(t, dispMod, dispOffset, target)
 
 	case types.Float:
-		code.instrFloatMoveFromBaseDisp(t, dispMod, dispOffset, target)
+		code.instrFloatMovFromBaseDisp(t, dispMod, dispOffset, target)
 
 	default:
 		panic(t)
@@ -143,7 +149,7 @@ func (code *Coder) OpMove(t types.T, source, target regs.R) {
 func (code *Coder) OpMoveImm(t types.T, value interface{}, target regs.R) {
 	switch t.Category() {
 	case types.Int:
-		code.instrIntMoveImm(t, value, target)
+		code.instrIntMovImm(t, value, target)
 
 	case types.Float:
 		code.opFloatMoveImm(t, value, target)
@@ -169,9 +175,14 @@ func (code *Coder) StubOpBranch() {
 	code.instrJmpDisp8Value0()
 }
 
+func (code *Coder) StubOpBranchIf(t types.T, subject regs.R) {
+	code.UnaryOp("eflags", t, subject)
+	code.instrJneDisp8Value0()
+}
+
 func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
 	code.UnaryOp("eflags", t, subject)
-	code.instrJzDisp8Value0()
+	code.instrJeDisp8Value0()
 }
 
 func (code *Coder) StubOpCall() {
@@ -224,7 +235,7 @@ func (code *Coder) fromStack(mod byte, target regs.R) {
 
 func (code *Coder) fromBaseDisp(mod byte, disp interface{}, target regs.R) {
 	code.WriteByte(modRM(mod, target, (1<<2)|(1<<0)))
-	binary.Write(code, byteOrder, disp)
+	code.immediate(disp)
 }
 
 func (code *Coder) toStack(mod byte, source regs.R) {
@@ -251,9 +262,15 @@ func (code *Coder) instrJmpDisp8Value0() {
 	code.WriteByte(0)
 }
 
-// jz
-func (code *Coder) instrJzDisp8Value0() {
+// je
+func (code *Coder) instrJeDisp8Value0() {
 	code.WriteByte(0x74)
+	code.WriteByte(0)
+}
+
+// jne
+func (code *Coder) instrJneDisp8Value0() {
+	code.WriteByte(0x75)
 	code.WriteByte(0)
 }
 
