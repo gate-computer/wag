@@ -108,25 +108,25 @@ func (code *Coder) instrFloatMovFromIntReg(t types.T, source, target regs.R) {
 	code.WriteByte(modRM(modReg, target, source))
 }
 
-// movdqa
+// movdqu
 func (code *Coder) instrFloatMovFromStack(target regs.R) {
-	code.WriteByte(0x66)
+	code.WriteByte(0xf3)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6f)
 	code.fromStack(0, target)
 }
 
-// movdqa
-func (code *Coder) instrFloatMovFromBaseDisp(t types.T, mod byte, disp interface{}, target regs.R) {
-	code.WriteByte(floatSizeCode(t))
+// movdqu
+func (code *Coder) instrFloatMovFromBaseDisp(mod byte, disp interface{}, target regs.R) {
+	code.WriteByte(0xf3)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6f)
 	code.fromBaseDisp(mod, disp, target)
 }
 
-// movdqa
+// movdqu
 func (code *Coder) instrFloatMovToStack(source regs.R) {
-	code.WriteByte(0x66)
+	code.WriteByte(0xf3)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x7f)
 	code.toStack(0, source)

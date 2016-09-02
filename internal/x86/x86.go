@@ -135,7 +135,7 @@ func (code *Coder) OpLoadLocal(t types.T, sourceOffset int, target regs.R) {
 		code.instrIntMovFromBaseDisp(t, dispMod, dispOffset, target)
 
 	case types.Float:
-		code.instrFloatMovFromBaseDisp(t, dispMod, dispOffset, target)
+		code.instrFloatMovFromBaseDisp(dispMod, dispOffset, target)
 
 	default:
 		panic(t)
