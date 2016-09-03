@@ -45,13 +45,13 @@ func (code *Coder) opFloatMoveImm(t types.T, value interface{}, target regs.R) {
 }
 
 func (code *Coder) opFloatPop(target regs.R) {
-	code.instrFloatMovFromStack(types.F64, target)
+	code.instrFloatMovFromStack(target)
 	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(wordSize), regStackPtr)
 }
 
 func (code *Coder) opFloatPush(source regs.R) {
 	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(-wordSize), regStackPtr)
-	code.instrFloatMovToStack(types.F64, source)
+	code.instrFloatMovToStack(source)
 }
 
 func floatSizeCode(t types.T) byte {
@@ -105,10 +105,10 @@ func (code *Coder) instrFloatMovFromIntReg(t types.T, source, target regs.R) {
 	code.WriteByte(modRM(modReg, target, source))
 }
 
-// movddup
-func (code *Coder) instrFloatMovFromStack(t types.T, target regs.R) {
+// movq
+func (code *Coder) instrFloatMovFromStack(target regs.R) {
 	code.WriteByte(0x66)
-	code.Write(intSizePrefix(t))
+	code.WriteByte(rexW)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6e)
 	code.fromStack(0, target)
@@ -122,10 +122,10 @@ func (code *Coder) instrFloatMovFromStackDisp(mod byte, disp interface{}, target
 	code.fromStackDisp(mod, disp, target)
 }
 
-// movdqu
-func (code *Coder) instrFloatMovToStack(t types.T, source regs.R) {
+// movq
+func (code *Coder) instrFloatMovToStack(source regs.R) {
 	code.WriteByte(0x66)
-	code.Write(intSizePrefix(t))
+	code.WriteByte(rexW)
 	code.WriteByte(0x0f)
 	code.WriteByte(0x7e)
 	code.toStack(0, source)
