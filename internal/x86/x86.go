@@ -17,11 +17,14 @@ const (
 	modDisp32 = byte((1 << 1) | (0 << 0))
 	modReg    = byte((1 << 1) | (1 << 0))
 
-	//            regs.R0      rax
-	//            regs.R1      rcx
-	//            -            rdx
-	regScratch  = regs.R(3) // rbx
-	regStackPtr = 4         // rsp
+	// regs.R0 = rax
+	// regs.R1 = rcx
+	regScratch = regs.R(2) // rdx
+	// rbx
+	regStackPtr = 4 // rsp
+	// rbp
+	regRODataPtr = 6 // rsi
+	// rdi
 
 	wordSize      = 8
 	codeAlignment = 16
@@ -36,6 +39,10 @@ type Machine struct{}
 
 func (Machine) NewCoder() *Coder {
 	return new(Coder)
+}
+
+func (Machine) ByteOrder() binary.ByteOrder {
+	return byteOrder
 }
 
 func (Machine) FunctionCallStackOverhead() int {
@@ -98,8 +105,45 @@ func (code *Coder) OpAddToStackPtr(offset int) {
 	code.opIntAdd64Imm(offset, regStackPtr)
 }
 
+func (code *Coder) OpBranchIndirect(reg regs.R) (branchAddr int) {
+	code.instrLeaRIP(0, regScratch)
+	branchAddr = code.Len()
+	code.intBinaryOp("add", types.I64, reg, regScratch)
+	code.instrJmpReg(regScratch)
+	return
+}
+
 func (code *Coder) OpInvalid() {
 	code.instrUb2()
+}
+
+func (code *Coder) OpLoadRODataDispRegScaleInplace(t types.T, addr int, dispType types.T, reg regs.R, scale uint8) {
+	if addr < 0 || 0x80000000 <= addr {
+		panic(addr)
+	}
+
+	if dispType != types.I64 {
+		// TODO: sign-extend
+	}
+
+	code.instrIntShl64Imm8(scale, reg)
+
+	if addr != 0 {
+		code.instrIntAdd64Imm(opcodeIntAdd64Imm32, int32(addr), reg)
+	}
+
+	code.intBinaryOp("add", types.I64, regRODataPtr, reg)
+
+	switch dispType {
+	case types.I32:
+		code.instrIntMovsxdFromMemIndirect(reg, reg)
+
+	case types.I64:
+		code.instrIntMovFromMemIndirect(t, reg, reg)
+
+	default:
+		panic(t)
+	}
 }
 
 func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
@@ -171,17 +215,25 @@ func (code *Coder) OpReturn() {
 }
 
 func (code *Coder) StubOpBranch() {
-	code.instrJmpDisp8Value0()
+	code.instrJmpDisp8Value0(opcodeJmp)
 }
 
 func (code *Coder) StubOpBranchIf(t types.T, subject regs.R) {
 	code.UnaryOp("test", t, subject)
-	code.instrJneDisp8Value0()
+	code.instrJmpDisp8Value0(opcodeJne)
 }
 
 func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
 	code.UnaryOp("test", t, subject)
-	code.instrJeDisp8Value0()
+	code.instrJmpDisp8Value0(opcodeJe)
+}
+
+func (code *Coder) StubOpBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{}) {
+	code.instrIntMovImm(t, upperBound, regScratch)
+	code.UnaryOp("test", t, indexReg)
+	code.instrIntCmov(opcodeIntCmovl, t, regScratch, indexReg) // transform negative index to upper bound
+	code.intBinaryOp("sub", t, indexReg, regScratch)
+	code.instrJmpDisp8Value0(opcodeJle)
 }
 
 func (code *Coder) StubOpCall() {
@@ -189,24 +241,24 @@ func (code *Coder) StubOpCall() {
 }
 
 func (code *Coder) UpdateBranches(l *links.L) {
-	for _, pos := range l.Sites {
-		offset := l.Address - pos
+	for _, addr := range l.Sites {
+		offset := l.Address - addr
 		if offset < -0x80 || 0x80 <= offset {
 			panic(offset)
 		}
 
-		code.updateJDisp8(pos, int8(offset))
+		code.updateJmpDisp8(addr, int8(offset))
 	}
 }
 
 func (code *Coder) UpdateCalls(l *links.L) {
-	for _, pos := range l.Sites {
-		offset := l.Address - pos
+	for _, addr := range l.Sites {
+		offset := l.Address - addr
 		if offset < -0x80000000 || 0x80000000 <= offset {
 			panic(offset)
 		}
 
-		code.updateCallDisp32(pos, int32(offset))
+		code.updateCallDisp32(addr, int32(offset))
 	}
 }
 
@@ -242,6 +294,10 @@ func (code *Coder) toStack(mod byte, source regs.R) {
 	code.WriteByte(sib(0, regStackPtr, regStackPtr))
 }
 
+func (code *Coder) updateDataDisp32(addr int, disp int32) {
+	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(disp))
+}
+
 // call
 func (code *Coder) instrCallDisp32Value0() {
 	code.WriteByte(0xe8)
@@ -251,30 +307,38 @@ func (code *Coder) instrCallDisp32Value0() {
 	code.WriteByte(0)
 }
 
-func (code *Coder) updateCallDisp32(pos int, disp int32) {
-	byteOrder.PutUint32(code.Bytes()[pos-4:pos], uint32(disp))
+func (code *Coder) updateCallDisp32(addr int, disp int32) {
+	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(disp))
 }
 
 // jmp
-func (code *Coder) instrJmpDisp8Value0() {
-	code.WriteByte(0xeb)
+func (code *Coder) instrJmpReg(addrReg regs.R) {
+	code.WriteByte(0xff)
+	code.WriteByte(modRM(modReg, 0x4, addrReg))
+}
+
+const (
+	opcodeJmp = 0xeb
+	opcodeJe  = 0x74
+	opcodeJne = 0x75
+	opcodeJle = 0x7e
+)
+
+func (code *Coder) instrJmpDisp8Value0(opcode byte) {
+	code.WriteByte(opcode)
 	code.WriteByte(0)
 }
 
-// je
-func (code *Coder) instrJeDisp8Value0() {
-	code.WriteByte(0x74)
-	code.WriteByte(0)
+func (code *Coder) updateJmpDisp8(addr int, disp int8) {
+	code.Bytes()[addr-1] = byte(disp)
 }
 
-// jne
-func (code *Coder) instrJneDisp8Value0() {
-	code.WriteByte(0x75)
-	code.WriteByte(0)
-}
-
-func (code *Coder) updateJDisp8(pos int, disp int8) {
-	code.Bytes()[pos-1] = byte(disp)
+// lea
+func (code *Coder) instrLeaRIP(disp int32, target regs.R) {
+	code.WriteByte(rexW)
+	code.WriteByte(0x8d)
+	code.WriteByte(modRM(0, target, (1<<2)|(1<<0)))
+	code.immediate(disp)
 }
 
 // nop

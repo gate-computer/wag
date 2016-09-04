@@ -11,7 +11,9 @@ type machineCoder interface {
 	BinaryOp(name string, t types.T, source, target regs.R)
 
 	OpAddToStackPtr(int)
+	OpBranchIndirect(disp regs.R) (branchAddr int)
 	OpInvalid()
+	OpLoadRODataDispRegScaleInplace(t types.T, addr int, dispType types.T, reg regs.R, scale uint8)
 	OpLoadStack(t types.T, sourceOffset int, target regs.R)
 	OpMove(t types.T, source, target regs.R)
 	OpMoveImm(t types.T, source interface{}, target regs.R)
@@ -23,6 +25,7 @@ type machineCoder interface {
 	StubOpBranch()
 	StubOpBranchIf(types.T, regs.R)
 	StubOpBranchIfNot(types.T, regs.R)
+	StubOpBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{})
 	StubOpCall()
 
 	UpdateBranches(*links.L)

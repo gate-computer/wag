@@ -12,9 +12,15 @@
 #define MAGIC   0x54fd3985
 #define ID_BASE 0x700000
 
-typedef int32_t (*start_func)(void);
+typedef int32_t (*start_func)(void *dummy, void *rodata);
 
-static void *start_addr;
+struct header {
+	uint64_t text_size;
+	uint64_t rodata_size;
+	uint64_t bss_size;
+} __attribute__ ((packed));
+
+static void *text_addr;
 
 static void handle_signal(int signum, siginfo_t *i, void *context)
 {
@@ -32,11 +38,11 @@ static void handle_signal(int signum, siginfo_t *i, void *context)
 	fprintf(stderr, "exec: signal: ptr       = %p\n", i->si_ptr);
 	fprintf(stderr, "exec: signal: overrun   = %d\n", i->si_overrun);
 	fprintf(stderr, "exec: signal: timerid   = %d\n", i->si_timerid);
-	fprintf(stderr, "exec: signal: addr      = %p (0x%lx)\n", i->si_addr, (void *) i->si_addr - start_addr);
+	fprintf(stderr, "exec: signal: addr      = %p (0x%lx)\n", i->si_addr, (void *) i->si_addr - text_addr);
 	fprintf(stderr, "exec: signal: band      = %ld\n", i->si_band);
 	fprintf(stderr, "exec: signal: fd        = %d\n", i->si_fd);
 	fprintf(stderr, "exec: signal: addr_lsb  = %d\n", i->si_addr_lsb);
-	fprintf(stderr, "exec: signal: call addr = %p (0x%lx)\n", i->si_call_addr, (void *) i->si_call_addr - start_addr);
+	fprintf(stderr, "exec: signal: call addr = %p (0x%lx)\n", i->si_call_addr, (void *) i->si_call_addr - text_addr);
 	fprintf(stderr, "exec: signal: syscall   = %d\n", i->si_syscall);
 	fprintf(stderr, "exec: signal: arch      = %u\n", i->si_arch);
 
@@ -53,14 +59,65 @@ int main(int argc, char **argv)
 		return 2;
 
 	struct stat st;
+
 	if (fstat(fd, &st) < 0)
 		return 3;
 
-	start_addr = mmap(NULL, st.st_size, PROT_EXEC|PROT_READ, MAP_PRIVATE, fd, 0);
-	if (start_addr == MAP_FAILED)
+	struct header head;
+
+	if (lseek(fd, -sizeof (head), SEEK_END) < 0)
 		return 4;
 
-	fprintf(stderr, "exec: start = 0x%p\n", start_addr);
+	if (read(fd, &head, sizeof (head)) != sizeof (head))
+		return 5;
+
+	if (lseek(fd, 0, SEEK_SET) < 0)
+		return 4;
+
+	size_t data_size = st.st_size - head.text_size - head.rodata_size - sizeof (head);
+
+	fprintf(stderr, "exec: text size   = %ld\n", head.text_size);
+	fprintf(stderr, "exec: rodata size = %ld\n", head.rodata_size);
+	fprintf(stderr, "exec: data size   = %ld\n", data_size);
+	fprintf(stderr, "exec: bss size    = %ld\n", head.bss_size);
+
+	size_t text_offset = 0;
+	size_t rodata_offset = text_offset + head.text_size;
+	size_t data_offset = rodata_offset + head.rodata_size;
+
+	void *rodata_addr = NULL;
+	void *data_addr = NULL;
+	void *bss_addr = NULL;
+
+	text_addr = mmap(NULL, head.text_size, PROT_EXEC|PROT_READ, MAP_PRIVATE|MAP_32BIT, fd, text_offset);
+	if (text_addr == MAP_FAILED)
+		return 6;
+
+	fprintf(stderr, "exec: text addr   = %p\n", text_addr);
+
+	if (head.rodata_size > 0) {
+		rodata_addr = mmap(NULL, head.rodata_size, PROT_READ, MAP_PRIVATE|MAP_32BIT, fd, rodata_offset);
+		if (rodata_addr == MAP_FAILED)
+			return 6;
+	}
+
+	fprintf(stderr, "exec: rodata addr = %p\n", rodata_addr);
+
+	if (data_size > 0) {
+		data_addr = mmap(NULL, data_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_32BIT, fd, data_offset);
+		if (data_addr == MAP_FAILED)
+			return 6;
+	}
+
+	fprintf(stderr, "exec: data addr   = %p\n", data_addr);
+
+	if (head.bss_size > 0) {
+		bss_addr = mmap(NULL, head.bss_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_32BIT|MAP_ANONYMOUS, -1, 0);
+		if (bss_addr == MAP_FAILED)
+			return 6;
+	}
+
+	fprintf(stderr, "exec: bss addr    = %p\n", bss_addr);
 
 	const struct sigaction signal_action = {
 		.sa_sigaction = handle_signal,
@@ -81,9 +138,9 @@ int main(int argc, char **argv)
 		}
 	}
 
-	start_func start = (start_func) start_addr;
+	start_func start = (start_func) text_addr;
 
-	int32_t result = start();
+	int32_t result = start(NULL, rodata_addr);
 	if (result != MAGIC) {
 		fprintf(stderr, "exec: failed test: %d\n", result - ID_BASE);
 		return 6;

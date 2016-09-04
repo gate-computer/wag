@@ -15,7 +15,7 @@ const (
 	wordSize = 8
 )
 
-func (m *Module) Code() []byte {
+func (m *Module) Code() (text, roData, data []byte, bssSize int) {
 	code := programCoder{
 		mach:          machine.NewCoder(),
 		functionLinks: make(map[*Function]*links.L),
@@ -23,11 +23,15 @@ func (m *Module) Code() []byte {
 
 	code.module(m)
 
-	return code.mach.Bytes()
+	roData = code.roData.populate()
+
+	text = code.mach.Bytes()
+	return
 }
 
 type programCoder struct {
 	mach          machineCoder
+	roData        dataArena
 	functionLinks map[*Function]*links.L
 }
 
@@ -48,18 +52,17 @@ func (code *programCoder) module(m *Module) {
 	for _, link := range code.functionLinks {
 		code.mach.UpdateCalls(link)
 	}
-
-	return
 }
 
 func (program *programCoder) function(m *Module, f *Function) {
 	// fmt.Println(f.Names, f.body)
 
 	code := functionCoder{
-		program:  program,
-		module:   m,
-		function: f,
-		mach:     program.mach,
+		program:    program,
+		module:     m,
+		function:   f,
+		mach:       program.mach,
+		labelLinks: make(map[*links.L]struct{}),
 	}
 
 	code.mach.Align()
@@ -110,7 +113,7 @@ func (program *programCoder) function(m *Module, f *Function) {
 	code.opAddToStackPtr(code.getLocalsEndOffset())
 	code.mach.OpReturn()
 
-	for _, link := range code.labelLinks {
+	for link := range code.labelLinks {
 		code.mach.UpdateBranches(link)
 	}
 }
@@ -127,8 +130,8 @@ type functionCoder struct {
 	function    *Function
 	mach        machineCoder
 	stackOffset int
-	targetStack []branchTarget
-	labelLinks  []*links.L
+	targetStack []*branchTarget
+	labelLinks  map[*links.L]struct{}
 }
 
 func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType types.T) {
@@ -194,69 +197,8 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			code.popTarget()
 			code.label(after)
 
-		case "br", "br_if":
-			var indexToken interface{}
-			var resultExpr interface{}
-			var condExpr interface{}
-
-			switch exprName {
-			case "br":
-				switch len(args) {
-				case 1:
-					indexToken = args[0]
-
-				case 2:
-					indexToken = args[0]
-					resultExpr = args[1]
-
-				default:
-					panic(fmt.Errorf("%s: wrong number of operands", exprName))
-				}
-
-			case "br_if":
-				switch len(args) {
-				case 2:
-					indexToken = args[0]
-					condExpr = args[1]
-
-				case 3:
-					indexToken = args[0]
-					resultExpr = args[1]
-					condExpr = args[2]
-
-				default:
-					panic(fmt.Errorf("%s: wrong number of operands", exprName))
-				}
-			}
-
-			index := int(values.I32(indexToken))
-			if index < 0 || index >= len(code.targetStack) {
-				panic(index)
-			}
-			target := code.targetStack[len(code.targetStack)-index-1]
-			if resultExpr != nil {
-				// br doesn't actually return anything...
-				resultType = code.expr(resultExpr, target.expectType)
-			}
-			delta := code.stackOffset - target.stackOffset
-			if condExpr != nil {
-				if resultType != types.Void {
-					code.opPush(resultType, regs.R0)
-				}
-				condType := code.expr(condExpr, types.AnyScalar)
-				condReg := regs.R0
-				if resultType != types.Void {
-					code.mach.OpMove(condType, condReg, regs.R1)
-					condReg = regs.R1
-					code.opPop(resultType, regs.R0)
-				}
-				code.opAddToStackPtr(delta)
-				code.opBranchIf(condType, condReg, target.label)
-				code.opAddToStackPtr(-delta)
-			} else {
-				code.opAddToStackPtr(delta)
-				code.opBranch(target.label)
-			}
+		case "br", "br_if", "br_table":
+			resultType = code.exprBr(exprName, args)
 
 		case "call":
 			if len(args) < 1 {
@@ -385,6 +327,183 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	panic(fmt.Errorf("result type %s does not match expected type %s", resultType, expectType))
 }
 
+func (code *functionCoder) exprBr(branchKind string, args []interface{}) (resultType types.T) {
+	var indexes []interface{}
+	var defaultIndex interface{}
+	var resultExpr interface{}
+	var condExpr interface{}
+
+	switch branchKind {
+	case "br":
+		switch len(args) {
+		case 1:
+			defaultIndex = args[0]
+
+		case 2:
+			defaultIndex = args[0]
+			resultExpr = args[1]
+
+		default:
+			panic(fmt.Errorf("%s: wrong number of operands", branchKind))
+		}
+
+	case "br_if":
+		switch len(args) {
+		case 2:
+			defaultIndex = args[0]
+			condExpr = args[1]
+
+		case 3:
+			defaultIndex = args[0]
+			resultExpr = args[1]
+			condExpr = args[2]
+
+		default:
+			panic(fmt.Errorf("%s: wrong number of operands", branchKind))
+		}
+
+	case "br_table":
+		if len(args) < 2 {
+			panic(fmt.Errorf("%s: too few operands", branchKind))
+		}
+
+		condExpr = args[len(args)-1]
+		args = args[:len(args)-1]
+
+		if _, ok := args[len(args)-1].([]interface{}); ok {
+			resultExpr = args[len(args)-1]
+			args = args[:len(args)-1]
+		}
+
+		if len(args) < 1 {
+			panic(fmt.Errorf("%s: too few operands", branchKind))
+		}
+
+		indexes = args[:len(args)-1]
+		defaultIndex = args[len(args)-1]
+	}
+
+	defaultTarget := code.getTarget(defaultIndex)
+	defaultStackDelta := code.stackOffset - defaultTarget.stackOffset
+
+	if resultExpr != nil {
+		// branch expressions don't actually return anything...
+		resultType = code.expr(resultExpr, defaultTarget.expectType)
+	}
+
+	var condType types.T
+	condReg := regs.R0
+
+	if condExpr != nil {
+		if resultType != types.Void {
+			code.opPush(resultType, regs.R0)
+		}
+		condType = code.expr(condExpr, types.AnyScalar)
+		if resultType != types.Void {
+			code.mach.OpMove(condType, condReg, regs.R1)
+			condReg = regs.R1
+			code.opPop(resultType, regs.R0)
+		}
+	}
+
+	switch branchKind {
+	case "br", "br_if":
+		code.opAddToStackPtr(defaultStackDelta)
+
+		if condExpr != nil {
+			code.opBranchIf(condType, condReg, defaultTarget.label)
+			code.opAddToStackPtr(-defaultStackDelta)
+		} else {
+			code.opBranch(defaultTarget.label)
+		}
+
+	case "br_table":
+		var targets []*branchTarget
+
+		for _, x := range indexes {
+			target := code.getTarget(x)
+			targets = append(targets, target)
+
+			code.labelLinks[target.label] = struct{}{}
+		}
+
+		commonStackOffset := defaultTarget.stackOffset
+
+		for _, target := range targets {
+			if target.stackOffset != commonStackOffset {
+				commonStackOffset = -1
+				break
+			}
+		}
+
+		var tableType types.T
+		var tableScale uint8
+
+		if commonStackOffset >= 0 {
+			tableType = types.I32
+			tableScale = 2
+		} else {
+			tableType = types.I64
+			tableScale = 3
+		}
+
+		tableSize := len(targets) << tableScale
+		tableAlloc, tableAddr := code.program.roData.allocate(tableSize)
+
+		// branchAddr := code.opBranchTable(condType, condReg, tableAddr, len(targets), defaultStackDelta, defaultTarget.label)
+
+		branchStackOffset := code.stackOffset
+
+		var outOfBounds *links.L
+
+		if commonStackOffset >= 0 {
+			code.opAddToStackPtr(branchStackOffset - commonStackOffset)
+			outOfBounds = defaultTarget.label
+		} else if defaultStackDelta != 0 {
+			outOfBounds = new(links.L) // trampoline
+		} else {
+			outOfBounds = defaultTarget.label
+		}
+
+		code.opBranchIfOutOfBounds(condType, condReg, uint32(len(targets)), outOfBounds)
+		code.mach.OpLoadRODataDispRegScaleInplace(tableType, tableAddr, condType, condReg, tableScale)
+
+		var branchAddr int
+
+		if commonStackOffset < 0 {
+			// - add (condReg >> 32) to regStackPtr
+			// - (condReg & 0xffffffff) to condReg
+			panic("not implemented")
+		}
+
+		branchAddr = code.mach.OpBranchIndirect(condReg)
+
+		tableAlloc.populator = func(data []byte) {
+			for _, target := range targets {
+				disp := target.label.Address - branchAddr
+
+				if commonStackOffset >= 0 {
+					machine.ByteOrder().PutUint32(data[:4], uint32(disp))
+					data = data[4:]
+				} else {
+					delta := branchStackOffset - target.stackOffset
+					packed := (uint64(uint32(delta)) << 32) | uint64(uint32(disp))
+					machine.ByteOrder().PutUint64(data[:8], packed)
+					data = data[8:]
+				}
+			}
+		}
+
+		if commonStackOffset < 0 && defaultStackDelta != 0 {
+			code.label(outOfBounds) // trampoline
+			code.opAddToStackPtr(defaultStackDelta)
+			code.opBranch(defaultTarget.label)
+		}
+	}
+
+	return
+}
+
 func (code *functionCoder) opAddToStackPtr(offset int) {
 	if offset != 0 {
 		code.mach.OpAddToStackPtr(offset)
@@ -395,19 +514,25 @@ func (code *functionCoder) opAddToStackPtr(offset int) {
 func (code *functionCoder) opBranch(l *links.L) {
 	code.mach.StubOpBranch()
 	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks = append(code.labelLinks, l)
+	code.labelLinks[l] = struct{}{}
 }
 
-func (code *functionCoder) opBranchIf(t types.T, reg regs.R, l *links.L) {
-	code.mach.StubOpBranchIf(t, reg)
+func (code *functionCoder) opBranchIf(t types.T, subject regs.R, l *links.L) {
+	code.mach.StubOpBranchIf(t, subject)
 	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks = append(code.labelLinks, l)
+	code.labelLinks[l] = struct{}{}
 }
 
-func (code *functionCoder) opBranchIfNot(t types.T, reg regs.R, l *links.L) {
-	code.mach.StubOpBranchIfNot(t, reg)
+func (code *functionCoder) opBranchIfNot(t types.T, subject regs.R, l *links.L) {
+	code.mach.StubOpBranchIfNot(t, subject)
 	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks = append(code.labelLinks, l)
+	code.labelLinks[l] = struct{}{}
+}
+
+func (code *functionCoder) opBranchIfOutOfBounds(t types.T, subject regs.R, value interface{}, l *links.L) {
+	code.mach.StubOpBranchIfOutOfBounds(t, subject, value)
+	l.Sites = append(l.Sites, code.mach.Len())
+	code.labelLinks[l] = struct{}{}
 }
 
 func (code *functionCoder) opCall(l *links.L) {
@@ -415,13 +540,13 @@ func (code *functionCoder) opCall(l *links.L) {
 	l.Sites = append(l.Sites, code.mach.Len())
 }
 
-func (code *functionCoder) opPop(t types.T, reg regs.R) {
-	code.mach.OpPop(t, reg)
+func (code *functionCoder) opPop(t types.T, target regs.R) {
+	code.mach.OpPop(t, target)
 	code.stackOffset -= wordSize
 }
 
-func (code *functionCoder) opPush(t types.T, reg regs.R) {
-	code.mach.OpPush(t, reg)
+func (code *functionCoder) opPush(t types.T, source regs.R) {
+	code.mach.OpPush(t, source)
 	code.stackOffset += wordSize
 }
 
@@ -430,11 +555,19 @@ func (code *functionCoder) label(l *links.L) {
 }
 
 func (code *functionCoder) pushTarget(l *links.L, expectType types.T) {
-	code.targetStack = append(code.targetStack, branchTarget{l, expectType, code.stackOffset})
+	code.targetStack = append(code.targetStack, &branchTarget{l, expectType, code.stackOffset})
 }
 
 func (code *functionCoder) popTarget() {
 	code.targetStack = code.targetStack[:len(code.targetStack)-1]
+}
+
+func (code *functionCoder) getTarget(index interface{}) *branchTarget {
+	i := int(values.I32(index))
+	if i < 0 || i >= len(code.targetStack) {
+		panic(i)
+	}
+	return code.targetStack[len(code.targetStack)-i-1]
 }
 
 func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType types.T, found bool) {

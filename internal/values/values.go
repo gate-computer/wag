@@ -7,19 +7,26 @@ import (
 )
 
 func I32(x interface{}) uint32 {
-	s := x.(string)
+	switch s := x.(type) {
+	case uint32:
+		return s
 
-	signed64, err := strconv.ParseInt(s, 0, 32)
-	if err == nil {
-		return uint32(signed64)
+	case string:
+		signed64, err := strconv.ParseInt(s, 0, 32)
+		if err == nil {
+			return uint32(signed64)
+		}
+
+		unsigned64, err := strconv.ParseUint(s, 0, 32)
+		if err == nil {
+			return uint32(unsigned64)
+		}
+
+		panic(err)
+
+	default:
+		panic(x)
 	}
-
-	unsigned64, err := strconv.ParseUint(s, 0, 32)
-	if err == nil {
-		return uint32(unsigned64)
-	}
-
-	panic(err)
 }
 
 func I64(x interface{}) uint64 {

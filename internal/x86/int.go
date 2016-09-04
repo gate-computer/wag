@@ -11,7 +11,7 @@ func (code *Coder) intUnaryOp(name string, t types.T, subject regs.R) {
 	case "eqz":
 		code.instrIntMov32Imm(1, regScratch)
 		code.instrIntTest(t, subject, subject)
-		code.instrIntCmove(types.I32, regScratch, subject)
+		code.instrIntCmov(opcodeIntCmove, types.I32, regScratch, subject)
 
 	case "test": // internal
 		code.instrIntTest(t, subject, subject)
@@ -32,7 +32,7 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 		code.OpMove(t, target, regScratch)
 		code.instrIntMov32Imm(1, target)
 		code.intBinaryOp("sub", t, source, regScratch)
-		code.instrIntCmove(types.I32, regScratch, target)
+		code.instrIntCmov(opcodeIntCmove, types.I32, regScratch, target)
 
 	default:
 		panic(name)
@@ -48,9 +48,9 @@ var intBinaryOpcodes = map[string]byte{
 	"xor": 0x31,
 }
 
-func (code *Coder) intBinaryInstr(t types.T, opcodeIntBinary byte, source, target regs.R) {
+func (code *Coder) intBinaryInstr(t types.T, opcode byte, source, target regs.R) {
 	code.Write(intSizePrefix(t))
-	code.WriteByte(opcodeIntBinary)
+	code.WriteByte(opcode)
 	code.WriteByte(modRM(modReg, source, target))
 }
 
@@ -86,18 +86,22 @@ const (
 )
 
 // add sign-extended
-func (code *Coder) instrIntAdd64Imm(opcodeIntAdd64Imm byte, value interface{}, target regs.R) {
+func (code *Coder) instrIntAdd64Imm(opcode byte, value interface{}, target regs.R) {
 	code.WriteByte(rexW)
-	code.WriteByte(opcodeIntAdd64Imm)
+	code.WriteByte(opcode)
 	code.WriteByte(modRM(modReg, 0, target))
 	code.immediate(value)
 }
 
-// cmove
-func (code *Coder) instrIntCmove(t types.T, source, target regs.R) {
+const (
+	opcodeIntCmove = 0x44
+	opcodeIntCmovl = 0x4e
+)
+
+func (code *Coder) instrIntCmov(opcode byte, t types.T, source, target regs.R) {
 	code.Write(intSizePrefix(t))
 	code.WriteByte(0x0f)
-	code.WriteByte(0x44)
+	code.WriteByte(opcode)
 	code.WriteByte(modRM(modReg, target, source))
 }
 
@@ -121,6 +125,20 @@ func (code *Coder) instrIntMovFromStackDisp(t types.T, mod byte, offset interfac
 	code.fromStackDisp(mod, offset, target)
 }
 
+// mov
+func (code *Coder) instrIntMovFromMemIndirect(t types.T, source, target regs.R) {
+	code.Write(intSizePrefix(t))
+	code.WriteByte(0x8b)
+	code.WriteByte(modRM(0, target, source))
+}
+
+// movsxd
+func (code *Coder) instrIntMovsxdFromMemIndirect(source, target regs.R) {
+	code.WriteByte(rexW)
+	code.WriteByte(0x63)
+	code.WriteByte(modRM(0, target, source))
+}
+
 // pop
 func (code *Coder) instrIntPop(target regs.R) {
 	code.WriteByte(0x58 + byte(target))
@@ -129,6 +147,14 @@ func (code *Coder) instrIntPop(target regs.R) {
 // push
 func (code *Coder) instrIntPush(source regs.R) {
 	code.WriteByte(0x50 + byte(source))
+}
+
+// shl
+func (code *Coder) instrIntShl64Imm8(value uint8, target regs.R) {
+	code.WriteByte(rexW)
+	code.WriteByte(0xc1)
+	code.WriteByte(modRM(modReg, 0, target))
+	code.immediate(value)
 }
 
 // test

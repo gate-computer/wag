@@ -1,6 +1,8 @@
 package wag
 
 import (
+	"encoding/binary"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -16,6 +18,8 @@ const (
 	magic   = 0x54fd3985
 	idBase  = 0x700000
 	objdump = true
+
+	sectionAlignment = 4096
 )
 
 type fun func() int32
@@ -87,7 +91,7 @@ func test(t *testing.T, filename string) {
 		}
 
 		if argCount == 1 {
-			t.Logf("skipping %s", sexp.Stringify(assert, false))
+			// t.Logf("skipping %s", sexp.Stringify(assert, false))
 			continue
 		}
 
@@ -116,7 +120,7 @@ func test(t *testing.T, filename string) {
 			}
 
 		default:
-			t.Logf("skipping %s", assertName)
+			// t.Logf("skipping %s", assertName)
 			continue
 		}
 
@@ -140,7 +144,7 @@ func test(t *testing.T, filename string) {
 	})
 
 	m := loadModule(module)
-	binary := m.Code()
+	text, roData, data, bssSize := m.Code()
 
 	name := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", ".bin", -1))
 
@@ -149,7 +153,29 @@ func test(t *testing.T, filename string) {
 		t.Fatal(err)
 	}
 
-	if _, err := f.Write(binary); err != nil {
+	textSize, err := writeSection(f, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	roDataSize, err := writeSection(f, roData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := writeSection(f, data); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, textSize); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, roDataSize); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := binary.Write(f, binary.LittleEndian, int64(bssSize)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -200,4 +226,26 @@ func invoke2call(exports map[string]string, x interface{}) {
 			invoke2call(exports, e)
 		}
 	}
+}
+
+func writeSection(f *os.File, data []byte) (size int64, err error) {
+	_, err = f.Write(data)
+	if err != nil {
+		return
+	}
+
+	size = int64(len(data))
+
+	padding := sectionAlignment - (size & (sectionAlignment - 1))
+	if padding == sectionAlignment {
+		padding = 0
+	}
+
+	_, err = f.Seek(padding, io.SeekCurrent)
+	if err != nil {
+		return
+	}
+
+	size += padding
+	return
 }
