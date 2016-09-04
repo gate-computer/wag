@@ -55,8 +55,6 @@ func (code *programCoder) module(m *Module) {
 }
 
 func (program *programCoder) function(m *Module, f *Function) {
-	// fmt.Println(f.Names, f.body)
-
 	code := functionCoder{
 		program:    program,
 		module:     m,
@@ -154,34 +152,17 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 		case "eqz":
 			resultType = types.I32
 			fallthrough
-
 		case "neg":
-			if len(args) != 1 {
-				panic(fmt.Errorf("%s: wrong number of operands", exprName))
-			}
-			code.expr(args[0], opType)
-			code.mach.UnaryOp(opName, opType, regs.R0)
+			code.exprUnaryOp(exprName, opName, opType, args)
 
 		case "ne":
 			resultType = types.I32
 			fallthrough
-
 		case "add", "and", "or", "sub", "xor":
-			if len(args) != 2 {
-				panic(fmt.Errorf("%s: wrong number of operands", exprName))
-			}
-			code.expr(args[0], opType)
-			code.opPush(opType, regs.R0)
-			code.expr(args[1], opType)
-			code.mach.OpMove(opType, regs.R0, regs.R1)
-			code.opPop(opType, regs.R0)
-			code.mach.BinaryOp(opName, opType, regs.R1, regs.R0)
+			code.exprBinaryOp(exprName, opName, opType, args)
 
 		case "const":
-			if len(args) != 1 {
-				panic(fmt.Errorf("%s: wrong number of operands", exprName))
-			}
-			code.mach.OpMoveImm(opType, args[0], regs.R0)
+			code.exprConst(exprName, opType, args)
 
 		default:
 			panic(exprName)
@@ -189,124 +170,33 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	} else {
 		switch exprName {
 		case "block":
-			after := new(links.L)
-			code.pushTarget(after, expectType)
-			for _, arg := range args {
-				resultType = code.expr(arg, types.Any)
-			}
-			code.popTarget()
-			code.label(after)
+			resultType = code.exprBlock(exprName, args, expectType)
 
 		case "br", "br_if", "br_table":
 			resultType = code.exprBr(exprName, args)
 
 		case "call":
-			if len(args) < 1 {
-				panic(fmt.Errorf("%s: too few operands", exprName))
-			}
-			funcName := args[0].(string)
-			target, found := code.module.Functions[funcName]
-			if !found {
-				panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
-			}
-			funcArgs := args[1:]
-			if len(target.Signature.ArgTypes) != len(funcArgs) {
-				panic(fmt.Errorf("%s: wrong number of arguments", exprName))
-			}
-			for i, arg := range funcArgs {
-				t := target.Signature.ArgTypes[i]
-				code.expr(arg, t)
-				code.opPush(t, regs.R0)
-			}
-			code.opCall(code.program.functionLinks[target])
-			code.opAddToStackPtr(len(funcArgs) * wordSize)
-			resultType = target.Signature.ResultType
+			resultType = code.exprCall(exprName, args)
 
 		case "get_local":
-			if len(args) != 1 {
-				panic(fmt.Errorf("%s: wrong number of operands", exprName))
-			}
-			varName := args[0].(string)
-			offset, varType, found := code.getVarOffsetAndType(varName)
-			if !found {
-				panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
-			}
-			code.mach.OpLoadStack(varType, offset, regs.R0)
-			resultType = varType
+			resultType = code.exprGetLocal(exprName, args)
 
 		case "if":
-			if len(args) < 2 {
-				panic(fmt.Errorf("%s: too few operands", exprName))
-			}
-			haveElse := len(args) == 3
-			if len(args) > 3 {
-				panic(fmt.Errorf("%s: too many operands", exprName))
-			}
-			afterThen := new(links.L)
-			afterElse := new(links.L)
-			t := code.expr(args[0], types.AnyScalar)
-			code.opBranchIfNot(t, regs.R0, afterThen)
-			var thenType types.T
-			for _, e := range args[1].([]interface{}) {
-				thenType = code.expr(e, types.Any)
-			}
-			if haveElse {
-				code.opBranch(afterElse)
-				code.mach.Align()
-			}
-			code.label(afterThen)
-			if haveElse {
-				var elseType types.T
-				for _, e := range args[2].([]interface{}) {
-					elseType = code.expr(e, types.Any)
-				}
-				code.label(afterElse)
-				if thenType != elseType {
-					panic(fmt.Errorf("%s: then and else expressions return distinct types: %s vs. %s", exprName, thenType, elseType))
-				}
-			}
-			resultType = thenType
+			resultType = code.exprIf(exprName, args)
 
 		case "nop":
-			if len(args) != 0 {
-				panic(fmt.Errorf("%s: wrong number of operands", exprName))
-			}
-			code.mach.OpNop()
+			resultType = code.exprNop(exprName, args)
 
 		case "return":
-			t := code.function.Signature.ResultType
-			if t == types.Void {
-				t = types.Any
-			}
-			if code.function.Signature.ResultType == types.Void {
-				if len(args) == 1 {
-					code.expr(args[0], t)
-				} else if len(args) != 0 {
-					panic(fmt.Errorf("%s: wrong number of operands", exprName))
-				}
-			} else {
-				if len(args) != 1 {
-					panic(fmt.Errorf("%s: wrong number of operands", exprName))
-				}
-				code.expr(args[0], t)
-			}
-			code.opAddToStackPtr(code.getLocalsEndOffset())
-			code.mach.OpReturn()
-			resultType = code.function.Signature.ResultType
+			resultType = code.exprReturn(exprName, args)
 
 		case "unreachable":
-			if len(args) != 0 {
-				panic(fmt.Errorf("%s: wrong number of operands", exprName))
-			}
-			code.mach.OpInvalid()
-			resultType = expectType
+			resultType = code.exprUnreachable(exprName, args, expectType)
 
 		default:
 			panic(exprName)
 		}
 	}
-
-	// fmt.Println(" ", expr)
 
 	switch expectType {
 	case types.Any:
@@ -327,13 +217,57 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	panic(fmt.Errorf("result type %s does not match expected type %s", resultType, expectType))
 }
 
-func (code *functionCoder) exprBr(branchKind string, args []interface{}) (resultType types.T) {
+func (code *functionCoder) exprUnaryOp(exprName, opName string, opType types.T, args []interface{}) {
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	code.expr(args[0], opType)
+	code.mach.UnaryOp(opName, opType, regs.R0)
+}
+
+func (code *functionCoder) exprBinaryOp(exprName, opName string, opType types.T, args []interface{}) {
+	if len(args) != 2 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	code.expr(args[0], opType)
+	code.opPush(opType, regs.R0)
+	code.expr(args[1], opType)
+	code.mach.OpMove(opType, regs.R0, regs.R1)
+	code.opPop(opType, regs.R0)
+	code.mach.BinaryOp(opName, opType, regs.R1, regs.R0)
+}
+
+func (code *functionCoder) exprConst(exprName string, opType types.T, args []interface{}) {
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	code.mach.OpMoveImm(opType, args[0], regs.R0)
+}
+
+func (code *functionCoder) exprBlock(exprName string, args []interface{}, expectType types.T) (resultType types.T) {
+	after := new(links.L)
+	code.pushTarget(after, expectType)
+
+	for _, arg := range args {
+		resultType = code.expr(arg, types.Any)
+	}
+
+	code.popTarget()
+	code.label(after)
+
+	return
+}
+
+func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultType types.T) {
 	var indexes []interface{}
 	var defaultIndex interface{}
 	var resultExpr interface{}
 	var condExpr interface{}
 
-	switch branchKind {
+	switch exprName {
 	case "br":
 		switch len(args) {
 		case 1:
@@ -344,7 +278,7 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 			resultExpr = args[1]
 
 		default:
-			panic(fmt.Errorf("%s: wrong number of operands", branchKind))
+			panic(fmt.Errorf("%s: wrong number of operands", exprName))
 		}
 
 	case "br_if":
@@ -359,12 +293,12 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 			condExpr = args[2]
 
 		default:
-			panic(fmt.Errorf("%s: wrong number of operands", branchKind))
+			panic(fmt.Errorf("%s: wrong number of operands", exprName))
 		}
 
 	case "br_table":
 		if len(args) < 2 {
-			panic(fmt.Errorf("%s: too few operands", branchKind))
+			panic(fmt.Errorf("%s: too few operands", exprName))
 		}
 
 		condExpr = args[len(args)-1]
@@ -376,7 +310,7 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 		}
 
 		if len(args) < 1 {
-			panic(fmt.Errorf("%s: too few operands", branchKind))
+			panic(fmt.Errorf("%s: too few operands", exprName))
 		}
 
 		indexes = args[:len(args)-1]
@@ -406,7 +340,7 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 		}
 	}
 
-	switch branchKind {
+	switch exprName {
 	case "br", "br_if":
 		code.opAddToStackPtr(defaultStackDelta)
 
@@ -450,8 +384,6 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 		tableSize := len(targets) << tableScale
 		tableAlloc, tableAddr := code.program.roData.allocate(tableSize)
 
-		// branchAddr := code.opBranchTable(condType, condReg, tableAddr, len(targets), defaultStackDelta, defaultTarget.label)
-
 		branchStackOffset := code.stackOffset
 
 		var outOfBounds *links.L
@@ -471,8 +403,8 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 		var branchAddr int
 
 		if commonStackOffset < 0 {
-			// - add (condReg >> 32) to regStackPtr
-			// - (condReg & 0xffffffff) to condReg
+			// TODO: add (condReg >> 32) to regStackPtr
+			// TODO: (condReg & 0xffffffff) to condReg
 			panic("not implemented")
 		}
 
@@ -502,6 +434,141 @@ func (code *functionCoder) exprBr(branchKind string, args []interface{}) (result
 	}
 
 	return
+}
+
+func (code *functionCoder) exprCall(exprName string, args []interface{}) types.T {
+	if len(args) == 0 {
+		panic(fmt.Errorf("%s: too few operands", exprName))
+	}
+
+	funcName := args[0].(string)
+	target, found := code.module.Functions[funcName]
+	if !found {
+		panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
+	}
+
+	funcArgs := args[1:]
+
+	if len(target.Signature.ArgTypes) != len(funcArgs) {
+		panic(fmt.Errorf("%s: wrong number of arguments", exprName))
+	}
+
+	for i, arg := range funcArgs {
+		t := target.Signature.ArgTypes[i]
+		code.expr(arg, t)
+		code.opPush(t, regs.R0)
+	}
+
+	code.opCall(code.program.functionLinks[target])
+	code.opAddToStackPtr(len(funcArgs) * wordSize)
+
+	return target.Signature.ResultType
+}
+
+func (code *functionCoder) exprGetLocal(exprName string, args []interface{}) types.T {
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	varName := args[0].(string)
+	offset, varType, found := code.getVarOffsetAndType(varName)
+	if !found {
+		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
+	}
+
+	code.mach.OpLoadStack(varType, offset, regs.R0)
+
+	return varType
+}
+
+func (code *functionCoder) exprIf(exprName string, args []interface{}) types.T {
+	if len(args) < 2 {
+		panic(fmt.Errorf("%s: too few operands", exprName))
+	}
+
+	haveElse := len(args) == 3
+
+	if len(args) > 3 {
+		panic(fmt.Errorf("%s: too many operands", exprName))
+	}
+
+	afterThen := new(links.L)
+	afterElse := new(links.L)
+
+	t := code.expr(args[0], types.AnyScalar)
+	code.opBranchIfNot(t, regs.R0, afterThen)
+
+	var thenType types.T
+
+	for _, e := range args[1].([]interface{}) {
+		thenType = code.expr(e, types.Any)
+	}
+
+	if haveElse {
+		code.opBranch(afterElse)
+		code.mach.Align()
+	}
+
+	code.label(afterThen)
+
+	if haveElse {
+		var elseType types.T
+
+		for _, e := range args[2].([]interface{}) {
+			elseType = code.expr(e, types.Any)
+		}
+
+		if thenType != elseType {
+			panic(fmt.Errorf("%s: then and else expressions return distinct types: %s vs. %s", exprName, thenType, elseType))
+		}
+
+		code.label(afterElse)
+	}
+
+	return thenType
+}
+
+func (code *functionCoder) exprNop(exprName string, args []interface{}) (resultType types.T) {
+	if len(args) != 0 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	code.mach.OpNop()
+
+	return
+}
+
+func (code *functionCoder) exprReturn(exprName string, args []interface{}) types.T {
+	if len(args) > 1 {
+		panic(fmt.Errorf("%s: too many operands", exprName))
+	}
+
+	if code.function.Signature.ResultType != types.Void && len(args) == 0 {
+		panic(fmt.Errorf("%s: too few operands", exprName))
+	}
+
+	if len(args) > 0 {
+		t := code.function.Signature.ResultType
+		if t == types.Void {
+			t = types.Any
+		}
+		code.expr(args[0], t)
+	}
+
+	code.opAddToStackPtr(code.getLocalsEndOffset())
+	code.mach.OpReturn()
+
+	return code.function.Signature.ResultType
+}
+
+func (code *functionCoder) exprUnreachable(exprName string, args []interface{}, expectType types.T) types.T {
+	if len(args) != 0 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	code.mach.OpInvalid()
+
+	return expectType
 }
 
 func (code *functionCoder) opAddToStackPtr(offset int) {
