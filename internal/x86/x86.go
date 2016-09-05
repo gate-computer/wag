@@ -24,7 +24,7 @@ const (
 	regStackPtr = 4 // rsp
 	// rbp
 	regRODataPtr = 6 // rsi
-	// rdi
+	regTextPtr   = 7 // rdi
 
 	wordSize      = 8
 	codeAlignment = 16
@@ -109,7 +109,13 @@ func (code *Coder) OpBranchIndirect(reg regs.R) (branchAddr int) {
 	code.instrLeaRIP(0, regScratch)
 	branchAddr = code.Len()
 	code.intBinaryOp("add", types.I64, reg, regScratch)
-	code.instrJmpReg(regScratch)
+	code.instrIndirect(opcodeIndirectJmp, regScratch)
+	return
+}
+
+func (code *Coder) OpCallIndirectTrash(reg regs.R) {
+	code.intBinaryOp("add", types.I64, regTextPtr, reg)
+	code.instrIndirect(opcodeIndirectCall, reg)
 	return
 }
 
@@ -117,24 +123,24 @@ func (code *Coder) OpInvalid() {
 	code.instrUb2()
 }
 
-func (code *Coder) OpLoadRODataDispRegScaleInplace(t types.T, addr int, dispType types.T, reg regs.R, scale uint8) {
+func (code *Coder) OpLoadRODataRegScaleExt(t types.T, addr int, dispType types.T, reg regs.R, scale uint8) {
 	if addr < 0 || 0x80000000 <= addr {
 		panic(addr)
 	}
 
 	if dispType != types.I64 {
-		// TODO: sign-extend
+		code.instrIntMovsxd(reg, reg) // sign extension
 	}
 
-	code.instrIntShl64Imm8(scale, reg)
+	code.instrIntShImm(opcodeIntShlImm, types.I64, scale, reg)
 
 	if addr != 0 {
-		code.instrIntAdd64Imm(opcodeIntAdd64Imm32, int32(addr), reg)
+		code.instrIntAddSubImm(opcodeIntAddImm, types.I64, immsizeIntAddSub32, int32(addr), reg)
 	}
 
 	code.intBinaryOp("add", types.I64, regRODataPtr, reg)
 
-	switch dispType {
+	switch t {
 	case types.I32:
 		code.instrIntMovsxdFromMemIndirect(reg, reg)
 
@@ -146,43 +152,76 @@ func (code *Coder) OpLoadRODataDispRegScaleInplace(t types.T, addr int, dispType
 	}
 }
 
-func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R) {
-	var dispMod byte
-	var dispOffset interface{}
+func (code *Coder) OpLoadStackExt(t types.T, sourceOffset int, target regs.R) {
+	if sourceOffset == 0 {
+		switch t {
+		case types.I32:
+			code.instrIntMovsxdFromStack(target)
 
-	switch {
-	case sourceOffset < 0:
-		panic(sourceOffset)
+		case types.I64:
+			code.instrIntMovFromStack(t, target)
 
-	case (sourceOffset & 7) != 0:
-		panic(sourceOffset)
+		case types.F32, types.F64:
+			code.instrFloatMovFromStack(target)
+			// TODO: does F32 need sign-extension or something...?
 
-	case sourceOffset < 0x80:
-		dispMod = modDisp8
-		dispOffset = int8(sourceOffset)
+		default:
+			panic(t)
+		}
+	} else {
+		var dispMod byte
+		var dispOffset interface{}
 
-	case sourceOffset < 0x80000000:
-		dispMod = modDisp32
-		dispOffset = int32(sourceOffset)
+		switch {
+		case sourceOffset < 0:
+			panic(sourceOffset)
 
-	default:
-		panic(sourceOffset)
+		case t.Size() == types.Size64 && (sourceOffset&7) != 0:
+			panic(sourceOffset)
+
+		case (sourceOffset & 3) != 0:
+			panic(sourceOffset)
+
+		case sourceOffset < 0x80:
+			dispMod = modDisp8
+			dispOffset = int8(sourceOffset)
+
+		case sourceOffset < 0x80000000:
+			dispMod = modDisp32
+			dispOffset = int32(sourceOffset)
+
+		default:
+			panic(sourceOffset)
+		}
+
+		switch t {
+		case types.I32:
+			code.instrIntMovsxdFromStackDisp(dispMod, dispOffset, target)
+
+		case types.I64:
+			code.instrIntMovFromStackDisp(t, dispMod, dispOffset, target)
+
+		case types.F32, types.F64:
+			code.instrFloatMovFromStackDisp(dispMod, dispOffset, target)
+			// TODO: does F32 need sign-extension or something...?
+
+		default:
+			panic(t)
+		}
 	}
+}
 
-	switch t.Category() {
-	case types.Int:
-		code.instrIntMovFromStackDisp(t, dispMod, dispOffset, target)
+func (code *Coder) OpMoveExt(t types.T, source, target regs.R) {
+	switch t {
+	case types.I32:
+		code.instrIntMovsxd(source, target)
 
-	case types.Float:
-		code.instrFloatMovFromStackDisp(dispMod, dispOffset, target)
+	case types.I64:
+		code.BinaryOp("mov", t, source, target)
 
 	default:
 		panic(t)
 	}
-}
-
-func (code *Coder) OpMove(t types.T, source, target regs.R) {
-	code.BinaryOp("mov", t, source, target)
 }
 
 func (code *Coder) OpMoveImm(t types.T, value interface{}, target regs.R) {
@@ -214,18 +253,43 @@ func (code *Coder) OpReturn() {
 	code.instrRet()
 }
 
+func (code *Coder) OpShiftRightLogicalImm(t types.T, count uint8, target regs.R) {
+	code.instrIntShImm(opcodeIntShrImm, t, count, target)
+}
+
 func (code *Coder) StubOpBranch() {
-	code.instrJmpDisp8Value0(opcodeJmp)
+	code.stubInstrJmp()
 }
 
 func (code *Coder) StubOpBranchIf(t types.T, subject regs.R) {
 	code.UnaryOp("test", t, subject)
-	code.instrJmpDisp8Value0(opcodeJne)
+	code.stubInstrJcc(opcodeJne)
 }
 
 func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
 	code.UnaryOp("test", t, subject)
-	code.instrJmpDisp8Value0(opcodeJe)
+	code.stubInstrJcc(opcodeJe)
+}
+
+func (code *Coder) StubOpBranchIfNotEqualImmTrash(t types.T, value int, subject regs.R) {
+	var immsize byte
+	var imm interface{}
+
+	switch {
+	case -0x80 <= value && value < 0x80:
+		immsize = immsizeIntAddSub8
+		imm = int8(value)
+
+	case -0x80000000 <= value && value < 0x80000000:
+		immsize = immsizeIntAddSub32
+		imm = int32(value)
+
+	default:
+		panic(value)
+	}
+
+	code.instrIntAddSubImm(opcodeIntSubImm, t, immsize, imm, subject)
+	code.stubInstrJcc(opcodeJne)
 }
 
 func (code *Coder) StubOpBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{}) {
@@ -233,32 +297,29 @@ func (code *Coder) StubOpBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBo
 	code.UnaryOp("test", t, indexReg)
 	code.instrIntCmov(opcodeIntCmovl, t, regScratch, indexReg) // transform negative index to upper bound
 	code.intBinaryOp("sub", t, indexReg, regScratch)
-	code.instrJmpDisp8Value0(opcodeJle)
+	code.stubInstrJcc(opcodeJle)
 }
 
 func (code *Coder) StubOpCall() {
-	code.instrCallDisp32Value0()
+	code.stubInstrCall()
 }
 
 func (code *Coder) UpdateBranches(l *links.L) {
-	for _, addr := range l.Sites {
-		offset := l.Address - addr
-		if offset < -0x80 || 0x80 <= offset {
-			panic(offset)
-		}
-
-		code.updateJmpDisp8(addr, int8(offset))
-	}
+	code.update(l)
 }
 
 func (code *Coder) UpdateCalls(l *links.L) {
+	code.update(l)
+}
+
+func (code *Coder) update(l *links.L) {
 	for _, addr := range l.Sites {
 		offset := l.Address - addr
 		if offset < -0x80000000 || 0x80000000 <= offset {
 			panic(offset)
 		}
 
-		code.updateCallDisp32(addr, int32(offset))
+		byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(offset))
 	}
 }
 
@@ -294,43 +355,14 @@ func (code *Coder) toStack(mod byte, source regs.R) {
 	code.WriteByte(sib(0, regStackPtr, regStackPtr))
 }
 
-func (code *Coder) updateDataDisp32(addr int, disp int32) {
-	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(disp))
-}
-
-// call
-func (code *Coder) instrCallDisp32Value0() {
-	code.WriteByte(0xe8)
-	code.WriteByte(0)
-	code.WriteByte(0)
-	code.WriteByte(0)
-	code.WriteByte(0)
-}
-
-func (code *Coder) updateCallDisp32(addr int, disp int32) {
-	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(disp))
-}
-
-// jmp
-func (code *Coder) instrJmpReg(addrReg regs.R) {
-	code.WriteByte(0xff)
-	code.WriteByte(modRM(modReg, 0x4, addrReg))
-}
-
 const (
-	opcodeJmp = 0xeb
-	opcodeJe  = 0x74
-	opcodeJne = 0x75
-	opcodeJle = 0x7e
+	opcodeIndirectCall = 0x2
+	opcodeIndirectJmp  = 0x4
 )
 
-func (code *Coder) instrJmpDisp8Value0(opcode byte) {
-	code.WriteByte(opcode)
-	code.WriteByte(0)
-}
-
-func (code *Coder) updateJmpDisp8(addr int, disp int8) {
-	code.Bytes()[addr-1] = byte(disp)
+func (code *Coder) instrIndirect(opcode byte, addrReg regs.R) {
+	code.WriteByte(0xff)
+	code.WriteByte(modRM(modReg, regs.R(opcode), addrReg))
 }
 
 // lea
@@ -355,4 +387,37 @@ func (code *Coder) instrRet() {
 func (code *Coder) instrUb2() {
 	code.WriteByte(0x0f)
 	code.WriteByte(0x0b)
+}
+
+// call
+func (code *Coder) stubInstrCall() {
+	code.WriteByte(0xe8)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+}
+
+const (
+	opcodeJe  = 0x84
+	opcodeJle = 0x8e
+	opcodeJne = 0x85
+)
+
+func (code *Coder) stubInstrJcc(opcode byte) {
+	code.WriteByte(0x0f)
+	code.WriteByte(opcode)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+}
+
+// jmp
+func (code *Coder) stubInstrJmp() {
+	code.WriteByte(0xe9)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
+	code.WriteByte(0)
 }

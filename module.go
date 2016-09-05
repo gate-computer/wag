@@ -3,6 +3,7 @@ package wag
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -55,11 +56,13 @@ func (flags FunctionFlags) String() (s string) {
 }
 
 type Module struct {
-	Memory       Memory
-	Signatures   map[string]*Signature
-	FunctionList []*Function
-	Functions    map[string]*Function
-	Start        string
+	Memory          Memory
+	Signatures      SignaturesByIndex
+	NamedSignatures map[string]*Signature
+	Functions       []*Function
+	NamedFunctions  map[string]*Function
+	Table           []*Function
+	Start           string
 
 	code []byte
 }
@@ -84,15 +87,19 @@ func loadModule(top []interface{}) (m *Module) {
 	}
 
 	m = &Module{
-		Signatures: make(map[string]*Signature),
-		Functions:  make(map[string]*Function),
+		NamedSignatures: make(map[string]*Signature),
+		NamedFunctions:  make(map[string]*Function),
 	}
+
+	var sigs []*Signature
 
 	startSet := false
 
 	for _, x := range top[1:] {
 		expr := x.([]interface{})
 		name := expr[0].(string)
+
+		var newSig *Signature
 
 		switch name {
 		case "memory":
@@ -105,9 +112,20 @@ func loadModule(top []interface{}) (m *Module) {
 
 		case "func":
 			f := newFunction(m, expr)
-			m.FunctionList = append(m.FunctionList, f)
+
+			i := sort.Search(len(sigs), func(i int) bool {
+				return sigs[i].Compare(f.Signature) >= 0
+			})
+			if i < len(sigs) && sigs[i].Compare(f.Signature) == 0 {
+				f.Signature = sigs[i]
+			} else {
+				newSig = f.Signature
+			}
+
+			m.Functions = append(m.Functions, f)
+
 			for _, name := range f.Names {
-				m.Functions[name] = f
+				m.NamedFunctions[name] = f
 			}
 
 		case "start":
@@ -115,23 +133,59 @@ func loadModule(top []interface{}) (m *Module) {
 			startSet = true
 
 		case "type":
-			sig := newSignature(m, expr)
-			m.Signatures[sig.Name] = sig
+			sig, sigName := newSignature(m, expr)
+
+			i := sort.Search(len(sigs), func(i int) bool {
+				return sigs[i].Compare(sig) >= 0
+			})
+			if i < len(sigs) && sigs[i].Compare(sig) == 0 {
+				sig = sigs[i]
+			} else {
+				newSig = sig
+			}
+
+			if sigName != "" {
+				m.NamedSignatures[sigName] = sig
+			}
 
 		case "table":
-			// TODO
+			for _, x := range expr[1:] {
+				funcName := x.(string)
+				f, found := m.NamedFunctions[funcName]
+				if !found {
+					panic(funcName)
+				}
+				m.Table = append(m.Table, f)
+			}
 
 		default:
 			panic(fmt.Errorf("unknown module child: %s", name))
+		}
+
+		if newSig != nil {
+			i := sort.Search(len(sigs), func(i int) bool {
+				return sigs[i].Compare(newSig) >= 0
+			})
+
+			if i == len(sigs) || sigs[i].Compare(newSig) != 0 {
+				newSig.Index = len(sigs) // in order of appearance
+
+				sigs = append(sigs, nil)
+				copy(sigs[i+1:], sigs[i:])
+				sigs[i] = newSig
+			}
 		}
 	}
 
 	if !startSet {
 		panic(errors.New("start function not defined"))
 	}
-	if _, found := m.Functions[m.Start]; !found {
+	if _, found := m.NamedFunctions[m.Start]; !found {
 		panic(fmt.Errorf("start function not found: %s", m.Start))
 	}
+
+	m.Signatures = SignaturesByIndex(sigs)
+	sort.Sort(m.Signatures)
 
 	return
 }
@@ -142,22 +196,21 @@ type Memory struct {
 }
 
 type Signature struct {
-	Name       string
+	Index      int
 	ArgTypes   []types.T
 	ResultType types.T
 }
 
-func newSignature(m *Module, list []interface{}) (sig *Signature) {
+func newSignature(m *Module, list []interface{}) (sig *Signature, name string) {
 	f := newFunction(m, list[2].([]interface{}))
 
 	sig = f.Signature
-	sig.Name = list[1].(string)
-
+	name = list[1].(string)
 	return
 }
 
 func (sig *Signature) String() (s string) {
-	s = sig.Name + "("
+	s = "("
 	for i, t := range sig.ArgTypes {
 		if i > 0 {
 			s += ","
@@ -166,6 +219,56 @@ func (sig *Signature) String() (s string) {
 	}
 	s += ")->" + sig.ResultType.String()
 	return
+}
+
+func (sig1 *Signature) Compare(sig2 *Signature) int {
+	len1 := len(sig1.ArgTypes)
+	len2 := len(sig2.ArgTypes)
+
+	if len1 < len2 {
+		return -1
+	}
+	if len1 > len2 {
+		return 1
+	}
+
+	for n := range sig1.ArgTypes {
+		arg1 := sig1.ArgTypes[n]
+		arg2 := sig2.ArgTypes[n]
+
+		if arg1 < arg2 {
+			return -1
+		}
+		if arg1 > arg2 {
+			return 1
+		}
+	}
+
+	res1 := sig1.ResultType
+	res2 := sig2.ResultType
+
+	if res1 < res2 {
+		return -1
+	}
+	if res1 > res2 {
+		return 1
+	}
+
+	return 0
+}
+
+type SignaturesByIndex []*Signature
+
+func (a SignaturesByIndex) Len() int {
+	return len(a)
+}
+
+func (a SignaturesByIndex) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a SignaturesByIndex) Less(i, j int) bool {
+	return a[i].Index < a[j].Index
 }
 
 type Var struct {
@@ -188,7 +291,7 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 	list = list[1:] // skip "func" token
 
 	f = &Function{
-		Signature: &Signature{},
+		Signature: &Signature{Index: -1},
 		Vars:      make(map[string]Var),
 	}
 
@@ -263,7 +366,7 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 
 		case "type":
 			sigName := args[0].(string)
-			sig, found := m.Signatures[sigName]
+			sig, found := m.NamedSignatures[sigName]
 			if !found {
 				panic(sigName)
 			}

@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 
 	start_func start = (start_func) text_addr;
 
-	int32_t result = start(NULL, rodata_addr);
+	int32_t result = start(text_addr, rodata_addr);
 	if (result != MAGIC) {
 		fprintf(stderr, "exec: failed test: %d\n", result - ID_BASE);
 		return 6;

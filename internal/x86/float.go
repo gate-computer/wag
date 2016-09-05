@@ -46,11 +46,11 @@ func (code *Coder) opFloatMoveImm(t types.T, value interface{}, target regs.R) {
 
 func (code *Coder) opFloatPop(target regs.R) {
 	code.instrFloatMovFromStack(target)
-	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(wordSize), regStackPtr)
+	code.instrIntAddSubImm(opcodeIntAddImm, types.I64, immsizeIntAddSub8, int8(wordSize), regStackPtr)
 }
 
 func (code *Coder) opFloatPush(source regs.R) {
-	code.instrIntAdd64Imm(opcodeIntAdd64Imm8, int8(-wordSize), regStackPtr)
+	code.instrIntAddSubImm(opcodeIntSubImm, types.I64, immsizeIntAddSub8, int8(wordSize), regStackPtr)
 	code.instrFloatMovToStack(source)
 }
 

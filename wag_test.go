@@ -30,9 +30,9 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-//func TestFunc(t *testing.T) { test(t, "testdata/spec/ml-proto/test/func.wast") }
-func TestI32(t *testing.T) { test(t, "testdata/i32.wast") }
-func TestI64(t *testing.T) { test(t, "testdata/i64.wast") }
+func TestFunc(t *testing.T) { test(t, "testdata/spec/ml-proto/test/func.wast") }
+func TestI32(t *testing.T)  { test(t, "testdata/i32.wast") }
+func TestI64(t *testing.T)  { test(t, "testdata/i64.wast") }
 
 var (
 	execCompiled bool
@@ -90,12 +90,7 @@ func test(t *testing.T, filename string) {
 			}
 		}
 
-		if argCount == 1 {
-			// t.Logf("skipping %s", sexp.Stringify(assert, false))
-			continue
-		}
-
-		if exprType == "" {
+		if argCount > 1 && exprType == "" {
 			t.Fatalf("can't figure out type of %s", sexp.Stringify(assert, true))
 		}
 
@@ -105,22 +100,26 @@ func test(t *testing.T, filename string) {
 
 		switch assertName {
 		case "assert_return":
-			test = []interface{}{
-				"if",
-				append([]interface{}{exprType + ".ne"}, assert[1:]...),
-				[]interface{}{
+			if argCount > 1 {
+				test = []interface{}{
+					"if",
+					append([]interface{}{exprType + ".ne"}, assert[1:]...),
 					[]interface{}{
-						"return",
 						[]interface{}{
-							"i32.const",
-							strconv.Itoa(testId),
+							"return",
+							[]interface{}{
+								"i32.const",
+								strconv.Itoa(testId),
+							},
 						},
 					},
-				},
+				}
+			} else {
+				test = append([]interface{}{"block"}, assert[1:]...)
 			}
 
 		default:
-			// t.Logf("skipping %s", assertName)
+			t.Logf("skipping %s", assertName)
 			continue
 		}
 
