@@ -9,12 +9,9 @@ import (
 func (code *Coder) intUnaryOp(name string, t types.T, subject regs.R) {
 	switch name {
 	case "eqz":
-		code.instrIntMov32Imm(1, regScratch)
 		code.instrIntTest(t, subject, subject)
-		code.instrIntCmov(opcodeIntCmove, types.I32, regScratch, subject)
-
-	case "test": // internal
-		code.instrIntTest(t, subject, subject)
+		code.instrIntSetcc(opcodeIntSete, subject)
+		code.instrIntMovzx32(subject, subject)
 
 	default:
 		panic(name)
@@ -29,10 +26,9 @@ func (code *Coder) intBinaryOp(name string, t types.T, source, target regs.R) {
 
 	switch name {
 	case "ne":
-		code.intBinaryOp("mov", t, target, regScratch)
-		code.instrIntMov32Imm(1, target)
-		code.intBinaryOp("sub", t, source, regScratch)
-		code.instrIntCmov(opcodeIntCmove, types.I32, regScratch, target)
+		code.intBinaryOp("sub", t, source, target)
+		code.instrIntSetcc(opcodeIntSetne, target)
+		code.instrIntMovzx32(target, target)
 
 	default:
 		panic(name)
@@ -169,6 +165,13 @@ func (code *Coder) instrIntMovsxdFromMemIndirect(source, target regs.R) {
 	code.WriteByte(modRM(0, target, source))
 }
 
+// movzx
+func (code *Coder) instrIntMovzx32(source, target regs.R) {
+	code.WriteByte(0x0f)
+	code.WriteByte(0xb6)
+	code.WriteByte(modRM(modReg, target, source))
+}
+
 // pop
 func (code *Coder) instrIntPop(target regs.R) {
 	code.WriteByte(0x58 + byte(target))
@@ -177,6 +180,17 @@ func (code *Coder) instrIntPop(target regs.R) {
 // push
 func (code *Coder) instrIntPush(source regs.R) {
 	code.WriteByte(0x50 + byte(source))
+}
+
+const (
+	opcodeIntSete  = 0x94
+	opcodeIntSetne = 0x95
+)
+
+func (code *Coder) instrIntSetcc(opcode byte, subject regs.R) {
+	code.WriteByte(0x0f)
+	code.WriteByte(opcode)
+	code.WriteByte(modRM(modReg, 0, subject))
 }
 
 const (

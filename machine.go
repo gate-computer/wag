@@ -7,7 +7,7 @@ import (
 )
 
 type machineCoder interface {
-	UnaryOp(name string, t types.T, reg regs.R)
+	UnaryOp(name string, t types.T, subject regs.R)
 	BinaryOp(name string, t types.T, source, target regs.R)
 
 	OpAddToStackPtr(int)

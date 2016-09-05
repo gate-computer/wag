@@ -262,12 +262,12 @@ func (code *Coder) StubOpBranch() {
 }
 
 func (code *Coder) StubOpBranchIf(t types.T, subject regs.R) {
-	code.UnaryOp("test", t, subject)
+	code.instrIntTest(t, subject, subject)
 	code.stubInstrJcc(opcodeJne)
 }
 
 func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
-	code.UnaryOp("test", t, subject)
+	code.instrIntTest(t, subject, subject)
 	code.stubInstrJcc(opcodeJe)
 }
 
@@ -294,7 +294,7 @@ func (code *Coder) StubOpBranchIfNotEqualImmTrash(t types.T, value int, subject 
 
 func (code *Coder) StubOpBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{}) {
 	code.instrIntMovImm(t, upperBound, regScratch)
-	code.UnaryOp("test", t, indexReg)
+	code.instrIntTest(t, indexReg, indexReg)
 	code.instrIntCmov(opcodeIntCmovl, t, regScratch, indexReg) // transform negative index to upper bound
 	code.intBinaryOp("sub", t, indexReg, regScratch)
 	code.stubInstrJcc(opcodeJle)

@@ -23,10 +23,9 @@ func (code *Coder) floatBinaryOp(name string, t types.T, source, target regs.R) 
 		code.instrFloatMov(t, source, target)
 
 	case "ne":
-		code.intBinaryOp("xor", types.I32, regScratch, regScratch)
-		code.instrIntMov32Imm(1, target)                                 // int target reg
-		code.instrFloatUcomi(t, source, target)                          // float target reg
-		code.instrIntCmov(opcodeIntCmove, types.I32, regScratch, target) // int target reg
+		code.instrFloatUcomi(t, source, target)
+		code.instrIntSetcc(opcodeIntSetne, target)
+		code.instrIntMovzx32(target, target)
 
 	case "sub":
 		code.instrFloatSub(t, source, target)
