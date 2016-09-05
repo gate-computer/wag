@@ -145,8 +145,8 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 }
 
-func (code *programCoder) opTrapIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{}) {
-	code.mach.StubOpBranchIfOutOfBounds(t, indexReg, upperBound)
+func (code *programCoder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int) {
+	code.mach.StubOpBranchIfOutOfBounds(indexReg, upperBound)
 	code.trap.Sites = append(code.trap.Sites, code.mach.Len())
 }
 
@@ -276,7 +276,7 @@ func (code *functionCoder) exprBinaryOp(exprName, opName string, opType types.T,
 	code.expr(args[0], opType)
 	code.opPush(opType, regs.R0)
 	code.expr(args[1], opType)
-	code.mach.BinaryOp("mov", opType, regs.R0, regs.R1)
+	code.mach.OpMove(opType, regs.R0, regs.R1, false)
 	code.opPop(opType, regs.R0)
 	code.mach.BinaryOp(opName, opType, regs.R1, regs.R0)
 }
@@ -377,7 +377,7 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 		}
 		condType = code.expr(condExpr, types.AnyScalar)
 		if resultType != types.Void {
-			code.mach.OpMoveExt(condType, condReg, regs.R1)
+			code.mach.OpMove(condType, condReg, regs.R1, true)
 			condReg = regs.R1
 			condRegExt = true
 			code.opPop(resultType, regs.R0)
@@ -441,9 +441,13 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 			outOfBounds = defaultTarget.label
 		}
 
-		code.opBranchIfOutOfBounds(condType, condReg, uint32(len(targets)), outOfBounds)
+		if condType != types.I32 {
+			panic(condType)
+		}
 
-		if condType == types.I32 && condRegExt {
+		code.opBranchIfOutOfBounds(condReg, len(targets), outOfBounds)
+
+		if condRegExt {
 			condType = types.I64
 		}
 
@@ -534,13 +538,13 @@ func (code *functionCoder) exprCallIndirect(exprName string, args []interface{})
 	args = args[2:]
 
 	code.expr(indexExpr, types.I32)
-	code.program.opTrapIfOutOfBounds(types.I32, regs.R0, uint32(len(code.module.Table)))
+	code.program.opTrapIfOutOfBounds(regs.R0, len(code.module.Table))
 	code.mach.OpLoadRODataRegScaleExt(types.I64, 0, types.I32, regs.R0, 3) // table is at 0
 	code.opPush(types.I32, regs.R0)                                        // push func
 	code.mach.OpShiftRightLogicalImm(types.I64, 32, regs.R0)               // signature id
 	code.program.opTrapIfNotEqualImmTrash(types.I32, sig.Index, regs.R0)
 	argsSize := code.partialExprCallArgs(exprName, sig, args)
-	code.mach.OpLoadStackExt(types.I32, argsSize, regs.R1) // load func (XXX: breaks on big endian)
+	code.mach.OpLoadStack(types.I32, argsSize, regs.R1, true) // load func (XXX: breaks on big endian)
 	code.mach.OpCallIndirectTrash(regs.R1)
 	code.opAddToStackPtr(argsSize + wordSize) // pop args + func
 
@@ -573,7 +577,7 @@ func (code *functionCoder) exprGetLocal(exprName string, args []interface{}) typ
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	code.mach.OpLoadStackExt(varType, offset, regs.R0)
+	code.mach.OpLoadStack(varType, offset, regs.R0, false)
 
 	return varType
 }
@@ -693,8 +697,8 @@ func (code *functionCoder) opBranchIfNot(t types.T, subject regs.R, l *links.L) 
 	code.labelLinks[l] = struct{}{}
 }
 
-func (code *functionCoder) opBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{}, l *links.L) {
-	code.mach.StubOpBranchIfOutOfBounds(t, indexReg, upperBound)
+func (code *functionCoder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *links.L) {
+	code.mach.StubOpBranchIfOutOfBounds(indexReg, upperBound)
 	l.Sites = append(l.Sites, code.mach.Len())
 	code.labelLinks[l] = struct{}{}
 }

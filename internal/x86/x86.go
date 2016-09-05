@@ -1,4 +1,5 @@
 // +build amd64
+
 package x86
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 )
 
 const (
@@ -77,10 +79,10 @@ func regOp(intOp, floatOp func(regs.R), t types.T, subject regs.R) {
 func (code *Coder) UnaryOp(name string, t types.T, subject regs.R) {
 	switch t.Category() {
 	case types.Int:
-		code.intUnaryOp(name, t, subject)
+		code.opIntUnary(name, t, subject)
 
 	case types.Float:
-		code.floatUnaryOp(name, t, subject)
+		code.opFloatUnary(name, t, subject)
 
 	default:
 		panic(t)
@@ -91,10 +93,10 @@ func (code *Coder) UnaryOp(name string, t types.T, subject regs.R) {
 func (code *Coder) BinaryOp(name string, t types.T, source, target regs.R) {
 	switch t.Category() {
 	case types.Int:
-		code.intBinaryOp(name, t, source, target)
+		code.opIntBinary(name, t, source, target)
 
 	case types.Float:
-		code.floatBinaryOp(name, t, source, target)
+		code.opFloatBinary(name, t, source, target)
 
 	default:
 		panic(t)
@@ -102,19 +104,19 @@ func (code *Coder) BinaryOp(name string, t types.T, source, target regs.R) {
 }
 
 func (code *Coder) OpAddToStackPtr(offset int) {
-	code.opIntAdd64Imm(offset, regStackPtr)
+	code.instrIntImm(opcodeIntImmAdd, types.I64, offset, regStackPtr)
 }
 
 func (code *Coder) OpBranchIndirect(reg regs.R) (branchAddr int) {
 	code.instrLeaRIP(0, regScratch)
 	branchAddr = code.Len()
-	code.intBinaryOp("add", types.I64, reg, regScratch)
+	code.opIntBinary("add", types.I64, reg, regScratch)
 	code.instrIndirect(opcodeIndirectJmp, regScratch)
 	return
 }
 
 func (code *Coder) OpCallIndirectTrash(reg regs.R) {
-	code.intBinaryOp("add", types.I64, regTextPtr, reg)
+	code.opIntBinary("add", types.I64, regTextPtr, reg)
 	code.instrIndirect(opcodeIndirectCall, reg)
 	return
 }
@@ -129,108 +131,82 @@ func (code *Coder) OpLoadRODataRegScaleExt(t types.T, addr int, dispType types.T
 	}
 
 	if dispType != types.I64 {
-		code.instrIntMovsxd(reg, reg) // sign extension
+		code.instrIntMov(types.I32, reg, reg, true)
 	}
 
-	code.instrIntShImm(opcodeIntShlImm, types.I64, scale, reg)
+	code.instrIntImmSh(opcodeIntImmShl, types.I64, scale, reg)
 
 	if addr != 0 {
-		code.instrIntAddSubImm(opcodeIntAddImm, types.I64, immsizeIntAddSub32, int32(addr), reg)
+		code.instrIntImm(opcodeIntImmAdd, types.I64, addr, reg)
 	}
 
-	code.intBinaryOp("add", types.I64, regRODataPtr, reg)
+	code.opIntBinary("add", types.I64, regRODataPtr, reg)
+	code.instrIntMovFromIndirect(t, reg, reg, true)
+}
 
-	switch t {
-	case types.I32:
-		code.instrIntMovsxdFromMemIndirect(reg, reg)
+func (code *Coder) OpLoadStack(t types.T, sourceOffset int, target regs.R, signExt bool) {
+	var dispMod byte
+	var dispOffset interface{}
 
-	case types.I64:
-		code.instrIntMovFromMemIndirect(t, reg, reg)
+	switch {
+	case sourceOffset < 0:
+		panic(sourceOffset)
+
+	case sourceOffset == 0:
+
+	case t.Size() == types.Size64 && (sourceOffset&7) != 0:
+		panic(sourceOffset)
+
+	case (sourceOffset & 3) != 0:
+		panic(sourceOffset)
+
+	case sourceOffset < 0x80:
+		dispMod = modDisp8
+		dispOffset = int8(sourceOffset)
+
+	case sourceOffset < 0x80000000:
+		dispMod = modDisp32
+		dispOffset = int32(sourceOffset)
+
+	default:
+		panic(sourceOffset)
+	}
+
+	switch t.Category() {
+	case types.Int:
+		code.instrIntMovFromStack(t, dispMod, dispOffset, target, signExt)
+
+	case types.Float:
+		code.instrFloatMovFromStack(dispMod, dispOffset, target) // TODO: signExt
 
 	default:
 		panic(t)
 	}
 }
 
-func (code *Coder) OpLoadStackExt(t types.T, sourceOffset int, target regs.R) {
-	if sourceOffset == 0 {
-		switch t {
-		case types.I32:
-			code.instrIntMovsxdFromStack(target)
+func (code *Coder) OpMove(t types.T, source, target regs.R, signExt bool) {
+	switch t.Category() {
+	case types.Int:
+		code.instrIntMov(t, source, target, signExt)
 
-		case types.I64:
-			code.instrIntMovFromStack(t, target)
-
-		case types.F32, types.F64:
-			code.instrFloatMovFromStack(target)
-			// TODO: does F32 need sign-extension or something...?
-
-		default:
-			panic(t)
-		}
-	} else {
-		var dispMod byte
-		var dispOffset interface{}
-
-		switch {
-		case sourceOffset < 0:
-			panic(sourceOffset)
-
-		case t.Size() == types.Size64 && (sourceOffset&7) != 0:
-			panic(sourceOffset)
-
-		case (sourceOffset & 3) != 0:
-			panic(sourceOffset)
-
-		case sourceOffset < 0x80:
-			dispMod = modDisp8
-			dispOffset = int8(sourceOffset)
-
-		case sourceOffset < 0x80000000:
-			dispMod = modDisp32
-			dispOffset = int32(sourceOffset)
-
-		default:
-			panic(sourceOffset)
-		}
-
-		switch t {
-		case types.I32:
-			code.instrIntMovsxdFromStackDisp(dispMod, dispOffset, target)
-
-		case types.I64:
-			code.instrIntMovFromStackDisp(t, dispMod, dispOffset, target)
-
-		case types.F32, types.F64:
-			code.instrFloatMovFromStackDisp(dispMod, dispOffset, target)
-			// TODO: does F32 need sign-extension or something...?
-
-		default:
-			panic(t)
-		}
-	}
-}
-
-func (code *Coder) OpMoveExt(t types.T, source, target regs.R) {
-	switch t {
-	case types.I32:
-		code.instrIntMovsxd(source, target)
-
-	case types.I64:
-		code.BinaryOp("mov", t, source, target)
+	case types.Float:
+		code.instrFloatMov(t, source, target) // TODO: signExt
 
 	default:
 		panic(t)
 	}
 }
 
-func (code *Coder) OpMoveImm(t types.T, value interface{}, target regs.R) {
+func (code *Coder) OpMoveImm(t types.T, token interface{}, target regs.R) {
+	value := values.Parse(t, token)
+
 	switch t.Category() {
 	case types.Int:
 		code.instrIntMovImm(t, value, target)
 
 	case types.Float:
-		code.opFloatMoveImm(t, value, target)
+		code.instrIntMovImm(t, value, regScratch)
+		code.instrFloatMovFromInt(t, regScratch, target)
 
 	default:
 		panic(t)
@@ -254,7 +230,7 @@ func (code *Coder) OpReturn() {
 }
 
 func (code *Coder) OpShiftRightLogicalImm(t types.T, count uint8, target regs.R) {
-	code.instrIntShImm(opcodeIntShrImm, t, count, target)
+	code.instrIntImmSh(opcodeIntImmShr, t, count, target)
 }
 
 func (code *Coder) StubOpBranch() {
@@ -272,31 +248,15 @@ func (code *Coder) StubOpBranchIfNot(t types.T, subject regs.R) {
 }
 
 func (code *Coder) StubOpBranchIfNotEqualImmTrash(t types.T, value int, subject regs.R) {
-	var immsize byte
-	var imm interface{}
-
-	switch {
-	case -0x80 <= value && value < 0x80:
-		immsize = immsizeIntAddSub8
-		imm = int8(value)
-
-	case -0x80000000 <= value && value < 0x80000000:
-		immsize = immsizeIntAddSub32
-		imm = int32(value)
-
-	default:
-		panic(value)
-	}
-
-	code.instrIntAddSubImm(opcodeIntSubImm, t, immsize, imm, subject)
+	code.instrIntImm(opcodeIntImmSub, t, value, subject)
 	code.stubInstrJcc(opcodeJne)
 }
 
-func (code *Coder) StubOpBranchIfOutOfBounds(t types.T, indexReg regs.R, upperBound interface{}) {
-	code.instrIntMovImm(t, upperBound, regScratch)
-	code.instrIntTest(t, indexReg, indexReg)
-	code.instrIntCmov(opcodeIntCmovl, t, regScratch, indexReg) // transform negative index to upper bound
-	code.intBinaryOp("sub", t, indexReg, regScratch)
+func (code *Coder) StubOpBranchIfOutOfBounds(indexReg regs.R, upperBound int) {
+	code.instrIntMovImm(types.I32, uint32(upperBound), regScratch)
+	code.instrIntTest(types.I32, indexReg, indexReg)
+	code.instrIntCmov(opcodeIntCmovl, types.I32, regScratch, indexReg) // negative index -> upper bound
+	code.opIntBinary("sub", types.I32, indexReg, regScratch)
 	code.stubInstrJcc(opcodeJle)
 }
 
@@ -340,19 +300,20 @@ func sib(scale, index, base byte) byte {
 	return (scale << 6) | (index << 3) | base
 }
 
-func (code *Coder) fromStack(mod byte, target regs.R) {
+func (code *Coder) fromStack(mod byte, disp interface{}, target regs.R) {
 	code.WriteByte(modRM(mod, target, 1<<2))
 	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+	if disp != nil {
+		code.immediate(disp)
+	}
 }
 
-func (code *Coder) fromStackDisp(mod byte, disp interface{}, target regs.R) {
-	code.fromStack(mod, target)
-	code.immediate(disp)
-}
-
-func (code *Coder) toStack(mod byte, source regs.R) {
+func (code *Coder) toStack(mod byte, disp interface{}, source regs.R) {
 	code.WriteByte(modRM(mod, source, 1<<2))
 	code.WriteByte(sib(0, regStackPtr, regStackPtr))
+	if disp != nil {
+		code.immediate(disp)
+	}
 }
 
 const (
@@ -365,7 +326,6 @@ func (code *Coder) instrIndirect(opcode byte, addrReg regs.R) {
 	code.WriteByte(modRM(modReg, regs.R(opcode), addrReg))
 }
 
-// lea
 func (code *Coder) instrLeaRIP(disp int32, target regs.R) {
 	code.WriteByte(rexW)
 	code.WriteByte(0x8d)
@@ -373,23 +333,19 @@ func (code *Coder) instrLeaRIP(disp int32, target regs.R) {
 	code.immediate(disp)
 }
 
-// nop
 func (code *Coder) instrNop() {
 	code.WriteByte(0x90)
 }
 
-// ret
 func (code *Coder) instrRet() {
 	code.WriteByte(0xc3)
 }
 
-// ub2
 func (code *Coder) instrUb2() {
 	code.WriteByte(0x0f)
 	code.WriteByte(0x0b)
 }
 
-// call
 func (code *Coder) stubInstrCall() {
 	code.WriteByte(0xe8)
 	code.WriteByte(0)
@@ -413,7 +369,6 @@ func (code *Coder) stubInstrJcc(opcode byte) {
 	code.WriteByte(0)
 }
 
-// jmp
 func (code *Coder) stubInstrJmp() {
 	code.WriteByte(0xe9)
 	code.WriteByte(0)
