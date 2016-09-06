@@ -4,6 +4,7 @@ import (
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/traps"
 )
 
 type machineCoder interface {
@@ -23,7 +24,7 @@ type machineCoder interface {
 	OpPush(types.T, regs.R)
 	OpReturn()
 	OpShiftRightLogicalImm(types.T, uint8, regs.R)
-	OpTrap(arg int)
+	OpTrap(traps.Id)
 
 	StubOpBranch()
 	StubOpBranchIf(types.T, regs.R)

@@ -16,7 +16,6 @@ import (
 
 const (
 	magic   = 0x54fd3985
-	idBase  = 0x700000
 	objdump = true
 
 	sectionAlignment = 4096
@@ -61,10 +60,11 @@ func test(t *testing.T, filename string) {
 	testFunc := []interface{}{
 		"func",
 		"$test",
+		[]interface{}{"param", "$arg", "i32"},
 		[]interface{}{"result", "i32"},
 	}
 
-	testId := idBase
+	var id int
 
 	for {
 		var assert []interface{}
@@ -96,26 +96,39 @@ func test(t *testing.T, filename string) {
 
 		invoke2call(exports, assert[1:])
 
+		var spec []interface{}
 		var test []interface{}
 
 		switch assertName {
 		case "assert_return":
+			spec = []interface{}{
+				"return",
+				[]interface{}{"i32.const", "0"},
+			}
+
 			if argCount > 1 {
 				test = []interface{}{
-					"if",
-					append([]interface{}{exprType + ".ne"}, assert[1:]...),
-					[]interface{}{
-						[]interface{}{
-							"return",
-							[]interface{}{
-								"i32.const",
-								strconv.Itoa(testId),
-							},
-						},
-					},
+					"return",
+					append([]interface{}{exprType + ".eq"}, assert[1:]...),
 				}
 			} else {
 				test = append([]interface{}{"block"}, assert[1:]...)
+				test = append(test, []interface{}{"return", []interface{}{"i32.const", "1"}})
+			}
+
+		case "assert_trap":
+			spec = []interface{}{
+				"return",
+				[]interface{}{"i32.const", "1"},
+			}
+
+			test = []interface{}{
+				"block",
+				assert[1],
+				[]interface{}{
+					"return",
+					[]interface{}{"i32.const", "0"},
+				},
 			}
 
 		default:
@@ -123,15 +136,37 @@ func test(t *testing.T, filename string) {
 			continue
 		}
 
-		testFunc = append(testFunc, test)
-		testId++
+		condSpec := []interface{}{
+			"if",
+			[]interface{}{
+				"i32.eq",
+				[]interface{}{"get_local", "$arg"},
+				[]interface{}{"i32.const", strconv.Itoa(0x100000 + id)},
+			},
+			[]interface{}{spec},
+		}
+
+		condTest := []interface{}{
+			"if",
+			[]interface{}{
+				"i32.eq",
+				[]interface{}{"get_local", "$arg"},
+				[]interface{}{"i32.const", strconv.Itoa(id)},
+			},
+			[]interface{}{test},
+		}
+
+		testFunc = append(testFunc, condSpec)
+		testFunc = append(testFunc, condTest)
+
+		id++
 	}
 
 	testFunc = append(testFunc, []interface{}{
 		"return",
 		[]interface{}{
 			"i32.const",
-			strconv.Itoa(magic),
+			"-1",
 		},
 	})
 

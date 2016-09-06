@@ -1,5 +1,7 @@
 #include <fcntl.h>
+#include <setjmp.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,10 +11,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define MAGIC   0x54fd3985
-#define ID_BASE 0x700000
-
-typedef int32_t (*start_func)(void *dummy, void *rodata, void *, void *, void (*trap)(int));
+typedef int32_t (*start_func)(void *text, void *rodata, void *, void *, void (*trap)(int));
 
 struct header {
 	uint64_t text_size;
@@ -49,11 +48,34 @@ static void handle_signal(int signum, siginfo_t *i, void *context)
 	_exit(7);
 }
 
+static jmp_buf trap_buf;
+
 static void handle_trap(int arg)
 {
 	fprintf(stderr, "exec: trap %d\n", arg);
+	longjmp(trap_buf, 1);
+}
 
-	_exit(8);
+static int32_t call(void *text, void *rodata, start_func start, int64_t arg, void (*trap)(int))
+{
+	register void *rdi asm ("rdi") = text;
+	register void *rsi asm ("rsi") = rodata;
+	register void *rdx asm ("rdx") = start;
+	register int64_t rcx asm ("rcx") = arg;
+	register void *r8 asm ("r8") = trap;
+
+	int32_t retval;
+
+	asm volatile (
+		"        push    %%rcx  \n"
+		"        call    *%%rdx \n"
+		"        pop     %%rcx  \n"
+		: "=a" (retval)
+		: "r" (rdi), "r" (rsi), "r" (rdx), "r" (rcx), "r" (r8)
+		: "cc", "memory"
+	);
+
+	return retval;
 }
 
 int main(int argc, char **argv)
@@ -147,12 +169,51 @@ int main(int argc, char **argv)
 
 	start_func start = (start_func) text_addr;
 
-	int32_t result = start(text_addr, rodata_addr, NULL, NULL, handle_trap);
-	if (result != MAGIC) {
-		fprintf(stderr, "exec: failed test: %d\n", result - ID_BASE);
-		return 6;
+	bool fail = false;
+	bool done = false;
+
+	for (int id = 0; !done; id++) {
+		int32_t assert_type = call(text_addr, rodata_addr, start, 0x100000 + id, handle_trap);
+		if (assert_type < 0)
+			break;
+
+		if (setjmp(trap_buf)) {
+			if (assert_type == 1) {
+				fprintf(stderr, "exec: test #%d: trap ok\n", id);
+			} else {
+				fprintf(stderr, "exec: test #%d: failed due to unexpected trap\n", id);
+				fail = true;
+			}
+			continue;
+		}
+
+		int32_t result = call(text_addr, rodata_addr, start, id, handle_trap);
+
+		switch (result) {
+		case 1:
+			if (assert_type == 0) {
+				fprintf(stderr, "exec: test #%d: return ok\n", id);
+			} else {
+				fprintf(stderr, "exec: test #%d: failed due to unexpected success\n", id);
+				fail = true;
+			}
+			break;
+
+		case 0:
+			fprintf(stderr, "exec: test #%d: fail\n", id);
+			fail = true;
+			break;
+
+		case -1:
+			done = true;
+			break;
+
+		default:
+			fprintf(stderr, "exec: test #%d: bad result: %d\n", id, result);
+			fail = true;
+			break;
+		}
 	}
 
-	fprintf(stderr, "exec: ok\n");
-	return 0;
+	return fail ? 6 : 0;
 }

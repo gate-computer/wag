@@ -45,6 +45,11 @@ func (code *Coder) opFloatUnary(name string, t types.T, subject regs.R) {
 
 func (code *Coder) opFloatBinary(name string, t types.T, source, target regs.R) {
 	switch name {
+	case "eq":
+		code.instrFloatUcomi(t, source, target)
+		code.instrIntSetcc(opcodeIntSete, target)
+		code.instrIntMovZeroExt32(target, target)
+
 	case "ne":
 		code.instrFloatUcomi(t, source, target)
 		code.instrIntSetcc(opcodeIntSetne, target)

@@ -146,10 +146,10 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 }
 
-func (code *programCoder) trap(l *links.L, arg int) {
+func (code *programCoder) trap(l *links.L, id traps.Id) {
 	code.mach.Align()
 	l.Address = code.mach.Len()
-	code.mach.OpTrap(arg)
+	code.mach.OpTrap(id)
 
 	code.mach.UpdateBranches(l)
 }
@@ -203,7 +203,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 		case "neg":
 			code.exprUnaryOp(exprName, opName, opType, args)
 
-		case "ne":
+		case "eq", "ne":
 			resultType = types.I32
 			fallthrough
 		case "add", "and", "or", "sub", "xor":

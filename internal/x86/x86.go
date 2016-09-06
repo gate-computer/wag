@@ -10,6 +10,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/traps"
 )
 
 const (
@@ -236,8 +237,8 @@ func (code *Coder) OpShiftRightLogicalImm(t types.T, count uint8, target regs.R)
 	code.instrIntImmSh(opcodeIntImmShr, t, count, target)
 }
 
-func (code *Coder) OpTrap(arg int) {
-	code.instrIntMovImm(types.I64, int64(arg), regTrapArg)
+func (code *Coder) OpTrap(id traps.Id) {
+	code.instrIntMovImm(types.I64, int64(id), regTrapArg)
 	code.instrIntMov(types.I64, regTrapFunc, regScratch, false)
 	code.instrIndirect(opcodeIndirectCall, regScratch)
 }
