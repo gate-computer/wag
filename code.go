@@ -10,6 +10,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/traps"
 )
 
 const (
@@ -34,8 +35,8 @@ type programCoder struct {
 	roData        dataArena
 	functionLinks map[*Function]*links.L
 
-	trapIndirectCallPtr links.L
-	trapIndirectCallSig links.L
+	trapIndirectCallIndex     links.L
+	trapIndirectCallSignature links.L
 }
 
 func (code *programCoder) module(m *Module) {
@@ -75,8 +76,8 @@ func (code *programCoder) module(m *Module) {
 		}
 	}
 
-	code.trapTrampoline(&code.trapIndirectCallPtr, 0x501)
-	code.trapTrampoline(&code.trapIndirectCallSig, 0x502)
+	code.trap(&code.trapIndirectCallIndex, traps.IndirectCallIndex)
+	code.trap(&code.trapIndirectCallSignature, traps.IndirectCallSignature)
 
 	for _, link := range code.functionLinks {
 		code.mach.UpdateCalls(link)
@@ -145,7 +146,7 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 }
 
-func (code *programCoder) trapTrampoline(l *links.L, arg int) {
+func (code *programCoder) trap(l *links.L, arg int) {
 	code.mach.Align()
 	l.Address = code.mach.Len()
 	code.mach.OpTrap(arg)
@@ -546,11 +547,11 @@ func (code *functionCoder) exprCallIndirect(exprName string, args []interface{})
 	args = args[2:]
 
 	code.expr(indexExpr, types.I32)
-	code.program.opTrapIfOutOfBounds(regs.R0, len(code.module.Table), &code.program.trapIndirectCallPtr)
+	code.program.opTrapIfOutOfBounds(regs.R0, len(code.module.Table), &code.program.trapIndirectCallIndex)
 	code.mach.OpLoadRODataRegScaleExt(types.I64, 0, types.I32, regs.R0, 3) // table is at 0
 	code.opPush(types.I32, regs.R0)                                        // push func
 	code.mach.OpShiftRightLogicalImm(types.I64, 32, regs.R0)               // signature id
-	code.program.opTrapIfNotEqualImmTrash(types.I32, sig.Index, regs.R0, &code.program.trapIndirectCallSig)
+	code.program.opTrapIfNotEqualImmTrash(types.I32, sig.Index, regs.R0, &code.program.trapIndirectCallSignature)
 	argsSize := code.partialExprCallArgs(exprName, sig, args)
 	code.mach.OpLoadStack(types.I32, argsSize, regs.R1, true) // load func (XXX: breaks on big endian)
 	code.mach.OpCallIndirectTrash(regs.R1)

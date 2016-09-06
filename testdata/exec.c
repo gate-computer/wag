@@ -51,7 +51,7 @@ static void handle_signal(int signum, siginfo_t *i, void *context)
 
 static void handle_trap(int arg)
 {
-	fprintf(stderr, "exec: trap 0x%x\n", arg);
+	fprintf(stderr, "exec: trap %d\n", arg);
 
 	_exit(8);
 }
