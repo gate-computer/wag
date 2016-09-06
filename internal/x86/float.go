@@ -87,7 +87,7 @@ func (code *Coder) instrFloatMov(t types.T, source, target regs.R) {
 
 func (code *Coder) instrFloatMovFromInt(t types.T, source, target regs.R) {
 	code.WriteByte(0x66)
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, 0, false))
 	code.WriteByte(0x0f)
 	code.WriteByte(0x6e) // movd, movq
 	code.WriteByte(modRM(modReg, target, source))

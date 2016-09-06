@@ -33,7 +33,9 @@ type programCoder struct {
 	mach          machineCoder
 	roData        dataArena
 	functionLinks map[*Function]*links.L
-	trap          links.L
+
+	trapIndirectCallPtr links.L
+	trapIndirectCallSig links.L
 }
 
 func (code *programCoder) module(m *Module) {
@@ -73,10 +75,8 @@ func (code *programCoder) module(m *Module) {
 		}
 	}
 
-	code.mach.Align()
-	code.trap.Address = code.mach.Len()
-	code.mach.OpInvalid() // TODO: something else
-	code.mach.UpdateBranches(&code.trap)
+	code.trapTrampoline(&code.trapIndirectCallPtr, 0x501)
+	code.trapTrampoline(&code.trapIndirectCallSig, 0x502)
 
 	for _, link := range code.functionLinks {
 		code.mach.UpdateCalls(link)
@@ -145,14 +145,22 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 }
 
-func (code *programCoder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int) {
-	code.mach.StubOpBranchIfOutOfBounds(indexReg, upperBound)
-	code.trap.Sites = append(code.trap.Sites, code.mach.Len())
+func (code *programCoder) trapTrampoline(l *links.L, arg int) {
+	code.mach.Align()
+	l.Address = code.mach.Len()
+	code.mach.OpTrap(arg)
+
+	code.mach.UpdateBranches(l)
 }
 
-func (code *programCoder) opTrapIfNotEqualImmTrash(t types.T, value int, subject regs.R) {
+func (code *programCoder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int, trap *links.L) {
+	code.mach.StubOpBranchIfOutOfBounds(indexReg, upperBound)
+	trap.Sites = append(trap.Sites, code.mach.Len())
+}
+
+func (code *programCoder) opTrapIfNotEqualImmTrash(t types.T, value int, subject regs.R, trap *links.L) {
 	code.mach.StubOpBranchIfNotEqualImmTrash(t, value, subject)
-	code.trap.Sites = append(code.trap.Sites, code.mach.Len())
+	trap.Sites = append(trap.Sites, code.mach.Len())
 }
 
 type branchTarget struct {
@@ -538,11 +546,11 @@ func (code *functionCoder) exprCallIndirect(exprName string, args []interface{})
 	args = args[2:]
 
 	code.expr(indexExpr, types.I32)
-	code.program.opTrapIfOutOfBounds(regs.R0, len(code.module.Table))
+	code.program.opTrapIfOutOfBounds(regs.R0, len(code.module.Table), &code.program.trapIndirectCallPtr)
 	code.mach.OpLoadRODataRegScaleExt(types.I64, 0, types.I32, regs.R0, 3) // table is at 0
 	code.opPush(types.I32, regs.R0)                                        // push func
 	code.mach.OpShiftRightLogicalImm(types.I64, 32, regs.R0)               // signature id
-	code.program.opTrapIfNotEqualImmTrash(types.I32, sig.Index, regs.R0)
+	code.program.opTrapIfNotEqualImmTrash(types.I32, sig.Index, regs.R0, &code.program.trapIndirectCallSig)
 	argsSize := code.partialExprCallArgs(exprName, sig, args)
 	code.mach.OpLoadStack(types.I32, argsSize, regs.R1, true) // load func (XXX: breaks on big endian)
 	code.mach.OpCallIndirectTrash(regs.R1)

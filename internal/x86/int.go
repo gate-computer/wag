@@ -5,17 +5,28 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-func intSizePrefix(t types.T, signExt bool) []byte {
+func intPrefix(t types.T, ro regs.R, signExt bool) (prefix []byte) {
+	var rex byte
+
+	if ro >= 8 {
+		rex |= rexB
+	}
+
 	switch {
 	case t.Size() == types.Size64 || signExt:
-		return []byte{rexW}
+		rex |= rexW
 
 	case t.Size() == types.Size32:
-		return nil
 
 	default:
 		panic(t)
 	}
+
+	if rex != 0 {
+		prefix = []byte{rex}
+	}
+
+	return
 }
 
 func (code *Coder) opIntUnary(name string, t types.T, subject regs.R) {
@@ -56,7 +67,7 @@ var opcodeIntBinary = map[string]byte{
 }
 
 func (code *Coder) instrIntBinary(opcode byte, t types.T, source, target regs.R) {
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, source, false))
 	code.WriteByte(opcode)
 	code.WriteByte(modRM(modReg, source, target))
 }
@@ -83,7 +94,7 @@ func (code *Coder) instrIntImm(opcode byte, t types.T, value int, target regs.R)
 		panic(value)
 	}
 
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, 0, false))
 	code.WriteByte(immsize)
 	code.WriteByte(modRM(modReg, regs.R(opcode), target))
 	code.immediate(imm)
@@ -94,26 +105,26 @@ const (
 )
 
 func (code *Coder) instrIntCmov(opcode byte, t types.T, source, target regs.R) {
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, target, false))
 	code.WriteByte(0x0f)
 	code.WriteByte(opcode)
 	code.WriteByte(modRM(modReg, target, source))
 }
 
 func (code *Coder) instrIntMov(t types.T, source, target regs.R, signExt bool) {
-	code.Write(intSizePrefix(t, signExt))
-
 	if t.Size() == types.Size32 && signExt {
+		code.Write(intPrefix(t, target, signExt))
 		code.WriteByte(0x63) // movsxd
 		code.WriteByte(modRM(modReg, target, source))
 	} else {
+		code.Write(intPrefix(t, source, signExt))
 		code.WriteByte(0x89) // mov
 		code.WriteByte(modRM(modReg, source, target))
 	}
 }
 
 func (code *Coder) instrIntMovFromStack(t types.T, mod byte, disp interface{}, target regs.R, signExt bool) {
-	code.Write(intSizePrefix(t, signExt))
+	code.Write(intPrefix(t, 0, signExt))
 
 	if t.Size() == types.Size32 && signExt {
 		code.WriteByte(0x63) // movsxd
@@ -125,7 +136,7 @@ func (code *Coder) instrIntMovFromStack(t types.T, mod byte, disp interface{}, t
 }
 
 func (code *Coder) instrIntMovFromIndirect(t types.T, source, target regs.R, signExt bool) {
-	code.Write(intSizePrefix(t, signExt))
+	code.Write(intPrefix(t, target, signExt))
 
 	if t.Size() == types.Size32 && signExt {
 		code.WriteByte(0x63) // movsxd
@@ -137,7 +148,7 @@ func (code *Coder) instrIntMovFromIndirect(t types.T, source, target regs.R, sig
 }
 
 func (code *Coder) instrIntMovImm(t types.T, value interface{}, target regs.R) {
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, 0, false))
 	code.WriteByte(0xb8 + byte(target))
 	code.immediate(value)
 }
@@ -173,14 +184,14 @@ const (
 )
 
 func (code *Coder) instrIntImmSh(opcode byte, t types.T, count uint8, target regs.R) {
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, 0, false))
 	code.WriteByte(0xc1)
 	code.WriteByte(modRM(modReg, regs.R(opcode), target))
 	code.immediate(count)
 }
 
 func (code *Coder) instrIntTest(t types.T, source, target regs.R) {
-	code.Write(intSizePrefix(t, false))
+	code.Write(intPrefix(t, target, false))
 	code.WriteByte(0x85)
 	code.WriteByte(modRM(modReg, target, source))
 }

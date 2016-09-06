@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	rexB = byte((1 << 6) | (1 << 2))
 	rexW = byte((1 << 6) | (1 << 3))
 
 	modDisp8  = byte((0 << 1) | (1 << 0))
@@ -27,6 +28,8 @@ const (
 	// rbp
 	regRODataPtr = 6 // rsi
 	regTextPtr   = 7 // rdi
+	regTrapArg   = 7 // rdi
+	regTrapFunc  = 8 // r8
 
 	wordSize      = 8
 	codeAlignment = 16
@@ -233,6 +236,12 @@ func (code *Coder) OpShiftRightLogicalImm(t types.T, count uint8, target regs.R)
 	code.instrIntImmSh(opcodeIntImmShr, t, count, target)
 }
 
+func (code *Coder) OpTrap(arg int) {
+	code.instrIntMovImm(types.I64, int64(arg), regTrapArg)
+	code.instrIntMov(types.I64, regTrapFunc, regScratch, false)
+	code.instrIndirect(opcodeIndirectCall, regScratch)
+}
+
 func (code *Coder) StubOpBranch() {
 	code.stubInstrJmp()
 }
@@ -293,7 +302,11 @@ func (code *Coder) Align() {
 }
 
 func modRM(mod byte, ro, rm regs.R) byte {
-	return (mod << 6) | (byte(ro) << 3) | byte(rm)
+	if rm >= 8 {
+		panic(rm)
+	}
+
+	return (mod << 6) | (byte(ro&7) << 3) | byte(rm)
 }
 
 func sib(scale, index, base byte) byte {

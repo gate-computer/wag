@@ -12,7 +12,7 @@
 #define MAGIC   0x54fd3985
 #define ID_BASE 0x700000
 
-typedef int32_t (*start_func)(void *dummy, void *rodata);
+typedef int32_t (*start_func)(void *dummy, void *rodata, void *, void *, void (*trap)(int));
 
 struct header {
 	uint64_t text_size;
@@ -46,7 +46,14 @@ static void handle_signal(int signum, siginfo_t *i, void *context)
 	fprintf(stderr, "exec: signal: syscall   = %d\n", i->si_syscall);
 	fprintf(stderr, "exec: signal: arch      = %u\n", i->si_arch);
 
-	_exit(6);
+	_exit(7);
+}
+
+static void handle_trap(int arg)
+{
+	fprintf(stderr, "exec: trap 0x%x\n", arg);
+
+	_exit(8);
 }
 
 int main(int argc, char **argv)
@@ -140,7 +147,7 @@ int main(int argc, char **argv)
 
 	start_func start = (start_func) text_addr;
 
-	int32_t result = start(text_addr, rodata_addr);
+	int32_t result = start(text_addr, rodata_addr, NULL, NULL, handle_trap);
 	if (result != MAGIC) {
 		fprintf(stderr, "exec: failed test: %d\n", result - ID_BASE);
 		return 6;

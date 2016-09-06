@@ -133,19 +133,10 @@ func loadModule(top []interface{}) (m *Module) {
 			startSet = true
 
 		case "type":
-			sig, sigName := newSignature(m, expr)
-
-			i := sort.Search(len(sigs), func(i int) bool {
-				return sigs[i].Compare(sig) >= 0
-			})
-			if i < len(sigs) && sigs[i].Compare(sig) == 0 {
-				sig = sigs[i]
-			} else {
-				newSig = sig
-			}
-
+			var sigName string
+			newSig, sigName = newSignature(m, expr)
 			if sigName != "" {
-				m.NamedSignatures[sigName] = sig
+				m.NamedSignatures[sigName] = newSig
 			}
 
 		case "table":
@@ -167,13 +158,11 @@ func loadModule(top []interface{}) (m *Module) {
 				return sigs[i].Compare(newSig) >= 0
 			})
 
-			if i == len(sigs) || sigs[i].Compare(newSig) != 0 {
-				newSig.Index = len(sigs) // in order of appearance
+			newSig.Index = len(sigs) // in order of appearance
 
-				sigs = append(sigs, nil)
-				copy(sigs[i+1:], sigs[i:])
-				sigs[i] = newSig
-			}
+			sigs = append(sigs, nil)
+			copy(sigs[i+1:], sigs[i:])
+			sigs[i] = newSig
 		}
 	}
 

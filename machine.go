@@ -23,6 +23,7 @@ type machineCoder interface {
 	OpPush(types.T, regs.R)
 	OpReturn()
 	OpShiftRightLogicalImm(types.T, uint8, regs.R)
+	OpTrap(arg int)
 
 	StubOpBranch()
 	StubOpBranchIf(types.T, regs.R)
