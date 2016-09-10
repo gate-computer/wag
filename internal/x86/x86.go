@@ -122,6 +122,10 @@ func (code *Coder) BinaryOp(name string, t types.T) {
 	}
 }
 
+func (code *Coder) OpAbort() {
+	Int3.op(code)
+}
+
 func (code *Coder) OpAddToStackPtr(offset int) {
 	switch {
 	case offset > 0:
@@ -227,10 +231,6 @@ func (code *Coder) OpTrap(id traps.Id) {
 	MovImm.op(code, types.I64, regTrapArg, imm64(int(id)))
 	Mov.op(code, types.I64, regScratch, regTrapFunc)
 	CallIndirect.op(code, regScratch)
-}
-
-func (code *Coder) OpUnreachable() {
-	Int3.op(code)
 }
 
 func (code *Coder) StubOpBranch() {

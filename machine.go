@@ -13,6 +13,7 @@ type machineCoder interface {
 	UnaryOp(name string, t types.T)
 	BinaryOp(name string, t types.T)
 
+	OpAbort()
 	OpAddToStackPtr(int)
 	OpBranchIndirect(disp regs.R) (branchAddr int)
 	OpCallIndirectDisp32FromStack(ptrStackOffset int)
@@ -28,7 +29,6 @@ type machineCoder interface {
 	OpShiftRightLogical32Bits(subject regs.R)
 	OpStoreStack(t types.T, targetOffset int, source regs.R)
 	OpTrap(traps.Id)
-	OpUnreachable()
 
 	StubOpBranch()
 	StubOpBranchIf(regs.R)

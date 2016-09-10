@@ -7,6 +7,7 @@ const (
 	CallStackExhausted
 	IndirectCallIndex
 	IndirectCallSignature
+	Unreachable
 )
 
 func (id Id) String() string {
@@ -22,6 +23,9 @@ func (id Id) String() string {
 
 	case IndirectCallSignature:
 		return "indirect call signature mismatch"
+
+	case Unreachable:
+		return "unreachable"
 
 	default:
 		return "unknown trap"

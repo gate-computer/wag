@@ -43,6 +43,8 @@ func TestI32(t *testing.T)         { test(t, "testdata/i32.wast") }
 func TestI64(t *testing.T)         { test(t, "testdata/i64.wast") }
 func TestIntLiterals(t *testing.T) { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
 func TestLabels(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/labels.wast") }
+func TestNop(t *testing.T)         { test(t, "testdata/spec/ml-proto/test/nop.wast") }
+func TestTypecheck(t *testing.T)   { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
 
 func test(t *testing.T, filename string) {
 	if parallel {

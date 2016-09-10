@@ -9,6 +9,7 @@ import (
 
 	"github.com/tsavola/wag/internal/sexp"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 )
 
 const (
@@ -105,10 +106,10 @@ func loadModule(top []interface{}) (m *Module) {
 		switch name {
 		case "memory":
 			if len(expr) > 1 {
-				m.Memory.MinSize = int(expr[1].(uint64))
+				m.Memory.MinSize = int(values.I32(expr[1]))
 			}
 			if len(expr) > 2 {
-				m.Memory.MaxSize = int(expr[2].(uint64))
+				m.Memory.MaxSize = int(values.I32(expr[2]))
 			}
 
 		case "func":

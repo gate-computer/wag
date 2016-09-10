@@ -45,6 +45,7 @@ type programCoder struct {
 	trapCallStackExhausted    links.L
 	trapIndirectCallIndex     links.L
 	trapIndirectCallSignature links.L
+	trapUnreachable           links.L
 }
 
 func (code *programCoder) module(m *Module) {
@@ -86,6 +87,7 @@ func (code *programCoder) module(m *Module) {
 	code.trap(&code.trapCallStackExhausted, traps.CallStackExhausted)
 	code.trap(&code.trapIndirectCallIndex, traps.IndirectCallIndex)
 	code.trap(&code.trapIndirectCallSignature, traps.IndirectCallSignature)
+	code.trap(&code.trapUnreachable, traps.Unreachable)
 
 	for _, link := range code.functionLinks {
 		code.mach.UpdateCalls(link)
@@ -152,7 +154,7 @@ func (program *programCoder) function(m *Module, f *Function) {
 	}
 
 	if unreachable {
-		code.mach.OpUnreachable()
+		code.mach.OpAbort()
 	} else {
 		code.opAddToStackPtr(code.getLocalsEndOffset())
 		code.mach.OpReturn()
@@ -172,14 +174,23 @@ func (code *programCoder) trap(l *links.L, id traps.Id) {
 	code.mach.UpdateBranches(l)
 }
 
+func (code *programCoder) trapSite(l *links.L) {
+	l.Sites = append(l.Sites, code.mach.Len())
+}
+
+func (code *programCoder) opTrap(trap *links.L) {
+	code.mach.StubOpBranch()
+	code.trapSite(trap)
+}
+
 func (code *programCoder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int, trap *links.L) {
 	code.mach.StubOpBranchIfOutOfBounds(indexReg, upperBound)
-	trap.Sites = append(trap.Sites, code.mach.Len())
+	code.trapSite(trap)
 }
 
 func (code *programCoder) opTrapIfNotEqualImm32(subject regs.R, value int, trap *links.L) {
 	code.mach.StubOpBranchIfNotEqualImm32(subject, value)
-	trap.Sites = append(trap.Sites, code.mach.Len())
+	code.trapSite(trap)
 }
 
 type branchTarget struct {
@@ -297,7 +308,7 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	}
 
 	if unreachable {
-		code.mach.OpUnreachable()
+		code.mach.OpAbort()
 	}
 
 	return
@@ -790,7 +801,7 @@ func (code *functionCoder) exprIf(exprName string, args []interface{}, expectTyp
 
 	if haveElse {
 		if thenDeadend {
-			code.mach.OpUnreachable()
+			code.mach.OpAbort()
 		} else {
 			code.opBranch(end)
 			endReachable = true
@@ -804,7 +815,7 @@ func (code *functionCoder) exprIf(exprName string, args []interface{}, expectTyp
 		}
 
 		if elseDeadend {
-			code.mach.OpUnreachable()
+			code.mach.OpAbort()
 		} else {
 			if resultType != altResultType {
 				if thenDeadend {
@@ -881,7 +892,7 @@ func (code *functionCoder) exprUnreachable(exprName string, args []interface{}, 
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	code.mach.OpUnreachable()
+	code.program.opTrap(&code.program.trapUnreachable)
 
 	return true
 }
