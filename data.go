@@ -5,6 +5,7 @@ const (
 )
 
 type dataAllocation struct {
+	addr      int
 	size      int
 	populator func([]byte)
 }
@@ -14,21 +15,19 @@ type dataArena struct {
 	allocs []*dataAllocation
 }
 
-func (arena *dataArena) allocate(size int) (alloc *dataAllocation, addr int) {
-	addr = arena.size
-	arena.size = ((arena.size + size) + (dataAlignment - 1)) &^ (dataAlignment - 1)
-	alloc = &dataAllocation{size: size}
+func (arena *dataArena) allocate(size, alignment int, populator func([]byte)) (alloc *dataAllocation) {
+	addr := (arena.size + (alignment - 1)) &^ (alignment - 1)
+	alloc = &dataAllocation{addr, size, populator}
+
+	arena.size = addr + size
 	arena.allocs = append(arena.allocs, alloc)
 	return
 }
 
 func (arena *dataArena) populate() (data []byte) {
 	data = make([]byte, arena.size)
-	tail := data
-	for _, alloc := range arena.allocs {
-		alloc.populator(tail[:alloc.size])
-		size := (alloc.size + (dataAlignment - 1)) &^ (dataAlignment - 1)
-		tail = tail[size:]
+	for _, x := range arena.allocs {
+		x.populator(data[x.addr : x.addr+x.size])
 	}
 	return
 }

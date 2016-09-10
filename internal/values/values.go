@@ -2,12 +2,21 @@ package values
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/tsavola/wag/internal/types"
 )
 
+func nonOctalize(s string) string {
+	for len(s) > 1 && strings.HasPrefix(s, "0") && !strings.HasPrefix(s, "0x") {
+		s = s[1:]
+	}
+
+	return s
+}
+
 func I32(x interface{}) uint32 {
-	s := x.(string)
+	s := nonOctalize(x.(string))
 
 	signed64, err := strconv.ParseInt(s, 0, 32)
 	if err == nil {
@@ -23,7 +32,7 @@ func I32(x interface{}) uint32 {
 }
 
 func I64(x interface{}) uint64 {
-	s := x.(string)
+	s := nonOctalize(x.(string))
 
 	signed64, err := strconv.ParseInt(s, 0, 64)
 	if err == nil {

@@ -3,6 +3,7 @@ package wag
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -15,11 +16,15 @@ import (
 
 const (
 	wordSize = 8
+
+	roTableAddr = 0
 )
 
 func (m *Module) Code() (text, roData, data []byte, bssSize int) {
 	code := programCoder{
-		mach: machine.NewCoder(),
+		mach:           machine.NewCoder(),
+		roFloat32Addrs: make(map[uint32]int),
+		roFloat64Addrs: make(map[uint64]int),
 	}
 
 	code.module(m)
@@ -31,10 +36,13 @@ func (m *Module) Code() (text, roData, data []byte, bssSize int) {
 }
 
 type programCoder struct {
-	mach          machineCoder
-	roData        dataArena
-	functionLinks map[*Function]*links.L
+	mach           machineCoder
+	roData         dataArena
+	functionLinks  map[*Function]*links.L
+	roFloat32Addrs map[uint32]int
+	roFloat64Addrs map[uint64]int
 
+	trapCallStackExhausted    links.L
 	trapIndirectCallIndex     links.L
 	trapIndirectCallSignature links.L
 }
@@ -47,12 +55,7 @@ func (code *programCoder) module(m *Module) {
 	}
 
 	if len(m.Table) > 0 {
-		alloc, addr := code.roData.allocate(len(m.Table) * 8)
-		if addr != 0 {
-			panic(addr)
-		}
-
-		alloc.populator = func(data []byte) {
+		alloc := code.roData.allocate(len(m.Table)*8, 8, func(data []byte) {
 			for _, f := range m.Table {
 				if f.Signature.Index < 0 {
 					panic("function signature has no index while populating table")
@@ -64,6 +67,9 @@ func (code *programCoder) module(m *Module) {
 				machine.ByteOrder().PutUint64(data[:8], packed)
 				data = data[8:]
 			}
+		})
+		if alloc.addr != roTableAddr {
+			panic(alloc.addr)
 		}
 	}
 
@@ -76,6 +82,8 @@ func (code *programCoder) module(m *Module) {
 		}
 	}
 
+	code.trap(code.mach.DivideByZeroTarget(), traps.DivideByZero)
+	code.trap(&code.trapCallStackExhausted, traps.CallStackExhausted)
 	code.trap(&code.trapIndirectCallIndex, traps.IndirectCallIndex)
 	code.trap(&code.trapIndirectCallSignature, traps.IndirectCallSignature)
 
@@ -85,6 +93,10 @@ func (code *programCoder) module(m *Module) {
 }
 
 func (program *programCoder) function(m *Module, f *Function) {
+	if false {
+		fmt.Println("func:", f.Names)
+	}
+
 	code := functionCoder{
 		program:    program,
 		module:     m,
@@ -93,53 +105,60 @@ func (program *programCoder) function(m *Module, f *Function) {
 		labelLinks: make(map[*links.L]struct{}),
 	}
 
-	code.mach.Align()
-
+	code.mach.AlignFunction()
 	program.functionLinks[f].Address = code.mach.Len()
 
+	stackUsageAddr := code.mach.StubOpBranchIfStackExhausted()
+	program.trapCallStackExhausted.Sites = append(program.trapCallStackExhausted.Sites, code.mach.Len())
+
 	if f.NumLocals > 0 {
-		code.mach.BinaryOp("xor", types.I64, regs.R1, regs.R1)
+		code.mach.OpClear(regs.R1)
 
 		for i := 0; i < f.NumLocals; i++ {
 			code.mach.OpPush(types.I64, regs.R1)
 		}
 	}
 
-	expectType := f.Signature.ResultType
-	if expectType == types.Void {
-		expectType = types.Any
-	}
-
 	end := new(links.L)
-	code.pushTarget(end, expectType)
+	code.pushTarget(end, "", f.Signature.ResultType)
 
 	var finalType types.T
+	var unreachable bool
 
 	for i, x := range f.body {
-		t := types.Any
+		var t types.T
 		if i == len(f.body)-1 {
-			t = expectType
+			t = f.Signature.ResultType
 		}
-		finalType = code.expr(x, t)
+		finalType, unreachable = code.expr(x, t)
 	}
 
-	if f.Signature.ResultType != types.Void && finalType != f.Signature.ResultType {
+	if !unreachable && f.Signature.ResultType != types.Void && finalType != f.Signature.ResultType {
 		panic(fmt.Errorf("last expression of function %s returns incorrect type: %s", f, finalType))
 	}
 
-	code.popTarget()
+	if code.popTarget() {
+		unreachable = false
+	}
+
 	code.label(end)
 
 	if code.stackOffset != 0 {
-		panic(errors.New("internal: stack offset is non-zero at end of function"))
+		panic(fmt.Errorf("internal: stack offset is non-zero at end of function: %d", code.stackOffset))
 	}
 
 	if len(code.targetStack) != 0 {
 		panic(errors.New("internal: branch target stack is not empty at end of function"))
 	}
 
-	code.opAddToStackPtr(code.getLocalsEndOffset())
-	code.mach.OpReturn()
+	if unreachable {
+		code.mach.OpUnreachable()
+	} else {
+		code.opAddToStackPtr(code.getLocalsEndOffset())
+		code.mach.OpReturn()
+	}
+
+	code.mach.UpdateStackDisp(stackUsageAddr, code.getLocalsEndOffset()+code.stackUsage)
 
 	for link := range code.labelLinks {
 		code.mach.UpdateBranches(link)
@@ -147,7 +166,6 @@ func (program *programCoder) function(m *Module, f *Function) {
 }
 
 func (code *programCoder) trap(l *links.L, id traps.Id) {
-	code.mach.Align()
 	l.Address = code.mach.Len()
 	code.mach.OpTrap(id)
 
@@ -159,13 +177,14 @@ func (code *programCoder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int, t
 	trap.Sites = append(trap.Sites, code.mach.Len())
 }
 
-func (code *programCoder) opTrapIfNotEqualImmTrash(t types.T, value int, subject regs.R, trap *links.L) {
-	code.mach.StubOpBranchIfNotEqualImmTrash(t, value, subject)
+func (code *programCoder) opTrapIfNotEqualImm32(subject regs.R, value int, trap *links.L) {
+	code.mach.StubOpBranchIfNotEqualImm32(subject, value)
 	trap.Sites = append(trap.Sites, code.mach.Len())
 }
 
 type branchTarget struct {
 	label       *links.L
+	name        string
 	expectType  types.T
 	stackOffset int
 }
@@ -176,14 +195,24 @@ type functionCoder struct {
 	function    *Function
 	mach        machineCoder
 	stackOffset int
+	stackUsage  int
 	targetStack []*branchTarget
 	labelLinks  map[*links.L]struct{}
+	exprDepth   int // for debugging
 }
 
-func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType types.T) {
+func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType types.T, unreachable bool) {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
+
+	if false {
+		for i := 0; i < code.exprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<%s>\n", exprName)
+	}
+	code.exprDepth++
 
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
@@ -200,13 +229,13 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 		case "eqz":
 			resultType = types.I32
 			fallthrough
-		case "neg":
+		case "ctz", "neg":
 			code.exprUnaryOp(exprName, opName, opType, args)
 
-		case "eq", "ne":
+		case "eq", "gt", "gt_s", "gt_u", "lt", "lt_s", "ne":
 			resultType = types.I32
 			fallthrough
-		case "add", "and", "or", "sub", "xor":
+		case "add", "and", "div", "div_u", "mul", "or", "sub", "xor":
 			code.exprBinaryOp(exprName, opName, opType, args)
 
 		case "const":
@@ -218,10 +247,10 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 	} else {
 		switch exprName {
 		case "block":
-			resultType = code.exprBlock(exprName, args, expectType)
+			resultType, unreachable = code.exprBlock(exprName, args, expectType, nil)
 
 		case "br", "br_if", "br_table":
-			resultType = code.exprBr(exprName, args)
+			unreachable = code.exprBr(exprName, args)
 
 		case "call":
 			resultType = code.exprCall(exprName, args)
@@ -233,39 +262,45 @@ func (code *functionCoder) expr(x interface{}, expectType types.T) (resultType t
 			resultType = code.exprGetLocal(exprName, args)
 
 		case "if":
-			resultType = code.exprIf(exprName, args)
+			resultType, unreachable = code.exprIf(exprName, args, expectType)
+
+		case "loop":
+			resultType, unreachable = code.exprLoop(exprName, args, expectType)
 
 		case "nop":
-			resultType = code.exprNop(exprName, args)
+			code.exprNop(exprName, args)
 
 		case "return":
-			resultType = code.exprReturn(exprName, args)
+			unreachable = code.exprReturn(exprName, args)
+
+		case "set_local":
+			resultType = code.exprSetLocal(exprName, args)
 
 		case "unreachable":
-			resultType = code.exprUnreachable(exprName, args, expectType)
+			unreachable = code.exprUnreachable(exprName, args, expectType)
 
 		default:
 			panic(exprName)
 		}
 	}
 
-	switch expectType {
-	case types.Any:
-		return
-
-	case types.AnyScalar:
-		switch resultType {
-		case types.I32, types.I64, types.F32, types.F64:
-			return
+	code.exprDepth--
+	if false {
+		for i := 0; i < code.exprDepth; i++ {
+			fmt.Print("    ")
 		}
-
-	default:
-		if resultType == expectType {
-			return
-		}
+		fmt.Printf("</%s>\n", exprName)
 	}
 
-	panic(fmt.Errorf("result type %s does not match expected type %s", resultType, expectType))
+	if !unreachable && expectType != types.Void && resultType != expectType {
+		panic(fmt.Errorf("%s: result type %s does not match expected type %s", exprName, resultType, expectType))
+	}
+
+	if unreachable {
+		code.mach.OpUnreachable()
+	}
+
+	return
 }
 
 func (code *functionCoder) exprUnaryOp(exprName, opName string, opType types.T, args []interface{}) {
@@ -274,7 +309,7 @@ func (code *functionCoder) exprUnaryOp(exprName, opName string, opType types.T, 
 	}
 
 	code.expr(args[0], opType)
-	code.mach.UnaryOp(opName, opType, regs.R0)
+	code.mach.UnaryOp(opName, opType)
 }
 
 func (code *functionCoder) exprBinaryOp(exprName, opName string, opType types.T, args []interface{}) {
@@ -285,9 +320,9 @@ func (code *functionCoder) exprBinaryOp(exprName, opName string, opType types.T,
 	code.expr(args[0], opType)
 	code.opPush(opType, regs.R0)
 	code.expr(args[1], opType)
-	code.mach.OpMove(opType, regs.R0, regs.R1, false)
+	code.mach.OpMove(opType, regs.R1, regs.R0)
 	code.opPop(opType, regs.R0)
-	code.mach.BinaryOp(opName, opType, regs.R1, regs.R0)
+	code.mach.BinaryOp(opName, opType)
 }
 
 func (code *functionCoder) exprConst(exprName string, opType types.T, args []interface{}) {
@@ -295,27 +330,107 @@ func (code *functionCoder) exprConst(exprName string, opType types.T, args []int
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	code.mach.OpMoveImm(opType, args[0], regs.R0)
+	value := values.Parse(opType, args[0])
+
+	switch opType.Category() {
+	case types.Int:
+		code.mach.OpMoveImmediateInt(opType, regs.R0, value)
+
+	case types.Float:
+		var addr int
+		var found bool
+
+		switch opType.Size() {
+		case types.Size32:
+			bits := math.Float32bits(value.(float32))
+			addr, found = code.program.roFloat32Addrs[bits]
+			if !found {
+				alloc := code.program.roData.allocate(4, 4, func(data []byte) {
+					machine.ByteOrder().PutUint32(data, bits)
+				})
+				code.program.roFloat32Addrs[bits] = alloc.addr
+				addr = alloc.addr
+			}
+
+		case types.Size64:
+			bits := math.Float64bits(value.(float64))
+			addr, found = code.program.roFloat64Addrs[bits]
+			if !found {
+				alloc := code.program.roData.allocate(8, 8, func(data []byte) {
+					machine.ByteOrder().PutUint64(data, bits)
+				})
+				code.program.roFloat64Addrs[bits] = alloc.addr
+				addr = alloc.addr
+			}
+
+		default:
+			panic(opType)
+		}
+
+		code.mach.OpLoadROFloatDisp(opType, regs.R0, addr)
+
+	default:
+		panic(opType)
+	}
 }
 
-func (code *functionCoder) exprBlock(exprName string, args []interface{}, expectType types.T) (resultType types.T) {
-	after := new(links.L)
-	code.pushTarget(after, expectType)
+func (code *functionCoder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L) (resultType types.T, unreachable bool) {
+	var afterName string
+	var beforeName string
 
-	for _, arg := range args {
-		resultType = code.expr(arg, types.Any)
+	if len(args) > 0 {
+		if name, ok := args[0].(string); ok {
+			afterName = name
+			args = args[1:]
+		}
+
+		if len(args) > 0 {
+			if name, ok := args[0].(string); ok {
+				beforeName = name
+				args = args[1:]
+			}
+		}
 	}
 
-	code.popTarget()
+	after := new(links.L)
+	code.pushTarget(after, afterName, expectType)
+
+	if before != nil {
+		code.pushTarget(before, beforeName, types.Void)
+	}
+
+	for i, arg := range args {
+		var t types.T
+		if i == len(args)-1 {
+			t = expectType
+		}
+
+		resultType, unreachable = code.expr(arg, t)
+		if unreachable {
+			break
+		}
+	}
+
+	if before != nil {
+		code.popTarget()
+	}
+
+	if code.popTarget() {
+		if unreachable {
+			resultType = expectType // checked by exprBr
+			unreachable = false
+		}
+	}
+
 	code.label(after)
 
 	return
 }
 
-func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultType types.T) {
+func (code *functionCoder) exprBr(exprName string, args []interface{}) (unreachable bool) {
 	var indexes []interface{}
 	var defaultIndex interface{}
-	var resultExpr interface{}
+	var valueExpr interface{}
 	var condExpr interface{}
 
 	switch exprName {
@@ -326,7 +441,7 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 
 		case 2:
 			defaultIndex = args[0]
-			resultExpr = args[1]
+			valueExpr = args[1]
 
 		default:
 			panic(fmt.Errorf("%s: wrong number of operands", exprName))
@@ -340,7 +455,7 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 
 		case 3:
 			defaultIndex = args[0]
-			resultExpr = args[1]
+			valueExpr = args[1]
 			condExpr = args[2]
 
 		default:
@@ -356,7 +471,7 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 		args = args[:len(args)-1]
 
 		if _, ok := args[len(args)-1].([]interface{}); ok {
-			resultExpr = args[len(args)-1]
+			valueExpr = args[len(args)-1]
 			args = args[:len(args)-1]
 		}
 
@@ -368,48 +483,62 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 		defaultIndex = args[len(args)-1]
 	}
 
-	defaultTarget := code.getTarget(defaultIndex)
+	defaultTarget := code.findTarget(defaultIndex)
 	defaultStackDelta := code.stackOffset - defaultTarget.stackOffset
 
-	if resultExpr != nil {
+	var valueType types.T
+
+	if valueExpr != nil {
 		// branch expressions don't actually return anything...
-		resultType = code.expr(resultExpr, defaultTarget.expectType)
+		valueType, unreachable = code.expr(valueExpr, defaultTarget.expectType)
+		if unreachable {
+			return
+		}
 	}
 
-	var condType types.T
+	if defaultTarget.expectType != types.Void && valueType != defaultTarget.expectType {
+		panic(fmt.Errorf("%s: branch value type %s differs from default branch target type %s", exprName, valueType, defaultTarget.expectType))
+	}
+
 	condReg := regs.R0
-	condRegExt := false
 
 	if condExpr != nil {
-		if resultType != types.Void {
-			code.opPush(resultType, regs.R0)
+		if valueType.Category() == types.Int {
+			code.opPush(valueType, regs.R0)
 		}
-		condType = code.expr(condExpr, types.AnyScalar)
-		if resultType != types.Void {
-			code.mach.OpMove(condType, condReg, regs.R1, true)
+
+		code.expr(condExpr, types.I32)
+
+		if valueType.Category() == types.Int {
+			code.mach.OpMove(types.I32, regs.R1, regs.R0)
 			condReg = regs.R1
-			condRegExt = true
-			code.opPop(resultType, regs.R0)
+
+			code.opPop(valueType, regs.R0)
 		}
 	}
 
 	switch exprName {
-	case "br", "br_if":
-		code.opAddToStackPtr(defaultStackDelta)
+	case "br":
+		code.mach.OpAddToStackPtr(defaultStackDelta)
+		code.opBranch(defaultTarget.label)
 
-		if condExpr != nil {
-			code.opBranchIf(condType, condReg, defaultTarget.label)
-			code.opAddToStackPtr(-defaultStackDelta)
-		} else {
-			code.opBranch(defaultTarget.label)
-		}
+		unreachable = true
+
+	case "br_if":
+		code.mach.OpAddToStackPtr(defaultStackDelta)
+		code.opBranchIf(condReg, defaultTarget.label)
+		code.mach.OpAddToStackPtr(-defaultStackDelta)
 
 	case "br_table":
 		var targets []*branchTarget
 
 		for _, x := range indexes {
-			target := code.getTarget(x)
+			target := code.findTarget(x)
 			targets = append(targets, target)
+
+			if target.expectType != types.Void && valueType != target.expectType {
+				panic(fmt.Errorf("%s: branch value type %s differs from non-default branch target type %s", exprName, valueType, target.expectType))
+			}
 
 			code.labelLinks[target.label] = struct{}{}
 		}
@@ -435,14 +564,14 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 		}
 
 		tableSize := len(targets) << tableScale
-		tableAlloc, tableAddr := code.program.roData.allocate(tableSize)
+		tableAlloc := code.program.roData.allocate(tableSize, 1<<tableScale, nil)
 
 		branchStackOffset := code.stackOffset
 
 		var outOfBounds *links.L
 
 		if commonStackOffset >= 0 {
-			code.opAddToStackPtr(branchStackOffset - commonStackOffset)
+			code.mach.OpAddToStackPtr(branchStackOffset - commonStackOffset)
 			outOfBounds = defaultTarget.label
 		} else if defaultStackDelta != 0 {
 			outOfBounds = new(links.L) // trampoline
@@ -450,17 +579,8 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 			outOfBounds = defaultTarget.label
 		}
 
-		if condType != types.I32 {
-			panic(condType)
-		}
-
 		code.opBranchIfOutOfBounds(condReg, len(targets), outOfBounds)
-
-		if condRegExt {
-			condType = types.I64
-		}
-
-		code.mach.OpLoadRODataRegScaleExt(tableType, tableAddr, condType, condReg, tableScale)
+		code.mach.OpLoadROIntIndex32ScaleDisp(tableType, condReg, tableScale, tableAlloc.addr, true)
 
 		var branchAddr int
 
@@ -490,7 +610,7 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (resultTy
 
 		if commonStackOffset < 0 && defaultStackDelta != 0 {
 			code.label(outOfBounds) // trampoline
-			code.opAddToStackPtr(defaultStackDelta)
+			code.mach.OpAddToStackPtr(defaultStackDelta)
 			code.opBranch(defaultTarget.label)
 		}
 	}
@@ -503,15 +623,24 @@ func (code *functionCoder) exprCall(exprName string, args []interface{}) types.T
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
+	var target *Function
+
 	funcName := args[0].(string)
-	target, found := code.module.NamedFunctions[funcName]
-	if !found {
-		panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
+	funcNum, err := strconv.ParseUint(funcName, 10, 32)
+	if err == nil {
+		if funcNum < 0 || funcNum >= uint64(len(code.module.Functions)) {
+			panic(funcName)
+		}
+		target = code.module.Functions[funcNum]
+	} else {
+		var found bool
+		target, found = code.module.NamedFunctions[funcName]
+		if !found {
+			panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
+		}
 	}
 
-	args = args[1:]
-
-	argsSize := code.partialExprCallArgs(exprName, target.Signature, args)
+	argsSize := code.partialExprCallArgs(exprName, target.Signature, args[1:])
 	code.opCall(code.program.functionLinks[target])
 	code.opAddToStackPtr(argsSize)
 
@@ -548,13 +677,12 @@ func (code *functionCoder) exprCallIndirect(exprName string, args []interface{})
 
 	code.expr(indexExpr, types.I32)
 	code.program.opTrapIfOutOfBounds(regs.R0, len(code.module.Table), &code.program.trapIndirectCallIndex)
-	code.mach.OpLoadRODataRegScaleExt(types.I64, 0, types.I32, regs.R0, 3) // table is at 0
-	code.opPush(types.I32, regs.R0)                                        // push func
-	code.mach.OpShiftRightLogicalImm(types.I64, 32, regs.R0)               // signature id
-	code.program.opTrapIfNotEqualImmTrash(types.I32, sig.Index, regs.R0, &code.program.trapIndirectCallSignature)
+	code.mach.OpLoadROIntIndex32ScaleDisp(types.I64, regs.R0, 3, roTableAddr, false)
+	code.opPush(types.I32, regs.R0)              // push func
+	code.mach.OpShiftRightLogical32Bits(regs.R0) // signature id
+	code.program.opTrapIfNotEqualImm32(regs.R0, sig.Index, &code.program.trapIndirectCallSignature)
 	argsSize := code.partialExprCallArgs(exprName, sig, args)
-	code.mach.OpLoadStack(types.I32, argsSize, regs.R1, true) // load func (XXX: breaks on big endian)
-	code.mach.OpCallIndirectTrash(regs.R1)
+	code.mach.OpCallIndirectDisp32FromStack(argsSize)
 	code.opAddToStackPtr(argsSize + wordSize) // pop args + func
 
 	return sig.ResultType
@@ -572,6 +700,11 @@ func (code *functionCoder) partialExprCallArgs(exprName string, sig *Signature, 
 	}
 
 	argsStackSize = len(args) * wordSize
+
+	if n := code.stackOffset + machine.FunctionCallStackOverhead(); n > code.stackUsage {
+		code.stackUsage = n
+	}
+
 	return
 }
 
@@ -586,12 +719,57 @@ func (code *functionCoder) exprGetLocal(exprName string, args []interface{}) typ
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	code.mach.OpLoadStack(varType, offset, regs.R0, false)
+	code.mach.OpLoadStack(varType, regs.R0, offset)
 
 	return varType
 }
 
-func (code *functionCoder) exprIf(exprName string, args []interface{}) types.T {
+func (code *functionCoder) exprs(x interface{}, name string, after *links.L, expectType types.T) (resultType types.T, unreachable, afterReached bool) {
+	args := x.([]interface{})
+
+	var afterName string
+
+	if len(args) > 0 {
+		if s, ok := args[0].(string); ok && s == name {
+			args = args[1:]
+
+			if len(args) > 0 {
+				if s, ok := args[0].(string); ok {
+					afterName = s
+					args = args[1:]
+				}
+			}
+		}
+	}
+
+	code.pushTarget(after, afterName, expectType)
+
+	if len(args) > 0 {
+		switch args[0].(type) {
+		case string:
+			resultType, unreachable = code.expr(args, expectType)
+
+		case []interface{}:
+			for i, expr := range args {
+				var t types.T
+				if i == len(args)-1 {
+					t = expectType
+				}
+
+				resultType, unreachable = code.expr(expr, t)
+				if unreachable {
+					break
+				}
+			}
+		}
+	}
+
+	afterReached = code.popTarget()
+
+	return
+}
+
+func (code *functionCoder) exprIf(exprName string, args []interface{}, expectType types.T) (resultType types.T, unreachable bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
@@ -602,53 +780,66 @@ func (code *functionCoder) exprIf(exprName string, args []interface{}) types.T {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
+	end := new(links.L)
 	afterThen := new(links.L)
-	afterElse := new(links.L)
 
-	t := code.expr(args[0], types.AnyScalar)
-	code.opBranchIfNot(t, regs.R0, afterThen)
+	code.expr(args[0], types.I32)
+	code.opBranchIfNot(regs.R0, afterThen)
 
-	var thenType types.T
-
-	for _, e := range args[1].([]interface{}) {
-		thenType = code.expr(e, types.Any)
-	}
+	resultType, thenDeadend, endReachable := code.exprs(args[1], "then", end, expectType)
 
 	if haveElse {
-		code.opBranch(afterElse)
-		code.mach.Align()
-	}
+		if thenDeadend {
+			code.mach.OpUnreachable()
+		} else {
+			code.opBranch(end)
+			endReachable = true
+		}
+		code.label(afterThen)
 
-	code.label(afterThen)
+		altResultType, elseDeadend, altEndReachable := code.exprs(args[2], "else", end, expectType)
 
-	if haveElse {
-		var elseType types.T
-
-		for _, e := range args[2].([]interface{}) {
-			elseType = code.expr(e, types.Any)
+		if altEndReachable {
+			endReachable = true
 		}
 
-		if thenType != elseType {
-			panic(fmt.Errorf("%s: then and else expressions return distinct types: %s vs. %s", exprName, thenType, elseType))
+		if elseDeadend {
+			code.mach.OpUnreachable()
+		} else {
+			if resultType != altResultType {
+				if thenDeadend {
+					resultType = altResultType
+				} else {
+					panic(fmt.Errorf("%s: then and else expressions return distinct types: %s vs. %s", exprName, resultType, altResultType))
+				}
+			}
+			endReachable = true
 		}
-
-		code.label(afterElse)
+	} else {
+		endReachable = true
+		code.label(afterThen)
 	}
 
-	return thenType
-}
+	code.label(end)
 
-func (code *functionCoder) exprNop(exprName string, args []interface{}) (resultType types.T) {
-	if len(args) != 0 {
-		panic(fmt.Errorf("%s: wrong number of operands", exprName))
-	}
-
-	code.mach.OpNop()
-
+	unreachable = !endReachable
 	return
 }
 
-func (code *functionCoder) exprReturn(exprName string, args []interface{}) types.T {
+func (code *functionCoder) exprLoop(exprName string, args []interface{}, expectType types.T) (resultType types.T, unreachable bool) {
+	before := new(links.L)
+	code.label(before)
+
+	return code.exprBlock(exprName, args, expectType, before)
+}
+
+func (code *functionCoder) exprNop(exprName string, args []interface{}) {
+	if len(args) != 0 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+}
+
+func (code *functionCoder) exprReturn(exprName string, args []interface{}) (unreachable bool) {
 	if len(args) > 1 {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
@@ -658,63 +849,71 @@ func (code *functionCoder) exprReturn(exprName string, args []interface{}) types
 	}
 
 	if len(args) > 0 {
-		t := code.function.Signature.ResultType
-		if t == types.Void {
-			t = types.Any
-		}
-		code.expr(args[0], t)
+		code.expr(args[0], code.function.Signature.ResultType)
 	}
 
-	code.opAddToStackPtr(code.getLocalsEndOffset())
+	code.mach.OpAddToStackPtr(code.getLocalsEndOffset())
 	code.mach.OpReturn()
 
-	return code.function.Signature.ResultType
+	unreachable = true
+	return
 }
 
-func (code *functionCoder) exprUnreachable(exprName string, args []interface{}, expectType types.T) types.T {
+func (code *functionCoder) exprSetLocal(exprName string, args []interface{}) types.T {
+	if len(args) != 2 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	varName := args[0].(string)
+	offset, varType, found := code.getVarOffsetAndType(varName)
+	if !found {
+		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
+	}
+
+	code.expr(args[1], varType)
+	code.mach.OpStoreStack(varType, offset, regs.R0)
+
+	return varType // this contradicts the design doc, but needed for labels.wast
+}
+
+func (code *functionCoder) exprUnreachable(exprName string, args []interface{}, expectType types.T) bool {
 	if len(args) != 0 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	code.mach.OpInvalid()
+	code.mach.OpUnreachable()
 
-	return expectType
+	return true
 }
 
 func (code *functionCoder) opAddToStackPtr(offset int) {
-	if offset != 0 {
-		code.mach.OpAddToStackPtr(offset)
-		code.stackOffset -= offset
-	}
+	code.mach.OpAddToStackPtr(offset)
+	code.stackOffset -= offset
 }
 
 func (code *functionCoder) opBranch(l *links.L) {
 	code.mach.StubOpBranch()
-	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks[l] = struct{}{}
+	code.branchSite(l)
 }
 
-func (code *functionCoder) opBranchIf(t types.T, subject regs.R, l *links.L) {
-	code.mach.StubOpBranchIf(t, subject)
-	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks[l] = struct{}{}
+func (code *functionCoder) opBranchIf(subject regs.R, l *links.L) {
+	code.mach.StubOpBranchIf(subject)
+	code.branchSite(l)
 }
 
-func (code *functionCoder) opBranchIfNot(t types.T, subject regs.R, l *links.L) {
-	code.mach.StubOpBranchIfNot(t, subject)
-	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks[l] = struct{}{}
+func (code *functionCoder) opBranchIfNot(subject regs.R, l *links.L) {
+	code.mach.StubOpBranchIfNot(subject)
+	code.branchSite(l)
 }
 
 func (code *functionCoder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *links.L) {
 	code.mach.StubOpBranchIfOutOfBounds(indexReg, upperBound)
-	l.Sites = append(l.Sites, code.mach.Len())
-	code.labelLinks[l] = struct{}{}
+	code.branchSite(l)
 }
 
 func (code *functionCoder) opCall(l *links.L) {
 	code.mach.StubOpCall()
-	l.Sites = append(l.Sites, code.mach.Len())
+	code.callSite(l)
 }
 
 func (code *functionCoder) opPop(t types.T, target regs.R) {
@@ -725,26 +924,52 @@ func (code *functionCoder) opPop(t types.T, target regs.R) {
 func (code *functionCoder) opPush(t types.T, source regs.R) {
 	code.mach.OpPush(t, source)
 	code.stackOffset += wordSize
+	if code.stackOffset > code.stackUsage {
+		code.stackUsage = code.stackOffset
+	}
 }
 
 func (code *functionCoder) label(l *links.L) {
 	l.Address = code.mach.Len()
 }
 
-func (code *functionCoder) pushTarget(l *links.L, expectType types.T) {
-	code.targetStack = append(code.targetStack, &branchTarget{l, expectType, code.stackOffset})
+func (code *functionCoder) branchSite(l *links.L) {
+	l.Sites = append(l.Sites, code.mach.Len())
+	code.labelLinks[l] = struct{}{}
 }
 
-func (code *functionCoder) popTarget() {
+func (code *functionCoder) callSite(l *links.L) {
+	l.Sites = append(l.Sites, code.mach.Len())
+}
+
+func (code *functionCoder) pushTarget(l *links.L, name string, expectType types.T) {
+	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, code.stackOffset})
+}
+
+func (code *functionCoder) popTarget() (live bool) {
+	target := code.targetStack[len(code.targetStack)-1]
+	_, live = code.labelLinks[target.label]
+
 	code.targetStack = code.targetStack[:len(code.targetStack)-1]
+	return
 }
 
-func (code *functionCoder) getTarget(index interface{}) *branchTarget {
-	i := int(values.I32(index))
-	if i < 0 || i >= len(code.targetStack) {
-		panic(i)
+func (code *functionCoder) findTarget(token interface{}) *branchTarget {
+	name := token.(string)
+
+	for i := len(code.targetStack) - 1; i >= 0; i-- {
+		target := code.targetStack[i]
+		if target.name != "" && target.name == name {
+			return target
+		}
 	}
-	return code.targetStack[len(code.targetStack)-i-1]
+
+	i := int(values.I32(token))
+	if i >= 0 && i < len(code.targetStack) {
+		return code.targetStack[len(code.targetStack)-i-1]
+	}
+
+	panic(name)
 }
 
 func (code *functionCoder) getVarOffsetAndType(name string) (offset int, varType types.T, found bool) {

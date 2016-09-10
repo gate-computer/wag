@@ -1,8 +1,6 @@
 package wag
 
 import (
-	"encoding/binary"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -10,15 +8,22 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tsavola/wag/internal/sexp"
+	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/traps"
 )
 
 const (
-	magic   = 0x54fd3985
-	objdump = true
+	parallel   = true
+	writeBin   = false
+	dumpText   = false
+	dumpROData = false
 
-	sectionAlignment = 4096
+	stackSize = 0x100000
+
+	timeout = time.Second * 3
 )
 
 type fun func() int32
@@ -29,15 +34,21 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-func TestFunc(t *testing.T) { test(t, "testdata/spec/ml-proto/test/func.wast") }
-func TestI32(t *testing.T)  { test(t, "testdata/i32.wast") }
-func TestI64(t *testing.T)  { test(t, "testdata/i64.wast") }
-
-var (
-	execCompiled bool
-)
+func TestBlock(t *testing.T)       { test(t, "testdata/spec/ml-proto/test/block.wast") }
+func TestBrIf(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/br_if.wast") }
+func TestFac(t *testing.T)         { test(t, "testdata/spec/ml-proto/test/fac.wast") }
+func TestForward(t *testing.T)     { test(t, "testdata/spec/ml-proto/test/forward.wast") }
+func TestFunc(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/func.wast") }
+func TestI32(t *testing.T)         { test(t, "testdata/i32.wast") }
+func TestI64(t *testing.T)         { test(t, "testdata/i64.wast") }
+func TestIntLiterals(t *testing.T) { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
+func TestLabels(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/labels.wast") }
 
 func test(t *testing.T, filename string) {
+	if parallel {
+		t.Parallel()
+	}
+
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
@@ -64,9 +75,12 @@ func test(t *testing.T, filename string) {
 		[]interface{}{"result", "i32"},
 	}
 
-	var id int
+	var idCount int
 
 	for {
+		idCount++
+		id := idCount
+
 		var assert []interface{}
 		assert, data = sexp.ParsePanic(data)
 		if assert == nil {
@@ -132,11 +146,13 @@ func test(t *testing.T, filename string) {
 			}
 
 		default:
-			t.Logf("skipping %s", assertName)
-			continue
+			spec = []interface{}{
+				"return",
+				[]interface{}{"i32.const", "-1"},
+			}
 		}
 
-		condSpec := []interface{}{
+		testFunc = append(testFunc, []interface{}{
 			"if",
 			[]interface{}{
 				"i32.eq",
@@ -144,31 +160,22 @@ func test(t *testing.T, filename string) {
 				[]interface{}{"i32.const", strconv.Itoa(0x100000 + id)},
 			},
 			[]interface{}{spec},
+		})
+
+		if test != nil {
+			testFunc = append(testFunc, []interface{}{
+				"if",
+				[]interface{}{
+					"i32.eq",
+					[]interface{}{"get_local", "$arg"},
+					[]interface{}{"i32.const", strconv.Itoa(id)},
+				},
+				[]interface{}{test},
+			})
 		}
-
-		condTest := []interface{}{
-			"if",
-			[]interface{}{
-				"i32.eq",
-				[]interface{}{"get_local", "$arg"},
-				[]interface{}{"i32.const", strconv.Itoa(id)},
-			},
-			[]interface{}{test},
-		}
-
-		testFunc = append(testFunc, condSpec)
-		testFunc = append(testFunc, condTest)
-
-		id++
 	}
 
-	testFunc = append(testFunc, []interface{}{
-		"return",
-		[]interface{}{
-			"i32.const",
-			"-1",
-		},
-	})
+	testFunc = append(testFunc, []interface{}{"unreachable"})
 
 	module = append(module, testFunc)
 
@@ -180,69 +187,143 @@ func test(t *testing.T, filename string) {
 	m := loadModule(module)
 	text, roData, data, bssSize := m.Code()
 
-	name := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", ".bin", -1))
+	if writeBin {
+		textName := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", "-text.bin", -1))
 
-	f, err := os.Create(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	textSize, err := writeSection(f, text)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	roDataSize, err := writeSection(f, roData)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := writeSection(f, data); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := binary.Write(f, binary.LittleEndian, textSize); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := binary.Write(f, binary.LittleEndian, roDataSize); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := binary.Write(f, binary.LittleEndian, int64(bssSize)); err != nil {
-		t.Fatal(err)
-	}
-
-	if objdump {
-		dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", name)
-		dump.Stdout = os.Stdout
-		dump.Stderr = os.Stderr
-
-		if err := dump.Run(); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if !execCompiled {
-		cc := exec.Command("cc", "-g", "-o", "testdata/exec", "testdata/exec.c")
-		cc.Stdout = os.Stdout
-		cc.Stderr = os.Stderr
-
-		if err := cc.Run(); err != nil {
+		f, err := os.Create(textName)
+		if err != nil {
 			t.Fatal(err)
 		}
 
-		execCompiled = true
+		if _, err := f.Write(text); err != nil {
+			t.Fatal(err)
+		}
+
+		f.Close()
+
+		roDataName := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", "-rodata.bin", -1))
+
+		f, err = os.Create(roDataName)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := f.Write(roData); err != nil {
+			t.Fatal(err)
+		}
+
+		f.Close()
+
+		if dumpText {
+			dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", textName)
+			dump.Stdout = os.Stdout
+			dump.Stderr = os.Stderr
+
+			if err := dump.Run(); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if dumpROData {
+			dump := exec.Command("hexdump", roDataName)
+			dump.Stdout = os.Stdout
+			dump.Stderr = os.Stderr
+
+			if err := dump.Run(); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 
-	// exec := exec.Command("gdb", "-ex", "run", "-ex", "bt", "-ex", "quit", "--args", "testdata/exec", name)
-	exec := exec.Command("testdata/exec", name)
-	exec.Stdin = f
-	exec.Stdout = os.Stdout
-	exec.Stderr = os.Stderr
+	var timedout bool
 
-	if err := exec.Run(); err != nil {
+	p, err := runner.NewProgram(text, roData, data, bssSize)
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer func() {
+		if !timedout {
+			p.Close()
+		}
+	}()
+
+	r, err := p.NewRunner(stackSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if !timedout {
+			r.Close()
+		}
+	}()
+
+	for id := 1; id != idCount; id++ {
+		assertType, err := r.Run(0x100000 + id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if assertType < -1 || assertType > 1 {
+			panic(assertType)
+		}
+
+		if assertType == -1 {
+			t.Logf("run: test #%d: not supported", id)
+			continue
+		}
+
+		var result int32
+		var panicked interface{}
+		done := make(chan struct{})
+
+		go func() {
+			defer close(done)
+			defer func() {
+				panicked = recover()
+			}()
+			result, err = r.Run(id)
+		}()
+
+		timer := time.NewTimer(timeout)
+
+		select {
+		case <-done:
+			timer.Stop()
+
+		case <-timer.C:
+			timedout = true
+			t.Fatalf("run: test #%d: timeout", id)
+		}
+
+		if panicked != nil {
+			t.Fatalf("run: test #%d: panic: %v", id, panicked)
+		}
+
+		if err != nil {
+			if _, ok := err.(traps.Id); ok {
+				if assertType == 1 {
+					t.Logf("run: test #%d: trap ok", id)
+				} else {
+					t.Errorf("run: test #%d: failed due to unexpected trap", id)
+				}
+			} else {
+				t.Fatal(err)
+			}
+		} else {
+			if assertType == 0 {
+				switch result {
+				case 1:
+					t.Logf("run: test #%d: return ok", id)
+
+				case 0:
+					t.Errorf("run: test #%d: return fail", id)
+
+				default:
+					t.Fatalf("run: test #%d: bad result: %d", id, result)
+				}
+			} else {
+				t.Fatalf("run: test #%d: failed due to unexpected return (result: %d)", id, result)
+			}
+		}
 	}
 }
 
@@ -260,26 +341,4 @@ func invoke2call(exports map[string]string, x interface{}) {
 			invoke2call(exports, e)
 		}
 	}
-}
-
-func writeSection(f *os.File, data []byte) (size int64, err error) {
-	_, err = f.Write(data)
-	if err != nil {
-		return
-	}
-
-	size = int64(len(data))
-
-	padding := sectionAlignment - (size & (sectionAlignment - 1))
-	if padding == sectionAlignment {
-		padding = 0
-	}
-
-	_, err = f.Seek(padding, io.SeekCurrent)
-	if err != nil {
-		return
-	}
-
-	size += padding
-	return
 }

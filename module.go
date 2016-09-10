@@ -92,6 +92,7 @@ func loadModule(top []interface{}) (m *Module) {
 	}
 
 	var sigs []*Signature
+	var tableTokens []interface{}
 
 	startSet := false
 
@@ -140,14 +141,7 @@ func loadModule(top []interface{}) (m *Module) {
 			}
 
 		case "table":
-			for _, x := range expr[1:] {
-				funcName := x.(string)
-				f, found := m.NamedFunctions[funcName]
-				if !found {
-					panic(funcName)
-				}
-				m.Table = append(m.Table, f)
-			}
+			tableTokens = expr[1:]
 
 		default:
 			panic(fmt.Errorf("unknown module child: %s", name))
@@ -171,6 +165,15 @@ func loadModule(top []interface{}) (m *Module) {
 	}
 	if _, found := m.NamedFunctions[m.Start]; !found {
 		panic(fmt.Errorf("start function not found: %s", m.Start))
+	}
+
+	for _, x := range tableTokens {
+		funcName := x.(string)
+		f, found := m.NamedFunctions[funcName]
+		if !found {
+			panic(funcName)
+		}
+		m.Table = append(m.Table, f)
 	}
 
 	m.Signatures = SignaturesByIndex(sigs)

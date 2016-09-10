@@ -5,130 +5,90 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-func floatSizeCode(t types.T) byte {
-	switch t {
-	case types.F32:
-		return 0xf3
+type floatPrefix struct {
+	size32 []byte
+	size64 []byte
+}
 
-	case types.F64:
-		return 0xf2
+func (p *floatPrefix) writeTo(code *Coder, t types.T, dummy regs.R) {
+	switch t.Size() {
+	case types.Size32:
+		code.Write(p.size32)
+
+	case types.Size64:
+		code.Write(p.size64)
 
 	default:
 		panic(t)
 	}
 }
 
-func floatSizePrefix(t types.T) []byte {
-	switch t {
-	case types.F32:
-		return nil
+var (
+	operandSize = &floatPrefix{nil, []byte{0x66}}
+	scalarSize  = &floatPrefix{[]byte{0xf3}, []byte{0xf2}}
+)
 
-	case types.F64:
-		return []byte{0x66}
+var (
+	UcomissUcomisd = insnPrefixModRegFromReg{operandSize, []byte{0x0f, 0x2e}, ModReg}
+	AddssAddsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x58}, ModReg}
+	SubssSubsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5c}, ModReg}
+	DivssDivsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5e}, ModReg}
 
-	default:
-		panic(t)
-	}
+	MovssMovsd = insnPrefixModRegToReg{scalarSize, []byte{0x0f, 0x11}, ModReg}
+
+	MovssMovsdFromIndirect = insnPrefixModRegFromRegDisp{scalarSize, []byte{0x0f, 0x10}}
+
+	MovssMovsdFromStack = insnPrefixModRegSibImm{scalarSize, []byte{0x0f, 0x10}, sib{0, regStackPtr, regStackPtr}}
+	MovssMovsdToStack   = insnPrefixModRegSibImm{scalarSize, []byte{0x0f, 0x11}, sib{0, regStackPtr, regStackPtr}}
+)
+
+var binaryFloatInsns = map[string]binaryInsn{
+	"add": AddssAddsd,
+	"div": DivssDivsd,
+	"sub": SubssSubsd,
 }
 
-func (code *Coder) opFloatUnary(name string, t types.T, subject regs.R) {
+var setccFloatInsns = map[string]unaryInsn{
+	"eq": Sete,
+	"gt": Setg,
+	"ne": Setne,
+	"lt": Setl,
+}
+
+func pushFloatOp(code *Coder, t types.T, source regs.R) {
+	SubImm.op(code, types.I64, regStackPtr, wordSize)
+	MovssMovsdToStack.op(code, t, source, 0)
+}
+
+func popFloatOp(code *Coder, t types.T, target regs.R) {
+	MovssMovsdFromStack.op(code, t, target, 0)
+	AddImm.op(code, types.I64, regStackPtr, wordSize)
+}
+
+func unaryFloatOp(code *Coder, name string, t types.T) {
 	switch name {
 	case "neg":
-		code.instrFloatMov(t, subject, regScratch)
-		code.instrFloatXor(subject, subject)
-		code.instrFloatSub(t, regScratch, subject)
+		MovssMovsd.op(code, t, regScratch, regs.R0)
+		SubssSubsd.op(code, t, regs.R0, regScratch)
+		SubssSubsd.op(code, t, regs.R0, regScratch)
 
 	default:
 		panic(name)
 	}
 }
 
-func (code *Coder) opFloatBinary(name string, t types.T, source, target regs.R) {
-	switch name {
-	case "eq":
-		code.instrFloatUcomi(t, source, target)
-		code.instrIntSetcc(opcodeIntSete, target)
-		code.instrIntMovZeroExt32(target, target)
-
-	case "ne":
-		code.instrFloatUcomi(t, source, target)
-		code.instrIntSetcc(opcodeIntSetne, target)
-		code.instrIntMovZeroExt32(target, target)
-
-	case "sub":
-		code.instrFloatSub(t, source, target)
-
-	case "xor":
-		code.instrFloatXor(source, target)
-
-	default:
-		panic(name)
+func binaryFloatOp(code *Coder, name string, t types.T) {
+	if insn, found := binaryFloatInsns[name]; found {
+		insn.op(code, t, regs.R0, regs.R1)
+		return
 	}
-}
 
-func (code *Coder) opFloatPop(target regs.R) {
-	code.instrFloatMovFromStack(0, nil, target)
-	code.instrIntImm(opcodeIntImmAdd, types.I64, wordSize, regStackPtr)
-}
-
-func (code *Coder) opFloatPush(source regs.R) {
-	code.instrIntImm(opcodeIntImmSub, types.I64, wordSize, regStackPtr)
-	code.instrFloatMovToStack(source)
-}
-
-func (code *Coder) instrFloatUcomi(t types.T, source, target regs.R) {
-	code.Write(floatSizePrefix(t))
-	code.WriteByte(0x0f)
-	code.WriteByte(0x2e) // ucomiss, ucomisd
-	code.WriteByte(modRM(modReg, target, source))
-}
-
-func (code *Coder) instrFloatMov(t types.T, source, target regs.R) {
-	code.WriteByte(floatSizeCode(t))
-	code.WriteByte(0x0f)
-	code.WriteByte(0x11) // movss, movsd
-	code.WriteByte(modRM(modReg, source, target))
-}
-
-func (code *Coder) instrFloatMovFromInt(t types.T, source, target regs.R) {
-	code.WriteByte(0x66)
-	code.Write(intPrefix(t, 0, false))
-	code.WriteByte(0x0f)
-	code.WriteByte(0x6e) // movd, movq
-	code.WriteByte(modRM(modReg, target, source))
-}
-
-func (code *Coder) instrFloatMovFromStack(mod byte, disp interface{}, target regs.R) {
-	if mod == 0 {
-		code.WriteByte(0x66)
-		code.WriteByte(rexW)
-		code.WriteByte(0x0f)
-		code.WriteByte(0x6e) // movq
-	} else {
-		code.WriteByte(0xf3)
-		code.WriteByte(0x0f)
-		code.WriteByte(0x6f) // movdqu
+	if setcc, found := setccFloatInsns[name]; found {
+		UcomissUcomisd.op(code, t, regs.R0, regs.R1)
+		setcc.op(code, regs.R0)
+		Movzx8.op(code, regs.R0, regs.R0)
+		return
 	}
-	code.fromStack(mod, disp, target)
-}
 
-func (code *Coder) instrFloatMovToStack(source regs.R) {
-	code.WriteByte(0x66)
-	code.WriteByte(rexW)
-	code.WriteByte(0x0f)
-	code.WriteByte(0x7e) // movq
-	code.toStack(0, nil, source)
-}
-
-func (code *Coder) instrFloatSub(t types.T, source, target regs.R) {
-	code.WriteByte(floatSizeCode(t))
-	code.WriteByte(0x0f)
-	code.WriteByte(0x5c) // subss, subsd
-	code.WriteByte(modRM(modReg, target, source))
-}
-
-func (code *Coder) instrFloatXor(source, target regs.R) {
-	code.WriteByte(0x0f)
-	code.WriteByte(0x57) // xorps
-	code.WriteByte(modRM(modReg, source, target))
+	panic(name)
 }

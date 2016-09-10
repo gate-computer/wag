@@ -3,12 +3,20 @@ package traps
 type Id int
 
 const (
-	IndirectCallIndex = Id(iota)
+	DivideByZero = Id(iota + 1)
+	CallStackExhausted
+	IndirectCallIndex
 	IndirectCallSignature
 )
 
 func (id Id) String() string {
 	switch id {
+	case DivideByZero:
+		return "divide by zero"
+
+	case CallStackExhausted:
+		return "call stack exhausted"
+
 	case IndirectCallIndex:
 		return "indirect call index out of bounds"
 
@@ -18,4 +26,8 @@ func (id Id) String() string {
 	default:
 		return "unknown trap"
 	}
+}
+
+func (id Id) Error() string {
+	return "trap: " + id.String()
 }

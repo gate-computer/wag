@@ -13,7 +13,6 @@ const (
 	maskFloat = 2
 	mask32    = 4 // value is significant
 	mask64    = 8 // value is significant
-	maskAny   = 16
 
 	maskCategory = maskInt | maskFloat
 	maskSize     = mask32 | mask64
@@ -23,9 +22,6 @@ const (
 	I64  = T(maskInt | mask64)
 	F32  = T(maskFloat | mask32)
 	F64  = T(maskFloat | mask64)
-
-	AnyScalar = T(maskAny | maskInt | mask32) // pseudo
-	Any       = T(maskAny)                    // pseudo
 
 	Int   = Category(maskInt)
 	Float = Category(maskFloat)
@@ -51,15 +47,13 @@ func (t T) String() string {
 	case F64:
 		return "f64"
 
-	case AnyScalar:
-		return "anyscalar"
-
-	case Any:
-		return "any"
-
 	default:
 		return strconv.Itoa(int(t))
 	}
+}
+
+func (t T) Scalar() bool {
+	return t.Category() != 0
 }
 
 func (t T) Category() Category {
