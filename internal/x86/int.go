@@ -123,7 +123,7 @@ func binaryIntOp(code *Coder, name string, t types.T) {
 		Test.op(code, t, regs.R1, regs.R1)
 		Je.op(code)
 		code.divideByZero.Sites = append(code.divideByZero.Sites, code.Len())
-		Xor.op(code, t, regScratch, regScratch)
+		Xor.op(code, t, regDividendHi, regDividendHi)
 		Div.op(code, t, regs.R1)
 
 	case "mul":

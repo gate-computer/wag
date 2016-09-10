@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	parallel   = true
-	writeBin   = false
-	dumpText   = false
-	dumpROData = false
+	parallel   = false
+	writeBin   = true
+	dumpText   = true
+	dumpROData = true
 
 	stackSize = 0x100000
 
@@ -33,6 +33,8 @@ type startFunc struct {
 }
 
 type startFuncPtr *startFunc
+
+func TestBranchStackDelta(t *testing.T) { test(t, "testdata/branch_stack_delta.wast") }
 
 func TestBlock(t *testing.T)       { test(t, "testdata/spec/ml-proto/test/block.wast") }
 func TestBrIf(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/br_if.wast") }

@@ -13,14 +13,14 @@ import (
 const (
 	// regs.R0 = rax
 	// regs.R1 = rcx
-	regScratch = regs.R(2) // rdx
-	// rbx
-	regStackPtr   = 4 // rsp
-	regStackLimit = 5 // rbp
-	regRODataPtr  = 6 // rsi
-	regTextPtr    = 7 // rdi
-	regTrapArg    = 7 // rdi
-	regTrapFunc   = 8 // r8
+	regDividendHi = regs.R2   // rdx
+	regScratch    = regs.R(3) // rbx
+	regStackPtr   = 4         // rsp
+	regStackLimit = regs.R(5) // rbp
+	regRODataPtr  = regs.R(6) // rsi
+	regTextPtr    = regs.R(7) // rdi
+	regTrapArg    = regs.R(7) // rdi
+	regTrapFunc   = regs.R(8) // r8
 
 	wordSize      = 8
 	codeAlignment = 16
@@ -108,7 +108,7 @@ func (code *Coder) UnaryOp(name string, t types.T) {
 	}
 }
 
-// BinaryOp operates on two typed registers.
+// BinaryOp operates on two typed registers, and trashes three registers.
 func (code *Coder) BinaryOp(name string, t types.T) {
 	switch t.Category() {
 	case types.Int:
@@ -126,7 +126,7 @@ func (code *Coder) OpAbort() {
 	Int3.op(code)
 }
 
-func (code *Coder) OpAddToStackPtr(offset int) {
+func (code *Coder) OpAddImmToStackPtr(offset int) {
 	switch {
 	case offset > 0:
 		AddImm.op(code, types.I64, regStackPtr, offset)
@@ -136,7 +136,15 @@ func (code *Coder) OpAddToStackPtr(offset int) {
 	}
 }
 
-func (code *Coder) OpBranchIndirect(reg regs.R) (branchAddr int) {
+func (code *Coder) OpAddToStackPtr(source regs.R) {
+	Add.op(code, types.I64, regStackPtr, source)
+}
+
+func (code *Coder) OpBranchIndirect(t types.T, reg regs.R) (branchAddr int) {
+	if t == types.I32 {
+		Movsxd.op(code, types.I32, reg, reg)
+	}
+
 	LeaRip.op(code, regScratch, imm32(0))
 	branchAddr = code.Len()
 	Add.op(code, types.I64, regScratch, reg)
@@ -190,7 +198,7 @@ func (code *Coder) OpMove(t types.T, target, source regs.R) {
 	}
 }
 
-func (code *Coder) OpMoveImmediateInt(t types.T, target regs.R, value interface{}) {
+func (code *Coder) OpMoveImmInt(t types.T, target regs.R, value interface{}) {
 	MovImm.op(code, t, target, imm{value})
 }
 

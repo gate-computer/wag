@@ -156,7 +156,7 @@ func (program *programCoder) function(m *Module, f *Function) {
 	if unreachable {
 		code.mach.OpAbort()
 	} else {
-		code.opAddToStackPtr(code.getLocalsEndOffset())
+		code.opAddImmToStackPtr(code.getLocalsEndOffset())
 		code.mach.OpReturn()
 	}
 
@@ -345,7 +345,7 @@ func (code *functionCoder) exprConst(exprName string, opType types.T, args []int
 
 	switch opType.Category() {
 	case types.Int:
-		code.mach.OpMoveImmediateInt(opType, regs.R0, value)
+		code.mach.OpMoveImmInt(opType, regs.R0, value)
 
 	case types.Float:
 		var addr int
@@ -492,6 +492,10 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (unreacha
 
 		indexes = args[:len(args)-1]
 		defaultIndex = args[len(args)-1]
+
+		if len(indexes) == 0 {
+			exprName = "br"
+		}
 	}
 
 	defaultTarget := code.findTarget(defaultIndex)
@@ -530,15 +534,15 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (unreacha
 
 	switch exprName {
 	case "br":
-		code.mach.OpAddToStackPtr(defaultStackDelta)
+		code.mach.OpAddImmToStackPtr(defaultStackDelta)
 		code.opBranch(defaultTarget.label)
 
 		unreachable = true
 
 	case "br_if":
-		code.mach.OpAddToStackPtr(defaultStackDelta)
+		code.mach.OpAddImmToStackPtr(defaultStackDelta)
 		code.opBranchIf(condReg, defaultTarget.label)
-		code.mach.OpAddToStackPtr(-defaultStackDelta)
+		code.mach.OpAddImmToStackPtr(-defaultStackDelta)
 
 	case "br_table":
 		var targets []*branchTarget
@@ -554,9 +558,9 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (unreacha
 			code.labelLinks[target.label] = struct{}{}
 		}
 
-		commonStackOffset := defaultTarget.stackOffset
+		commonStackOffset := targets[0].stackOffset
 
-		for _, target := range targets {
+		for _, target := range targets[1:] {
 			if target.stackOffset != commonStackOffset {
 				commonStackOffset = -1
 				break
@@ -577,31 +581,23 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (unreacha
 		tableSize := len(targets) << tableScale
 		tableAlloc := code.program.roData.allocate(tableSize, 1<<tableScale, nil)
 
-		branchStackOffset := code.stackOffset
-
-		var outOfBounds *links.L
-
-		if commonStackOffset >= 0 {
-			code.mach.OpAddToStackPtr(branchStackOffset - commonStackOffset)
-			outOfBounds = defaultTarget.label
-		} else if defaultStackDelta != 0 {
-			outOfBounds = new(links.L) // trampoline
-		} else {
-			outOfBounds = defaultTarget.label
-		}
-
-		code.opBranchIfOutOfBounds(condReg, len(targets), outOfBounds)
+		code.mach.OpAddImmToStackPtr(defaultStackDelta)
+		code.opBranchIfOutOfBounds(condReg, len(targets), defaultTarget.label)
 		code.mach.OpLoadROIntIndex32ScaleDisp(tableType, condReg, tableScale, tableAlloc.addr, true)
 
-		var branchAddr int
+		tableStackOffset := code.stackOffset - defaultStackDelta
+		addrType := types.I64 // loaded with zero-extend
 
-		if commonStackOffset < 0 {
-			// TODO: add (condReg >> 32) to regStackPtr
-			// TODO: (condReg & 0xffffffff) to condReg
-			panic("not implemented")
+		if commonStackOffset >= 0 {
+			code.mach.OpAddImmToStackPtr(tableStackOffset - commonStackOffset)
+		} else {
+			code.mach.OpMove(types.I64, regs.R2, condReg)
+			code.mach.OpShiftRightLogical32Bits(regs.R2)
+			code.mach.OpAddToStackPtr(regs.R2)
+			addrType = types.I32 // upper half of condReg contains stack offset
 		}
 
-		branchAddr = code.mach.OpBranchIndirect(condReg)
+		branchAddr := code.mach.OpBranchIndirect(addrType, condReg)
 
 		tableAlloc.populator = func(data []byte) {
 			for _, target := range targets {
@@ -611,18 +607,12 @@ func (code *functionCoder) exprBr(exprName string, args []interface{}) (unreacha
 					machine.ByteOrder().PutUint32(data[:4], uint32(disp))
 					data = data[4:]
 				} else {
-					delta := branchStackOffset - target.stackOffset
+					delta := tableStackOffset - target.stackOffset
 					packed := (uint64(uint32(delta)) << 32) | uint64(uint32(disp))
 					machine.ByteOrder().PutUint64(data[:8], packed)
 					data = data[8:]
 				}
 			}
-		}
-
-		if commonStackOffset < 0 && defaultStackDelta != 0 {
-			code.label(outOfBounds) // trampoline
-			code.mach.OpAddToStackPtr(defaultStackDelta)
-			code.opBranch(defaultTarget.label)
 		}
 	}
 
@@ -653,7 +643,7 @@ func (code *functionCoder) exprCall(exprName string, args []interface{}) types.T
 
 	argsSize := code.partialExprCallArgs(exprName, target.Signature, args[1:])
 	code.opCall(code.program.functionLinks[target])
-	code.opAddToStackPtr(argsSize)
+	code.opAddImmToStackPtr(argsSize)
 
 	return target.Signature.ResultType
 }
@@ -694,7 +684,7 @@ func (code *functionCoder) exprCallIndirect(exprName string, args []interface{})
 	code.program.opTrapIfNotEqualImm32(regs.R0, sig.Index, &code.program.trapIndirectCallSignature)
 	argsSize := code.partialExprCallArgs(exprName, sig, args)
 	code.mach.OpCallIndirectDisp32FromStack(argsSize)
-	code.opAddToStackPtr(argsSize + wordSize) // pop args + func
+	code.opAddImmToStackPtr(argsSize + wordSize) // pop args + func
 
 	return sig.ResultType
 }
@@ -863,7 +853,7 @@ func (code *functionCoder) exprReturn(exprName string, args []interface{}) (unre
 		code.expr(args[0], code.function.Signature.ResultType)
 	}
 
-	code.mach.OpAddToStackPtr(code.getLocalsEndOffset())
+	code.mach.OpAddImmToStackPtr(code.getLocalsEndOffset())
 	code.mach.OpReturn()
 
 	unreachable = true
@@ -897,8 +887,8 @@ func (code *functionCoder) exprUnreachable(exprName string, args []interface{}, 
 	return true
 }
 
-func (code *functionCoder) opAddToStackPtr(offset int) {
-	code.mach.OpAddToStackPtr(offset)
+func (code *functionCoder) opAddImmToStackPtr(offset int) {
+	code.mach.OpAddImmToStackPtr(offset)
 	code.stackOffset -= offset
 }
 
