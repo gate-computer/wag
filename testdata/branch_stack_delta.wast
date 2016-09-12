@@ -17,6 +17,8 @@
 
   (func "br_table" (param i32) (result i32)
     (loop $out $loop
+      (i32.add (i32.const 1234) (get_local 0))
+      (i32.add (get_local 0) (i32.const 5678))
       (i32.add
         (i32.const 0)
         (if (i32.const 1)

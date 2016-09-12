@@ -1,6 +1,7 @@
 package x86
 
 import (
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 )
@@ -14,7 +15,7 @@ const (
 	ModReg         = mod((1 << 7) | (1 << 6))
 )
 
-func (mod mod) writeTo(code *Coder, ro, rm byte) {
+func (mod mod) writeTo(code *gen.Coder, ro, rm byte) {
 	if rm >= 8 {
 		panic(rm)
 	}
@@ -33,7 +34,7 @@ type modOp struct {
 	opcode byte
 }
 
-func (modOp modOp) writeTo(code *Coder, rm byte) {
+func (modOp modOp) writeTo(code *gen.Coder, rm byte) {
 	modOp.mod.writeTo(code, modOp.opcode, rm)
 }
 
@@ -42,7 +43,7 @@ type modMem struct {
 	mem mem
 }
 
-func (modMem modMem) writeTo(code *Coder, ro byte) {
+func (modMem modMem) writeTo(code *gen.Coder, ro byte) {
 	modMem.mod.writeTo(code, ro, byte(modMem.mem))
 }
 
@@ -72,7 +73,7 @@ func dispMod(t types.T, offset int) (mod mod, disp imm) {
 	return
 }
 
-func writeSibTo(code *Coder, scale, index, base byte) {
+func writeSibTo(code *gen.Coder, scale, index, base byte) {
 	code.WriteByte((scale << 6) | (index << 3) | base)
 }
 
@@ -82,25 +83,25 @@ type sib struct {
 	base  byte
 }
 
-func (sib sib) writeTo(code *Coder) {
+func (sib sib) writeTo(code *gen.Coder) {
 	writeSibTo(code, sib.scale, sib.index, sib.base)
 }
 
 type prefix interface {
-	writeTo(*Coder, types.T, regs.R)
+	writeTo(*gen.Coder, types.T, regs.R)
 }
 
 type unaryInsn interface {
-	op(code *Coder, subject regs.R)
+	op(code *gen.Coder, subject regs.R)
 }
 
 type binaryInsn interface {
-	op(code *Coder, t types.T, target, source regs.R)
+	op(code *gen.Coder, t types.T, target, source regs.R)
 }
 
 type insnFixed []byte
 
-func (bytes insnFixed) op(code *Coder) {
+func (bytes insnFixed) op(code *gen.Coder) {
 	code.Write([]byte(bytes))
 }
 
@@ -108,13 +109,13 @@ type insnReg struct {
 	base byte
 }
 
-func (i insnReg) op(code *Coder, reg regs.R) {
+func (i insnReg) op(code *gen.Coder, reg regs.R) {
 	code.WriteByte(i.base + byte(reg))
 }
 
 type insnModRegFromReg []byte
 
-func (bytes insnModRegFromReg) op(code *Coder, target, source regs.R) {
+func (bytes insnModRegFromReg) op(code *gen.Coder, target, source regs.R) {
 	code.Write([]byte(bytes))
 	ModReg.writeTo(code, byte(target), byte(source))
 }
@@ -124,7 +125,7 @@ type insnModOpReg struct {
 	ro    byte
 }
 
-func (i insnModOpReg) op(code *Coder, reg regs.R) {
+func (i insnModOpReg) op(code *gen.Coder, reg regs.R) {
 	code.Write(i.bytes)
 	ModReg.writeTo(code, i.ro, byte(reg))
 }
@@ -134,7 +135,7 @@ type insnModRegMemImm struct {
 	modMem modMem
 }
 
-func (i insnModRegMemImm) op(code *Coder, reg regs.R, imm imm) {
+func (i insnModRegMemImm) op(code *gen.Coder, reg regs.R, imm imm) {
 	code.Write(i.bytes)
 	i.modMem.writeTo(code, byte(reg))
 	imm.writeTo(code)
@@ -145,19 +146,19 @@ type insnPrefixRegImm struct {
 	base   byte
 }
 
-func (i insnPrefixRegImm) op(code *Coder, t types.T, reg regs.R, imm imm) {
+func (i insnPrefixRegImm) op(code *gen.Coder, t types.T, reg regs.R, imm imm) {
 	i.prefix.writeTo(code, t, 0)
 	code.WriteByte(i.base + byte(reg))
 	imm.writeTo(code)
 }
 
-type insnPrefixModOpRegRax struct {
+type insnPrefixModOpReg struct {
 	prefix prefix
 	bytes  []byte
 	ro     byte
 }
 
-func (i insnPrefixModOpRegRax) op(code *Coder, t types.T, reg regs.R) {
+func (i insnPrefixModOpReg) op(code *gen.Coder, t types.T, reg regs.R) {
 	i.prefix.writeTo(code, t, 0)
 	code.Write(i.bytes)
 	ModReg.writeTo(code, i.ro, byte(reg))
@@ -169,7 +170,7 @@ type insnPrefixModRegFromReg struct {
 	mod    mod
 }
 
-func (i insnPrefixModRegFromReg) op(code *Coder, t types.T, target, source regs.R) {
+func (i insnPrefixModRegFromReg) op(code *gen.Coder, t types.T, target, source regs.R) {
 	i.prefix.writeTo(code, t, target)
 	code.Write(i.bytes)
 	i.mod.writeTo(code, byte(target), byte(source))
@@ -181,7 +182,7 @@ type insnPrefixModRegToReg struct {
 	mod    mod
 }
 
-func (i insnPrefixModRegToReg) op(code *Coder, t types.T, target, source regs.R) {
+func (i insnPrefixModRegToReg) op(code *gen.Coder, t types.T, target, source regs.R) {
 	i.prefix.writeTo(code, t, source)
 	code.Write(i.bytes)
 	i.mod.writeTo(code, byte(source), byte(target))
@@ -192,7 +193,7 @@ type insnPrefixModRegFromRegDisp struct {
 	bytes  []byte
 }
 
-func (i insnPrefixModRegFromRegDisp) op(code *Coder, t types.T, target, source regs.R, disp int) {
+func (i insnPrefixModRegFromRegDisp) op(code *gen.Coder, t types.T, target, source regs.R, disp int) {
 	mod, imm := dispMod(t, disp)
 
 	i.prefix.writeTo(code, t, target)
@@ -207,7 +208,7 @@ type insnPrefixModOpRegImm struct {
 	ro     byte
 }
 
-func (i insnPrefixModOpRegImm) op(code *Coder, t types.T, reg regs.R, imm imm) {
+func (i insnPrefixModOpRegImm) op(code *gen.Coder, t types.T, reg regs.R, imm imm) {
 	i.prefix.writeTo(code, t, 0)
 	code.Write(i.bytes)
 	ModReg.writeTo(code, i.ro, byte(reg))
@@ -220,7 +221,7 @@ type insnPrefixModRegSibImm struct {
 	sib    sib
 }
 
-func (i insnPrefixModRegSibImm) op(code *Coder, t types.T, reg regs.R, disp int) {
+func (i insnPrefixModRegSibImm) op(code *gen.Coder, t types.T, reg regs.R, disp int) {
 	mod, imm := dispMod(t, disp)
 
 	i.prefix.writeTo(code, t, reg)
@@ -235,7 +236,7 @@ type insnPrefixModRegCustomSibImm struct {
 	bytes  []byte
 }
 
-func (i insnPrefixModRegCustomSibImm) op(code *Coder, t types.T, reg regs.R, scale uint8, index, base regs.R, disp int) {
+func (i insnPrefixModRegCustomSibImm) op(code *gen.Coder, t types.T, reg regs.R, scale uint8, index, base regs.R, disp int) {
 	mod, imm := dispMod(t, disp)
 
 	i.prefix.writeTo(code, t, reg)
@@ -250,7 +251,7 @@ type insnPrefixArithmeticModOpRegImm struct {
 	ro     byte
 }
 
-func (i insnPrefixArithmeticModOpRegImm) op(code *Coder, t types.T, reg regs.R, value int) {
+func (i insnPrefixArithmeticModOpRegImm) op(code *gen.Coder, t types.T, reg regs.R, value int) {
 	var opcode byte
 	var imm imm
 

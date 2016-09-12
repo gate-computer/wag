@@ -18,7 +18,7 @@ import (
 const (
 	parallel   = false
 	writeBin   = true
-	dumpText   = true
+	dumpText   = false
 	dumpROData = true
 
 	stackSize = 0x100000
@@ -34,19 +34,20 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-func TestBranchStackDelta(t *testing.T) { test(t, "testdata/branch_stack_delta.wast") }
+//func TestLoop(t *testing.T) { test(t, "testdata/spec/ml-proto/test/loop.wast") }
 
-func TestBlock(t *testing.T)       { test(t, "testdata/spec/ml-proto/test/block.wast") }
-func TestBrIf(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/br_if.wast") }
-func TestFac(t *testing.T)         { test(t, "testdata/spec/ml-proto/test/fac.wast") }
-func TestForward(t *testing.T)     { test(t, "testdata/spec/ml-proto/test/forward.wast") }
-func TestFunc(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/func.wast") }
-func TestI32(t *testing.T)         { test(t, "testdata/i32.wast") }
-func TestI64(t *testing.T)         { test(t, "testdata/i64.wast") }
-func TestIntLiterals(t *testing.T) { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
-func TestLabels(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/labels.wast") }
-func TestNop(t *testing.T)         { test(t, "testdata/spec/ml-proto/test/nop.wast") }
-func TestTypecheck(t *testing.T)   { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
+func TestBlock(t *testing.T)            { test(t, "testdata/spec/ml-proto/test/block.wast") }
+func TestBrIf(t *testing.T)             { test(t, "testdata/spec/ml-proto/test/br_if.wast") }
+func TestBranchStackDelta(t *testing.T) { test(t, "testdata/branch_stack_delta.wast") }
+func TestFac(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/fac.wast") }
+func TestForward(t *testing.T)          { test(t, "testdata/spec/ml-proto/test/forward.wast") }
+func TestFunc(t *testing.T)             { test(t, "testdata/spec/ml-proto/test/func.wast") }
+func TestI32(t *testing.T)              { test(t, "testdata/i32.wast") }
+func TestI64(t *testing.T)              { test(t, "testdata/i64.wast") }
+func TestIntLiterals(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
+func TestLabels(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/labels.wast") }
+func TestNop(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/nop.wast") }
+func TestTypecheck(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
 
 func test(t *testing.T, filename string) {
 	if parallel {

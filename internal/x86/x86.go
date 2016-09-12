@@ -1,12 +1,13 @@
 package x86
 
 import (
-	"bytes"
 	"encoding/binary"
 
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/traps"
 )
 
@@ -22,16 +23,29 @@ const (
 	regTrapArg    = regs.R(7) // rdi
 	regTrapFunc   = regs.R(8) // r8
 
-	wordSize      = 8
-	codeAlignment = 16
-	paddingByte   = 0xcc // int3 instruction
+	wordSize          = 8
+	functionAlignment = 16
+	paddingByte       = 0xcc // int3 instruction
 )
 
 var (
 	byteOrder = binary.LittleEndian
+
+	nopSequences = [][]byte{
+		[]byte{0x90},
+		[]byte{0x66, 0x90},
+		[]byte{0x0f, 0x1f, 0x00},
+		[]byte{0x0f, 0x1f, 0x40, 0x00},
+		[]byte{0x0f, 0x1f, 0x44, 0x00, 0x00},
+		[]byte{0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00},
+		[]byte{0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00},
+		[]byte{0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00},
+		[]byte{0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00},
+	}
 )
 
 var (
+	Nop  = insnFixed{0x90}
 	Ret  = insnFixed{0xc3}
 	Int3 = insnFixed{0xcc}
 	Call = insnFixed{0xe8, 0, 0, 0, 0}
@@ -57,51 +71,22 @@ var (
 	LeaStack = insnPrefixModRegSibImm{rex, []byte{0x8d}, sib{0, regStackPtr, regStackPtr}}
 )
 
-type Machine struct{}
+type X86 struct{}
 
-func (Machine) NewCoder() *Coder {
-	return new(Coder)
-}
-
-func (Machine) ByteOrder() binary.ByteOrder {
-	return byteOrder
-}
-
-func (Machine) FunctionCallStackOverhead() int {
-	return wordSize // return address
-}
-
-type Coder struct {
-	bytes.Buffer
-	divideByZero links.L
-}
-
-func (code *Coder) DivideByZeroTarget() *links.L {
-	return &code.divideByZero
-}
-
-// regOp operates on a single register.
-func (code *Coder) regOp(intOp func(*Coder, regs.R), floatOp func(*Coder, types.T, regs.R), t types.T, subject regs.R) {
-	switch t.Category() {
-	case types.Int:
-		intOp(code, subject)
-
-	case types.Float:
-		floatOp(code, t, subject)
-
-	default:
-		panic(t)
-	}
-}
+func (x86 X86) WordSize() int                  { return wordSize }
+func (x86 X86) ByteOrder() binary.ByteOrder    { return binary.LittleEndian }
+func (x86 X86) FunctionCallStackOverhead() int { return wordSize }
+func (x86 X86) FunctionAlignment() int         { return functionAlignment }
 
 // UnaryOp operates on a single typed register.
-func (code *Coder) UnaryOp(name string, t types.T) {
+func (x86 X86) UnaryOp(code *gen.Coder, name string, t types.T, x values.Operand) values.Operand {
 	switch t.Category() {
 	case types.Int:
-		unaryIntOp(code, name, t)
+		return x86.unaryIntOp(code, name, t, x)
 
 	case types.Float:
-		unaryFloatOp(code, name, t)
+		x86.unaryFloatOp(code, name, t, x)
+		return values.RegOperand(regs.R0)
 
 	default:
 		panic(t)
@@ -109,24 +94,31 @@ func (code *Coder) UnaryOp(name string, t types.T) {
 }
 
 // BinaryOp operates on two typed registers, and trashes three registers.
-func (code *Coder) BinaryOp(name string, t types.T) {
+func (x86 X86) BinaryOp(code *gen.Coder, name string, t types.T, a, b values.Operand) values.Operand {
+	if reg, ok := b.CheckReg(); ok && reg == regs.R0 {
+		b = x86.OpMove(code, t, regScratch, b)
+	}
+
+	x86.getRegOperandIn(code, t, regs.R0, a)
+
 	switch t.Category() {
 	case types.Int:
-		binaryIntOp(code, name, t)
+		return x86.binaryIntOp(code, name, t, b)
 
 	case types.Float:
-		binaryFloatOp(code, name, t)
+		x86.binaryFloatOp(code, name, t, b)
+		return values.RegOperand(regs.R0)
 
 	default:
 		panic(t)
 	}
 }
 
-func (code *Coder) OpAbort() {
+func (x86 X86) OpAbort(code *gen.Coder) {
 	Int3.op(code)
 }
 
-func (code *Coder) OpAddImmToStackPtr(offset int) {
+func (x86 X86) OpAddImmToStackPtr(code *gen.Coder, offset int) {
 	switch {
 	case offset > 0:
 		AddImm.op(code, types.I64, regStackPtr, offset)
@@ -136,11 +128,11 @@ func (code *Coder) OpAddImmToStackPtr(offset int) {
 	}
 }
 
-func (code *Coder) OpAddToStackPtr(source regs.R) {
+func (x86 X86) OpAddToStackPtr(code *gen.Coder, source regs.R) {
 	Add.op(code, types.I64, regStackPtr, source)
 }
 
-func (code *Coder) OpBranchIndirect(t types.T, reg regs.R) (branchAddr int) {
+func (x86 X86) OpBranchIndirect(code *gen.Coder, t types.T, reg regs.R) (branchAddr int) {
 	if t == types.I32 {
 		Movsxd.op(code, types.I32, reg, reg)
 	}
@@ -152,17 +144,17 @@ func (code *Coder) OpBranchIndirect(t types.T, reg regs.R) (branchAddr int) {
 	return
 }
 
-func (code *Coder) OpCallIndirectDisp32FromStack(ptrStackOffset int) {
+func (x86 X86) OpCallIndirectDisp32FromStack(code *gen.Coder, ptrStackOffset int) {
 	MovsxdFromStack.op(code, types.I32, regScratch, ptrStackOffset)
 	Add.op(code, types.I64, regScratch, regTextPtr)
 	CallIndirect.op(code, regScratch)
 }
 
-func (code *Coder) OpClear(subject regs.R) {
+func (x86 X86) OpClear(code *gen.Coder, subject regs.R) {
 	Xor.op(code, types.I64, subject, subject)
 }
 
-func (code *Coder) OpLoadROIntIndex32ScaleDisp(t types.T, reg regs.R, scale uint8, addr int, signExt bool) {
+func (x86 X86) OpLoadROIntIndex32ScaleDisp(code *gen.Coder, t types.T, reg regs.R, scale uint8, addr int, signExt bool) {
 	Movsxd.op(code, types.I32, reg, reg)
 
 	if signExt && t == types.I32 {
@@ -172,95 +164,131 @@ func (code *Coder) OpLoadROIntIndex32ScaleDisp(t types.T, reg regs.R, scale uint
 	}
 }
 
-func (code *Coder) OpLoadStack(t types.T, target regs.R, sourceOffset int) {
+func (x86 X86) OpMove(code *gen.Coder, t types.T, targetReg regs.R, source values.Operand) values.Operand {
 	switch t.Category() {
 	case types.Int:
-		MovFromStack.op(code, t, target, sourceOffset)
+		switch source.Storage {
+		case values.Imm:
+			switch source.ImmValue(t) {
+			case 0:
+				Xor.op(code, t, targetReg, targetReg)
+
+			default:
+				MovImm.op(code, t, targetReg, imm{source.Imm(t)})
+			}
+
+		case values.StackOffset:
+			MovFromStack.op(code, t, targetReg, source.Offset())
+
+		case values.Reg:
+			if sourceReg := source.Reg(); sourceReg != targetReg {
+				Mov.op(code, t, targetReg, sourceReg)
+			}
+
+		case values.StackPop:
+			Pop.op(code, targetReg)
+
+		default:
+			panic(source)
+		}
 
 	case types.Float:
-		MovssMovsdFromStack.op(code, t, target, sourceOffset)
+		switch source.Storage {
+		case values.StackOffset:
+			MovssMovsdFromStack.op(code, t, targetReg, source.Offset())
+
+		case values.ROData:
+			MovssMovsdFromIndirect.op(code, t, targetReg, regRODataPtr, source.Addr())
+
+		case values.Reg:
+			if sourceReg := source.Reg(); sourceReg != targetReg {
+				MovssMovsd.op(code, t, targetReg, sourceReg)
+			}
+
+		case values.StackPop:
+			popFloatOp(code, t, targetReg)
+
+		default:
+			panic(source)
+		}
+
+	default:
+		panic(t)
+	}
+
+	return values.RegOperand(targetReg)
+}
+
+func (x86 X86) OpPush(code *gen.Coder, t types.T, source values.Operand) {
+	reg := x86.getTempRegOperand(code, t, source)
+
+	switch t.Category() {
+	case types.Int:
+		Push.op(code, reg)
+
+	case types.Float:
+		pushFloatOp(code, t, reg)
 
 	default:
 		panic(t)
 	}
 }
 
-func (code *Coder) OpMove(t types.T, target, source regs.R) {
-	switch t.Category() {
-	case types.Int:
-		Mov.op(code, t, target, source)
-
-	case types.Float:
-		MovssMovsd.op(code, t, target, source)
-
-	default:
-		panic(t)
-	}
-}
-
-func (code *Coder) OpMoveImmInt(t types.T, target regs.R, value interface{}) {
-	MovImm.op(code, t, target, imm{value})
-}
-
-func (code *Coder) OpLoadROFloatDisp(t types.T, target regs.R, addr int) {
-	MovssMovsdFromIndirect.op(code, t, target, regRODataPtr, addr)
-}
-
-func (code *Coder) OpPop(t types.T, target regs.R) {
-	code.regOp(Pop.op, popFloatOp, t, target)
-}
-
-func (code *Coder) OpPush(t types.T, source regs.R) {
-	code.regOp(Push.op, pushFloatOp, t, source)
-}
-
-func (code *Coder) OpReturn() {
+func (x86 X86) OpReturn(code *gen.Coder) {
 	Ret.op(code)
 }
 
-func (code *Coder) OpShiftRightLogical32Bits(subject regs.R) {
+func (x86 X86) OpShiftRightLogical32Bits(code *gen.Coder, subject regs.R) {
 	ShrImm.op(code, types.I64, subject, uimm8(-32))
 }
 
-func (code *Coder) OpStoreStack(t types.T, targetOffset int, source regs.R) {
+func (x86 X86) OpStoreStack(code *gen.Coder, t types.T, targetOffset int, source values.Operand) {
+	sourceReg := x86.getTempRegOperand(code, t, source)
+
 	switch t.Category() {
 	case types.Int:
-		MovToStack.op(code, t, source, targetOffset)
+		MovToStack.op(code, t, sourceReg, targetOffset)
 
 	case types.Float:
-		MovssMovsdToStack.op(code, t, source, targetOffset)
+		MovssMovsdToStack.op(code, t, sourceReg, targetOffset)
 
 	default:
 		panic(t)
 	}
 }
 
-func (code *Coder) OpTrap(id traps.Id) {
+func (x86 X86) OpTrap(code *gen.Coder, id traps.Id) {
 	MovImm.op(code, types.I64, regTrapArg, imm64(int(id)))
 	Mov.op(code, types.I64, regScratch, regTrapFunc)
 	CallIndirect.op(code, regScratch)
 }
 
-func (code *Coder) StubOpBranch() {
+func (x86 X86) StubOpBranch(code *gen.Coder) {
 	Jmp.op(code)
 }
 
-func (code *Coder) StubOpBranchIf(subject regs.R) {
-	Test.op(code, types.I32, subject, subject)
+func (x86 X86) StubOpBranchIf(code *gen.Coder, subject values.Operand) {
+	reg := x86.getTempRegOperand(code, types.I32, subject)
+
+	Test.op(code, types.I32, reg, reg)
 	Jne.op(code)
 }
 
-func (code *Coder) StubOpBranchIfNot(subject regs.R) {
-	Test.op(code, types.I32, subject, subject)
+func (x86 X86) StubOpBranchIfNot(code *gen.Coder, subject values.Operand) {
+	reg := x86.getTempRegOperand(code, types.I32, subject)
+
+	Test.op(code, types.I32, reg, reg)
 	Je.op(code)
 }
 
-func (code *Coder) StubOpBranchIfNotEqualImm32(subject regs.R, value int) {
-	CmpImm.op(code, types.I32, subject, value)
+func (x86 X86) StubOpBranchIfNotEqualImm32(code *gen.Coder, operand values.Operand, value int) {
+	reg := x86.getTempRegOperand(code, types.I32, operand)
+
+	CmpImm.op(code, types.I32, reg, value)
 	Jne.op(code)
 }
 
-func (code *Coder) StubOpBranchIfOutOfBounds(indexReg regs.R, upperBound int) {
+func (x86 X86) StubOpBranchIfOutOfBounds(code *gen.Coder, indexReg regs.R, upperBound int) {
 	MovImm.op(code, types.I32, regScratch, imm32(upperBound))
 	Test.op(code, types.I32, indexReg, indexReg)
 	Cmovl.op(code, types.I32, indexReg, regScratch) // negative index -> upper bound
@@ -268,7 +296,7 @@ func (code *Coder) StubOpBranchIfOutOfBounds(indexReg regs.R, upperBound int) {
 	Jle.op(code)
 }
 
-func (code *Coder) StubOpBranchIfStackExhausted() (stackUsageAddr int) {
+func (x86 X86) StubOpBranchIfStackExhausted(code *gen.Coder) (stackUsageAddr int) {
 	LeaStack.op(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.op(code, types.I64, regScratch, regStackLimit)
@@ -276,23 +304,23 @@ func (code *Coder) StubOpBranchIfStackExhausted() (stackUsageAddr int) {
 	return
 }
 
-func (code *Coder) StubOpCall() {
+func (x86 X86) StubOpCall(code *gen.Coder) {
 	Call.op(code)
 }
 
-func (code *Coder) UpdateBranches(l *links.L) {
-	code.updateSites(l)
+func (x86 X86) UpdateBranches(code *gen.Coder, l *links.L) {
+	x86.updateSites(code, l)
 }
 
-func (code *Coder) UpdateCalls(l *links.L) {
-	code.updateSites(l)
+func (x86 X86) UpdateCalls(code *gen.Coder, l *links.L) {
+	x86.updateSites(code, l)
 }
 
-func (code *Coder) UpdateStackDisp(addr int, value int) {
-	code.updateAddr(addr, -value)
+func (x86 X86) UpdateStackDisp(code *gen.Coder, addr int, value int) {
+	x86.updateAddr(code, addr, -value)
 }
 
-func (code *Coder) updateAddr(addr int, value int) {
+func (x86 X86) updateAddr(code *gen.Coder, addr int, value int) {
 	if value < -0x80000000 || 0x80000000 <= value {
 		panic(value)
 	}
@@ -300,17 +328,48 @@ func (code *Coder) updateAddr(addr int, value int) {
 	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(value))
 }
 
-func (code *Coder) updateSites(l *links.L) {
+func (x86 X86) updateSites(code *gen.Coder, l *links.L) {
 	for _, addr := range l.Sites {
-		code.updateAddr(addr, l.Address-addr)
+		x86.updateAddr(code, addr, l.Address-addr)
 	}
 }
 
-func (code *Coder) AlignFunction() {
-	size := codeAlignment - (code.Len() & (codeAlignment - 1))
-	if size < codeAlignment {
+func (x86 X86) AlignFunction(code *gen.Coder) {
+	size := functionAlignment - (code.Len() & (functionAlignment - 1))
+	if size < functionAlignment {
 		for i := 0; i < size; i++ {
 			code.WriteByte(paddingByte)
 		}
+	}
+}
+
+func (x86 X86) DeleteCode(code *gen.Coder, addrBegin, addrEnd int) {
+	for i := addrBegin; i < addrEnd; i++ {
+		code.Bytes()[i] = paddingByte
+	}
+}
+
+func (x86 X86) DisableCode(code *gen.Coder, addrBegin, addrEnd int) {
+	buf := code.Bytes()[addrBegin:addrEnd]
+	for len(buf) > 0 {
+		n := len(buf)
+		if n > len(nopSequences) {
+			n = len(nopSequences)
+		}
+		copy(buf[:n], nopSequences[n-1])
+		buf = buf[n:]
+	}
+}
+
+func (x86 X86) getTempRegOperand(code *gen.Coder, t types.T, o values.Operand) regs.R {
+	if o.Storage != values.Reg {
+		o = x86.OpMove(code, t, regScratch, o)
+	}
+	return o.Reg()
+}
+
+func (x86 X86) getRegOperandIn(code *gen.Coder, t types.T, target regs.R, o values.Operand) {
+	if reg, ok := o.CheckReg(); !(ok && reg == target) {
+		x86.OpMove(code, t, target, o)
 	}
 }

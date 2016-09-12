@@ -106,10 +106,10 @@ func loadModule(top []interface{}) (m *Module) {
 		switch name {
 		case "memory":
 			if len(expr) > 1 {
-				m.Memory.MinSize = int(values.I32(expr[1]))
+				m.Memory.MinSize = int(values.ParseI32(expr[1]))
 			}
 			if len(expr) > 2 {
-				m.Memory.MaxSize = int(values.I32(expr[2]))
+				m.Memory.MaxSize = int(values.ParseI32(expr[2]))
 			}
 
 		case "func":

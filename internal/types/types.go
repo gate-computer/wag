@@ -1,9 +1,5 @@
 package types
 
-import (
-	"strconv"
-)
-
 type T int
 type Category int
 type Size int
@@ -48,7 +44,7 @@ func (t T) String() string {
 		return "f64"
 
 	default:
-		return strconv.Itoa(int(t))
+		return "corrupted"
 	}
 }
 
