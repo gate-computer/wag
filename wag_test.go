@@ -18,7 +18,7 @@ import (
 const (
 	parallel   = false
 	writeBin   = true
-	dumpText   = false
+	dumpText   = true
 	dumpROData = true
 
 	stackSize = 0x100000

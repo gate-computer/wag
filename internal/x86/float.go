@@ -7,12 +7,12 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-type floatPrefix struct {
+type floatSizePrefix struct {
 	size32 []byte
 	size64 []byte
 }
 
-func (p *floatPrefix) writeTo(code *gen.Coder, t types.T, dummy regs.R) {
+func (p *floatSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase regs.R) {
 	switch t.Size() {
 	case types.Size32:
 		code.Write(p.size32)
@@ -23,11 +23,13 @@ func (p *floatPrefix) writeTo(code *gen.Coder, t types.T, dummy regs.R) {
 	default:
 		panic(t)
 	}
+
+	writeRexTo(code, 0, ro, index, rmOrBase)
 }
 
 var (
-	operandSize = &floatPrefix{nil, []byte{0x66}}
-	scalarSize  = &floatPrefix{[]byte{0xf3}, []byte{0xf2}}
+	operandSize = &floatSizePrefix{nil, []byte{0x66}}
+	scalarSize  = &floatSizePrefix{[]byte{0xf3}, []byte{0xf2}}
 )
 
 var (
@@ -50,51 +52,67 @@ var binaryFloatInsns = map[string]binaryInsn{
 	"sub": SubssSubsd,
 }
 
-var setccFloatInsns = map[string]unaryInsn{
-	"eq": Sete,
-	"gt": Setg,
-	"ne": Setne,
-	"lt": Setl,
+var binaryFloatConditions = map[string]values.Condition{
+	"eq": values.EQ,
+	"gt": values.GT_S,
+	"lt": values.LT_S,
+	"ne": values.NE,
 }
 
-func (x86 X86) unaryFloatOp(code *gen.Coder, name string, t types.T, source values.Operand) {
-	x86.getRegOperandIn(code, t, regs.R0, source)
-
+func (x86 X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
 	switch name {
 	case "neg":
-		MovssMovsd.op(code, t, regScratch, regs.R0)
-		SubssSubsd.op(code, t, regs.R0, regScratch)
-		SubssSubsd.op(code, t, regs.R0, regScratch)
-		return
+		tempReg := code.OpAllocReg(t)
+		defer code.FreeReg(t, tempReg)
+
+		targetReg := x86.opOwnReg(code, t, x)
+
+		MovssMovsd.op(code, t, tempReg, targetReg)
+		SubssSubsd.op(code, t, targetReg, tempReg)
+		SubssSubsd.op(code, t, targetReg, tempReg)
+		return values.RegTempOperand(targetReg)
 	}
 
 	panic(name)
 }
 
-func (x86 X86) binaryFloatOp(code *gen.Coder, name string, t types.T, source values.Operand) {
-	sourceReg := x86.getTempRegOperand(code, t, source)
-
+func (x86 X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
 	if insn, found := binaryFloatInsns[name]; found {
-		insn.op(code, t, regs.R0, sourceReg)
-		return
+		targetReg := x86.opOwnReg(code, t, a)
+
+		sourceReg, own := x86.opBorrowReg(code, t, b)
+		if own {
+			defer code.FreeReg(t, sourceReg)
+		}
+
+		insn.op(code, t, targetReg, sourceReg)
+		return values.RegTempOperand(targetReg)
 	}
 
-	if setcc, found := setccFloatInsns[name]; found {
-		UcomissUcomisd.op(code, t, regs.R0, sourceReg)
-		setcc.op(code, regs.R0)
-		Movzx8.op(code, regs.R0, regs.R0)
-		return
+	if cond, found := binaryFloatConditions[name]; found {
+		aReg, own := x86.opBorrowReg(code, t, a)
+		if own {
+			defer code.FreeReg(t, aReg)
+		}
+
+		bReg, own := x86.opBorrowReg(code, t, b)
+		if own {
+			defer code.FreeReg(t, bReg)
+		}
+
+		UcomissUcomisd.op(code, t, aReg, bReg)
+		return values.ConditionFlagsOperand(cond)
 	}
 
 	panic(name)
 }
 
-func pushFloatOp(code *gen.Coder, t types.T, source regs.R) {
+func pushFloatOp(code gen.Coder, t types.T, source regs.R) {
 	SubImm.op(code, types.I64, regStackPtr, wordSize)
 	MovssMovsdToStack.op(code, t, source, 0)
 }
 
-func popFloatOp(code *gen.Coder, t types.T, target regs.R) {
+func popFloatOp(code gen.Coder, t types.T, target regs.R) {
 	MovssMovsdFromStack.op(code, t, target, 0)
 	AddImm.op(code, types.I64, regStackPtr, wordSize)
 }

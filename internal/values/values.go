@@ -15,16 +15,46 @@ type Storage int
 const (
 	Nowhere = Storage(iota)
 	Imm
-	StackOffset
 	ROData
-	Reg
+	RegVar
+	RegTemp
+	StackVar
 	StackPop
+	ConditionFlags
 )
 
 var (
 	NoOperand       = Operand{Storage: Nowhere}
 	StackPopOperand = Operand{Storage: StackPop}
 )
+
+type Condition int
+
+const (
+	EQ = Condition(iota)
+	NE
+	GE_S
+	GT_S
+	GE_U
+	GT_U
+	LE_S
+	LT_S
+	LE_U
+	LT_U
+)
+
+var InvertedConditions = []Condition{
+	NE,   // EQ
+	EQ,   // NE
+	LT_S, // GE_S
+	LE_S, // GT_S
+	LT_U, // GE_U
+	LE_U, // GT_U
+	GT_S, // LE_S
+	GE_S, // LT_U
+	GT_U, // LE_U
+	GE_U, // LT_U
+}
 
 type Operand struct {
 	Storage Storage
@@ -48,16 +78,24 @@ func ImmOperand(t types.T, value int) Operand {
 	return Operand{Imm, x}
 }
 
-func StackOffsetOperand(offset int) Operand {
-	return Operand{StackOffset, uint64(offset)}
-}
-
 func RODataOperand(addr int) Operand {
 	return Operand{ROData, uint64(addr)}
 }
 
-func RegOperand(reg regs.R) Operand {
-	return Operand{Reg, uint64(byte(reg))}
+func RegTempOperand(reg regs.R) Operand {
+	return Operand{RegTemp, uint64(byte(reg))}
+}
+
+func RegVarOperand(reg regs.R) Operand {
+	return Operand{RegVar, uint64(byte(reg))}
+}
+
+func StackVarOperand(offset int) Operand {
+	return Operand{StackVar, uint64(offset)}
+}
+
+func ConditionFlagsOperand(cond Condition) Operand {
+	return Operand{ConditionFlags, uint64(int(cond))}
 }
 
 // Pure operands don't need to be saved during arbitrary expression evaluation.
@@ -130,29 +168,6 @@ func (o Operand) CheckImmValue(t types.T) (value int64, ok bool) {
 	return
 }
 
-func (o Operand) Offset() (offset int) {
-	offset, ok := o.CheckStackOffset()
-	if !ok {
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) CheckStackOffset() (offset int, ok bool) {
-	if o.Storage != StackOffset {
-		return
-	}
-
-	value := int64(o.X)
-	if value < -0x80000000 || value >= 0x80000000 {
-		panic(value)
-	}
-
-	offset = int(value)
-	ok = true
-	return
-}
-
 func (o Operand) Addr() (addr int) {
 	addr, ok := o.CheckROData()
 	if !ok {
@@ -176,20 +191,74 @@ func (o Operand) CheckROData() (addr int, ok bool) {
 }
 
 func (o Operand) Reg() (reg regs.R) {
-	reg, ok := o.CheckReg()
+	reg, ok := o.CheckAnyReg()
 	if !ok {
 		panic(o)
 	}
 	return
 }
 
-func (o Operand) CheckReg() (reg regs.R, ok bool) {
-	if o.Storage != Reg {
+func (o Operand) CheckAnyReg() (reg regs.R, ok bool) {
+	switch o.Storage {
+	case RegVar, RegTemp:
+		reg = regs.R(byte(o.X))
+		ok = true
+	}
+	return
+}
+
+func (o Operand) CheckRegVar() (reg regs.R, ok bool) {
+	if o.Storage == RegVar {
+		reg = regs.R(byte(o.X))
+		ok = true
+	}
+	return
+}
+
+func (o Operand) CheckRegTemp() (reg regs.R, ok bool) {
+	if o.Storage == RegTemp {
+		reg = regs.R(byte(o.X))
+		ok = true
+	}
+	return
+}
+
+func (o Operand) Offset() (offset int) {
+	offset, ok := o.CheckStackVar()
+	if !ok {
+		panic(o)
+	}
+	return
+}
+
+func (o Operand) CheckStackVar() (offset int, ok bool) {
+	if o.Storage != StackVar {
 		return
 	}
 
-	reg = regs.R(byte(o.X))
+	value := int64(o.X)
+	if value < -0x80000000 || value >= 0x80000000 {
+		panic(value)
+	}
+
+	offset = int(value)
 	ok = true
+	return
+}
+
+func (o Operand) Condition() (cond Condition) {
+	cond, ok := o.CheckConditionFlags()
+	if !ok {
+		panic(o)
+	}
+	return
+}
+
+func (o Operand) CheckConditionFlags() (cond Condition, ok bool) {
+	if o.Storage == ConditionFlags {
+		cond = Condition(int(o.X))
+		ok = true
+	}
 	return
 }
 
@@ -201,17 +270,23 @@ func (o Operand) String() string {
 	case Imm:
 		return fmt.Sprintf("immediate data 0x%x", o.X)
 
-	case StackOffset:
-		return fmt.Sprintf("on stack at offset 0x%x", o.X)
-
 	case ROData:
 		return fmt.Sprintf("in read-only data at offset 0x%x", o.X)
 
-	case Reg:
-		return fmt.Sprintf("in register #%d", o.X)
+	case RegVar:
+		return fmt.Sprintf("cached in register #%d", o.X)
+
+	case RegTemp:
+		return fmt.Sprintf("temporarily in register #%d", o.X)
+
+	case StackVar:
+		return fmt.Sprintf("on stack at offset 0x%x", o.X)
 
 	case StackPop:
 		return "pushed on stack"
+
+	case ConditionFlags:
+		return "in CPU condition flags"
 
 	default:
 		return "corrupted"

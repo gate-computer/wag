@@ -1,17 +1,33 @@
 package gen
 
 import (
-	"bytes"
+	"io"
 
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/types"
 )
 
-type Coder struct {
-	bytes.Buffer
+type Coder interface {
+	io.Writer
+	WriteByte(byte) error
+	Bytes() []byte
+	Len() int
 
-	TrapDivideByZero          links.L
-	TrapCallStackExhausted    links.L
-	TrapIndirectCallIndex     links.L
-	TrapIndirectCallSignature links.L
-	TrapUnreachable           links.L
+	TrapLinks() *TrapLinks
+}
+
+type RegCoder interface {
+	Coder
+
+	OpAllocReg(t types.T) regs.R
+	FreeReg(types.T, regs.R)
+}
+
+type TrapLinks struct {
+	DivideByZero          links.L
+	CallStackExhausted    links.L
+	IndirectCallIndex     links.L
+	IndirectCallSignature links.L
+	Unreachable           links.L
 }

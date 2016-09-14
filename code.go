@@ -1,6 +1,7 @@
 package wag
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -16,46 +17,79 @@ import (
 
 const (
 	roTableAddr = 0
+
+	verbose = false
 )
 
-func (m *Module) Code() (text, roData, data []byte, bssSize int) {
-	var code gen.Coder
+type liveOperand struct {
+	typ types.T
+	ref *values.Operand
+}
 
-	prog := programCoder{
+type regVar struct {
+	typ types.T
+	reg regs.R
+}
+
+type branchTarget struct {
+	label       *links.L
+	name        string
+	expectType  types.T
+	stackOffset int
+}
+
+type coder struct {
+	module *Module
+
+	text   bytes.Buffer
+	roData dataArena
+
+	functionLinks map[*Function]*links.L
+	trapLinks     gen.TrapLinks
+
+	roFloat32Addrs map[uint32]int
+	roFloat64Addrs map[uint64]int
+
+	regsInt   regAllocator
+	regsFloat regAllocator
+
+	liveOperands    []liveOperand
+	evictedOperands int
+
+	stackOffset int
+
+	targetStack []*branchTarget
+
+	// these must be reset for each function
+	function       *Function
+	labelLinks     map[*links.L]struct{}
+	maxStackOffset int
+	varRegs        []regVar
+
+	exprDepth int // for debugging
+}
+
+func (m *Module) Code() (text, roData, data []byte, bssSize int) {
+	code := &coder{
+		module:         m,
 		roFloat32Addrs: make(map[uint32]int),
 		roFloat64Addrs: make(map[uint64]int),
 	}
 
-	prog.module(&code, m)
-
-	roData = prog.roData.populate()
-
-	text = code.Bytes()
-	return
-}
-
-type programCoder struct {
-	roData         dataArena
-	functionLinks  map[*Function]*links.L
-	roFloat32Addrs map[uint32]int
-	roFloat64Addrs map[uint64]int
-}
-
-func (prog *programCoder) module(code *gen.Coder, m *Module) {
-	prog.functionLinks = make(map[*Function]*links.L)
+	code.functionLinks = make(map[*Function]*links.L)
 
 	for _, f := range m.Functions {
-		prog.functionLinks[f] = new(links.L)
+		code.functionLinks[f] = new(links.L)
 	}
 
 	if len(m.Table) > 0 {
-		alloc := prog.roData.allocate(len(m.Table)*8, 8, func(data []byte) {
+		alloc := code.roData.allocate(len(m.Table)*8, 8, func(data []byte) {
 			for _, f := range m.Table {
 				if f.Signature.Index < 0 {
 					panic("function signature has no index while populating table")
 				}
 
-				addr := uint32(prog.functionLinks[f].Address)
+				addr := uint32(code.functionLinks[f].Address)
 				sigId := uint32(f.Signature.Index)
 				packed := (uint64(sigId) << 32) | uint64(addr)
 				mach.ByteOrder().PutUint64(data[:8], packed)
@@ -67,36 +101,67 @@ func (prog *programCoder) module(code *gen.Coder, m *Module) {
 		}
 	}
 
+	code.regsInt.init(mach.AvailableIntRegs())
+	code.regsFloat.init(mach.AvailableFloatRegs())
+
 	start := m.NamedFunctions[m.Start]
-	prog.function(code, m, start)
+	code.genFunction(start)
 
 	for _, f := range m.Functions {
 		if f != start {
-			prog.function(code, m, f)
+			code.genFunction(f)
 		}
 	}
 
-	prog.trap(code, &code.TrapDivideByZero, traps.DivideByZero)
-	prog.trap(code, &code.TrapCallStackExhausted, traps.CallStackExhausted)
-	prog.trap(code, &code.TrapIndirectCallIndex, traps.IndirectCallIndex)
-	prog.trap(code, &code.TrapIndirectCallSignature, traps.IndirectCallSignature)
-	prog.trap(code, &code.TrapUnreachable, traps.Unreachable)
+	code.genTrap(&code.trapLinks.DivideByZero, traps.DivideByZero)
+	code.genTrap(&code.trapLinks.CallStackExhausted, traps.CallStackExhausted)
+	code.genTrap(&code.trapLinks.IndirectCallIndex, traps.IndirectCallIndex)
+	code.genTrap(&code.trapLinks.IndirectCallSignature, traps.IndirectCallSignature)
+	code.genTrap(&code.trapLinks.Unreachable, traps.Unreachable)
 
-	for _, link := range prog.functionLinks {
+	for _, link := range code.functionLinks {
 		mach.UpdateCalls(code, link)
 	}
+
+	roData = code.roData.populate()
+
+	text = code.text.Bytes()
+	return
 }
 
-func (prog *programCoder) function(code *gen.Coder, m *Module, f *Function) {
-	if false {
+func (code *coder) Write(buf []byte) (int, error) {
+	return code.text.Write(buf)
+}
+
+func (code *coder) WriteByte(b byte) error {
+	return code.text.WriteByte(b)
+}
+
+func (code *coder) Bytes() []byte {
+	return code.text.Bytes()
+}
+
+func (code *coder) Len() int {
+	return code.text.Len()
+}
+
+func (code *coder) TrapLinks() *gen.TrapLinks {
+	return &code.trapLinks
+}
+
+func (code *coder) genFunction(f *Function) {
+	if verbose {
 		fmt.Println("func:", f.Names)
 	}
 
-	proc := functionCoder{
-		prog:       prog,
-		module:     m,
-		function:   f,
-		labelLinks: make(map[*links.L]struct{}),
+	code.function = f
+	code.labelLinks = make(map[*links.L]struct{})
+	code.maxStackOffset = 0
+
+	if cap(code.varRegs) >= f.NumLocals {
+		code.varRegs = code.varRegs[:f.NumLocals]
+	} else {
+		code.varRegs = make([]regVar, f.NumLocals)
 	}
 
 	mach.AlignFunction(code)
@@ -105,18 +170,21 @@ func (prog *programCoder) function(code *gen.Coder, m *Module, f *Function) {
 	stackCheckAddr := code.Len()
 
 	if f.NumLocals > 0 {
-		mach.OpClear(code, regs.R1)
-		zero := values.RegOperand(regs.R1)
+		reg := code.opAllocIntReg()
+		mach.OpMove(code, types.I64, reg, values.ImmOperand(types.I64, 0))
 
 		for i := 0; i < f.NumLocals; i++ {
-			mach.OpPush(code, types.I64, zero)
+			mach.OpPushIntReg(code, reg)
 		}
+
+		code.freeIntReg(reg)
 	}
 
 	end := new(links.L)
-	proc.pushTarget(end, "", f.Signature.ResultType)
+	code.pushTarget(end, "", f.Signature.ResultType)
 
 	var result values.Operand
+	var resultType types.T
 	var deadend bool
 
 	for i, x := range f.body {
@@ -125,45 +193,62 @@ func (prog *programCoder) function(code *gen.Coder, m *Module, f *Function) {
 			t = f.Signature.ResultType
 		}
 
-		result, deadend = proc.expr(code, x, t)
+		result, resultType, deadend = code.expr(x, t)
 		if deadend {
 			mach.OpAbort(code)
 			break
 		}
+
+		if i < len(f.body)-1 {
+			code.discard(resultType, result)
+		}
 	}
 
 	if !deadend {
-		proc.opMove(code, f.Signature.ResultType, regs.R0, result)
+		code.opMove(f.Signature.ResultType, mach.ResultReg(), result)
 	}
 
-	if proc.popTarget() {
+	if code.popTarget() {
 		deadend = false
+		code.opLabel(end)
 	}
 
-	proc.label(code, end)
-
-	if proc.stackOffset != 0 {
-		panic(fmt.Errorf("internal: stack offset is non-zero at end of function: %d", proc.stackOffset))
-	}
-
-	if len(proc.targetStack) != 0 {
-		panic(errors.New("internal: branch target stack is not empty at end of function"))
-	}
-
-	totalStackUsage := proc.function.NumLocals*mach.WordSize() + proc.stackUsage
+	stackUsage := code.function.NumLocals*mach.WordSize() + code.maxStackOffset
 
 	if !deadend {
-		mach.OpAddImmToStackPtr(code, proc.function.NumLocals*mach.WordSize())
+		mach.OpAddImmToStackPtr(code, code.function.NumLocals*mach.WordSize())
 		mach.OpReturn(code)
 	}
 
-	for link := range proc.labelLinks {
+	for i, v := range code.varRegs {
+		if v.typ != types.Void {
+			code.FreeReg(v.typ, v.reg)
+			code.varRegs[i].typ = types.Void
+		}
+	}
+
+	code.regsInt.postCheck("integer")
+	code.regsFloat.postCheck("float")
+
+	if len(code.liveOperands) != 0 {
+		panic(errors.New("internal: live operands exist at end of function"))
+	}
+
+	if code.stackOffset != 0 {
+		panic(fmt.Errorf("internal: stack offset is non-zero at end of function: %d", code.stackOffset))
+	}
+
+	if len(code.targetStack) != 0 {
+		panic(errors.New("internal: branch target stack is not empty at end of function"))
+	}
+
+	for link := range code.labelLinks {
 		mach.UpdateBranches(code, link)
 	}
 
-	if totalStackUsage > 0 {
-		mach.UpdateStackDisp(code, stackUsageAddr, totalStackUsage)
-		code.TrapCallStackExhausted.AddSite(stackCheckAddr)
+	if stackUsage > 0 {
+		mach.UpdateStackDisp(code, stackUsageAddr, stackUsage)
+		code.trapLinks.CallStackExhausted.AddSite(stackCheckAddr)
 	} else {
 		newAddr := stackCheckAddr &^ (mach.FunctionAlignment() - 1)
 		if functionAddr == 0 {
@@ -176,73 +261,47 @@ func (prog *programCoder) function(code *gen.Coder, m *Module, f *Function) {
 		functionAddr = newAddr
 	}
 
-	prog.functionLinks[f].Address = functionAddr
+	code.functionLinks[f].Address = functionAddr
 }
 
-func (prog *programCoder) trap(code *gen.Coder, l *links.L, id traps.Id) {
+func (code *coder) genTrap(l *links.L, id traps.Id) {
 	l.Address = code.Len()
 	mach.OpTrap(code, id)
 
 	mach.UpdateBranches(code, l)
 }
 
-func (prog *programCoder) trapSite(code *gen.Coder, l *links.L) {
+func (code *coder) trapSite(l *links.L) {
 	l.AddSite(code.Len())
 }
 
-func (prog *programCoder) opTrap(code *gen.Coder, trap *links.L) {
+func (code *coder) opTrap(trap *links.L) {
 	mach.StubOpBranch(code)
-	prog.trapSite(code, trap)
+	code.trapSite(trap)
 }
 
-func (prog *programCoder) opTrapIfOutOfBounds(code *gen.Coder, indexReg regs.R, upperBound int, trap *links.L) {
+func (code *coder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int, trap *links.L) {
 	mach.StubOpBranchIfOutOfBounds(code, indexReg, upperBound)
-	prog.trapSite(code, trap)
+	code.trapSite(trap)
 }
 
-func (prog *programCoder) opTrapIfNotEqualImm32(code *gen.Coder, x values.Operand, value int, trap *links.L) {
-	mach.StubOpBranchIfNotEqualImm32(code, x, value)
-	prog.trapSite(code, trap)
+func (code *coder) opTrapIfNotEqualImm32(reg regs.R, value int, trap *links.L) {
+	mach.StubOpBranchIfNotEqualImm32(code, reg, value)
+	code.trapSite(trap)
 }
 
-type liveOperand struct {
-	typ types.T
-	ref *values.Operand
-}
-
-type branchTarget struct {
-	label       *links.L
-	name        string
-	expectType  types.T
-	stackOffset int
-}
-
-type functionCoder struct {
-	module       *Module
-	prog         *programCoder
-	function     *Function
-	liveOperands []liveOperand
-	stackOffset  int
-	stackUsage   int
-	targetStack  []*branchTarget
-	labelLinks   map[*links.L]struct{}
-	exprDepth    int // for debugging
-}
-
-func (proc *functionCoder) expr(code *gen.Coder, x interface{}, expectType types.T) (result values.Operand, deadend bool) {
+func (code *coder) expr(x interface{}, expectType types.T) (result values.Operand, resultType types.T, deadend bool) {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
 
-	var resultType types.T
-
-	if false {
-		for i := 0; i < proc.exprDepth; i++ {
+	if verbose {
+		for i := 0; i < code.exprDepth; i++ {
 			fmt.Print("    ")
 		}
 		fmt.Printf("<%s>\n", exprName)
 	}
-	proc.exprDepth++
+	code.exprDepth++
 
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
@@ -260,16 +319,16 @@ func (proc *functionCoder) expr(code *gen.Coder, x interface{}, expectType types
 			resultType = types.I32
 			fallthrough
 		case "ctz", "neg":
-			result, deadend = proc.exprUnaryOp(code, exprName, opName, opType, args)
+			result, deadend = code.exprUnaryOp(exprName, opName, opType, args)
 
 		case "eq", "gt", "gt_s", "gt_u", "lt", "lt_s", "ne":
 			resultType = types.I32
 			fallthrough
 		case "add", "and", "div", "div_u", "mul", "or", "sub", "xor":
-			result, deadend = proc.exprBinaryOp(code, exprName, opName, opType, args)
+			result, deadend = code.exprBinaryOp(exprName, opName, opType, args)
 
 		case "const":
-			result = proc.exprConst(code, exprName, opType, args)
+			result = code.exprConst(exprName, opType, args)
 
 		default:
 			panic(exprName)
@@ -277,41 +336,41 @@ func (proc *functionCoder) expr(code *gen.Coder, x interface{}, expectType types
 	} else {
 		switch exprName {
 		case "block":
-			result, deadend = proc.exprBlock(code, exprName, args, expectType, nil)
+			result, deadend = code.exprBlock(exprName, args, expectType, nil)
 			resultType = expectType
 
 		case "br", "br_if", "br_table":
-			deadend = proc.exprBr(code, exprName, args)
+			deadend = code.exprBr(exprName, args)
 
 		case "call":
-			result, resultType, deadend = proc.exprCall(code, exprName, args)
+			result, resultType, deadend = code.exprCall(exprName, args)
 
 		case "call_indirect":
-			result, resultType, deadend = proc.exprCallIndirect(code, exprName, args)
+			result, resultType, deadend = code.exprCallIndirect(exprName, args)
 
 		case "get_local":
-			result, resultType = proc.exprGetLocal(code, exprName, args)
+			result, resultType = code.exprGetLocal(exprName, args)
 
 		case "if":
-			result, deadend = proc.exprIf(code, exprName, args, expectType)
+			result, deadend = code.exprIf(exprName, args, expectType)
 			resultType = expectType
 
 		case "loop":
-			result, deadend = proc.exprLoop(code, exprName, args, expectType)
+			result, deadend = code.exprLoop(exprName, args, expectType)
 			resultType = expectType
 
 		case "nop":
-			proc.exprNop(code, exprName, args)
+			code.exprNop(exprName, args)
 
 		case "return":
-			proc.exprReturn(code, exprName, args)
+			code.exprReturn(exprName, args)
 			deadend = true
 
 		case "set_local":
-			result, resultType, deadend = proc.exprSetLocal(code, exprName, args)
+			result, resultType, deadend = code.exprSetLocal(exprName, args)
 
 		case "unreachable":
-			proc.exprUnreachable(code, exprName, args)
+			code.exprUnreachable(exprName, args)
 			deadend = true
 
 		default:
@@ -319,14 +378,14 @@ func (proc *functionCoder) expr(code *gen.Coder, x interface{}, expectType types
 		}
 	}
 
-	proc.exprDepth--
-	if false {
-		for i := 0; i < proc.exprDepth+1; i++ {
+	code.exprDepth--
+	if verbose {
+		for i := 0; i < code.exprDepth+1; i++ {
 			fmt.Print("    ")
 		}
 		fmt.Printf("%s %s\n", resultType, result)
 
-		for i := 0; i < proc.exprDepth; i++ {
+		for i := 0; i < code.exprDepth; i++ {
 			fmt.Print("    ")
 		}
 		fmt.Printf("</%s>\n", exprName)
@@ -346,57 +405,85 @@ func (proc *functionCoder) expr(code *gen.Coder, x interface{}, expectType types
 	}
 
 	if result.Storage == values.StackPop {
-		// TODO: allow this and move it to register here?
 		panic(fmt.Errorf("%s: result operand is %s", exprName, result))
 	}
 
 	return
 }
 
-func (proc *functionCoder) exprUnaryOp(code *gen.Coder, exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprUnaryOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	proc.saveLiveRegOperands(code, opType, 1)
-
-	x, deadend := proc.expr(code, args[0], opType)
+	x, _, deadend := code.expr(args[0], opType)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	result = proc.unaryOp(code, opName, opType, x)
+	if value, ok := x.CheckImmValue(opType); ok {
+		switch opName {
+		case "eqz":
+			if value == 0 {
+				result = values.ImmOperand(opType, 1)
+			} else {
+				result = values.ImmOperand(opType, 0)
+			}
+			return
+		}
+	}
+
+	result = code.unaryOp(opName, opType, x)
 	return
 }
 
-func (proc *functionCoder) exprBinaryOp(code *gen.Coder, exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) != 2 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	proc.saveLiveRegOperands(code, opType, 3)
-
-	left, deadend := proc.expr(code, args[0], opType)
+	a, _, deadend := code.expr(args[0], opType)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	proc.pushLiveOperand(opType, &left)
-	right, deadend := proc.expr(code, args[1], opType)
-	proc.popLiveOperand()
+	code.opPushLiveOperand(opType, &a)
+	b, _, deadend := code.expr(args[1], opType)
+	code.popLiveOperand(&a)
 	if deadend {
-		proc.access(left) // live operand may have been pushed to stack
+		code.access(opType, a)
 		mach.OpAbort(code)
 		return
 	}
 
-	result = proc.binaryOp(code, opName, opType, left, right)
+	if a.Storage == values.Imm && b.Storage != values.Imm {
+		switch opName {
+		case "add", "and", "or", "xor":
+			a, b = b, a
+		}
+	}
+
+	if value, ok := b.CheckImmValue(opType); ok && value == 0 {
+		switch opName {
+		case "add", "or", "sub":
+			code.access(opType, a)
+			result = b
+			return
+
+		case "mul":
+			code.access(opType, a)
+			result = values.ImmOperand(opType, 0)
+			return
+		}
+	}
+
+	result = code.binaryOp(opName, opType, a, b)
 	return
 }
 
-func (proc *functionCoder) exprConst(code *gen.Coder, exprName string, opType types.T, args []interface{}) values.Operand {
+func (code *coder) exprConst(exprName string, opType types.T, args []interface{}) values.Operand {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
@@ -406,12 +493,12 @@ func (proc *functionCoder) exprConst(code *gen.Coder, exprName string, opType ty
 	switch opType {
 	case types.F32:
 		bits := imm.Imm(opType).(uint32)
-		addr, found := proc.prog.roFloat32Addrs[bits]
+		addr, found := code.roFloat32Addrs[bits]
 		if !found {
-			alloc := proc.prog.roData.allocate(4, 4, func(data []byte) {
+			alloc := code.roData.allocate(4, 4, func(data []byte) {
 				mach.ByteOrder().PutUint32(data, bits)
 			})
-			proc.prog.roFloat32Addrs[bits] = alloc.addr
+			code.roFloat32Addrs[bits] = alloc.addr
 			addr = alloc.addr
 		}
 
@@ -419,12 +506,12 @@ func (proc *functionCoder) exprConst(code *gen.Coder, exprName string, opType ty
 
 	case types.F64:
 		bits := imm.Imm(opType).(uint64)
-		addr, found := proc.prog.roFloat64Addrs[bits]
+		addr, found := code.roFloat64Addrs[bits]
 		if !found {
-			alloc := proc.prog.roData.allocate(8, 8, func(data []byte) {
+			alloc := code.roData.allocate(8, 8, func(data []byte) {
 				mach.ByteOrder().PutUint64(data, bits)
 			})
-			proc.prog.roFloat64Addrs[bits] = alloc.addr
+			code.roFloat64Addrs[bits] = alloc.addr
 			addr = alloc.addr
 		}
 
@@ -435,9 +522,7 @@ func (proc *functionCoder) exprConst(code *gen.Coder, exprName string, opType ty
 	}
 }
 
-func (proc *functionCoder) exprBlock(code *gen.Coder, exprName string, args []interface{}, expectType types.T, before *links.L) (result values.Operand, deadend bool) {
-	proc.saveAllLiveOperands(code)
-
+func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L) (result values.Operand, deadend bool) {
 	var afterName string
 	var beforeName string
 
@@ -456,11 +541,13 @@ func (proc *functionCoder) exprBlock(code *gen.Coder, exprName string, args []in
 	}
 
 	after := new(links.L)
-	proc.pushTarget(after, afterName, expectType)
+	code.pushTarget(after, afterName, expectType)
 
 	if before != nil {
-		proc.pushTarget(before, beforeName, types.Void)
+		code.pushTarget(before, beforeName, types.Void)
 	}
+
+	var resultType types.T
 
 	for i, arg := range args {
 		var t types.T
@@ -468,45 +555,43 @@ func (proc *functionCoder) exprBlock(code *gen.Coder, exprName string, args []in
 			t = expectType
 		}
 
-		result, deadend = proc.expr(code, arg, t)
+		result, resultType, deadend = code.expr(arg, t)
 		if deadend {
 			mach.OpAbort(code)
 			break
 		}
 
 		if i < len(args)-1 {
-			proc.discard(code, result)
+			code.discard(resultType, result)
 		}
 	}
 
 	if before != nil {
-		proc.popTarget()
+		code.popTarget()
 	}
 
-	if proc.popTarget() {
+	if code.popTarget() {
 		if deadend {
 			deadend = false
 		} else {
-			proc.opMove(code, expectType, regs.R0, result)
+			code.opMove(expectType, mach.ResultReg(), result)
 		}
 
 		if expectType != types.Void {
-			result = values.RegOperand(regs.R0)
+			result = values.RegTempOperand(mach.ResultReg())
 		}
+
+		code.opLabel(after)
 	}
 
 	if deadend {
 		mach.OpAbort(code)
 	}
 
-	proc.label(code, after)
-
 	return
 }
 
-func (proc *functionCoder) exprBr(code *gen.Coder, exprName string, args []interface{}) (deadend bool) {
-	proc.saveAllLiveOperands(code)
-
+func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	var tableIndexes []interface{}
 	var defaultIndex interface{}
 	var valueExpr interface{}
@@ -566,15 +651,15 @@ func (proc *functionCoder) exprBr(code *gen.Coder, exprName string, args []inter
 		}
 	}
 
-	defaultTarget := proc.findTarget(defaultIndex)
-	defaultStackDelta := proc.stackOffset - defaultTarget.stackOffset
+	defaultTarget := code.findTarget(defaultIndex)
+	defaultStackDelta := code.stackOffset - defaultTarget.stackOffset
 
 	valueType := defaultTarget.expectType
 
 	var tableTargets []*branchTarget
 
 	for _, x := range tableIndexes {
-		target := proc.findTarget(x)
+		target := code.findTarget(x)
 
 		if target.expectType != types.Void {
 			switch {
@@ -588,13 +673,13 @@ func (proc *functionCoder) exprBr(code *gen.Coder, exprName string, args []inter
 
 		tableTargets = append(tableTargets, target)
 
-		proc.labelLinks[target.label] = struct{}{}
+		code.labelLinks[target.label] = struct{}{}
 	}
 
 	var valueOperand values.Operand
 
 	if valueExpr != nil {
-		valueOperand, deadend = proc.expr(code, valueExpr, valueType)
+		valueOperand, _, deadend = code.expr(valueExpr, valueType)
 		if deadend {
 			mach.OpAbort(code)
 			return
@@ -604,32 +689,32 @@ func (proc *functionCoder) exprBr(code *gen.Coder, exprName string, args []inter
 	var condOperand values.Operand
 
 	if condExpr != nil {
-		proc.pushLiveOperand(valueType, &valueOperand)
-		condOperand, deadend = proc.expr(code, condExpr, types.I32)
-		proc.popLiveOperand()
+		code.opPushLiveOperand(valueType, &valueOperand)
+		condOperand, _, deadend = code.expr(condExpr, types.I32)
+		code.popLiveOperand(&valueOperand)
 		if deadend {
-			proc.access(valueOperand) // live operand may have been pushed to stack
+			code.access(valueType, valueOperand)
 			mach.OpAbort(code)
 			return
 		}
-
-		if reg, ok := condOperand.CheckReg(); ok && reg == regs.R0 {
-			condOperand = proc.opMove(code, types.I32, regs.R1, condOperand)
-		}
 	}
 
-	proc.opMove(code, valueType, regs.R0, valueOperand)
+	code.opMove(valueType, mach.ResultReg(), valueOperand)
 
 	switch exprName {
 	case "br":
+		code.opFlushRegVars()
+
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
-		proc.opBranch(code, defaultTarget.label)
+		code.opBranch(defaultTarget.label)
 
 		deadend = true
 
 	case "br_if":
+		code.opFlushRegVars()
+
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
-		proc.opBranchIf(code, condOperand, defaultTarget.label)
+		code.opBranchIf(condOperand, true, defaultTarget.label)
 		mach.OpAddImmToStackPtr(code, -defaultStackDelta)
 
 	case "br_table":
@@ -654,29 +739,44 @@ func (proc *functionCoder) exprBr(code *gen.Coder, exprName string, args []inter
 		}
 
 		tableSize := len(tableTargets) << tableScale
-		tableAlloc := proc.prog.roData.allocate(tableSize, 1<<tableScale, nil)
+		tableAlloc := code.roData.allocate(tableSize, 1<<tableScale, nil)
 
-		operand := condOperand
-		reg, ok := operand.CheckReg()
-		if !ok {
-			reg = regs.R1
-			operand = proc.opMove(code, types.I32, reg, operand)
+		var reg2 regs.R
+
+		if commonStackOffset < 0 {
+			code.opPushLiveOperand(types.I32, &condOperand)
+			reg2 = code.opAllocIntReg()
+			defer code.freeIntReg(reg2)
+			code.popLiveOperand(&condOperand)
 		}
 
-		mach.OpAddImmToStackPtr(code, defaultStackDelta)
-		tableStackOffset := proc.stackOffset - defaultStackDelta
+		reg, ok := condOperand.CheckRegTemp()
+		if !ok {
+			code.opPushLiveOperand(types.I32, &condOperand)
+			reg = code.opAllocIntReg()
+			code.popLiveOperand(&condOperand)
 
-		proc.opBranchIfOutOfBounds(code, reg, len(tableTargets), defaultTarget.label)
+			code.opMove(types.I32, reg, condOperand)
+		}
+		defer code.freeIntReg(reg)
+
+		code.opFlushRegVars()
+
+		mach.OpAddImmToStackPtr(code, defaultStackDelta)
+		tableStackOffset := code.stackOffset - defaultStackDelta
+		code.opBranchIfOutOfBounds(reg, len(tableTargets), defaultTarget.label)
 		mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, tableScale, tableAlloc.addr, true)
+
 		addrType := types.I64 // loaded with zero-extend
 
 		if commonStackOffset >= 0 {
 			mach.OpAddImmToStackPtr(code, tableStackOffset-commonStackOffset)
 		} else {
-			proc.opMove(code, types.I64, regs.R2, operand)
-			mach.OpShiftRightLogical32Bits(code, regs.R2)
-			mach.OpAddToStackPtr(code, regs.R2)
-			addrType = types.I32 // upper half of register still contains stack offset
+			mach.OpMoveReg(code, types.I64, reg2, reg)
+			mach.OpShiftRightLogical32Bits(code, reg2)
+			mach.OpAddToStackPtr(code, reg2)
+
+			addrType = types.I32 // upper half of reg still contains stack offset
 		}
 
 		branchAddr := mach.OpBranchIndirect(code, addrType, reg)
@@ -701,61 +801,59 @@ func (proc *functionCoder) exprBr(code *gen.Coder, exprName string, args []inter
 	return
 }
 
-func (proc *functionCoder) exprCall(code *gen.Coder, exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) exprCall(exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
 	if len(args) == 0 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
-
-	proc.saveAllLiveOperands(code)
 
 	var target *Function
 
 	funcName := args[0].(string)
 	funcNum, err := strconv.ParseUint(funcName, 10, 32)
 	if err == nil {
-		if funcNum < 0 || funcNum >= uint64(len(proc.module.Functions)) {
+		if funcNum < 0 || funcNum >= uint64(len(code.module.Functions)) {
 			panic(funcName)
 		}
-		target = proc.module.Functions[funcNum]
+		target = code.module.Functions[funcNum]
 	} else {
 		var found bool
-		target, found = proc.module.NamedFunctions[funcName]
+		target, found = code.module.NamedFunctions[funcName]
 		if !found {
 			panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
 		}
 	}
 
-	result, resultType, deadend, argsSize := proc.partialCallArgsExpr(code, exprName, target.Signature, args[1:])
+	code.opEvictAllLiveOperands()
+
+	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	proc.opCall(code, proc.prog.functionLinks[target])
-	proc.opAddImmToStackPtr(code, argsSize)
+	code.opCall(code.functionLinks[target])
+	code.opAddImmToStackPtr(argsSize)
 
 	return
 }
 
-func (proc *functionCoder) exprCallIndirect(code *gen.Coder, exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
-
-	proc.saveAllLiveOperands(code)
 
 	var sig *Signature
 
 	sigName := args[0].(string)
 	sigNum, err := strconv.ParseUint(sigName, 10, 32)
 	if err == nil {
-		if sigNum < 0 || sigNum >= uint64(len(proc.module.Signatures)) {
+		if sigNum < 0 || sigNum >= uint64(len(code.module.Signatures)) {
 			panic(sigName)
 		}
-		sig = proc.module.Signatures[sigNum]
+		sig = code.module.Signatures[sigNum]
 	} else {
 		var found bool
-		if sig, found = proc.module.NamedSignatures[sigName]; !found {
+		if sig, found = code.module.NamedSignatures[sigName]; !found {
 			panic(sigName)
 		}
 	}
@@ -767,89 +865,171 @@ func (proc *functionCoder) exprCallIndirect(code *gen.Coder, exprName string, ar
 	indexExpr := args[1]
 	args = args[2:]
 
-	operand, deadend := proc.expr(code, indexExpr, types.I32)
+	operand, _, deadend := code.expr(indexExpr, types.I32)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	reg, ok := operand.CheckReg()
+	reg, ok := operand.CheckRegTemp()
 	if !ok {
-		reg = regs.R0
-		operand = proc.opMove(code, types.I32, reg, operand)
+		code.opPushLiveOperand(types.I32, &operand)
+		reg = code.opAllocIntReg()
+		defer code.freeIntReg(reg)
+		code.popLiveOperand(&operand)
+
+		code.opMove(types.I32, reg, operand)
 	}
 
-	proc.prog.opTrapIfOutOfBounds(code, reg, len(proc.module.Table), &code.TrapIndirectCallIndex)
-	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, 3, roTableAddr, false)
-	proc.opPush(code, types.I32, operand)     // push func
-	mach.OpShiftRightLogical32Bits(code, reg) // signature id
-	proc.prog.opTrapIfNotEqualImm32(code, operand, sig.Index, &code.TrapIndirectCallSignature)
+	code.opEvictAllLiveOperands()
 
-	result, resultType, deadend, argsSize := proc.partialCallArgsExpr(code, exprName, sig, args)
+	// if the operand yielded a temporary register, then it was just freed by
+	// the eviction, but the register retains its value.  don't call anything
+	// that allocates registers until the critical section ends.
+
+	code.opTrapIfOutOfBounds(reg, len(code.module.Table), &code.trapLinks.IndirectCallIndex)
+	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, 3, roTableAddr, false)
+	mach.OpPushIntReg(code, reg) // push func ptr
+	code.incrementStackOffset()
+	mach.OpShiftRightLogical32Bits(code, reg) // signature id
+	code.opTrapIfNotEqualImm32(reg, sig.Index, &code.trapLinks.IndirectCallSignature)
+
+	// end of critical section.
+
+	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, sig, args)
 	if deadend {
+		code.stackOffset -= mach.WordSize() // pop func ptr
 		mach.OpAbort(code)
 		return
 	}
 
 	mach.OpCallIndirectDisp32FromStack(code, argsSize)
-	proc.opAddImmToStackPtr(code, argsSize+mach.WordSize()) // pop args + func
-
+	code.opAddImmToStackPtr(argsSize + mach.WordSize()) // pop args and func ptr
 	return
 }
 
-func (proc *functionCoder) partialCallArgsExpr(code *gen.Coder, exprName string, sig *Signature, args []interface{}) (result values.Operand, resultType types.T, deadend bool, argsStackSize int) {
+func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []interface{}) (result values.Operand, resultType types.T, deadend bool, argsStackSize int) {
 	if len(sig.ArgTypes) != len(args) {
 		panic(fmt.Errorf("%s: wrong number of arguments", exprName))
 	}
+
+	initialStackOffset := code.stackOffset
 
 	for i, arg := range args {
 		t := sig.ArgTypes[i]
 
 		var x values.Operand
-		x, deadend = proc.expr(code, arg, t)
+
+		x, _, deadend = code.expr(arg, t)
 		if deadend {
 			mach.OpAbort(code)
 			break
 		}
 
-		proc.opPush(code, t, x)
-		argsStackSize += mach.WordSize()
+		x = code.access(t, x)
+		mach.OpPush(code, t, x)
+		code.incrementStackOffset()
 	}
 
-	if n := proc.stackOffset + mach.FunctionCallStackOverhead(); n > proc.stackUsage {
-		proc.stackUsage = n
+	if n := code.stackOffset + mach.FunctionCallStackOverhead(); n > code.maxStackOffset {
+		code.maxStackOffset = n
 	}
 
 	if deadend {
-		proc.stackOffset -= argsStackSize // revert pushes
+		code.stackOffset = initialStackOffset
 		return
 	}
 
+	argsStackSize = code.stackOffset - initialStackOffset
+
 	resultType = sig.ResultType
-
 	if resultType != types.Void {
-		result = values.RegOperand(regs.R0)
+		result = values.RegTempOperand(mach.ResultReg())
 	}
-
 	return
 }
 
-func (proc *functionCoder) exprGetLocal(code *gen.Coder, exprName string, args []interface{}) (result values.Operand, resultType types.T) {
+func (code *coder) exprGetLocal(exprName string, args []interface{}) (result values.Operand, resultType types.T) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
 	varName := args[0].(string)
-	offset, resultType, found := proc.getVarOffsetAndType(varName)
+	localIndex, offset, resultType, found := code.getVarLocalOffsetType(varName)
 	if !found {
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	result = values.StackOffsetOperand(offset)
+	if localIndex >= 0 {
+		if v := code.varRegs[localIndex]; v.typ != types.Void {
+			if v.typ != resultType {
+				panic("register variable type does not match actual variable type")
+			}
+			result = values.RegVarOperand(v.reg)
+			return
+		}
+	}
+
+	result = values.StackVarOperand(offset)
 	return
 }
 
-func (proc *functionCoder) exprs(code *gen.Coder, x interface{}, name string, end *links.L, expectType types.T) (deadend, endReached bool) {
+func (code *coder) exprIf(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
+	if len(args) < 2 {
+		panic(fmt.Errorf("%s: too few operands", exprName))
+	}
+
+	haveElse := len(args) == 3
+
+	if len(args) > 3 {
+		panic(fmt.Errorf("%s: too many operands", exprName))
+	}
+
+	end := new(links.L)
+	afterThen := new(links.L)
+
+	ifResult, _, deadend := code.expr(args[0], types.I32)
+	if deadend {
+		return
+	}
+
+	code.opFlushRegVars()
+	code.opBranchIf(ifResult, false, afterThen)
+
+	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType)
+
+	if haveElse {
+		if !thenDeadend {
+			code.opFlushRegVars()
+			code.opBranch(end)
+			endReachable = true
+		}
+		code.opLabel(afterThen)
+
+		elseDeadend, endReachableFromElse := code.ifExprs(args[2], "else", end, expectType)
+
+		if !elseDeadend {
+			endReachable = true
+		}
+		if endReachableFromElse {
+			endReachable = true
+		}
+	} else {
+		endReachable = true
+		code.opLabel(afterThen)
+	}
+
+	code.opLabel(end)
+
+	if expectType != types.Void {
+		result = values.RegTempOperand(mach.ResultReg())
+	}
+
+	deadend = !endReachable
+	return
+}
+
+func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType types.T) (deadend, endReached bool) {
 	args := x.([]interface{})
 
 	var endName string
@@ -867,14 +1047,15 @@ func (proc *functionCoder) exprs(code *gen.Coder, x interface{}, name string, en
 		}
 	}
 
-	proc.pushTarget(end, endName, expectType)
+	code.pushTarget(end, endName, expectType)
 
 	var result values.Operand
+	var resultType types.T
 
 	if len(args) > 0 {
 		switch args[0].(type) {
 		case string:
-			result, deadend = proc.expr(code, args, expectType)
+			result, _, deadend = code.expr(args, expectType)
 
 		case []interface{}:
 			for i, expr := range args {
@@ -883,13 +1064,13 @@ func (proc *functionCoder) exprs(code *gen.Coder, x interface{}, name string, en
 					t = expectType
 				}
 
-				result, deadend = proc.expr(code, expr, t)
+				result, resultType, deadend = code.expr(expr, t)
 				if deadend {
 					break
 				}
 
 				if i < len(args)-1 {
-					proc.discard(code, result)
+					code.discard(resultType, result)
 				}
 			}
 		}
@@ -898,338 +1079,393 @@ func (proc *functionCoder) exprs(code *gen.Coder, x interface{}, name string, en
 	if deadend {
 		mach.OpAbort(code)
 	} else {
-		proc.opMove(code, expectType, regs.R0, result)
+		code.opMove(expectType, mach.ResultReg(), result)
 	}
 
-	endReached = proc.popTarget()
+	endReached = code.popTarget()
 
 	return
 }
 
-func (proc *functionCoder) exprIf(code *gen.Coder, exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
-	if len(args) < 2 {
-		panic(fmt.Errorf("%s: too few operands", exprName))
-	}
-
-	proc.saveAllLiveOperands(code)
-
-	haveElse := len(args) == 3
-
-	if len(args) > 3 {
-		panic(fmt.Errorf("%s: too many operands", exprName))
-	}
-
-	end := new(links.L)
-	afterThen := new(links.L)
-
-	ifResult, deadend := proc.expr(code, args[0], types.I32)
-	if deadend {
-		return
-	}
-
-	proc.opBranchIfNot(code, ifResult, afterThen)
-
-	thenDeadend, endReachable := proc.exprs(code, args[1], "then", end, expectType)
-
-	if haveElse {
-		if !thenDeadend {
-			proc.opBranch(code, end)
-			endReachable = true
-		}
-		proc.label(code, afterThen)
-
-		elseDeadend, endReachableFromElse := proc.exprs(code, args[2], "else", end, expectType)
-
-		if !elseDeadend {
-			endReachable = true
-		}
-		if endReachableFromElse {
-			endReachable = true
-		}
-	} else {
-		endReachable = true
-		proc.label(code, afterThen)
-	}
-
-	proc.label(code, end)
-
-	if expectType != types.Void {
-		result = values.RegOperand(regs.R0)
-	}
-
-	deadend = !endReachable
-	return
-}
-
-func (proc *functionCoder) exprLoop(code *gen.Coder, exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
+func (code *coder) exprLoop(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
 	before := new(links.L)
-	proc.label(code, before)
+	code.opLabel(before)
 
-	return proc.exprBlock(code, exprName, args, expectType, before)
+	return code.exprBlock(exprName, args, expectType, before)
 }
 
-func (proc *functionCoder) exprNop(code *gen.Coder, exprName string, args []interface{}) {
+func (code *coder) exprNop(exprName string, args []interface{}) {
 	if len(args) != 0 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 }
 
-func (proc *functionCoder) exprReturn(code *gen.Coder, exprName string, args []interface{}) {
+func (code *coder) exprReturn(exprName string, args []interface{}) {
 	if len(args) > 1 {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
-	t := proc.function.Signature.ResultType
+	t := code.function.Signature.ResultType
 
 	if t != types.Void && len(args) == 0 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
 	if len(args) > 0 {
-		x, deadend := proc.expr(code, args[0], t)
+		x, _, deadend := code.expr(args[0], t)
 		if deadend {
 			mach.OpAbort(code)
 			return
 		}
 
-		proc.opMove(code, t, regs.R0, x)
+		code.opMove(t, mach.ResultReg(), x)
 	}
 
-	mach.OpAddImmToStackPtr(code, proc.stackOffset+proc.function.NumLocals*mach.WordSize())
+	mach.OpAddImmToStackPtr(code, code.stackOffset+code.function.NumLocals*mach.WordSize())
 	mach.OpReturn(code)
 }
 
-func (proc *functionCoder) exprSetLocal(code *gen.Coder, exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) exprSetLocal(exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
 	if len(args) != 2 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
 	varName := args[0].(string)
-	offset, resultType, found := proc.getVarOffsetAndType(varName)
+	localIndex, offset, resultType, found := code.getVarLocalOffsetType(varName)
 	if !found {
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	proc.saveLiveStackOffsetOperand(code, offset)
-	proc.saveLiveRegOperand(code, resultType, regs.R0) // see below
-
-	result, deadend = proc.expr(code, args[1], resultType)
+	result, _, deadend = code.expr(args[1], resultType)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	// The design doc says that set_local does't return a value, but it's
-	// needed for the labels.wast test to work.  Make sure it can be accessed
-	// twice.
-	if result.Once() {
-		result = proc.opMove(code, resultType, regs.R0, result)
+	// there are no live stack var operands (which would race with set_local),
+	// because they are loaded into registers (or to stack) by pushLiveOperand().
+
+	// the design doc says that set_local does't return a value, but it's
+	// needed for the labels.wast test to work.
+
+	if localIndex >= 0 {
+		if v := code.varRegs[localIndex]; v.typ != types.Void {
+			code.opMove(resultType, v.reg, result)
+			result = values.RegVarOperand(v.reg)
+			return
+		}
+
+		if reg, ok := code.tryAllocReg(resultType); ok {
+			code.opMove(resultType, reg, result)
+			code.varRegs[localIndex] = regVar{resultType, reg}
+			result = values.RegVarOperand(reg)
+			return
+		}
 	}
 
-	proc.opStoreStack(code, resultType, offset, result)
+	code.opStoreStack(resultType, offset, result)
+	result = values.StackVarOperand(offset)
 	return
 }
 
-func (proc *functionCoder) exprUnreachable(code *gen.Coder, exprName string, args []interface{}) {
+func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 	if len(args) != 0 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	proc.prog.opTrap(code, &code.TrapUnreachable)
+	code.opTrap(&code.trapLinks.Unreachable)
 }
 
-func (proc *functionCoder) access(o values.Operand) values.Operand {
-	switch o.Storage {
-	case values.StackOffset:
-		o = values.StackOffsetOperand(proc.stackOffset + o.Offset())
-
-	case values.StackPop:
-		proc.stackOffset -= mach.WordSize()
-	}
-
-	return o
-}
-
-func (proc *functionCoder) discard(code *gen.Coder, o values.Operand) {
-	if o.Storage == values.StackPop {
-		proc.opAddImmToStackPtr(code, 8)
-	}
-}
-
-func (proc *functionCoder) unaryOp(code *gen.Coder, name string, t types.T, x values.Operand) values.Operand {
-	x = proc.access(x)
+func (code *coder) unaryOp(name string, t types.T, x values.Operand) values.Operand {
+	x = code.access(t, x)
 	return mach.UnaryOp(code, name, t, x)
 }
 
-func (proc *functionCoder) binaryOp(code *gen.Coder, name string, t types.T, a, b values.Operand) values.Operand {
-	a = proc.access(a)
-	b = proc.access(b)
+func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) values.Operand {
+	a = code.access(t, a)
+	b = code.access(t, b)
 	return mach.BinaryOp(code, name, t, a, b)
 }
 
-func (proc *functionCoder) opAddImmToStackPtr(code *gen.Coder, offset int) {
-	proc.stackOffset -= offset
-	mach.OpAddImmToStackPtr(code, offset)
-}
-
-func (proc *functionCoder) opBranch(code *gen.Coder, l *links.L) {
-	mach.StubOpBranch(code)
-	proc.branchSite(code, l)
-}
-
-func (proc *functionCoder) opBranchIf(code *gen.Coder, x values.Operand, l *links.L) {
-	x = proc.access(x)
-	mach.StubOpBranchIf(code, x)
-	proc.branchSite(code, l)
-}
-
-func (proc *functionCoder) opBranchIfNot(code *gen.Coder, x values.Operand, l *links.L) {
-	x = proc.access(x)
-	mach.StubOpBranchIfNot(code, x)
-	proc.branchSite(code, l)
-}
-
-func (proc *functionCoder) opBranchIfOutOfBounds(code *gen.Coder, indexReg regs.R, upperBound int, l *links.L) {
-	mach.StubOpBranchIfOutOfBounds(code, indexReg, upperBound)
-	proc.branchSite(code, l)
-}
-
-func (proc *functionCoder) opCall(code *gen.Coder, l *links.L) {
-	mach.StubOpCall(code)
-	proc.callSite(code, l)
-}
-
-func (proc *functionCoder) opMove(code *gen.Coder, t types.T, target regs.R, x values.Operand) values.Operand {
-	if t == types.Void {
-		proc.discard(code, x)
-		return values.NoOperand
+func (code *coder) OpAllocReg(t types.T) (reg regs.R) {
+	reg, ok := code.tryAllocReg(t)
+	if !ok {
+		reg = code.opEvictLiveRegOperand(t)
 	}
-
-	proc.saveLiveRegOperand(code, t, target)
-
-	x = proc.access(x)
-
-	if reg, ok := x.CheckReg(); !(ok && reg == target) {
-		mach.OpMove(code, t, target, x)
-	}
-
-	return values.RegOperand(target)
-}
-
-func (proc *functionCoder) opPush(code *gen.Coder, t types.T, x values.Operand) values.Operand {
-	if x.Storage == values.StackPop {
-		panic(x) // XXX: ?
-	}
-
-	proc.saveAllLiveOperands(code)
-
-	x = proc.access(x)
-	mach.OpPush(code, t, x)
-
-	proc.stackOffset += mach.WordSize()
-
-	if proc.stackOffset > proc.stackUsage {
-		proc.stackUsage = proc.stackOffset
-	}
-
-	return values.StackPopOperand
-}
-
-func (proc *functionCoder) opStoreStack(code *gen.Coder, t types.T, offset int, x values.Operand) {
-	x = proc.access(x)
-	mach.OpStoreStack(code, t, proc.stackOffset+offset, x)
-}
-
-func (proc *functionCoder) pushLiveOperand(t types.T, ref *values.Operand) {
-	proc.liveOperands = append(proc.liveOperands, liveOperand{t, ref})
-}
-
-func (proc *functionCoder) popLiveOperand() {
-	proc.liveOperands = proc.liveOperands[:len(proc.liveOperands)-1]
-}
-
-func (proc *functionCoder) saveLiveRegOperand(code *gen.Coder, t types.T, reg regs.R) {
-	proc.saveAllLiveOperands(code)
-}
-
-func (proc *functionCoder) saveLiveRegOperands(code *gen.Coder, t types.T, count int) {
-	proc.saveAllLiveOperands(code)
-}
-
-func (proc *functionCoder) saveLiveStackOffsetOperand(code *gen.Coder, offset int) {
-	proc.saveAllLiveOperands(code)
-}
-
-func (proc *functionCoder) saveAllLiveOperands(code *gen.Coder) {
-	for _, live := range proc.liveOperands {
-		switch live.ref.Storage {
-		case values.Reg, values.StackOffset:
-			mach.OpPush(code, live.typ, *live.ref)
-			*live.ref = values.StackPopOperand
-
-			proc.stackOffset += mach.WordSize()
-		}
-	}
-
-	if proc.stackOffset > proc.stackUsage {
-		proc.stackUsage = proc.stackOffset
-	}
-}
-
-func (proc *functionCoder) label(code *gen.Coder, l *links.L) {
-	l.Address = code.Len()
-}
-
-func (proc *functionCoder) branchSite(code *gen.Coder, l *links.L) {
-	l.AddSite(code.Len())
-	proc.labelLinks[l] = struct{}{}
-}
-
-func (proc *functionCoder) callSite(code *gen.Coder, l *links.L) {
-	l.AddSite(code.Len())
-}
-
-func (proc *functionCoder) pushTarget(l *links.L, name string, expectType types.T) {
-	proc.targetStack = append(proc.targetStack, &branchTarget{l, name, expectType, proc.stackOffset})
-}
-
-func (proc *functionCoder) popTarget() (live bool) {
-	target := proc.targetStack[len(proc.targetStack)-1]
-	_, live = proc.labelLinks[target.label]
-
-	proc.targetStack = proc.targetStack[:len(proc.targetStack)-1]
 	return
 }
 
-func (proc *functionCoder) findTarget(token interface{}) *branchTarget {
+func (code *coder) tryAllocReg(t types.T) (reg regs.R, ok bool) {
+	return code.regs(t).allocWithPreference(mach.RegGroupPreference(t))
+}
+
+func (code *coder) FreeReg(t types.T, reg regs.R) {
+	code.regs(t).free(reg)
+}
+
+func (code *coder) opAllocIntReg() (reg regs.R) {
+	reg, ok := code.regs(types.I64).alloc()
+	if !ok {
+		reg = code.opEvictLiveRegOperand(types.I64)
+	}
+	return
+}
+
+func (code *coder) freeIntReg(reg regs.R) {
+	code.regs(types.I64).free(reg)
+}
+
+func (code *coder) regs(t types.T) *regAllocator {
+	switch t.Category() {
+	case types.Int:
+		return &code.regsInt
+
+	case types.Float:
+		return &code.regsFloat
+
+	default:
+		panic(t)
+	}
+}
+
+func (code *coder) incrementStackOffset() {
+	code.stackOffset += mach.WordSize()
+	if code.stackOffset > code.maxStackOffset {
+		code.maxStackOffset = code.stackOffset
+	}
+}
+
+func (code *coder) opAddImmToStackPtr(offset int) {
+	code.stackOffset -= offset
+	mach.OpAddImmToStackPtr(code, offset)
+}
+
+func (code *coder) opBranch(l *links.L) {
+	mach.StubOpBranch(code)
+	code.branchSite(l)
+}
+
+func (code *coder) opBranchIf(x values.Operand, yes bool, l *links.L) {
+	x = code.access(types.I32, x)
+	mach.StubOpBranchIf(code, x, yes)
+	code.branchSite(l)
+}
+
+func (code *coder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *links.L) {
+	mach.StubOpBranchIfOutOfBounds(code, indexReg, upperBound)
+	code.branchSite(l)
+}
+
+func (code *coder) opCall(l *links.L) {
+	mach.StubOpCall(code)
+	code.callSite(l)
+}
+
+func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
+	if t == types.Void {
+		return
+	}
+
+	if target == mach.ResultReg() {
+		if reg, ok := x.CheckRegTemp(); ok && reg == mach.ResultReg() {
+			return
+		}
+	}
+
+	x = code.access(t, x)
+	mach.OpMove(code, t, target, x)
+}
+
+func (code *coder) opSaveLocal(t types.T, x values.Operand) (offset int) {
+	for i, v := range code.varRegs {
+		if v.typ == t && v.reg == x.Reg() {
+			offset = i * mach.WordSize()
+			code.opStoreStack(t, offset, x)
+			code.varRegs[i].typ = types.Void
+			return
+		}
+	}
+
+	panic("local index not found for register variable operand")
+}
+
+func (code *coder) opStoreStack(t types.T, offset int, x values.Operand) {
+	x = code.access(t, x)
+	mach.OpStoreStack(code, t, code.stackOffset+offset, x)
+}
+
+func (code *coder) access(t types.T, x values.Operand) values.Operand {
+	switch x.Storage {
+	case values.StackVar:
+		x = values.StackVarOperand(code.stackOffset + x.Offset())
+
+	case values.StackPop:
+		code.stackOffset -= mach.WordSize()
+	}
+
+	return x
+}
+
+func (code *coder) discard(t types.T, x values.Operand) {
+	switch x.Storage {
+	case values.RegTemp:
+		code.FreeReg(t, x.Reg())
+
+	case values.StackPop:
+		code.opAddImmToStackPtr(mach.WordSize())
+	}
+}
+
+func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
+	switch ref.Storage {
+	case values.Nowhere, values.Imm, values.ROData:
+		return
+
+	case values.RegVar, values.RegTemp:
+
+	case values.StackVar, values.ConditionFlags:
+		reg := code.OpAllocReg(t)
+		code.opMove(t, reg, *ref)
+		*ref = values.RegTempOperand(reg)
+
+	default:
+		panic(*ref)
+	}
+
+	code.liveOperands = append(code.liveOperands, liveOperand{t, ref})
+}
+
+func (code *coder) popLiveOperand(ref *values.Operand) {
+	switch ref.Storage {
+	case values.Nowhere, values.Imm, values.ROData:
+
+	case values.RegVar, values.RegTemp, values.StackPop:
+		i := len(code.liveOperands) - 1
+		live := code.liveOperands[i]
+
+		if live.ref != ref {
+			panic("popLiveOperand argument does not match topmost item of liveOperands")
+		}
+
+		live.ref = nil
+		code.liveOperands = code.liveOperands[:i]
+
+		if code.evictedOperands > i {
+			code.evictedOperands = i
+		}
+
+	default:
+		panic(*ref)
+	}
+}
+
+// opEvictLiveRegOperand doesn't change the allocation state of the register.
+func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
+	for i := code.evictedOperands; i < len(code.liveOperands); i++ {
+		live := code.liveOperands[i]
+
+		if live.typ.Category() == t.Category() {
+			if reg, ok := live.ref.CheckAnyReg(); ok {
+				code.opEvictLiveOperandsUntil(i + 1) // XXX
+				return reg
+			}
+		}
+	}
+
+	panic("no live register operands to evict")
+}
+
+func (code *coder) opEvictAllLiveOperands() {
+	code.opEvictLiveOperandsUntil(len(code.liveOperands))
+}
+
+func (code *coder) opEvictLiveOperandsUntil(end int) {
+	for _, live := range code.liveOperands[code.evictedOperands:end] {
+		switch live.ref.Storage {
+		case values.RegVar:
+			offset := code.opSaveLocal(live.typ, *live.ref)
+			*live.ref = values.StackVarOperand(offset)
+
+		case values.RegTemp:
+			x := code.access(live.typ, *live.ref)
+			mach.OpPush(code, live.typ, x)
+			code.incrementStackOffset()
+			*live.ref = values.StackPopOperand
+		}
+	}
+
+	code.evictedOperands = end
+}
+
+func (code *coder) opFlushRegVars() {
+	/*
+		for _, live := range code.liveOperands[code.evictedOperands:end] {
+			if live.ref.Storage == values.RegVar {
+				offset := code.opSaveLocal(live.typ, *live.ref)
+				*live.ref = values.StackVarOperand(offset)
+			}
+		}
+	*/
+}
+
+func (code *coder) opLabel(l *links.L) {
+	l.Address = code.Len()
+
+	code.opFlushRegVars()
+}
+
+func (code *coder) branchSite(l *links.L) {
+	l.AddSite(code.Len())
+	code.labelLinks[l] = struct{}{}
+}
+
+func (code *coder) callSite(l *links.L) {
+	l.AddSite(code.Len())
+}
+
+func (code *coder) pushTarget(l *links.L, name string, expectType types.T) {
+	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, code.stackOffset})
+}
+
+func (code *coder) popTarget() (live bool) {
+	target := code.targetStack[len(code.targetStack)-1]
+	_, live = code.labelLinks[target.label]
+
+	code.targetStack = code.targetStack[:len(code.targetStack)-1]
+	return
+}
+
+func (code *coder) findTarget(token interface{}) *branchTarget {
 	name := token.(string)
 
-	for i := len(proc.targetStack) - 1; i >= 0; i-- {
-		target := proc.targetStack[i]
+	for i := len(code.targetStack) - 1; i >= 0; i-- {
+		target := code.targetStack[i]
 		if target.name != "" && target.name == name {
 			return target
 		}
 	}
 
 	i := int(values.ParseI32(token))
-	if i >= 0 && i < len(proc.targetStack) {
-		return proc.targetStack[len(proc.targetStack)-i-1]
+	if i >= 0 && i < len(code.targetStack) {
+		return code.targetStack[len(code.targetStack)-i-1]
 	}
 
 	panic(name)
 }
 
-func (proc *functionCoder) getVarOffsetAndType(name string) (offset int, varType types.T, found bool) {
-	v, found := proc.function.Vars[name]
+func (code *coder) getVarLocalOffsetType(name string) (localIndex, offset int, varType types.T, found bool) {
+	v, found := code.function.Vars[name]
 	if !found {
 		return
 	}
 
 	if v.Param {
-		paramPos := proc.function.NumParams - v.Index - 1
-		offset = proc.function.NumLocals*mach.WordSize() + mach.FunctionCallStackOverhead() + paramPos*mach.WordSize()
+		localIndex = -1
+		paramPos := code.function.NumParams - v.Index - 1
+		offset = code.function.NumLocals*mach.WordSize() + mach.FunctionCallStackOverhead() + paramPos*mach.WordSize()
 	} else {
-		offset = v.Index * mach.WordSize()
+		localIndex = v.Index
+		offset = localIndex * mach.WordSize()
 	}
 
 	varType = v.Type

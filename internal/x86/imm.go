@@ -2,7 +2,8 @@ package x86
 
 import (
 	"encoding/binary"
-	"io"
+
+	"github.com/tsavola/wag/internal/gen"
 )
 
 type imm struct {
@@ -25,9 +26,9 @@ func imm64(x int) imm {
 	return imm{int64(x)}
 }
 
-func (imm imm) writeTo(w io.Writer) {
+func (imm imm) writeTo(code gen.Coder) {
 	if imm.value != nil {
-		if err := binary.Write(w, byteOrder, imm.value); err != nil {
+		if err := binary.Write(code, byteOrder, imm.value); err != nil {
 			panic(err)
 		}
 	}
