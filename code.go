@@ -158,10 +158,10 @@ func (code *coder) genFunction(f *Function) {
 	code.labelLinks = make(map[*links.L]struct{})
 	code.maxStackOffset = 0
 
-	if cap(code.varRegs) >= f.NumLocals {
-		code.varRegs = code.varRegs[:f.NumLocals]
+	if cap(code.varRegs) >= len(f.Locals) {
+		code.varRegs = code.varRegs[:len(f.Locals)]
 	} else {
-		code.varRegs = make([]regVar, f.NumLocals)
+		code.varRegs = make([]regVar, len(f.Locals))
 	}
 
 	mach.AlignFunction(code)
