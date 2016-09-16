@@ -169,15 +169,34 @@ func (code *coder) genFunction(f *Function) {
 	stackUsageAddr := mach.StubOpBranchIfStackExhausted(code)
 	stackCheckAddr := code.Len()
 
-	if f.NumLocals > 0 {
-		reg := code.opAllocIntReg()
-		mach.OpMove(code, types.I64, reg, values.ImmOperand(types.I64, 0))
+	stackPtrMoved := false
+	zeroIntReg := regs.R(-1)
 
-		for i := 0; i < f.NumLocals; i++ {
-			mach.OpPushIntReg(code, reg)
+	for i, localType := range f.Locals {
+		if reg, ok := code.tryAllocReg(localType); ok {
+			mach.OpMove(code, localType, reg, values.ImmOperand(localType, 0))
+			code.varRegs[i] = regVar{localType, reg}
+
+			if zeroIntReg < 0 && localType == types.I64 {
+				zeroIntReg = reg
+			}
+		} else {
+			if !stackPtrMoved {
+				mach.OpAddImmToStackPtr(code, -mach.WordSize()*i)
+				stackPtrMoved = true
+
+				if zeroIntReg < 0 {
+					zeroIntReg = mach.ResultReg()
+					mach.OpMove(code, types.I64, zeroIntReg, values.ImmOperand(types.I64, 0))
+				}
+			}
+
+			mach.OpPushIntReg(code, zeroIntReg) // assume int 0 == float 0 bit pattern
 		}
+	}
 
-		code.freeIntReg(reg)
+	if !stackPtrMoved {
+		mach.OpAddImmToStackPtr(code, -mach.WordSize()*len(f.Locals))
 	}
 
 	end := new(links.L)
@@ -213,10 +232,10 @@ func (code *coder) genFunction(f *Function) {
 		code.opLabel(end)
 	}
 
-	stackUsage := code.function.NumLocals*mach.WordSize() + code.maxStackOffset
+	stackUsage := len(code.function.Locals)*mach.WordSize() + code.maxStackOffset
 
 	if !deadend {
-		mach.OpAddImmToStackPtr(code, code.function.NumLocals*mach.WordSize())
+		mach.OpAddImmToStackPtr(code, len(code.function.Locals)*mach.WordSize())
 		mach.OpReturn(code)
 	}
 
@@ -489,36 +508,40 @@ func (code *coder) exprConst(exprName string, opType types.T, args []interface{}
 
 	imm := values.ParseImm(opType, args[0])
 
+	// TODO: possible optimization: move RODataOperands to registers in
+	//       opPushLiveOperand(), using a RegVar-like operand type.
+
 	switch opType {
 	case types.F32:
-		bits := imm.Imm(opType).(uint32)
-		addr, found := code.roFloat32Addrs[bits]
-		if !found {
-			alloc := code.roData.allocate(4, 4, func(data []byte) {
-				mach.ByteOrder().PutUint32(data, bits)
-			})
-			code.roFloat32Addrs[bits] = alloc.addr
-			addr = alloc.addr
-		}
+		if bits := imm.Imm(opType).(uint32); bits != 0 {
+			addr, found := code.roFloat32Addrs[bits]
+			if !found {
+				alloc := code.roData.allocate(4, 4, func(data []byte) {
+					mach.ByteOrder().PutUint32(data, bits)
+				})
+				code.roFloat32Addrs[bits] = alloc.addr
+				addr = alloc.addr
+			}
 
-		return values.RODataOperand(addr)
+			return values.RODataOperand(addr)
+		}
 
 	case types.F64:
-		bits := imm.Imm(opType).(uint64)
-		addr, found := code.roFloat64Addrs[bits]
-		if !found {
-			alloc := code.roData.allocate(8, 8, func(data []byte) {
-				mach.ByteOrder().PutUint64(data, bits)
-			})
-			code.roFloat64Addrs[bits] = alloc.addr
-			addr = alloc.addr
+		if bits := imm.Imm(opType).(uint64); bits != 0 {
+			addr, found := code.roFloat64Addrs[bits]
+			if !found {
+				alloc := code.roData.allocate(8, 8, func(data []byte) {
+					mach.ByteOrder().PutUint64(data, bits)
+				})
+				code.roFloat64Addrs[bits] = alloc.addr
+				addr = alloc.addr
+			}
+
+			return values.RODataOperand(addr)
 		}
-
-		return values.RODataOperand(addr)
-
-	default:
-		return imm
 	}
+
+	return imm
 }
 
 func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L) (result values.Operand, deadend bool) {
@@ -1121,7 +1144,7 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 		code.opMove(t, mach.ResultReg(), x)
 	}
 
-	mach.OpAddImmToStackPtr(code, code.stackOffset+code.function.NumLocals*mach.WordSize())
+	mach.OpAddImmToStackPtr(code, code.stackOffset+len(code.function.Locals)*mach.WordSize())
 	mach.OpReturn(code)
 }
 
@@ -1524,8 +1547,8 @@ func (code *coder) getVarLocalOffsetType(name string) (localIndex, offset int, v
 
 	if v.Param {
 		localIndex = -1
-		paramPos := code.function.NumParams - v.Index - 1
-		offset = code.function.NumLocals*mach.WordSize() + mach.FunctionCallStackOverhead() + paramPos*mach.WordSize()
+		paramPos := len(code.function.Params) - v.Index - 1
+		offset = len(code.function.Locals)*mach.WordSize() + mach.FunctionCallStackOverhead() + paramPos*mach.WordSize()
 	} else {
 		localIndex = v.Index
 		offset = localIndex * mach.WordSize()

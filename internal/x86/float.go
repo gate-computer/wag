@@ -39,6 +39,7 @@ var (
 	DivssDivsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5e}}
 
 	MovssMovsd = insnPrefixModRegToReg{scalarSize, []byte{0x0f, 0x11}, ModReg}
+	XorpsXorpd = insnPrefixModRegToReg{operandSize, []byte{0x0f, 0x57}, ModReg}
 
 	MovssMovsdFromIndirect = insnPrefixModRegFromRegDisp{scalarSize, []byte{0x0f, 0x10}}
 

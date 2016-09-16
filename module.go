@@ -273,8 +273,8 @@ type Var struct {
 type Function struct {
 	Names     []string
 	Signature *Signature
-	NumLocals int
-	NumParams int
+	Params    []types.T
+	Locals    []types.T
 	Vars      map[string]Var
 
 	body []interface{}
@@ -329,7 +329,7 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 			}
 
 			for _, varType := range varTypes {
-				numName := strconv.Itoa(f.NumLocals + f.NumParams)
+				numName := strconv.Itoa(len(f.Locals) + len(f.Params))
 
 				v := Var{
 					Type: varType,
@@ -338,15 +338,15 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 				switch exprName {
 				case "local":
 					v.Param = false
-					v.Index = f.NumLocals
-					f.NumLocals++
+					v.Index = len(f.Locals)
+					f.Locals = append(f.Locals, varType)
 
 				case "param":
 					f.Signature.ArgTypes = append(f.Signature.ArgTypes, varType)
 
 					v.Param = true
-					v.Index = f.NumParams
-					f.NumParams++
+					v.Index = len(f.Params)
+					f.Params = append(f.Params, varType)
 				}
 
 				if varName != "" {
@@ -365,15 +365,15 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 			}
 
 			for _, varType := range sig.ArgTypes {
-				numName := strconv.Itoa(f.NumLocals + f.NumParams)
+				numName := strconv.Itoa(len(f.Locals) + len(f.Params))
 
 				f.Vars[numName] = Var{
 					Param: true,
-					Index: f.NumParams,
+					Index: len(f.Params),
 					Type:  varType,
 				}
 
-				f.NumParams++
+				f.Params = append(f.Params, varType)
 			}
 
 			f.Signature.ArgTypes = append(f.Signature.ArgTypes, sig.ArgTypes...)

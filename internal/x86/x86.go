@@ -311,6 +311,12 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 
 	case types.Float:
 		switch x.Storage {
+		case values.Imm:
+			if x.ImmValue(t) != 0 {
+				panic(x)
+			}
+			XorpsXorpd.op(code, t, targetReg, targetReg)
+
 		case values.ROData:
 			MovssMovsdFromIndirect.op(code, t, targetReg, regRODataPtr, x.Addr())
 
