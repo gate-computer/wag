@@ -125,7 +125,8 @@ type unaryInsn interface {
 }
 
 type binaryInsn interface {
-	op(code gen.Coder, t types.T, target, source regs.R)
+	opReg(code gen.Coder, t types.T, target, source regs.R)
+	opIndirect(code gen.Coder, t types.T, target, source regs.R, disp int)
 }
 
 type insnFixed []byte
@@ -216,13 +217,21 @@ func (i insnPrefixModOpReg) op(code gen.Coder, t types.T, reg regs.R) {
 type insnPrefixModRegFromReg struct {
 	prefix prefix
 	bytes  []byte
-	mod    mod
 }
 
-func (i insnPrefixModRegFromReg) op(code gen.Coder, t types.T, target, source regs.R) {
+func (i insnPrefixModRegFromReg) opReg(code gen.Coder, t types.T, target, source regs.R) {
 	i.prefix.writeTo(code, t, target, 0, source)
 	code.Write(i.bytes)
-	i.mod.writeTo(code, byte(target), byte(source))
+	ModReg.writeTo(code, byte(target), byte(source))
+}
+
+func (i insnPrefixModRegFromReg) opIndirect(code gen.Coder, t types.T, target, source regs.R, disp int) {
+	mod, imm := dispMod(t, disp)
+
+	i.prefix.writeTo(code, t, target, 0, source)
+	code.Write(i.bytes)
+	mod.writeTo(code, byte(target), byte(source))
+	imm.writeTo(code)
 }
 
 type insnPrefixModRegToReg struct {

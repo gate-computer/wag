@@ -223,30 +223,30 @@ func (x86 X86) OpAddImmToStackPtr(code gen.Coder, offset int) {
 }
 
 func (x86 X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
-	Add.op(code, types.I64, regStackPtr, source)
+	Add.opReg(code, types.I64, regStackPtr, source)
 }
 
 func (x86 X86) OpBranchIndirect(code gen.Coder, t types.T, reg regs.R) (branchAddr int) {
 	if t == types.I32 {
-		Movsxd.op(code, types.I32, reg, reg)
+		Movsxd.opReg(code, types.I32, reg, reg)
 	}
 
 	LeaRip.op(code, regScratch, imm32(0))
 	branchAddr = code.Len()
-	Add.op(code, types.I64, regScratch, reg)
+	Add.opReg(code, types.I64, regScratch, reg)
 	JmpIndirect.op(code, regScratch)
 	return
 }
 
 func (x86 X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
 	MovsxdFromStack.op(code, types.I32, regScratch, ptrStackOffset)
-	Add.op(code, types.I64, regScratch, regTextPtr)
+	Add.opReg(code, types.I64, regScratch, regTextPtr)
 	CallIndirect.op(code, regScratch)
 }
 
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
 func (x86 X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.R, scale uint8, addr int, signExt bool) {
-	Movsxd.op(code, types.I32, reg, reg)
+	Movsxd.opReg(code, types.I32, reg, reg)
 
 	if signExt && t == types.I32 {
 		MovsxdFromIndirectScaleIndex.op(code, t, reg, scale, reg, regRODataPtr, addr)
@@ -266,7 +266,7 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 
 			switch {
 			case value == 0:
-				Xor.op(code, t, targetReg, targetReg)
+				Xor.opReg(code, t, targetReg, targetReg)
 
 			case -0x80000000 <= value && value < 0x80000000:
 				MovImm32.op(code, t, targetReg, imm32(int(value)))
@@ -450,15 +450,15 @@ func (x86 X86) StubOpBranchIfNotEqualImm32(code gen.Coder, reg regs.R, value int
 func (x86 X86) StubOpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBound int) {
 	MovImm32.op(code, types.I32, regScratch, imm32(upperBound))
 	Test.op(code, types.I32, indexReg, indexReg)
-	Cmovl.op(code, types.I32, indexReg, regScratch) // negative index -> upper bound
-	Cmp.op(code, types.I32, regScratch, indexReg)
+	Cmovl.opReg(code, types.I32, indexReg, regScratch) // negative index -> upper bound
+	Cmp.opReg(code, types.I32, regScratch, indexReg)
 	Jle.op(code)
 }
 
 func (x86 X86) StubOpBranchIfStackExhausted(code gen.Coder) (stackUsageAddr int) {
 	LeaStack.op(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
-	Cmp.op(code, types.I64, regScratch, regStackLimit)
+	Cmp.opReg(code, types.I64, regScratch, regStackLimit)
 	Jl.op(code)
 	return
 }

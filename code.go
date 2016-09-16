@@ -453,7 +453,7 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 	b, _, deadend := code.expr(args[1], opType)
 	code.popLiveOperand(&a)
 	if deadend {
-		code.access(opType, a)
+		code.discard(opType, a)
 		mach.OpAbort(code)
 		return
 	}
@@ -468,12 +468,11 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 	if value, ok := b.CheckImmValue(opType); ok && value == 0 {
 		switch opName {
 		case "add", "or", "sub":
-			code.access(opType, a)
-			result = b
+			result = a
 			return
 
 		case "mul":
-			code.access(opType, a)
+			code.discard(opType, a)
 			result = values.ImmOperand(opType, 0)
 			return
 		}
@@ -693,7 +692,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		condOperand, _, deadend = code.expr(condExpr, types.I32)
 		code.popLiveOperand(&valueOperand)
 		if deadend {
-			code.access(valueType, valueOperand)
+			code.discard(valueType, valueOperand)
 			mach.OpAbort(code)
 			return
 		}
@@ -703,7 +702,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	switch exprName {
 	case "br":
-		code.opFlushRegVars()
+		code.opSaveAllRegs(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		code.opBranch(defaultTarget.label)
@@ -711,7 +710,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		deadend = true
 
 	case "br_if":
-		code.opFlushRegVars()
+		code.opSaveAllRegs(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		code.opBranchIf(condOperand, true, defaultTarget.label)
@@ -760,7 +759,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 		defer code.freeIntReg(reg)
 
-		code.opFlushRegVars()
+		code.opSaveAllRegs(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		tableStackOffset := code.stackOffset - defaultStackDelta
@@ -823,7 +822,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		}
 	}
 
-	code.opEvictAllLiveOperands()
+	code.opSaveAllRegs(true)
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
 	if deadend {
@@ -881,7 +880,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		code.opMove(types.I32, reg, operand)
 	}
 
-	code.opEvictAllLiveOperands()
+	code.opSaveAllRegs(true)
 
 	// if the operand yielded a temporary register, then it was just freed by
 	// the eviction, but the register retains its value.  don't call anything
@@ -926,7 +925,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 			break
 		}
 
-		x = code.access(t, x)
+		x = code.opAccessScalar(t, x)
 		mach.OpPush(code, t, x)
 		code.incrementStackOffset()
 	}
@@ -960,6 +959,7 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
+	// TODO: support params aswell
 	if localIndex >= 0 {
 		if v := code.varRegs[localIndex]; v.typ != types.Void {
 			if v.typ != resultType {
@@ -993,14 +993,14 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		return
 	}
 
-	code.opFlushRegVars()
+	code.opSaveAllRegs(false)
 	code.opBranchIf(ifResult, false, afterThen)
 
 	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType)
 
 	if haveElse {
 		if !thenDeadend {
-			code.opFlushRegVars()
+			code.opSaveAllRegs(true)
 			code.opBranch(end)
 			endReachable = true
 		}
@@ -1148,6 +1148,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	// the design doc says that set_local does't return a value, but it's
 	// needed for the labels.wast test to work.
 
+	// TODO: support params aswell
 	if localIndex >= 0 {
 		if v := code.varRegs[localIndex]; v.typ != types.Void {
 			code.opMove(resultType, v.reg, result)
@@ -1177,13 +1178,13 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 }
 
 func (code *coder) unaryOp(name string, t types.T, x values.Operand) values.Operand {
-	x = code.access(t, x)
+	x = code.opAccessScalar(t, x)
 	return mach.UnaryOp(code, name, t, x)
 }
 
 func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) values.Operand {
-	a = code.access(t, a)
-	b = code.access(t, b)
+	a = code.opAccessScalar(t, a)
+	b = code.opAccessScalar(t, b)
 	return mach.BinaryOp(code, name, t, a, b)
 }
 
@@ -1276,12 +1277,19 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 	mach.OpMove(code, t, target, x)
 }
 
-func (code *coder) opSaveLocal(t types.T, x values.Operand) (offset int) {
+func (code *coder) opCommitLocal(t types.T, x values.Operand, forget, free bool) (offset int) {
 	for i, v := range code.varRegs {
 		if v.typ == t && v.reg == x.Reg() {
 			offset = i * mach.WordSize()
 			code.opStoreStack(t, offset, x)
-			code.varRegs[i].typ = types.Void
+
+			if forget {
+				code.varRegs[i].typ = types.Void
+			}
+			if free {
+				code.FreeReg(t, v.reg)
+			}
+
 			return
 		}
 	}
@@ -1289,8 +1297,23 @@ func (code *coder) opSaveLocal(t types.T, x values.Operand) (offset int) {
 	panic("local index not found for register variable operand")
 }
 
+// opCommitAllLocals is only safe when there are no live RegVar operands.
+func (code *coder) opCommitAllLocals(drop bool) {
+	for i, v := range code.varRegs {
+		if v.typ != types.Void {
+			offset := i * mach.WordSize()
+			code.opStoreStack(v.typ, offset, values.RegVarOperand(v.reg))
+
+			if drop {
+				code.varRegs[i].typ = types.Void
+				code.FreeReg(v.typ, v.reg)
+			}
+		}
+	}
+}
+
 func (code *coder) opStoreStack(t types.T, offset int, x values.Operand) {
-	x = code.access(t, x)
+	x = code.opAccessScalar(t, x)
 	mach.OpStoreStack(code, t, code.stackOffset+offset, x)
 }
 
@@ -1301,6 +1324,17 @@ func (code *coder) access(t types.T, x values.Operand) values.Operand {
 
 	case values.StackPop:
 		code.stackOffset -= mach.WordSize()
+	}
+
+	return x
+}
+
+func (code *coder) opAccessScalar(t types.T, x values.Operand) values.Operand {
+	x = code.access(t, x)
+
+	if x.Storage == values.ConditionFlags {
+		reg := code.OpAllocReg(t)
+		x = mach.OpMove(code, t, reg, x)
 	}
 
 	return x
@@ -1323,7 +1357,16 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 
 	case values.RegVar, values.RegTemp:
 
-	case values.StackVar, values.ConditionFlags:
+	case values.StackVar:
+		_ = ref.Offset() // TODO: store index in operand instead of offset
+
+		// TODO: make a RegVarOperand instead
+
+		reg := code.OpAllocReg(t)
+		code.opMove(t, reg, *ref)
+		*ref = values.RegTempOperand(reg)
+
+	case values.ConditionFlags:
 		reg := code.OpAllocReg(t)
 		code.opMove(t, reg, *ref)
 		*ref = values.RegTempOperand(reg)
@@ -1339,7 +1382,7 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 	switch ref.Storage {
 	case values.Nowhere, values.Imm, values.ROData:
 
-	case values.RegVar, values.RegTemp, values.StackPop:
+	case values.RegVar, values.RegTemp, values.StackVar, values.StackPop:
 		i := len(code.liveOperands) - 1
 		live := code.liveOperands[i]
 
@@ -1361,12 +1404,32 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 
 // opEvictLiveRegOperand doesn't change the allocation state of the register.
 func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
+	// first, try to commit variable from register to stack
+
 	for i := code.evictedOperands; i < len(code.liveOperands); i++ {
 		live := code.liveOperands[i]
 
-		if live.typ.Category() == t.Category() {
-			if reg, ok := live.ref.CheckAnyReg(); ok {
-				code.opEvictLiveOperandsUntil(i + 1) // XXX
+		if reg, ok := live.ref.CheckRegVar(); ok {
+			if live.typ.Category() == t.Category() {
+				offset := code.opCommitLocal(live.typ, *live.ref, true, false)
+				*live.ref = values.StackVarOperand(offset)
+				return reg
+			}
+		}
+	}
+
+	// second, push temporary registers to stack until we find the correct type
+
+	for i := code.evictedOperands; i < len(code.liveOperands); i++ {
+		live := code.liveOperands[i]
+
+		if reg, ok := live.ref.CheckRegTemp(); ok {
+			x := code.opAccessScalar(live.typ, *live.ref)
+			mach.OpPush(code, live.typ, x)
+			code.incrementStackOffset()
+			*live.ref = values.StackPopOperand
+
+			if live.typ.Category() == t.Category() {
 				return reg
 			}
 		}
@@ -1375,43 +1438,41 @@ func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
 	panic("no live register operands to evict")
 }
 
-func (code *coder) opEvictAllLiveOperands() {
-	code.opEvictLiveOperandsUntil(len(code.liveOperands))
-}
+func (code *coder) opSaveAllRegs(dropVars bool) {
+	pushed := false
 
-func (code *coder) opEvictLiveOperandsUntil(end int) {
-	for _, live := range code.liveOperands[code.evictedOperands:end] {
+	for _, live := range code.liveOperands[code.evictedOperands:] {
 		switch live.ref.Storage {
 		case values.RegVar:
-			offset := code.opSaveLocal(live.typ, *live.ref)
+			offset := code.opCommitLocal(live.typ, *live.ref, dropVars, dropVars)
 			*live.ref = values.StackVarOperand(offset)
 
 		case values.RegTemp:
-			x := code.access(live.typ, *live.ref)
+			x := code.opAccessScalar(live.typ, *live.ref)
 			mach.OpPush(code, live.typ, x)
 			code.incrementStackOffset()
 			*live.ref = values.StackPopOperand
+
+			pushed = true
+
+		case values.StackPop:
+			if pushed {
+				panic("previously pushed operand found after newly pushed operand")
+			}
+
+		default:
+			panic(*live.ref)
 		}
 	}
 
-	code.evictedOperands = end
-}
+	code.evictedOperands = len(code.liveOperands)
 
-func (code *coder) opFlushRegVars() {
-	/*
-		for _, live := range code.liveOperands[code.evictedOperands:end] {
-			if live.ref.Storage == values.RegVar {
-				offset := code.opSaveLocal(live.typ, *live.ref)
-				*live.ref = values.StackVarOperand(offset)
-			}
-		}
-	*/
+	code.opCommitAllLocals(dropVars)
 }
 
 func (code *coder) opLabel(l *links.L) {
+	code.opSaveAllRegs(true)
 	l.Address = code.Len()
-
-	code.opFlushRegVars()
 }
 
 func (code *coder) branchSite(l *links.L) {
@@ -1458,6 +1519,8 @@ func (code *coder) getVarLocalOffsetType(name string) (localIndex, offset int, v
 	if !found {
 		return
 	}
+
+	// TODO: return index for params aswell
 
 	if v.Param {
 		localIndex = -1

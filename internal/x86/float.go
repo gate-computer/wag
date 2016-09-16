@@ -33,10 +33,10 @@ var (
 )
 
 var (
-	UcomissUcomisd = insnPrefixModRegFromReg{operandSize, []byte{0x0f, 0x2e}, ModReg}
-	AddssAddsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x58}, ModReg}
-	SubssSubsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5c}, ModReg}
-	DivssDivsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5e}, ModReg}
+	UcomissUcomisd = insnPrefixModRegFromReg{operandSize, []byte{0x0f, 0x2e}}
+	AddssAddsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x58}}
+	SubssSubsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5c}}
+	DivssDivsd     = insnPrefixModRegFromReg{scalarSize, []byte{0x0f, 0x5e}}
 
 	MovssMovsd = insnPrefixModRegToReg{scalarSize, []byte{0x0f, 0x11}, ModReg}
 
@@ -68,8 +68,8 @@ func (x86 X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values.
 		targetReg := x86.opOwnReg(code, t, x)
 
 		MovssMovsd.op(code, t, tempReg, targetReg)
-		SubssSubsd.op(code, t, targetReg, tempReg)
-		SubssSubsd.op(code, t, targetReg, tempReg)
+		SubssSubsd.opReg(code, t, targetReg, tempReg)
+		SubssSubsd.opReg(code, t, targetReg, tempReg)
 		return values.RegTempOperand(targetReg)
 	}
 
@@ -85,7 +85,7 @@ func (x86 X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b val
 			defer code.FreeReg(t, sourceReg)
 		}
 
-		insn.op(code, t, targetReg, sourceReg)
+		insn.opReg(code, t, targetReg, sourceReg)
 		return values.RegTempOperand(targetReg)
 	}
 
@@ -100,7 +100,7 @@ func (x86 X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b val
 			defer code.FreeReg(t, bReg)
 		}
 
-		UcomissUcomisd.op(code, t, aReg, bReg)
+		UcomissUcomisd.opReg(code, t, aReg, bReg)
 		return values.ConditionFlagsOperand(cond)
 	}
 

@@ -87,7 +87,6 @@ func (g *regGroupAllocator) alloc() (reg regs.R, ok bool) {
 			g.allocated[n] = true
 			reg = regs.R(g.offset + n)
 			ok = true
-			g.phase++
 
 			if verbose {
 				fmt.Printf("regalloc: allocated %s\n", reg)
@@ -110,6 +109,8 @@ func (g *regGroupAllocator) free(reg regs.R) (ok bool) {
 
 		g.allocated[i] = false
 		ok = true
+
+		g.phase += 3
 
 		if verbose {
 			fmt.Printf("regalloc: freed     %s\n", reg)

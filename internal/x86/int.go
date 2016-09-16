@@ -42,23 +42,25 @@ var (
 	Push = insnReg_sizeless_PrefixModOpReg{insnReg{0x50}, insnPrefixModOpReg{rexSize, []byte{0xff}, 6}}
 	Pop  = insnReg_sizeless_PrefixModOpReg{insnReg{0x58}, insnPrefixModOpReg{rexSize, []byte{0x8f}, 0}}
 
-	Cmovl  = insnPrefixModRegFromReg{rexSize, []byte{0x0f, 0x4c}, ModReg}
-	Bsf    = insnPrefixModRegFromReg{rexSize, []byte{0x0f, 0xbc}, ModReg}
-	Movsxd = insnPrefixModRegFromReg{rexSize, []byte{0x63}, ModReg}
+	Add    = insnPrefixModRegFromReg{rexSize, []byte{0x03}}
+	Or     = insnPrefixModRegFromReg{rexSize, []byte{0x0b}}
+	And    = insnPrefixModRegFromReg{rexSize, []byte{0x23}}
+	Sub    = insnPrefixModRegFromReg{rexSize, []byte{0x2b}}
+	Xor    = insnPrefixModRegFromReg{rexSize, []byte{0x33}}
+	Cmp    = insnPrefixModRegFromReg{rexSize, []byte{0x3b}}
+	Movsxd = insnPrefixModRegFromReg{rexSize, []byte{0x63}}
+	Cmovl  = insnPrefixModRegFromReg{rexSize, []byte{0x0f, 0x4c}}
+	Bsf    = insnPrefixModRegFromReg{rexSize, []byte{0x0f, 0xbc}}
 
-	Add  = insnPrefixModRegToReg{rexSize, []byte{0x01}, ModReg}
-	Or   = insnPrefixModRegToReg{rexSize, []byte{0x09}, ModReg}
-	And  = insnPrefixModRegToReg{rexSize, []byte{0x21}, ModReg}
-	Sub  = insnPrefixModRegToReg{rexSize, []byte{0x29}, ModReg}
-	Xor  = insnPrefixModRegToReg{rexSize, []byte{0x31}, ModReg}
-	Cmp  = insnPrefixModRegToReg{rexSize, []byte{0x39}, ModReg}
 	Test = insnPrefixModRegToReg{rexSize, []byte{0x85}, ModReg}
 	Mov  = insnPrefixModRegToReg{rexSize, []byte{0x89}, ModReg}
 
+	CmpImm32 = insnPrefixModOpRegImm{rexSize, []byte{0x81}, 7}
 	ShlImm   = insnPrefixModOpRegImm{rexSize, []byte{0xc1}, 0}
 	ShrImm   = insnPrefixModOpRegImm{rexSize, []byte{0xc1}, 5}
 	MovImm32 = insnPrefixModOpRegImm{rexSize, []byte{0xc7}, 0}
 
+	CmpFromStack    = insnPrefixModRegSibImm{rexSize, []byte{0x3b}, sib{0, regStackPtr, regStackPtr}}
 	MovsxdFromStack = insnPrefixModRegSibImm{rexSize, []byte{0x63}, sib{0, regStackPtr, regStackPtr}}
 	MovToStack      = insnPrefixModRegSibImm{rexSize, []byte{0x89}, sib{0, regStackPtr, regStackPtr}}
 	MovFromStack    = insnPrefixModRegSibImm{rexSize, []byte{0x8b}, sib{0, regStackPtr, regStackPtr}}
@@ -99,7 +101,7 @@ func (x86 X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Op
 			targetReg = code.OpAllocReg(t)
 		}
 
-		Bsf.op(code, t, targetReg, sourceReg)
+		Bsf.opReg(code, t, targetReg, sourceReg)
 		return values.RegTempOperand(targetReg)
 
 	case "eqz":
@@ -117,6 +119,12 @@ func (x86 X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Op
 
 func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
 	value, immediate := b.CheckImmValue(t)
+
+	if immediate && (value < -0x80000000 || value >= 0x80000000) {
+		reg := code.OpAllocReg(t)
+		b = x86.OpMove(code, t, reg, b)
+		immediate = false
+	}
 
 	switch name {
 	case "add":
@@ -168,7 +176,7 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			Test.op(code, t, reg, reg)
 			Je.op(code)
 			code.TrapLinks().DivideByZero.AddSite(code.Len())
-			Xor.op(code, t, regDividendHi, regDividendHi)
+			Xor.opReg(code, t, regDividendHi, regDividendHi)
 			Div.op(code, t, reg)
 			return values.RegTempOperand(regDividendLo)
 		}
@@ -198,7 +206,7 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			defer code.FreeReg(t, sourceReg)
 		}
 
-		insn.op(code, t, targetReg, sourceReg)
+		insn.opReg(code, t, targetReg, sourceReg)
 		return values.RegTempOperand(targetReg)
 	}
 
@@ -208,12 +216,32 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			defer code.FreeReg(t, aReg)
 		}
 
-		bReg, own := x86.opBorrowReg(code, t, b)
-		if own {
-			defer code.FreeReg(t, bReg)
+		switch b.Storage {
+		case values.Imm:
+			CmpImm32.op(code, t, aReg, imm32(int(value)))
+
+		case values.ROData:
+			Cmp.opIndirect(code, t, aReg, regRODataPtr, b.Addr())
+
+		case values.RegVar:
+			Cmp.opReg(code, t, aReg, b.Reg())
+
+		case values.RegTemp:
+			Cmp.opReg(code, t, aReg, b.Reg())
+			code.FreeReg(t, b.Reg())
+
+		case values.StackVar:
+			CmpFromStack.op(code, t, aReg, b.Offset())
+
+		case values.StackPop:
+			// TODO: try to allocate register for popping
+			AddImm.op(code, types.I64, regStackPtr, wordSize)
+			CmpFromStack.op(code, t, aReg, -wordSize)
+
+		default:
+			panic(b)
 		}
 
-		Cmp.op(code, t, aReg, bReg)
 		return values.ConditionFlagsOperand(cond)
 	}
 
@@ -221,13 +249,6 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 }
 
 func (x86 X86) opPrepareDivMul(code gen.RegCoder, t types.T, a, b values.Operand) (bReg regs.R, own bool) {
-	var pinned []regs.R
-
-	aReg, aRegOk := a.CheckAnyReg()
-	if aRegOk {
-		pinned = append(pinned, aReg)
-	}
-
 	bReg, ok := b.CheckRegVar()
 	if !ok {
 		bReg, ok = b.CheckRegTemp()
@@ -241,6 +262,7 @@ func (x86 X86) opPrepareDivMul(code gen.RegCoder, t types.T, a, b values.Operand
 		}
 	}
 
+	aReg, aRegOk := a.CheckAnyReg()
 	if !aRegOk || aReg != regDividendLo {
 		x86.OpMove(code, t, regDividendLo, a)
 	}
