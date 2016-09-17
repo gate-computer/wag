@@ -46,6 +46,7 @@ func TestI32(t *testing.T)              { test(t, "testdata/i32.wast") }
 func TestI64(t *testing.T)              { test(t, "testdata/i64.wast") }
 func TestIntLiterals(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
 func TestLabels(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/labels.wast") }
+func TestLotsOfLocals(t *testing.T)     { test(t, "testdata/lots_of_locals.wast") }
 func TestNop(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/nop.wast") }
 func TestTypecheck(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
 

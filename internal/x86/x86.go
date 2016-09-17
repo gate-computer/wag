@@ -2,7 +2,6 @@ package x86
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
@@ -59,7 +58,7 @@ var availableFloatRegs = [][]bool{
 	[]bool{
 		false, // xmm0 = result
 		true,
-		true,
+		false, // xmm2 = scratch
 		true,
 		true,
 		true,
@@ -261,11 +260,8 @@ func (x86 X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.R
 	}
 }
 
-// TODO: rename this to something else
 // OpMove must not update CPU's condition flags.
-func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.Operand) values.Operand {
-	fmt.Printf("move: %s <- %s\n", targetReg, x)
-
+func (x86 X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Operand) values.Operand {
 	switch t.Category() {
 	case types.Int:
 		switch x.Storage {
@@ -409,10 +405,20 @@ func (x86 X86) OpShiftRightLogical32Bits(code gen.Coder, subject regs.R) {
 	ShrImm.op(code, types.I64, subject, uimm8(-32))
 }
 
-func (x86 X86) OpStoreStack(code gen.RegCoder, t types.T, offset int, x values.Operand) {
-	reg, own := x86.opBorrowReg(code, t, x)
-	if own {
+// OpStoreStack must not allocate registers.
+func (x86 X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Operand) {
+	reg, ok := x.CheckTempReg()
+	if ok {
 		defer code.FreeReg(t, reg)
+	} else {
+		index, ok := x.CheckVar()
+		if ok {
+			_, reg, ok = code.Var(index)
+		}
+		if !ok {
+			reg = regScratch
+			x86.OpMove(code, t, reg, x)
+		}
 	}
 
 	switch t.Category() {

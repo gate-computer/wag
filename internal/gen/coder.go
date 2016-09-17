@@ -17,13 +17,14 @@ type Coder interface {
 	TrapLinks() *TrapLinks
 
 	Var(index int) (currentStackPtrOffset int, reg regs.R, regOk bool)
+
+	FreeReg(types.T, regs.R)
 }
 
 type RegCoder interface {
 	Coder
 
 	OpAllocReg(t types.T) regs.R
-	FreeReg(types.T, regs.R)
 }
 
 type TrapLinks struct {
