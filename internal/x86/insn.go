@@ -116,8 +116,8 @@ type prefix interface {
 	writeTo(gen.Coder, types.T, regs.R, regs.R, regs.R)
 }
 
-type nullaryInsn interface {
-	op(code gen.Coder)
+type addrInsn interface {
+	op(code gen.Coder, addr int)
 }
 
 type unaryInsn interface {
@@ -133,6 +133,43 @@ type insnFixed []byte
 
 func (bytes insnFixed) op(code gen.Coder) {
 	code.Write([]byte(bytes))
+}
+
+type insnAddr struct {
+	rel8  []byte
+	rel32 []byte
+}
+
+func (i insnAddr) op(code gen.Coder, targetAddr int) {
+	if i.rel8 != nil && targetAddr != 0 {
+		insnSize := len(i.rel8) + 1
+		siteAddr := code.Len() + insnSize
+		offset := targetAddr - siteAddr
+
+		if offset >= -0x80 && offset < 0x80 {
+			code.Write(i.rel8)
+			imm8(offset).writeTo(code)
+			return
+		}
+	}
+
+	insnSize := len(i.rel32) + 4
+	var offset int
+
+	if targetAddr != 0 {
+		siteAddr := code.Len() + insnSize
+		offset = targetAddr - siteAddr
+	} else {
+		offset = -insnSize // infinite loop as placeholder
+	}
+
+	if offset >= -0x80000000 && offset < 0x80000000 {
+		code.Write(i.rel32)
+		imm32(offset).writeTo(code)
+		return
+	}
+
+	panic(offset)
 }
 
 // TODO: does this work with rexB prefix?

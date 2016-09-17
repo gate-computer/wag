@@ -21,14 +21,20 @@ const (
 	verbose = false
 )
 
+var (
+	debugExprDepth = 1
+)
+
 type liveOperand struct {
 	typ types.T
 	ref *values.Operand
 }
 
 type regVar struct {
-	typ types.T
-	reg regs.R
+	refs  int
+	typ   types.T
+	reg   regs.R
+	dirty bool
 }
 
 type branchTarget struct {
@@ -53,7 +59,8 @@ type coder struct {
 	regsInt   regAllocator
 	regsFloat regAllocator
 
-	liveOperands []liveOperand
+	liveOperands               []liveOperand
+	noLiveTempRegOperandsUntil int
 
 	stackOffset int
 
@@ -64,8 +71,6 @@ type coder struct {
 	labelLinks     map[*links.L]struct{}
 	maxStackOffset int
 	varRegs        []regVar
-
-	exprDepth int // for debugging
 }
 
 func (m *Module) Code() (text, roData, data []byte, bssSize int) {
@@ -88,7 +93,7 @@ func (m *Module) Code() (text, roData, data []byte, bssSize int) {
 					panic("function signature has no index while populating table")
 				}
 
-				addr := uint32(code.functionLinks[f].Address)
+				addr := uint32(code.functionLinks[f].FinalAddress())
 				sigId := uint32(f.Signature.Index)
 				packed := (uint64(sigId) << 32) | uint64(addr)
 				mach.ByteOrder().PutUint64(data[:8], packed)
@@ -100,23 +105,28 @@ func (m *Module) Code() (text, roData, data []byte, bssSize int) {
 		}
 	}
 
-	code.regsInt.init(mach.AvailableIntRegs())
-	code.regsFloat.init(mach.AvailableFloatRegs())
+	mach.OpInit(code)
 
-	start := m.NamedFunctions[m.Start]
-	code.genFunction(start)
+	// generate trap code first so that we can write their addresses as we go.
+	// this also ensures that no link address will be zero (if OpInit is nop).
 
-	for _, f := range m.Functions {
-		if f != start {
-			code.genFunction(f)
-		}
-	}
+	startFunc := m.NamedFunctions[m.Start]
+	startLink := code.functionLinks[startFunc]
+	mach.OpBranch(code, 0)
+	startLink.AddSite(code.Len()) // XXX: this assumes that call and branch displacements are similar
 
 	code.genTrap(&code.trapLinks.DivideByZero, traps.DivideByZero)
 	code.genTrap(&code.trapLinks.CallStackExhausted, traps.CallStackExhausted)
 	code.genTrap(&code.trapLinks.IndirectCallIndex, traps.IndirectCallIndex)
 	code.genTrap(&code.trapLinks.IndirectCallSignature, traps.IndirectCallSignature)
 	code.genTrap(&code.trapLinks.Unreachable, traps.Unreachable)
+
+	code.regsInt.init(mach.AvailableIntRegs())
+	code.regsFloat.init(mach.AvailableFloatRegs())
+
+	for _, f := range m.Functions {
+		code.genFunction(f)
+	}
 
 	for _, link := range code.functionLinks {
 		mach.UpdateCalls(code, link)
@@ -148,40 +158,47 @@ func (code *coder) TrapLinks() *gen.TrapLinks {
 	return &code.trapLinks
 }
 
+func (code *coder) genTrap(l *links.L, id traps.Id) {
+	l.SetAddress(code.Len())
+	mach.OpTrap(code, id)
+}
+
 func (code *coder) genFunction(f *Function) {
 	if verbose {
-		fmt.Println("func:", f.Names)
+		fmt.Printf("<function names=\"%s\">\n", f.Names)
 	}
 
 	code.function = f
 	code.labelLinks = make(map[*links.L]struct{})
 	code.maxStackOffset = 0
 
-	if cap(code.varRegs) >= len(f.Locals) {
-		code.varRegs = code.varRegs[:len(f.Locals)]
+	if n := len(f.Params) + len(f.Locals); cap(code.varRegs) >= n {
+		code.varRegs = code.varRegs[:n]
 	} else {
-		code.varRegs = make([]regVar, len(f.Locals))
+		code.varRegs = make([]regVar, n)
 	}
 
 	mach.AlignFunction(code)
 	functionAddr := code.Len()
-	stackUsageAddr := mach.StubOpBranchIfStackExhausted(code)
-	stackCheckAddr := code.Len()
+	stackUsageAddr := mach.OpTrapIfStackExhausted(code)
+	stackCheckEndAddr := code.Len()
 
 	stackPtrMoved := false
 	zeroIntReg := regs.R(-1)
 
-	for i, localType := range f.Locals {
+	for localIndex, localType := range f.Locals {
+		varIndex := len(f.Params) + localIndex
+
 		if reg, ok := code.tryAllocReg(localType); ok {
 			mach.OpMove(code, localType, reg, values.ImmOperand(localType, 0))
-			code.varRegs[i] = regVar{localType, reg}
+			code.varRegs[varIndex] = regVar{0, localType, reg, true}
 
 			if zeroIntReg < 0 && localType == types.I64 {
 				zeroIntReg = reg
 			}
 		} else {
 			if !stackPtrMoved {
-				mach.OpAddImmToStackPtr(code, -mach.WordSize()*i)
+				mach.OpAddImmToStackPtr(code, -mach.WordSize()*varIndex)
 				stackPtrMoved = true
 
 				if zeroIntReg < 0 {
@@ -241,6 +258,8 @@ func (code *coder) genFunction(f *Function) {
 	for i, v := range code.varRegs {
 		if v.typ != types.Void {
 			code.FreeReg(v.typ, v.reg)
+
+			code.varRegs[i].refs = 0
 			code.varRegs[i].typ = types.Void
 		}
 	}
@@ -266,46 +285,18 @@ func (code *coder) genFunction(f *Function) {
 
 	if stackUsage > 0 {
 		mach.UpdateStackDisp(code, stackUsageAddr, stackUsage)
-		code.trapLinks.CallStackExhausted.AddSite(stackCheckAddr)
 	} else {
-		newAddr := stackCheckAddr &^ (mach.FunctionAlignment() - 1)
-		if functionAddr == 0 {
-			// start function
-			mach.DisableCode(code, functionAddr, newAddr)
-		} else {
-			mach.DeleteCode(code, functionAddr, newAddr)
-		}
-		mach.DisableCode(code, newAddr, stackCheckAddr)
+		newAddr := stackCheckEndAddr &^ (mach.FunctionAlignment() - 1)
+		mach.DeleteCode(code, functionAddr, newAddr)
+		mach.DisableCode(code, newAddr, stackCheckEndAddr)
 		functionAddr = newAddr
 	}
 
-	code.functionLinks[f].Address = functionAddr
-}
+	code.functionLinks[f].SetAddress(functionAddr)
 
-func (code *coder) genTrap(l *links.L, id traps.Id) {
-	l.Address = code.Len()
-	mach.OpTrap(code, id)
-
-	mach.UpdateBranches(code, l)
-}
-
-func (code *coder) trapSite(l *links.L) {
-	l.AddSite(code.Len())
-}
-
-func (code *coder) opTrap(trap *links.L) {
-	mach.StubOpBranch(code)
-	code.trapSite(trap)
-}
-
-func (code *coder) opTrapIfOutOfBounds(indexReg regs.R, upperBound int, trap *links.L) {
-	mach.StubOpBranchIfOutOfBounds(code, indexReg, upperBound)
-	code.trapSite(trap)
-}
-
-func (code *coder) opTrapIfNotEqualImm32(reg regs.R, value int, trap *links.L) {
-	mach.StubOpBranchIfNotEqualImm32(code, reg, value)
-	code.trapSite(trap)
+	if verbose {
+		fmt.Println("</function>")
+	}
 }
 
 func (code *coder) expr(x interface{}, expectType types.T) (result values.Operand, resultType types.T, deadend bool) {
@@ -314,12 +305,12 @@ func (code *coder) expr(x interface{}, expectType types.T) (result values.Operan
 	args := expr[1:]
 
 	if verbose {
-		for i := 0; i < code.exprDepth; i++ {
+		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
 		fmt.Printf("<%s>\n", exprName)
 	}
-	code.exprDepth++
+	debugExprDepth++
 
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
@@ -396,17 +387,12 @@ func (code *coder) expr(x interface{}, expectType types.T) (result values.Operan
 		}
 	}
 
-	code.exprDepth--
+	debugExprDepth--
 	if verbose {
-		for i := 0; i < code.exprDepth+1; i++ {
+		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
-		fmt.Printf("%s %s\n", resultType, result)
-
-		for i := 0; i < code.exprDepth; i++ {
-			fmt.Print("    ")
-		}
-		fmt.Printf("</%s>\n", exprName)
+		fmt.Printf("</%s result=\"%s %s\">\n", exprName, resultType, result)
 	}
 
 	if deadend {
@@ -422,7 +408,7 @@ func (code *coder) expr(x interface{}, expectType types.T) (result values.Operan
 		}
 	}
 
-	if result.Storage == values.StackPop {
+	if result.Storage == values.Stack {
 		panic(fmt.Errorf("%s: result operand is %s", exprName, result))
 	}
 
@@ -599,7 +585,7 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 		}
 
 		if expectType != types.Void {
-			result = values.RegTempOperand(mach.ResultReg())
+			result = values.TempRegOperand(mach.ResultReg())
 		}
 
 		code.opLabel(after)
@@ -724,8 +710,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	switch exprName {
 	case "br":
-		code.opSaveTempRegs()
-		code.opSaveRegVars(false)
+		code.opPushTempRegOperands()
+		code.opStoreRegVars(true)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		code.opBranch(defaultTarget.label)
@@ -733,8 +719,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		deadend = true
 
 	case "br_if":
-		code.opSaveTempRegs()
-		code.opSaveRegVars(false)
+		code.opPushTempRegOperands()
+		code.opStoreRegVars(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		code.opBranchIf(condOperand, true, defaultTarget.label)
@@ -764,6 +750,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		tableSize := len(tableTargets) << tableScale
 		tableAlloc := code.roData.allocate(tableSize, 1<<tableScale, nil)
 
+		code.opPushTempRegOperands()
+
 		var reg2 regs.R
 
 		if commonStackOffset < 0 {
@@ -773,8 +761,10 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 			code.popLiveOperand(&condOperand)
 		}
 
-		reg, ok := condOperand.CheckRegTemp()
+		reg, ok := condOperand.CheckTempReg()
 		if !ok {
+			// TODO: if condOperand is a regvar, we could just use that if we stored it first
+
 			code.opPushLiveOperand(types.I32, &condOperand)
 			reg = code.opAllocIntReg()
 			code.popLiveOperand(&condOperand)
@@ -783,8 +773,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 		defer code.freeIntReg(reg)
 
-		code.opSaveTempRegs()
-		code.opSaveRegVars(false)
+		code.opStoreRegVars(true)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		tableStackOffset := code.stackOffset - defaultStackDelta
@@ -807,7 +796,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 		tableAlloc.populator = func(data []byte) {
 			for _, target := range tableTargets {
-				disp := target.label.Address - branchAddr
+				disp := target.label.FinalAddress() - branchAddr
 
 				if commonStackOffset >= 0 {
 					mach.ByteOrder().PutUint32(data[:4], uint32(disp))
@@ -847,7 +836,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		}
 	}
 
-	code.opSaveTempRegs()
+	code.opPushTempRegOperands()
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
 	if deadend {
@@ -855,7 +844,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		return
 	}
 
-	code.opSaveRegVars(true)
+	code.opStoreRegVars(true)
 
 	code.opCall(code.functionLinks[target])
 	code.opAddImmToStackPtr(argsSize)
@@ -897,7 +886,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		return
 	}
 
-	reg, ok := operand.CheckRegTemp()
+	reg, ok := operand.CheckTempReg()
 	if !ok {
 		code.opPushLiveOperand(types.I32, &operand)
 		reg = code.opAllocIntReg()
@@ -907,22 +896,22 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		code.opMove(types.I32, reg, operand)
 	}
 
-	code.opSaveTempRegs()
+	code.opPushTempRegOperands()
 
 	// if the operand yielded a temporary register, then it was just freed by
 	// the eviction, but the register retains its value.  don't call anything
 	// that allocates registers until the critical section ends.
 
-	code.opTrapIfOutOfBounds(reg, len(code.module.Table), &code.trapLinks.IndirectCallIndex)
+	mach.OpBranchIfOutOfBounds(code, reg, len(code.module.Table), code.trapLinks.IndirectCallIndex.FinalAddress())
 	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, 3, roTableAddr, false)
 	mach.OpPushIntReg(code, reg) // push func ptr
 	code.incrementStackOffset()
 	mach.OpShiftRightLogical32Bits(code, reg) // signature id
-	code.opTrapIfNotEqualImm32(reg, sig.Index, &code.trapLinks.IndirectCallSignature)
+	mach.OpBranchIfNotEqualImm32(code, reg, sig.Index, code.trapLinks.IndirectCallSignature.FinalAddress())
 
 	// end of critical section.
 
-	code.opSaveRegVars(true)
+	code.opStoreRegVars(true)
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, sig, args)
 	if deadend {
@@ -972,7 +961,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 
 	resultType = sig.ResultType
 	if resultType != types.Void {
-		result = values.RegTempOperand(mach.ResultReg())
+		result = values.TempRegOperand(mach.ResultReg())
 	}
 	return
 }
@@ -983,23 +972,12 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 	}
 
 	varName := args[0].(string)
-	localIndex, offset, resultType, found := code.getVarLocalOffsetType(varName)
+	index, resultType, found := code.lookupFunctionVar(varName)
 	if !found {
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	// TODO: support params aswell
-	if localIndex >= 0 {
-		if v := code.varRegs[localIndex]; v.typ != types.Void {
-			if v.typ != resultType {
-				panic("register variable type does not match actual variable type")
-			}
-			result = values.RegVarOperand(v.reg)
-			return
-		}
-	}
-
-	result = values.StackVarOperand(offset)
+	result = values.VarOperand(index)
 	return
 }
 
@@ -1022,16 +1000,16 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		return
 	}
 
-	code.opSaveTempRegs()
-	code.opSaveRegVars(false)
+	code.opPushTempRegOperands()
+	code.opStoreRegVars(false)
 	code.opBranchIf(ifResult, false, afterThen)
 
 	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType)
 
 	if haveElse {
 		if !thenDeadend {
-			code.opSaveTempRegs()
-			code.opSaveRegVars(true)
+			code.opPushTempRegOperands()
+			code.opStoreRegVars(true)
 			code.opBranch(end)
 			endReachable = true
 		}
@@ -1050,10 +1028,12 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		code.opLabel(afterThen)
 	}
 
-	code.opLabel(end)
+	if endReachable {
+		code.opLabel(end)
+	}
 
 	if expectType != types.Void {
-		result = values.RegTempOperand(mach.ResultReg())
+		result = values.TempRegOperand(mach.ResultReg())
 	}
 
 	deadend = !endReachable
@@ -1162,7 +1142,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	}
 
 	varName := args[0].(string)
-	localIndex, offset, resultType, found := code.getVarLocalOffsetType(varName)
+	index, resultType, found := code.lookupFunctionVar(varName)
 	if !found {
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
@@ -1173,30 +1153,33 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		return
 	}
 
-	// there are no live stack var operands (which would race with set_local),
-	// because they are loaded into registers (or to stack) by pushLiveOperand().
-
 	// the design doc says that set_local does't return a value, but it's
 	// needed for the labels.wast test to work.
 
-	// TODO: support params aswell
-	if localIndex >= 0 {
-		if v := code.varRegs[localIndex]; v.typ != types.Void {
-			code.opMove(resultType, v.reg, result)
-			result = values.RegVarOperand(v.reg)
-			return
-		}
+	// TODO: repurpose temporary register.  also keep immediates etc.
 
-		if reg, ok := code.tryAllocReg(resultType); ok {
-			code.opMove(resultType, reg, result)
-			code.varRegs[localIndex] = regVar{resultType, reg}
-			result = values.RegVarOperand(reg)
-			return
-		}
+	if v := code.varRegs[index]; v.typ != types.Void {
+		code.opMove(resultType, v.reg, result)
+		code.varRegs[index].dirty = true
+
+		result = values.VarOperand(index)
+		return
 	}
 
-	code.opStoreStack(resultType, offset, result)
-	result = values.StackVarOperand(offset)
+	if reg, ok := code.tryAllocReg(resultType); ok {
+		code.opMove(resultType, reg, result)
+
+		v := &code.varRegs[index]
+		v.typ = resultType
+		v.reg = reg
+		v.dirty = true
+
+		result = values.VarOperand(index)
+		return
+	}
+
+	code.opStoreVar(resultType, index, result)
+	result = values.VarOperand(index)
 	return
 }
 
@@ -1205,7 +1188,7 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	code.opTrap(&code.trapLinks.Unreachable)
+	mach.OpBranch(code, code.trapLinks.Unreachable.FinalAddress())
 }
 
 func (code *coder) unaryOp(name string, t types.T, x values.Operand) values.Operand {
@@ -1222,7 +1205,15 @@ func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) values.
 func (code *coder) OpAllocReg(t types.T) (reg regs.R) {
 	reg, ok := code.tryAllocReg(t)
 	if !ok {
-		reg = code.opEvictLiveRegOperand(t)
+		reg = code.opStealReg(t)
+	}
+	return
+}
+
+func (code *coder) opTryAllocVarReg(t types.T, refs int) (reg regs.R, ok bool) {
+	reg, ok = code.tryAllocReg(t)
+	if !ok {
+		reg, ok = code.opTryStealVarReg(t, refs)
 	}
 	return
 }
@@ -1238,7 +1229,7 @@ func (code *coder) FreeReg(t types.T, reg regs.R) {
 func (code *coder) opAllocIntReg() (reg regs.R) {
 	reg, ok := code.regs(types.I64).alloc()
 	if !ok {
-		reg = code.opEvictLiveRegOperand(types.I64)
+		reg = code.opStealReg(types.I64)
 	}
 	return
 }
@@ -1273,23 +1264,23 @@ func (code *coder) opAddImmToStackPtr(offset int) {
 }
 
 func (code *coder) opBranch(l *links.L) {
-	mach.StubOpBranch(code)
+	mach.OpBranch(code, l.Address)
 	code.branchSite(l)
 }
 
 func (code *coder) opBranchIf(x values.Operand, yes bool, l *links.L) {
 	x = code.access(types.I32, x)
-	mach.StubOpBranchIf(code, x, yes)
+	mach.OpBranchIf(code, x, yes, l.Address)
 	code.branchSite(l)
 }
 
 func (code *coder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *links.L) {
-	mach.StubOpBranchIfOutOfBounds(code, indexReg, upperBound)
+	mach.OpBranchIfOutOfBounds(code, indexReg, upperBound, l.Address)
 	code.branchSite(l)
 }
 
 func (code *coder) opCall(l *links.L) {
-	mach.StubOpCall(code)
+	mach.OpCall(code, l.Address)
 	code.callSite(l)
 }
 
@@ -1299,7 +1290,7 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 	}
 
 	if target == mach.ResultReg() {
-		if reg, ok := x.CheckRegTemp(); ok && reg == mach.ResultReg() {
+		if reg, ok := x.CheckTempReg(); ok && reg == mach.ResultReg() {
 			return
 		}
 	}
@@ -1308,52 +1299,8 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 	mach.OpMove(code, t, target, x)
 }
 
-func (code *coder) opCommitLocal(t types.T, x values.Operand, forget, free bool) (offset int) {
-	for i, v := range code.varRegs {
-		if v.typ == t && v.reg == x.Reg() {
-			offset = i * mach.WordSize()
-			code.opStoreStack(t, offset, x)
-
-			if forget {
-				code.varRegs[i].typ = types.Void
-			}
-			if free {
-				code.FreeReg(t, v.reg)
-			}
-
-			return
-		}
-	}
-
-	panic("local index not found for register variable operand")
-}
-
-// opCommitAllLocals is only safe when there are no live RegVar operands.
-func (code *coder) opCommitAllLocals(drop bool) {
-	for i, v := range code.varRegs {
-		if v.typ != types.Void {
-			offset := i * mach.WordSize()
-			code.opStoreStack(v.typ, offset, values.RegVarOperand(v.reg))
-
-			if drop {
-				code.varRegs[i].typ = types.Void
-				code.FreeReg(v.typ, v.reg)
-			}
-		}
-	}
-}
-
-func (code *coder) opStoreStack(t types.T, offset int, x values.Operand) {
-	x = code.opAccessScalar(t, x)
-	mach.OpStoreStack(code, t, code.stackOffset+offset, x)
-}
-
 func (code *coder) access(t types.T, x values.Operand) values.Operand {
-	switch x.Storage {
-	case values.StackVar:
-		x = values.StackVarOperand(code.stackOffset + x.Offset())
-
-	case values.StackPop:
+	if x.Storage == values.Stack {
 		code.stackOffset -= mach.WordSize()
 	}
 
@@ -1373,10 +1320,10 @@ func (code *coder) opAccessScalar(t types.T, x values.Operand) values.Operand {
 
 func (code *coder) discard(t types.T, x values.Operand) {
 	switch x.Storage {
-	case values.RegTemp:
+	case values.TempReg:
 		code.FreeReg(t, x.Reg())
 
-	case values.StackPop:
+	case values.Stack:
 		code.opAddImmToStackPtr(mach.WordSize())
 	}
 }
@@ -1386,21 +1333,26 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 	case values.Nowhere, values.Imm, values.ROData:
 		return
 
-	case values.RegVar, values.RegTemp:
+	case values.Var:
+		v := &code.varRegs[ref.Index()]
+		v.refs++
 
-	case values.StackVar:
-		_ = ref.Offset() // TODO: store index in operand instead of offset
+		if v.typ == types.Void {
+			if reg, ok := code.opTryAllocVarReg(t, v.refs); ok {
+				code.opMove(t, reg, *ref)
 
-		// TODO: make a RegVarOperand instead
+				v.typ = t
+				v.reg = reg
+				v.dirty = false
+			}
+		}
 
-		reg := code.OpAllocReg(t)
-		code.opMove(t, reg, *ref)
-		*ref = values.RegTempOperand(reg)
+	case values.TempReg:
 
 	case values.ConditionFlags:
 		reg := code.OpAllocReg(t)
 		code.opMove(t, reg, *ref)
-		*ref = values.RegTempOperand(reg)
+		*ref = values.TempRegOperand(reg)
 
 	default:
 		panic(*ref)
@@ -1413,7 +1365,15 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 	switch ref.Storage {
 	case values.Nowhere, values.Imm, values.ROData:
 
-	case values.RegVar, values.RegTemp, values.StackVar, values.StackPop:
+	case values.Var:
+		v := &code.varRegs[ref.Index()]
+		v.refs--
+		if v.refs < 0 {
+			panic(*ref)
+		}
+		fallthrough
+
+	case values.TempReg, values.Stack:
 		i := len(code.liveOperands) - 1
 		live := code.liveOperands[i]
 
@@ -1424,97 +1384,143 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 		live.ref = nil
 		code.liveOperands = code.liveOperands[:i]
 
+		if code.noLiveTempRegOperandsUntil > i {
+			code.noLiveTempRegOperandsUntil = i
+		}
+
 	default:
 		panic(*ref)
 	}
 }
 
-// opEvictLiveRegOperand doesn't change the allocation state of the register.
-func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
+// opStealReg doesn't change the allocation state of the register.
+func (code *coder) opStealReg(t types.T) regs.R {
 	// first, try to commit variable from register to stack
 
-	for _, live := range code.liveOperands {
-		if reg, ok := live.ref.CheckRegVar(); ok {
-			if live.typ.Category() == t.Category() {
-				offset := code.opCommitLocal(live.typ, *live.ref, true, false)
-				*live.ref = values.StackVarOperand(offset)
-				return reg
-			}
-		}
+	if reg, ok := code.opTryStealVarReg(t, -1); ok {
+		return reg
 	}
 
 	// second, push temporary registers to stack until we find the correct type
 
-	for _, live := range code.liveOperands {
-		if reg, ok := live.ref.CheckRegTemp(); ok {
+	for _, live := range code.liveOperands[code.noLiveTempRegOperandsUntil:] {
+		if reg, ok := live.ref.CheckTempReg(); ok {
 			x := code.opAccessScalar(live.typ, *live.ref)
 			mach.OpPush(code, live.typ, x)
 			code.incrementStackOffset()
-			*live.ref = values.StackPopOperand
+			*live.ref = values.StackOperand
 
 			if live.typ.Category() == t.Category() {
 				return reg
 			}
 		}
+
+		code.noLiveTempRegOperandsUntil++
 	}
 
-	panic("no live register operands to evict")
+	panic("no registers to steal")
 }
 
-func (code *coder) opSaveTempRegs() {
+// opTryStealVarReg doesn't change the allocation state of the register.
+func (code *coder) opTryStealVarReg(t types.T, refsLimit int) (reg regs.R, ok bool) {
+	varRefs := refsLimit
+	var varIndex int
+
+	for i, v := range code.varRegs {
+		if v.typ.Category() == t.Category() {
+			if v.refs < 0 || v.refs < varRefs {
+				varRefs = v.refs
+				varIndex = i
+			}
+		}
+	}
+
+	if varRefs == refsLimit {
+		return
+	}
+
+	v := &code.varRegs[varIndex]
+
+	if v.dirty {
+		code.opStoreVar(v.typ, varIndex, values.VarOperand(varIndex)) // XXX: this is ugly
+	}
+	v.typ = types.Void
+
+	reg = v.reg
+	ok = true
+	return
+}
+
+func (code *coder) opPushTempRegOperands() {
 	pushed := false
 
-	for _, live := range code.liveOperands {
+	for _, live := range code.liveOperands[code.noLiveTempRegOperandsUntil:] {
 		switch live.ref.Storage {
-		case values.RegTemp:
+		case values.TempReg:
 			x := code.opAccessScalar(live.typ, *live.ref)
 			mach.OpPush(code, live.typ, x)
 			code.incrementStackOffset()
-			*live.ref = values.StackPopOperand
+			*live.ref = values.StackOperand
 
 			pushed = true
 
-		case values.StackPop:
+		case values.Stack:
 			if pushed {
 				panic("previously pushed operand found after newly pushed operand")
 			}
 		}
 	}
+
+	code.noLiveTempRegOperandsUntil = len(code.liveOperands)
 }
 
-// opSaveRegVars requires opSaveTempRegs to be called first (at the same
-// liveOperands nesting level).
-func (code *coder) opSaveRegVars(drop bool) {
-	// commit variables with live operands before opCommitAllLocals, so that
-	// the referenced operands can be updated
+// opStoreRegVars is only safe when there are no live RegVar operands.
+func (code *coder) opStoreRegVars(forgetRegs bool) {
+	for i, v := range code.varRegs {
+		if v.typ != types.Void {
+			if v.dirty {
+				code.opStoreVar(v.typ, i, values.VarOperand(i)) // XXX: this is ugly
+				code.varRegs[i].dirty = false
+			}
 
-	for _, live := range code.liveOperands {
-		switch live.ref.Storage {
-		case values.RegVar:
-			offset := code.opCommitLocal(live.typ, *live.ref, drop, drop)
-			*live.ref = values.StackVarOperand(offset)
-
-		case values.RegTemp:
-			panic(*live.ref)
+			if forgetRegs {
+				code.varRegs[i].typ = types.Void
+				code.FreeReg(v.typ, v.reg)
+			}
 		}
 	}
+}
 
-	code.opCommitAllLocals(drop)
+func (code *coder) opStoreVar(t types.T, index int, x values.Operand) {
+	offset := code.varStackOffset(index)
+	x = code.opAccessScalar(t, x)
+	mach.OpStoreStack(code, t, offset, x)
 }
 
 func (code *coder) opLabel(l *links.L) {
-	code.opSaveTempRegs()
-	code.opSaveRegVars(true)
-	l.Address = code.Len()
+	code.opPushTempRegOperands()
+	code.opStoreRegVars(true)
+	l.SetAddress(code.Len())
+
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Println("<label/>")
+	}
 }
 
 func (code *coder) branchSite(l *links.L) {
-	l.AddSite(code.Len())
-	code.labelLinks[l] = struct{}{}
+	if l.Address == 0 {
+		l.AddSite(code.Len())
+		code.labelLinks[l] = struct{}{}
+	}
 }
 
 func (code *coder) callSite(l *links.L) {
-	l.AddSite(code.Len())
+	if l.Address == 0 {
+		l.AddSite(code.Len())
+	}
 }
 
 func (code *coder) pushTarget(l *links.L, name string, expectType types.T) {
@@ -1547,23 +1553,41 @@ func (code *coder) findTarget(token interface{}) *branchTarget {
 	panic(name)
 }
 
-func (code *coder) getVarLocalOffsetType(name string) (localIndex, offset int, varType types.T, found bool) {
+func (code *coder) Var(i int) (offset int, reg regs.R, regOk bool) {
+	if v := code.varRegs[i]; v.typ == types.Void {
+		offset = code.varStackOffset(i)
+	} else {
+		reg = v.reg
+		regOk = true
+	}
+	return
+}
+
+func (code *coder) varStackOffset(index int) int {
+	var offset int
+
+	if index < len(code.function.Params) {
+		pos := len(code.function.Params) - index - 1
+		offset = len(code.function.Locals)*mach.WordSize() + mach.FunctionCallStackOverhead() + pos*mach.WordSize()
+	} else {
+		offset = (index - len(code.function.Params)) * mach.WordSize()
+	}
+
+	return code.stackOffset + offset
+}
+
+func (code *coder) lookupFunctionVar(name string) (index int, typ types.T, found bool) {
 	v, found := code.function.Vars[name]
 	if !found {
 		return
 	}
 
-	// TODO: return index for params aswell
-
 	if v.Param {
-		localIndex = -1
-		paramPos := len(code.function.Params) - v.Index - 1
-		offset = len(code.function.Locals)*mach.WordSize() + mach.FunctionCallStackOverhead() + paramPos*mach.WordSize()
+		index = v.Index
 	} else {
-		localIndex = v.Index
-		offset = localIndex * mach.WordSize()
+		index = len(code.function.Params) + v.Index
 	}
 
-	varType = v.Type
+	typ = v.Type
 	return
 }

@@ -2,6 +2,7 @@ package x86
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
@@ -14,7 +15,8 @@ import (
 const (
 	wordSize          = 8
 	functionAlignment = 16
-	paddingByte       = 0xcc // int3 instruction
+
+	paddingByte = 0xcc // int3 instruction
 )
 
 const (
@@ -81,21 +83,21 @@ var (
 )
 
 var (
-	Nop  = insnFixed{0x90}
 	Ret  = insnFixed{0xc3}
 	Int3 = insnFixed{0xcc}
-	Call = insnFixed{0xe8, 0, 0, 0, 0}
-	Jmp  = insnFixed{0xe9, 0, 0, 0, 0}
-	Jb   = insnFixed{0x0f, 0x82, 0, 0, 0, 0}
-	Jae  = insnFixed{0x0f, 0x83, 0, 0, 0, 0}
-	Je   = insnFixed{0x0f, 0x84, 0, 0, 0, 0}
-	Jne  = insnFixed{0x0f, 0x85, 0, 0, 0, 0}
-	Jbe  = insnFixed{0x0f, 0x86, 0, 0, 0, 0}
-	Ja   = insnFixed{0x0f, 0x87, 0, 0, 0, 0}
-	Jl   = insnFixed{0x0f, 0x8c, 0, 0, 0, 0}
-	Jge  = insnFixed{0x0f, 0x8d, 0, 0, 0, 0}
-	Jle  = insnFixed{0x0f, 0x8e, 0, 0, 0, 0}
-	Jg   = insnFixed{0x0f, 0x8f, 0, 0, 0, 0}
+
+	Call = insnAddr{nil, []byte{0xe8}}
+	Jmp  = insnAddr{[]byte{0xeb}, []byte{0xe9}}
+	Jb   = insnAddr{[]byte{0x72}, []byte{0x0f, 0x82}}
+	Jae  = insnAddr{[]byte{0x73}, []byte{0x0f, 0x83}}
+	Je   = insnAddr{[]byte{0x74}, []byte{0x0f, 0x84}}
+	Jne  = insnAddr{[]byte{0x75}, []byte{0x0f, 0x85}}
+	Jbe  = insnAddr{[]byte{0x76}, []byte{0x0f, 0x86}}
+	Ja   = insnAddr{[]byte{0x77}, []byte{0x0f, 0x87}}
+	Jl   = insnAddr{[]byte{0x7c}, []byte{0x0f, 0x8c}}
+	Jge  = insnAddr{[]byte{0x7d}, []byte{0x0f, 0x8d}}
+	Jle  = insnAddr{[]byte{0x7e}, []byte{0x0f, 0x8e}}
+	Jg   = insnAddr{[]byte{0x7f}, []byte{0x0f, 0x8f}}
 
 	CallIndirect = insnModOpReg{[]byte{0xff}, 2}
 	JmpIndirect  = insnModOpReg{[]byte{0xff}, 4}
@@ -117,7 +119,7 @@ var (
 	LeaStack = insnPrefixModRegSibImm{rexSize, []byte{0x8d}, sib{0, regStackPtr, regStackPtr}}
 )
 
-var jccInsns = []nullaryInsn{
+var jccInsns = []addrInsn{
 	Je,  // EQ
 	Jne, // NE
 	Jge, // GE_S
@@ -244,6 +246,10 @@ func (x86 X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int)
 	CallIndirect.op(code, regScratch)
 }
 
+func (x86 X86) OpInit(code gen.Coder) {
+	AddImm.op(code, types.I64, regStackLimit, wordSize) // reserve space for trap handler call
+}
+
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
 func (x86 X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.R, scale uint8, addr int, signExt bool) {
 	Movsxd.opReg(code, types.I32, reg, reg)
@@ -258,6 +264,8 @@ func (x86 X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.R
 // TODO: rename this to something else
 // OpMove must not update CPU's condition flags.
 func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.Operand) values.Operand {
+	fmt.Printf("move: %s <- %s\n", targetReg, x)
+
 	switch t.Category() {
 	case types.Int:
 		switch x.Storage {
@@ -279,12 +287,16 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 				MovImm.op(code, t, targetReg, imm{x.Imm(t)})
 			}
 
-		case values.RegVar:
-			if sourceReg := x.Reg(); sourceReg != targetReg {
-				Mov.op(code, t, targetReg, sourceReg)
+		case values.Var:
+			if sourceOffset, sourceReg, regOk := code.Var(x.Index()); regOk {
+				if sourceReg != targetReg {
+					Mov.op(code, t, targetReg, sourceReg)
+				}
+			} else {
+				MovFromStack.op(code, t, targetReg, sourceOffset)
 			}
 
-		case values.RegTemp:
+		case values.TempReg:
 			sourceReg := x.Reg()
 			if sourceReg == targetReg {
 				panic("moving temporary integer register to itself")
@@ -292,10 +304,7 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 			Mov.op(code, t, targetReg, sourceReg)
 			code.FreeReg(t, sourceReg)
 
-		case values.StackVar:
-			MovFromStack.op(code, t, targetReg, x.Offset())
-
-		case values.StackPop:
+		case values.Stack:
 			Pop.op(code, targetReg)
 
 		case values.ConditionFlags:
@@ -320,12 +329,16 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 		case values.ROData:
 			MovssMovsdFromIndirect.op(code, t, targetReg, regRODataPtr, x.Addr())
 
-		case values.RegVar:
-			if sourceReg := x.Reg(); sourceReg != targetReg {
-				MovssMovsd.op(code, t, targetReg, sourceReg)
+		case values.Var:
+			if sourceOffset, sourceReg, regOk := code.Var(x.Index()); regOk {
+				if sourceReg != targetReg {
+					MovssMovsd.op(code, t, targetReg, sourceReg)
+				}
+			} else {
+				MovssMovsdFromStack.op(code, t, targetReg, sourceOffset)
 			}
 
-		case values.RegTemp:
+		case values.TempReg:
 			sourceReg := x.Reg()
 			if sourceReg == targetReg {
 				panic("moving temporary float register to itself")
@@ -333,10 +346,7 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 			MovssMovsd.op(code, t, targetReg, sourceReg)
 			code.FreeReg(t, sourceReg)
 
-		case values.StackVar:
-			MovssMovsdFromStack.op(code, t, targetReg, x.Offset())
-
-		case values.StackPop:
+		case values.Stack:
 			popFloatOp(code, t, targetReg)
 
 		default:
@@ -347,7 +357,7 @@ func (x86 X86) OpMove(code gen.RegCoder, t types.T, targetReg regs.R, x values.O
 		panic(t)
 	}
 
-	return values.RegTempOperand(targetReg)
+	return values.TempRegOperand(targetReg)
 }
 
 func (x86 X86) OpMoveReg(code gen.Coder, t types.T, targetReg, sourceReg regs.R) {
@@ -421,13 +431,14 @@ func (x86 X86) OpTrap(code gen.Coder, id traps.Id) {
 	MovImm32.op(code, types.I64, regTrapArg, imm32(int(id)))
 	MovqFromMMX.op(code, types.I64, regScratch, regTrapFunc)
 	CallIndirect.op(code, regScratch)
+	Int3.op(code) // if trap handler returns
 }
 
-func (x86 X86) StubOpBranch(code gen.Coder) {
-	Jmp.op(code)
+func (x86 X86) OpBranch(code gen.Coder, addr int) {
+	Jmp.op(code, addr)
 }
 
-func (x86 X86) StubOpBranchIf(code gen.RegCoder, x values.Operand, yes bool) {
+func (x86 X86) OpBranchIf(code gen.RegCoder, x values.Operand, yes bool, addr int) {
 	cond, ok := x.CheckConditionFlags()
 	if !ok {
 		reg, own := x86.opBorrowReg(code, types.I32, x)
@@ -443,34 +454,34 @@ func (x86 X86) StubOpBranchIf(code gen.RegCoder, x values.Operand, yes bool) {
 		cond = values.InvertedConditions[cond]
 	}
 
-	jccInsns[int(cond)].op(code)
+	jccInsns[int(cond)].op(code, addr)
 }
 
-// StubOpBranchIfNotEqualImm32 must not allocate registers.
-func (x86 X86) StubOpBranchIfNotEqualImm32(code gen.Coder, reg regs.R, value int) {
+// OpBranchIfNotEqualImm32 must not allocate registers.
+func (x86 X86) OpBranchIfNotEqualImm32(code gen.Coder, reg regs.R, value int, addr int) {
 	CmpImm.op(code, types.I32, reg, value)
-	Jne.op(code)
+	Jne.op(code, addr)
 }
 
-// StubOpBranchIfOutOfBounds must not allocate registers.
-func (x86 X86) StubOpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBound int) {
+// OpBranchIfOutOfBounds must not allocate registers.
+func (x86 X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBound int, addr int) {
 	MovImm32.op(code, types.I32, regScratch, imm32(upperBound))
 	Test.op(code, types.I32, indexReg, indexReg)
 	Cmovl.opReg(code, types.I32, indexReg, regScratch) // negative index -> upper bound
 	Cmp.opReg(code, types.I32, regScratch, indexReg)
-	Jle.op(code)
+	Jle.op(code, addr)
 }
 
-func (x86 X86) StubOpBranchIfStackExhausted(code gen.Coder) (stackUsageAddr int) {
+func (x86 X86) OpTrapIfStackExhausted(code gen.Coder) (stackUsageAddr int) {
 	LeaStack.op(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.opReg(code, types.I64, regScratch, regStackLimit)
-	Jl.op(code)
+	Jl.op(code, code.TrapLinks().CallStackExhausted.FinalAddress())
 	return
 }
 
-func (x86 X86) StubOpCall(code gen.Coder) {
-	Call.op(code)
+func (x86 X86) OpCall(code gen.Coder, addr int) {
+	Call.op(code, addr)
 }
 
 func (x86 X86) UpdateBranches(code gen.Coder, l *links.L) {
@@ -494,8 +505,9 @@ func (x86 X86) updateAddr(code gen.Coder, addr int, value int) {
 }
 
 func (x86 X86) updateSites(code gen.Coder, l *links.L) {
-	for _, addr := range l.Sites {
-		x86.updateAddr(code, addr, l.Address-addr)
+	targetAddr := l.FinalAddress()
+	for _, siteAddr := range l.Sites {
+		x86.updateAddr(code, siteAddr, targetAddr-siteAddr)
 	}
 }
 
@@ -527,7 +539,7 @@ func (x86 X86) DisableCode(code gen.Coder, addrBegin, addrEnd int) {
 }
 
 func (x86 X86) opOwnReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R) {
-	reg, ok := x.CheckRegTemp()
+	reg, ok := x.CheckTempReg()
 	if !ok {
 		reg = code.OpAllocReg(t)
 		x86.OpMove(code, t, reg, x)
@@ -536,10 +548,14 @@ func (x86 X86) opOwnReg(code gen.RegCoder, t types.T, x values.Operand) (reg reg
 }
 
 func (x86 X86) opBorrowReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, own bool) {
-	reg, ok := x.CheckRegVar()
-	if !ok {
-		reg = x86.opOwnReg(code, t, x)
-		own = true
+	if index, ok := x.CheckVar(); ok {
+		_, reg, ok = code.Var(index)
+		if ok {
+			return
+		}
 	}
+
+	reg = x86.opOwnReg(code, t, x)
+	own = true
 	return
 }

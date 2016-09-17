@@ -16,16 +16,15 @@ const (
 	Nowhere = Storage(iota)
 	Imm
 	ROData
-	RegVar
-	RegTemp
-	StackVar
-	StackPop
+	Var
+	TempReg
+	Stack
 	ConditionFlags
 )
 
 var (
-	NoOperand       = Operand{Storage: Nowhere}
-	StackPopOperand = Operand{Storage: StackPop}
+	NoOperand    = Operand{Storage: Nowhere}
+	StackOperand = Operand{Storage: Stack}
 )
 
 type Condition int
@@ -82,34 +81,16 @@ func RODataOperand(addr int) Operand {
 	return Operand{ROData, uint64(addr)}
 }
 
-func RegTempOperand(reg regs.R) Operand {
-	return Operand{RegTemp, uint64(byte(reg))}
+func TempRegOperand(reg regs.R) Operand {
+	return Operand{TempReg, uint64(byte(reg))}
 }
 
-func RegVarOperand(reg regs.R) Operand {
-	return Operand{RegVar, uint64(byte(reg))}
-}
-
-func StackVarOperand(offset int) Operand {
-	return Operand{StackVar, uint64(offset)}
+func VarOperand(index int) Operand {
+	return Operand{Var, uint64(index)}
 }
 
 func ConditionFlagsOperand(cond Condition) Operand {
 	return Operand{ConditionFlags, uint64(int(cond))}
-}
-
-// Pure operands don't need to be saved during arbitrary expression evaluation.
-func (o Operand) Pure() (ok bool) {
-	switch o.Storage {
-	case Nowhere, Imm, ROData, StackPop:
-		ok = true
-	}
-	return
-}
-
-// Once operands can be accessed only once.
-func (o Operand) Once() bool {
-	return o.Storage == StackPop
 }
 
 func (o Operand) Imm(t types.T) (imm interface{}) {
@@ -190,59 +171,35 @@ func (o Operand) CheckROData() (addr int, ok bool) {
 	return
 }
 
+func (o Operand) Index() (index int) {
+	index, ok := o.CheckVar()
+	if !ok {
+		panic(o)
+	}
+	return
+}
+
+func (o Operand) CheckVar() (index int, ok bool) {
+	if o.Storage == Var {
+		index = int(o.X)
+		ok = true
+	}
+	return
+}
+
 func (o Operand) Reg() (reg regs.R) {
-	reg, ok := o.CheckAnyReg()
+	reg, ok := o.CheckTempReg()
 	if !ok {
 		panic(o)
 	}
 	return
 }
 
-func (o Operand) CheckAnyReg() (reg regs.R, ok bool) {
-	switch o.Storage {
-	case RegVar, RegTemp:
+func (o Operand) CheckTempReg() (reg regs.R, ok bool) {
+	if o.Storage == TempReg {
 		reg = regs.R(byte(o.X))
 		ok = true
 	}
-	return
-}
-
-func (o Operand) CheckRegVar() (reg regs.R, ok bool) {
-	if o.Storage == RegVar {
-		reg = regs.R(byte(o.X))
-		ok = true
-	}
-	return
-}
-
-func (o Operand) CheckRegTemp() (reg regs.R, ok bool) {
-	if o.Storage == RegTemp {
-		reg = regs.R(byte(o.X))
-		ok = true
-	}
-	return
-}
-
-func (o Operand) Offset() (offset int) {
-	offset, ok := o.CheckStackVar()
-	if !ok {
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) CheckStackVar() (offset int, ok bool) {
-	if o.Storage != StackVar {
-		return
-	}
-
-	value := int64(o.X)
-	if value < -0x80000000 || value >= 0x80000000 {
-		panic(value)
-	}
-
-	offset = int(value)
-	ok = true
 	return
 }
 
@@ -271,22 +228,19 @@ func (o Operand) String() string {
 		return fmt.Sprintf("immediate data 0x%x", o.X)
 
 	case ROData:
-		return fmt.Sprintf("in read-only data at offset 0x%x", o.X)
+		return fmt.Sprintf("read-only data at 0x%x", o.X)
 
-	case RegVar:
-		return fmt.Sprintf("cached in register #%d", o.X)
+	case Var:
+		return fmt.Sprintf("variable #%d", o.X)
 
-	case RegTemp:
-		return fmt.Sprintf("temporarily in register #%d", o.X)
+	case TempReg:
+		return fmt.Sprintf("temporary register r%d", o.X)
 
-	case StackVar:
-		return fmt.Sprintf("on stack at offset 0x%x", o.X)
-
-	case StackPop:
-		return "pushed on stack"
+	case Stack:
+		return "stack"
 
 	case ConditionFlags:
-		return "in CPU condition flags"
+		return "condition flags"
 
 	default:
 		return "corrupted"

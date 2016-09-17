@@ -89,7 +89,10 @@ func (g *regGroupAllocator) alloc() (reg regs.R, ok bool) {
 			ok = true
 
 			if verbose {
-				fmt.Printf("regalloc: allocated %s\n", reg)
+				for i := 0; i < debugExprDepth; i++ {
+					fmt.Print("    ")
+				}
+				fmt.Printf("<alloc reg=\"%s\"/>\n", reg)
 			}
 
 			break
@@ -113,7 +116,10 @@ func (g *regGroupAllocator) free(reg regs.R) (ok bool) {
 		g.phase += 3
 
 		if verbose {
-			fmt.Printf("regalloc: freed     %s\n", reg)
+			for i := 0; i < debugExprDepth; i++ {
+				fmt.Print("    ")
+			}
+			fmt.Printf("<free reg=\"%s\"/>\n", reg)
 		}
 	}
 

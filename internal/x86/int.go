@@ -102,7 +102,7 @@ func (x86 X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Op
 		}
 
 		Bsf.opReg(code, t, targetReg, sourceReg)
-		return values.RegTempOperand(targetReg)
+		return values.TempRegOperand(targetReg)
 
 	case "eqz":
 		reg, own := x86.opBorrowReg(code, t, x)
@@ -134,13 +134,13 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 				reg := x86.opOwnReg(code, t, a)
 
 				Inc.op(code, t, reg)
-				return values.RegTempOperand(reg)
+				return values.TempRegOperand(reg)
 
 			case -1:
 				reg := x86.opOwnReg(code, t, a)
 
 				Dec.op(code, t, reg)
-				return values.RegTempOperand(reg)
+				return values.TempRegOperand(reg)
 			}
 		}
 
@@ -151,13 +151,13 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 				reg := x86.opOwnReg(code, t, a)
 
 				Dec.op(code, t, reg)
-				return values.RegTempOperand(reg)
+				return values.TempRegOperand(reg)
 
 			case -1:
 				reg := x86.opOwnReg(code, t, a)
 
 				Inc.op(code, t, reg)
-				return values.RegTempOperand(reg)
+				return values.TempRegOperand(reg)
 			}
 		}
 
@@ -166,7 +166,7 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			reg := x86.opOwnReg(code, t, a)
 
 			ShrImm.op(code, t, reg, uimm8(log2(uint64(value))))
-			return values.RegTempOperand(reg)
+			return values.TempRegOperand(reg)
 		} else {
 			reg, own := x86.opPrepareDivMul(code, t, a, b)
 			if own {
@@ -174,11 +174,10 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			}
 
 			Test.op(code, t, reg, reg)
-			Je.op(code)
-			code.TrapLinks().DivideByZero.AddSite(code.Len())
+			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
 			Xor.opReg(code, t, regDividendHi, regDividendHi)
 			Div.op(code, t, reg)
-			return values.RegTempOperand(regDividendLo)
+			return values.TempRegOperand(regDividendLo)
 		}
 
 	case "mul":
@@ -186,7 +185,7 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			reg := x86.opOwnReg(code, t, a)
 
 			ShlImm.op(code, t, reg, uimm8(log2(uint64(value))))
-			return values.RegTempOperand(reg)
+			return values.TempRegOperand(reg)
 		} else {
 			reg, own := x86.opPrepareDivMul(code, t, a, b)
 			if own {
@@ -194,7 +193,7 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 			}
 
 			Mul.op(code, t, reg)
-			return values.RegTempOperand(regDividendLo)
+			return values.TempRegOperand(regDividendLo)
 		}
 	}
 
@@ -207,7 +206,7 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 		}
 
 		insn.opReg(code, t, targetReg, sourceReg)
-		return values.RegTempOperand(targetReg)
+		return values.TempRegOperand(targetReg)
 	}
 
 	if cond, found := binaryIntConditions[name]; found {
@@ -223,17 +222,18 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 		case values.ROData:
 			Cmp.opIndirect(code, t, aReg, regRODataPtr, b.Addr())
 
-		case values.RegVar:
-			Cmp.opReg(code, t, aReg, b.Reg())
+		case values.Var:
+			if bOffset, bReg, inReg := code.Var(b.Index()); inReg {
+				Cmp.opReg(code, t, aReg, bReg)
+			} else {
+				CmpFromStack.op(code, t, aReg, bOffset)
+			}
 
-		case values.RegTemp:
+		case values.TempReg:
 			Cmp.opReg(code, t, aReg, b.Reg())
 			code.FreeReg(t, b.Reg())
 
-		case values.StackVar:
-			CmpFromStack.op(code, t, aReg, b.Offset())
-
-		case values.StackPop:
+		case values.Stack:
 			// TODO: try to allocate register for popping
 			AddImm.op(code, types.I64, regStackPtr, wordSize)
 			CmpFromStack.op(code, t, aReg, -wordSize)
@@ -249,9 +249,12 @@ func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b value
 }
 
 func (x86 X86) opPrepareDivMul(code gen.RegCoder, t types.T, a, b values.Operand) (bReg regs.R, own bool) {
-	bReg, ok := b.CheckRegVar()
+	bIndex, ok := b.CheckVar()
+	if ok {
+		_, bReg, ok = code.Var(bIndex)
+	}
 	if !ok {
-		bReg, ok = b.CheckRegTemp()
+		bReg, ok = b.CheckTempReg()
 		if !ok {
 			bReg, own = x86.opBorrowReg(code, t, b)
 		} else if bReg == regDividendLo {
@@ -262,9 +265,22 @@ func (x86 X86) opPrepareDivMul(code gen.RegCoder, t types.T, a, b values.Operand
 		}
 	}
 
-	aReg, aRegOk := a.CheckAnyReg()
-	if !aRegOk || aReg != regDividendLo {
+	aReg, ok := checkAnyReg(code, a)
+	if !ok || aReg != regDividendLo {
 		x86.OpMove(code, t, regDividendLo, a)
+	}
+
+	return
+}
+
+func checkAnyReg(code gen.Coder, x values.Operand) (reg regs.R, ok bool) {
+	switch x.Storage {
+	case values.Var:
+		_, reg, ok = code.Var(x.Index())
+
+	case values.TempReg:
+		reg = x.Reg()
+		ok = true
 	}
 
 	return

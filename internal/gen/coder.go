@@ -15,6 +15,8 @@ type Coder interface {
 	Len() int
 
 	TrapLinks() *TrapLinks
+
+	Var(index int) (currentStackPtrOffset int, reg regs.R, regOk bool)
 }
 
 type RegCoder interface {
