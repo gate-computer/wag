@@ -53,8 +53,7 @@ type coder struct {
 	regsInt   regAllocator
 	regsFloat regAllocator
 
-	liveOperands    []liveOperand
-	evictedOperands int
+	liveOperands []liveOperand
 
 	stackOffset int
 
@@ -725,7 +724,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	switch exprName {
 	case "br":
-		code.opSaveAllRegs(false)
+		code.opSaveTempRegs()
+		code.opSaveRegVars(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		code.opBranch(defaultTarget.label)
@@ -733,7 +733,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		deadend = true
 
 	case "br_if":
-		code.opSaveAllRegs(false)
+		code.opSaveTempRegs()
+		code.opSaveRegVars(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		code.opBranchIf(condOperand, true, defaultTarget.label)
@@ -782,7 +783,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 		defer code.freeIntReg(reg)
 
-		code.opSaveAllRegs(false)
+		code.opSaveTempRegs()
+		code.opSaveRegVars(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
 		tableStackOffset := code.stackOffset - defaultStackDelta
@@ -845,13 +847,15 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		}
 	}
 
-	code.opSaveAllRegs(true)
+	code.opSaveTempRegs()
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
+
+	code.opSaveRegVars(true)
 
 	code.opCall(code.functionLinks[target])
 	code.opAddImmToStackPtr(argsSize)
@@ -903,7 +907,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		code.opMove(types.I32, reg, operand)
 	}
 
-	code.opSaveAllRegs(true)
+	code.opSaveTempRegs()
 
 	// if the operand yielded a temporary register, then it was just freed by
 	// the eviction, but the register retains its value.  don't call anything
@@ -917,6 +921,8 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	code.opTrapIfNotEqualImm32(reg, sig.Index, &code.trapLinks.IndirectCallSignature)
 
 	// end of critical section.
+
+	code.opSaveRegVars(true)
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, sig, args)
 	if deadend {
@@ -1016,14 +1022,16 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		return
 	}
 
-	code.opSaveAllRegs(false)
+	code.opSaveTempRegs()
+	code.opSaveRegVars(false)
 	code.opBranchIf(ifResult, false, afterThen)
 
 	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType)
 
 	if haveElse {
 		if !thenDeadend {
-			code.opSaveAllRegs(true)
+			code.opSaveTempRegs()
+			code.opSaveRegVars(true)
 			code.opBranch(end)
 			endReachable = true
 		}
@@ -1416,10 +1424,6 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 		live.ref = nil
 		code.liveOperands = code.liveOperands[:i]
 
-		if code.evictedOperands > i {
-			code.evictedOperands = i
-		}
-
 	default:
 		panic(*ref)
 	}
@@ -1429,9 +1433,7 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
 	// first, try to commit variable from register to stack
 
-	for i := code.evictedOperands; i < len(code.liveOperands); i++ {
-		live := code.liveOperands[i]
-
+	for _, live := range code.liveOperands {
 		if reg, ok := live.ref.CheckRegVar(); ok {
 			if live.typ.Category() == t.Category() {
 				offset := code.opCommitLocal(live.typ, *live.ref, true, false)
@@ -1443,9 +1445,7 @@ func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
 
 	// second, push temporary registers to stack until we find the correct type
 
-	for i := code.evictedOperands; i < len(code.liveOperands); i++ {
-		live := code.liveOperands[i]
-
+	for _, live := range code.liveOperands {
 		if reg, ok := live.ref.CheckRegTemp(); ok {
 			x := code.opAccessScalar(live.typ, *live.ref)
 			mach.OpPush(code, live.typ, x)
@@ -1461,15 +1461,11 @@ func (code *coder) opEvictLiveRegOperand(t types.T) regs.R {
 	panic("no live register operands to evict")
 }
 
-func (code *coder) opSaveAllRegs(dropVars bool) {
+func (code *coder) opSaveTempRegs() {
 	pushed := false
 
-	for _, live := range code.liveOperands[code.evictedOperands:] {
+	for _, live := range code.liveOperands {
 		switch live.ref.Storage {
-		case values.RegVar:
-			offset := code.opCommitLocal(live.typ, *live.ref, dropVars, dropVars)
-			*live.ref = values.StackVarOperand(offset)
-
 		case values.RegTemp:
 			x := code.opAccessScalar(live.typ, *live.ref)
 			mach.OpPush(code, live.typ, x)
@@ -1482,19 +1478,33 @@ func (code *coder) opSaveAllRegs(dropVars bool) {
 			if pushed {
 				panic("previously pushed operand found after newly pushed operand")
 			}
+		}
+	}
+}
 
-		default:
+// opSaveRegVars requires opSaveTempRegs to be called first (at the same
+// liveOperands nesting level).
+func (code *coder) opSaveRegVars(drop bool) {
+	// commit variables with live operands before opCommitAllLocals, so that
+	// the referenced operands can be updated
+
+	for _, live := range code.liveOperands {
+		switch live.ref.Storage {
+		case values.RegVar:
+			offset := code.opCommitLocal(live.typ, *live.ref, drop, drop)
+			*live.ref = values.StackVarOperand(offset)
+
+		case values.RegTemp:
 			panic(*live.ref)
 		}
 	}
 
-	code.evictedOperands = len(code.liveOperands)
-
-	code.opCommitAllLocals(dropVars)
+	code.opCommitAllLocals(drop)
 }
 
 func (code *coder) opLabel(l *links.L) {
-	code.opSaveAllRegs(true)
+	code.opSaveTempRegs()
+	code.opSaveRegVars(true)
 	l.Address = code.Len()
 }
 
