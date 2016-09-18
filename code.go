@@ -30,11 +30,19 @@ type liveOperand struct {
 	ref *values.Operand
 }
 
-type regVar struct {
+type varState struct {
 	refs  int
-	typ   types.T
-	reg   regs.R
+	cache values.Operand
 	dirty bool
+}
+
+func (v *varState) init(x values.Operand, dirty bool) {
+	v.cache = x
+	v.dirty = dirty
+}
+
+func (v *varState) reset() {
+	v.init(values.NoOperand, false)
 }
 
 type branchTarget struct {
@@ -59,8 +67,8 @@ type coder struct {
 	regsInt   regAllocator
 	regsFloat regAllocator
 
-	liveOperands               []liveOperand
-	noLiveTempRegOperandsUntil int
+	liveOperands          []liveOperand
+	immutableLiveOperands int
 
 	stackOffset int
 
@@ -68,9 +76,9 @@ type coder struct {
 
 	// these must be reset for each function
 	function       *Function
+	vars           []varState
 	labelLinks     map[*links.L]struct{}
 	maxStackOffset int
-	varRegs        []regVar
 }
 
 func (m *Module) Code() (text, roData, data []byte, bssSize int) {
@@ -169,50 +177,26 @@ func (code *coder) genFunction(f *Function) {
 	}
 
 	code.function = f
+
+	if n := len(f.Params) + len(f.Locals); cap(code.vars) >= n {
+		code.vars = code.vars[:n]
+	} else {
+		code.vars = make([]varState, n)
+	}
+
 	code.labelLinks = make(map[*links.L]struct{})
 	code.maxStackOffset = 0
-
-	if n := len(f.Params) + len(f.Locals); cap(code.varRegs) >= n {
-		code.varRegs = code.varRegs[:n]
-	} else {
-		code.varRegs = make([]regVar, n)
-	}
 
 	mach.AlignFunction(code)
 	functionAddr := code.Len()
 	stackUsageAddr := mach.OpTrapIfStackExhausted(code)
 	stackCheckEndAddr := code.Len()
 
-	stackPtrMoved := false
-	zeroIntReg := regs.R(-1)
+	mach.OpAddImmToStackPtr(code, -mach.WordSize()*len(f.Locals))
 
 	for localIndex, localType := range f.Locals {
 		varIndex := len(f.Params) + localIndex
-
-		if reg, ok := code.tryAllocReg(localType); ok {
-			mach.OpMove(code, localType, reg, values.ImmOperand(localType, 0))
-			code.varRegs[varIndex] = regVar{0, localType, reg, true}
-
-			if zeroIntReg < 0 && localType == types.I64 {
-				zeroIntReg = reg
-			}
-		} else {
-			if !stackPtrMoved {
-				mach.OpAddImmToStackPtr(code, -mach.WordSize()*varIndex)
-				stackPtrMoved = true
-
-				if zeroIntReg < 0 {
-					zeroIntReg = mach.ResultReg()
-					mach.OpMove(code, types.I64, zeroIntReg, values.ImmOperand(types.I64, 0))
-				}
-			}
-
-			mach.OpPushIntReg(code, zeroIntReg) // assume int 0 == float 0 bit pattern
-		}
-	}
-
-	if !stackPtrMoved {
-		mach.OpAddImmToStackPtr(code, -mach.WordSize()*len(f.Locals))
+		code.vars[varIndex].init(values.ImmOperand(localType, 0), true)
 	}
 
 	end := new(links.L)
@@ -255,13 +239,18 @@ func (code *coder) genFunction(f *Function) {
 		mach.OpReturn(code)
 	}
 
-	for i, v := range code.varRegs {
-		if v.typ != types.Void {
-			code.FreeReg(v.typ, v.reg)
+	for i := range code.vars {
+		v := &code.vars[i]
 
-			code.varRegs[i].refs = 0
-			code.varRegs[i].typ = types.Void
+		if v.refs != 0 {
+			panic(fmt.Errorf("internal: variable #%d reference count is non-zero at end of function", i))
 		}
+
+		if reg, ok := v.cache.CheckVarReg(); ok {
+			code.FreeReg(code.varType(i), reg)
+		}
+
+		v.reset()
 	}
 
 	code.regsInt.postCheck("integer")
@@ -469,16 +458,26 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		}
 	}
 
-	if value, ok := b.CheckImmValue(opType); ok && value == 0 {
+	if value, ok := b.CheckImmValue(opType); ok {
 		switch opName {
-		case "add", "or", "sub":
-			result = a
-			return
+		case "add", "or", "sub", "xor":
+			switch value {
+			case 0:
+				result = a
+				return
+			}
 
 		case "mul":
-			code.discard(opType, a)
-			result = values.ImmOperand(opType, 0)
-			return
+			switch value {
+			case 0:
+				code.discard(opType, a)
+				result = values.ImmOperand(opType, 0)
+				return
+
+			case 1:
+				result = a
+				return
+			}
 		}
 	}
 
@@ -710,7 +709,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	switch exprName {
 	case "br":
-		code.opPushTempRegOperands()
+		code.opSaveTempRegOperands()
 		code.opStoreRegVars(true)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
@@ -719,7 +718,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		deadend = true
 
 	case "br_if":
-		code.opPushTempRegOperands()
+		code.opSaveTempRegOperands()
 		code.opStoreRegVars(false)
 
 		mach.OpAddImmToStackPtr(code, defaultStackDelta)
@@ -750,7 +749,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		tableSize := len(tableTargets) << tableScale
 		tableAlloc := code.roData.allocate(tableSize, 1<<tableScale, nil)
 
-		code.opPushTempRegOperands()
+		code.opSaveTempRegOperands()
 
 		var reg2 regs.R
 
@@ -836,7 +835,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		}
 	}
 
-	code.opPushTempRegOperands()
+	code.opSaveTempRegOperands()
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
 	if deadend {
@@ -896,7 +895,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		code.opMove(types.I32, reg, operand)
 	}
 
-	code.opPushTempRegOperands()
+	code.opSaveTempRegOperands()
 
 	// if the operand yielded a temporary register, then it was just freed by
 	// the eviction, but the register retains its value.  don't call anything
@@ -943,7 +942,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 			break
 		}
 
-		x = code.opAccessScalar(t, x)
+		x = code.effectiveOperand(x)
 		mach.OpPush(code, t, x)
 		code.incrementStackOffset()
 	}
@@ -977,7 +976,19 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	result = values.VarOperand(index)
+	v := &code.vars[index]
+
+	switch v.cache.Storage {
+	case values.Imm, values.ROData:
+		result = v.cache
+
+	case values.Nowhere, values.VarReg:
+		result = values.VarOperand(index)
+
+	default:
+		panic(v.cache)
+	}
+
 	return
 }
 
@@ -1000,7 +1011,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		return
 	}
 
-	code.opPushTempRegOperands()
+	code.opSaveTempRegOperands()
 	code.opStoreRegVars(false)
 	code.opBranchIf(ifResult, false, afterThen)
 
@@ -1008,7 +1019,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 
 	if haveElse {
 		if !thenDeadend {
-			code.opPushTempRegOperands()
+			code.opSaveTempRegOperands()
 			code.opStoreRegVars(true)
 			code.opBranch(end)
 			endReachable = true
@@ -1153,33 +1164,92 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		return
 	}
 
-	// the design doc says that set_local does't return a value, but it's
-	// needed for the labels.wast test to work.
-
-	// TODO: repurpose temporary register.  also keep immediates etc.
-
-	if v := code.varRegs[index]; v.typ != types.Void {
-		code.opMove(resultType, v.reg, result)
-		code.varRegs[index].dirty = true
-
-		result = values.VarOperand(index)
+	if oldIndex, ok := result.CheckVar(); ok && index == oldIndex {
 		return
 	}
 
-	if reg, ok := code.tryAllocReg(resultType); ok {
-		code.opMove(resultType, reg, result)
+	v := &code.vars[index]
+	oldCache := v.cache
 
-		v := &code.varRegs[index]
-		v.typ = resultType
-		v.reg = reg
+	switch oldCache.Storage {
+	case values.Nowhere, values.VarReg:
+		// XXX: update live operands
+	}
+
+	switch result.Storage {
+	case values.Imm, values.ROData:
+		v.cache = result
 		v.dirty = true
 
-		result = values.VarOperand(index)
-		return
+	case values.Var, values.Stack, values.ConditionFlags:
+		reg, ok := oldCache.CheckVarReg()
+		if ok {
+			// reusing cache register, don't free it
+			oldCache = values.NoOperand
+		} else {
+			reg, ok = code.opTryAllocVarReg(resultType)
+		}
+
+		if ok {
+			code.opMove(resultType, reg, result)
+			v.cache = values.VarRegOperand(index, reg)
+			v.dirty = true
+		} else {
+			code.opStoreVar(resultType, index, result)
+			v.cache = values.NoOperand
+			v.dirty = false
+		}
+
+	case values.TempReg:
+		var ok bool
+
+		reg := result.Reg()
+		if code.regAllocated(resultType, reg) {
+			// repurposing the register which already contains the value
+			ok = true
+		} else {
+			// can't keep the transient register which contains the value
+
+			reg, ok = oldCache.CheckVarReg()
+			if ok {
+				// reusing cache register, don't free it
+				oldCache = values.NoOperand
+			} else {
+				reg, ok = code.opTryAllocVarReg(resultType)
+			}
+
+			if ok {
+				// we got a register for the value
+				code.opMove(resultType, reg, result)
+			}
+		}
+
+		if ok {
+			v.cache = values.VarRegOperand(index, reg)
+			v.dirty = true
+		} else {
+			code.opStoreVar(resultType, index, result)
+			v.cache = values.NoOperand
+			v.dirty = false
+		}
+
+	default:
+		panic(result)
 	}
 
-	code.opStoreVar(resultType, index, result)
-	result = values.VarOperand(index)
+	switch oldCache.Storage {
+	case values.Nowhere, values.Imm, values.ROData:
+
+	case values.VarReg:
+		code.FreeReg(resultType, oldCache.Reg())
+
+	default:
+		panic(oldCache)
+	}
+
+	// the design doc says that set_local does't return a value, but it's
+	// needed for the labels.wast test to work.
+	result = code.virtualOperand(v.cache)
 	return
 }
 
@@ -1191,35 +1261,39 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 	mach.OpBranch(code, code.trapLinks.Unreachable.FinalAddress())
 }
 
-func (code *coder) unaryOp(name string, t types.T, x values.Operand) values.Operand {
-	x = code.opAccessScalar(t, x)
-	return mach.UnaryOp(code, name, t, x)
+func (code *coder) unaryOp(name string, t types.T, x values.Operand) (result values.Operand) {
+	x = code.effectiveOperand(x)
+	result = mach.UnaryOp(code, name, t, x)
+	result = code.virtualOperand(result)
+	return
 }
 
-func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) values.Operand {
-	a = code.opAccessScalar(t, a)
-	b = code.opAccessScalar(t, b)
-	return mach.BinaryOp(code, name, t, a, b)
+func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) (result values.Operand) {
+	a = code.effectiveOperand(a)
+	b = code.effectiveOperand(b)
+	result = mach.BinaryOp(code, name, t, a, b)
+	result = code.virtualOperand(result)
+	return
 }
 
-func (code *coder) OpAllocReg(t types.T) (reg regs.R) {
-	reg, ok := code.tryAllocReg(t)
+func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
+	return code.regs(t).allocWithPreference(mach.RegGroupPreference(t))
+}
+
+func (code *coder) opAllocReg(t types.T) (reg regs.R) {
+	reg, ok := code.TryAllocReg(t)
 	if !ok {
 		reg = code.opStealReg(t)
 	}
 	return
 }
 
-func (code *coder) opTryAllocVarReg(t types.T, refs int) (reg regs.R, ok bool) {
-	reg, ok = code.tryAllocReg(t)
+func (code *coder) opTryAllocVarReg(t types.T) (reg regs.R, ok bool) {
+	reg, ok = code.TryAllocReg(t)
 	if !ok {
-		reg, ok = code.opTryStealVarReg(t, refs)
+		reg, ok = code.opTryStealVarReg(t)
 	}
 	return
-}
-
-func (code *coder) tryAllocReg(t types.T) (reg regs.R, ok bool) {
-	return code.regs(t).allocWithPreference(mach.RegGroupPreference(t))
 }
 
 func (code *coder) FreeReg(t types.T, reg regs.R) {
@@ -1236,6 +1310,11 @@ func (code *coder) opAllocIntReg() (reg regs.R) {
 
 func (code *coder) freeIntReg(reg regs.R) {
 	code.regs(types.I64).free(reg)
+}
+
+// regAllocated indicates if we can hang onto a register returned by mach ops.
+func (code *coder) regAllocated(t types.T, reg regs.R) bool {
+	return code.regs(t).allocated(reg)
 }
 
 func (code *coder) regs(t types.T) *regAllocator {
@@ -1258,6 +1337,12 @@ func (code *coder) incrementStackOffset() {
 	}
 }
 
+func (code *coder) AddStackUsage(size int) {
+	if n := code.stackOffset + size; n > code.maxStackOffset {
+		code.maxStackOffset = n
+	}
+}
+
 func (code *coder) opAddImmToStackPtr(offset int) {
 	code.stackOffset -= offset
 	mach.OpAddImmToStackPtr(code, offset)
@@ -1269,7 +1354,7 @@ func (code *coder) opBranch(l *links.L) {
 }
 
 func (code *coder) opBranchIf(x values.Operand, yes bool, l *links.L) {
-	x = code.access(types.I32, x)
+	x = code.effectiveOperand(x)
 	mach.OpBranchIf(code, x, yes, l.Address)
 	code.branchSite(l)
 }
@@ -1289,33 +1374,47 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 		return
 	}
 
+	x = code.effectiveOperand(x)
+
 	if target == mach.ResultReg() {
 		if reg, ok := x.CheckTempReg(); ok && reg == mach.ResultReg() {
 			return
 		}
 	}
 
-	x = code.access(t, x)
 	mach.OpMove(code, t, target, x)
 }
 
-func (code *coder) access(t types.T, x values.Operand) values.Operand {
-	if x.Storage == values.Stack {
-		code.stackOffset -= mach.WordSize()
+func (code *coder) effectiveOperand(x values.Operand) values.Operand {
+	if x.Storage == values.Var {
+		i := x.Index()
+		if v := code.vars[i]; v.cache.Storage == values.Nowhere {
+			x = values.VarMemOperand(i, code.varStackOffset(i))
+		} else {
+			x = v.cache
+		}
 	}
 
 	return x
 }
 
-func (code *coder) opAccessScalar(t types.T, x values.Operand) values.Operand {
-	x = code.access(t, x)
-
-	if x.Storage == values.ConditionFlags {
-		reg := code.OpAllocReg(t)
-		x = mach.OpMove(code, t, reg, x)
+func (code *coder) virtualOperand(x values.Operand) values.Operand {
+	switch x.Storage {
+	case values.VarMem, values.VarReg:
+		x = x.VarOperand()
 	}
 
 	return x
+}
+
+func (code *coder) Consumed(t types.T, x values.Operand) {
+	switch x.Storage {
+	case values.TempReg:
+		code.FreeReg(t, x.Reg())
+
+	case values.Stack:
+		code.stackOffset -= mach.WordSize()
+	}
 }
 
 func (code *coder) discard(t types.T, x values.Operand) {
@@ -1334,23 +1433,26 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 		return
 
 	case values.Var:
-		v := &code.varRegs[ref.Index()]
+		i := ref.Index()
+		v := &code.vars[i]
 		v.refs++
 
-		if v.typ == types.Void {
-			if reg, ok := code.opTryAllocVarReg(t, v.refs); ok {
+		if v.cache.Storage == values.Nowhere {
+			if reg, ok := code.opTryAllocVarReg(t); ok {
 				code.opMove(t, reg, *ref)
-
-				v.typ = t
-				v.reg = reg
+				v.cache = values.VarRegOperand(i, reg)
 				v.dirty = false
 			}
 		}
 
 	case values.TempReg:
+		if code.regAllocated(t, ref.Reg()) {
+			break // ok
+		}
+		fallthrough // can't keep the transient register
 
 	case values.ConditionFlags:
-		reg := code.OpAllocReg(t)
+		reg := code.opAllocReg(t)
 		code.opMove(t, reg, *ref)
 		*ref = values.TempRegOperand(reg)
 
@@ -1366,7 +1468,7 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 	case values.Nowhere, values.Imm, values.ROData:
 
 	case values.Var:
-		v := &code.varRegs[ref.Index()]
+		v := &code.vars[ref.Index()]
 		v.refs--
 		if v.refs < 0 {
 			panic(*ref)
@@ -1384,8 +1486,8 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 		live.ref = nil
 		code.liveOperands = code.liveOperands[:i]
 
-		if code.noLiveTempRegOperandsUntil > i {
-			code.noLiveTempRegOperandsUntil = i
+		if code.immutableLiveOperands > i {
+			code.immutableLiveOperands = i
 		}
 
 	default:
@@ -1394,70 +1496,159 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 }
 
 // opStealReg doesn't change the allocation state of the register.
-func (code *coder) opStealReg(t types.T) regs.R {
-	// first, try to commit variable from register to stack
+func (code *coder) opStealReg(needType types.T) (reg regs.R) {
+	// first, try to commit unreferenced variable from register to stack
 
-	if reg, ok := code.opTryStealVarReg(t, -1); ok {
-		return reg
+	reg, ok := code.opTryStealUnusedVarReg(needType)
+	if ok {
+		return
 	}
 
-	// second, push temporary registers to stack until we find the correct type
+	// second, push variables and registers to stack until we find the correct type
 
-	for _, live := range code.liveOperands[code.noLiveTempRegOperandsUntil:] {
-		if reg, ok := live.ref.CheckTempReg(); ok {
-			x := code.opAccessScalar(live.typ, *live.ref)
+	for _, live := range code.liveOperands[code.immutableLiveOperands:] {
+		var found bool
+
+		typeMatch := (live.typ.Category() == needType.Category())
+
+		switch live.ref.Storage {
+		case values.Imm, values.ROData:
+
+		case values.Var:
+			index := live.ref.Index()
+			v := &code.vars[index]
+
+			found = typeMatch && (v.cache.Storage == values.VarReg) && (v.refs == 1)
+			if found {
+				if v.dirty {
+					code.opStoreVar(live.typ, index, values.VarOperand(index)) // XXX: this is ugly
+				}
+				reg = v.cache.Reg()
+				v.reset()
+			} else {
+				x := code.effectiveOperand(*live.ref)
+				mach.OpPush(code, live.typ, x)
+				code.incrementStackOffset()
+				*live.ref = values.StackOperand
+			}
+
+			v.refs--
+			if v.refs < 0 {
+				panic(*live.ref)
+			}
+
+		case values.TempReg:
+			found = typeMatch
+			reg = live.ref.Reg()
+			x := code.effectiveOperand(*live.ref)
 			mach.OpPush(code, live.typ, x)
 			code.incrementStackOffset()
 			*live.ref = values.StackOperand
 
-			if live.typ.Category() == t.Category() {
-				return reg
-			}
+		default:
+			panic(*live.ref)
 		}
 
-		code.noLiveTempRegOperandsUntil++
+		code.immutableLiveOperands++
+
+		if found {
+			return
+		}
 	}
 
 	panic("no registers to steal")
 }
 
 // opTryStealVarReg doesn't change the allocation state of the register.
-func (code *coder) opTryStealVarReg(t types.T, refsLimit int) (reg regs.R, ok bool) {
-	varRefs := refsLimit
-	var varIndex int
+func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
+	reg, ok = code.opTryStealUnusedVarReg(needType)
+	if ok {
+		return
+	}
 
-	for i, v := range code.varRegs {
-		if v.typ.Category() == t.Category() {
-			if v.refs < 0 || v.refs < varRefs {
-				varRefs = v.refs
-				varIndex = i
+	for _, live := range code.liveOperands[code.immutableLiveOperands:] {
+		switch live.ref.Storage {
+		case values.Imm, values.ROData:
+
+		case values.Var:
+			if live.typ.Category() != needType.Category() {
+				return // nope
+			}
+
+			index := live.ref.Index()
+			v := &code.vars[index]
+			if v.refs > 1 {
+				return // nope
+			}
+			if v.cache.Storage != values.VarReg {
+				return // nope
+			}
+
+			if v.dirty {
+				code.opStoreVar(live.typ, index, values.VarOperand(index)) // XXX: this is ugly
+			}
+			reg = v.cache.Reg()
+			v.reset()
+
+			v.refs--
+			if v.refs < 0 {
+				panic(*live.ref)
+			}
+
+			ok = true
+
+		case values.TempReg:
+			return // nope
+
+		default:
+			panic(*live.ref)
+		}
+
+		code.immutableLiveOperands++
+
+		if ok {
+			return
+		}
+	}
+
+	return
+}
+
+// opTryStealUnusedVarReg doesn't change the allocation state of the register.
+func (code *coder) opTryStealUnusedVarReg(needType types.T) (reg regs.R, ok bool) {
+	var i int
+	var v *varState
+	var t types.T
+
+	for i = range code.vars {
+		v = &code.vars[i]
+		if v.refs == 0 && v.cache.Storage == values.VarReg {
+			t = code.varType(i)
+			if t.Category() == needType.Category() {
+				goto found
 			}
 		}
 	}
 
-	if varRefs == refsLimit {
-		return
-	}
+	return
 
-	v := &code.varRegs[varIndex]
-
+found:
 	if v.dirty {
-		code.opStoreVar(v.typ, varIndex, values.VarOperand(varIndex)) // XXX: this is ugly
+		code.opStoreVar(t, i, values.VarOperand(i)) // XXX: this is ugly
 	}
-	v.typ = types.Void
-
-	reg = v.reg
+	reg = v.cache.Reg()
+	v.reset()
 	ok = true
 	return
 }
 
-func (code *coder) opPushTempRegOperands() {
+func (code *coder) opSaveTempRegOperands() {
 	pushed := false
 
-	for _, live := range code.liveOperands[code.noLiveTempRegOperandsUntil:] {
+	for _, live := range code.liveOperands[code.immutableLiveOperands:] {
 		switch live.ref.Storage {
 		case values.TempReg:
-			x := code.opAccessScalar(live.typ, *live.ref)
+			x := code.effectiveOperand(*live.ref)
 			mach.OpPush(code, live.typ, x)
 			code.incrementStackOffset()
 			*live.ref = values.StackOperand
@@ -1471,34 +1662,37 @@ func (code *coder) opPushTempRegOperands() {
 		}
 	}
 
-	code.noLiveTempRegOperandsUntil = len(code.liveOperands)
+	code.immutableLiveOperands = len(code.liveOperands)
 }
 
-// opStoreRegVars is only safe when there are no live RegVar operands.
-func (code *coder) opStoreRegVars(forgetRegs bool) {
-	for i, v := range code.varRegs {
-		if v.typ != types.Void {
-			if v.dirty {
-				code.opStoreVar(v.typ, i, values.VarOperand(i)) // XXX: this is ugly
-				code.varRegs[i].dirty = false
-			}
+// opStoreRegVars is only safe when there are no live Var operands.
+func (code *coder) opStoreRegVars(forget bool) {
+	for i := range code.vars {
+		v := &code.vars[i]
+		t := code.varType(i)
 
-			if forgetRegs {
-				code.varRegs[i].typ = types.Void
-				code.FreeReg(v.typ, v.reg)
+		if v.dirty {
+			code.opStoreVar(t, i, values.VarOperand(i)) // XXX: this is ugly
+			v.dirty = false
+		}
+
+		if forget {
+			if v.cache.Storage == values.VarReg {
+				code.FreeReg(t, v.cache.Reg())
 			}
+			v.reset()
 		}
 	}
 }
 
 func (code *coder) opStoreVar(t types.T, index int, x values.Operand) {
 	offset := code.varStackOffset(index)
-	x = code.opAccessScalar(t, x)
+	x = code.effectiveOperand(x)
 	mach.OpStoreStack(code, t, offset, x)
 }
 
 func (code *coder) opLabel(l *links.L) {
-	code.opPushTempRegOperands()
+	code.opSaveTempRegOperands()
 	code.opStoreRegVars(true)
 	l.SetAddress(code.Len())
 
@@ -1553,14 +1747,12 @@ func (code *coder) findTarget(token interface{}) *branchTarget {
 	panic(name)
 }
 
-func (code *coder) Var(i int) (offset int, reg regs.R, regOk bool) {
-	if v := code.varRegs[i]; v.typ == types.Void {
-		offset = code.varStackOffset(i)
+func (code *coder) varType(index int) types.T {
+	if index < len(code.function.Params) {
+		return code.function.Params[index]
 	} else {
-		reg = v.reg
-		regOk = true
+		return code.function.Locals[index-len(code.function.Params)]
 	}
-	return
 }
 
 func (code *coder) varStackOffset(index int) int {

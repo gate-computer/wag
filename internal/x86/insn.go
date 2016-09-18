@@ -120,13 +120,24 @@ type addrInsn interface {
 	op(code gen.Coder, addr int)
 }
 
-type unaryInsn interface {
+type regInsn interface {
 	op(code gen.Coder, subject regs.R)
+}
+
+type unaryInsn interface {
+	opReg(code gen.Coder, t types.T, source regs.R)
+	opIndirect(code gen.Coder, t types.T, source regs.R, disp int)
+	opStack(code gen.Coder, t types.T, disp int)
 }
 
 type binaryInsn interface {
 	opReg(code gen.Coder, t types.T, target, source regs.R)
-	opIndirect(code gen.Coder, t types.T, target, source regs.R, disp int)
+	opFromIndirect(code gen.Coder, t types.T, target, source regs.R, disp int)
+	opFromStack(code gen.Coder, t types.T, target regs.R, disp int)
+}
+
+type binaryImmInsn interface {
+	op(code gen.Coder, t types.T, target regs.R, count imm)
 }
 
 type insnFixed []byte
@@ -194,7 +205,7 @@ func (i insnReg_sizeless_PrefixModOpReg) op(code gen.Coder, reg regs.R) {
 	if reg < 8 {
 		i.low.op(code, reg)
 	} else {
-		i.high.op(code, types.I32, reg)
+		i.high.opReg(code, types.I32, reg)
 	}
 }
 
@@ -245,10 +256,29 @@ type insnPrefixModOpReg struct {
 	ro     byte
 }
 
-func (i insnPrefixModOpReg) op(code gen.Coder, t types.T, reg regs.R) {
+func (i insnPrefixModOpReg) opReg(code gen.Coder, t types.T, reg regs.R) {
 	i.prefix.writeTo(code, t, 0, 0, reg)
 	code.Write(i.bytes)
 	ModReg.writeTo(code, i.ro, byte(reg))
+}
+
+func (i insnPrefixModOpReg) opIndirect(code gen.Coder, t types.T, reg regs.R, disp int) {
+	mod, imm := dispMod(t, disp)
+
+	i.prefix.writeTo(code, t, 0, 0, reg)
+	code.Write(i.bytes)
+	mod.writeTo(code, i.ro, byte(reg))
+	imm.writeTo(code)
+}
+
+func (i insnPrefixModOpReg) opStack(code gen.Coder, t types.T, disp int) {
+	mod, imm := dispMod(t, disp)
+
+	i.prefix.writeTo(code, t, 0, 0, 0)
+	code.Write(i.bytes)
+	mod.writeTo(code, i.ro, 1<<2)
+	sib{0, regStackPtr, regStackPtr}.writeTo(code)
+	imm.writeTo(code)
 }
 
 type insnPrefixModRegFromReg struct {
@@ -262,12 +292,22 @@ func (i insnPrefixModRegFromReg) opReg(code gen.Coder, t types.T, target, source
 	ModReg.writeTo(code, byte(target), byte(source))
 }
 
-func (i insnPrefixModRegFromReg) opIndirect(code gen.Coder, t types.T, target, source regs.R, disp int) {
+func (i insnPrefixModRegFromReg) opFromIndirect(code gen.Coder, t types.T, target, source regs.R, disp int) {
 	mod, imm := dispMod(t, disp)
 
 	i.prefix.writeTo(code, t, target, 0, source)
 	code.Write(i.bytes)
 	mod.writeTo(code, byte(target), byte(source))
+	imm.writeTo(code)
+}
+
+func (i insnPrefixModRegFromReg) opFromStack(code gen.Coder, t types.T, target regs.R, disp int) {
+	mod, imm := dispMod(t, disp)
+
+	i.prefix.writeTo(code, t, target, 0, 0)
+	code.Write(i.bytes)
+	mod.writeTo(code, byte(target), 1<<2)
+	sib{0, regStackPtr, regStackPtr}.writeTo(code)
 	imm.writeTo(code)
 }
 

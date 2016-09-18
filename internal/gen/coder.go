@@ -6,6 +6,7 @@ import (
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 )
 
 type Coder interface {
@@ -16,15 +17,15 @@ type Coder interface {
 
 	TrapLinks() *TrapLinks
 
-	Var(index int) (currentStackPtrOffset int, reg regs.R, regOk bool)
-
+	Consumed(types.T, values.Operand)
 	FreeReg(types.T, regs.R)
+	AddStackUsage(size int)
 }
 
 type RegCoder interface {
 	Coder
 
-	OpAllocReg(t types.T) regs.R
+	TryAllocReg(t types.T) (reg regs.R, ok bool)
 }
 
 type TrapLinks struct {

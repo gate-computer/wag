@@ -16,11 +16,47 @@ const (
 	Nowhere = Storage(iota)
 	Imm
 	ROData
-	Var
+	Var    // backed by wag.coder.varOperands array, containing other Operand types
+	VarMem // returned by gen.Coder.Var() for non-cached variables
+	VarReg // used in wag.coder.varState, returned by gen.Coder.Var()
 	TempReg
 	Stack
 	ConditionFlags
 )
+
+func (s Storage) String() string {
+	switch s {
+	case Nowhere:
+		return "nowhere"
+
+	case Imm:
+		return "immediate data"
+
+	case ROData:
+		return "read-only data"
+
+	case Var:
+		return "variable"
+
+	case VarMem:
+		return "memory variable"
+
+	case VarReg:
+		return "register variable"
+
+	case TempReg:
+		return "temporary register"
+
+	case Stack:
+		return "stack"
+
+	case ConditionFlags:
+		return "condition flags"
+
+	default:
+		return "unknown"
+	}
+}
 
 var (
 	NoOperand    = Operand{Storage: Nowhere}
@@ -81,12 +117,20 @@ func RODataOperand(addr int) Operand {
 	return Operand{ROData, uint64(addr)}
 }
 
-func TempRegOperand(reg regs.R) Operand {
-	return Operand{TempReg, uint64(byte(reg))}
-}
-
 func VarOperand(index int) Operand {
 	return Operand{Var, uint64(index)}
+}
+
+func VarMemOperand(index int, offset int) Operand {
+	return Operand{VarMem, (uint64(index) << 32) | uint64(offset)}
+}
+
+func VarRegOperand(index int, reg regs.R) Operand {
+	return Operand{VarReg, (uint64(index) << 32) | uint64(byte(reg))}
+}
+
+func TempRegOperand(reg regs.R) Operand {
+	return Operand{TempReg, uint64(byte(reg))}
 }
 
 func ConditionFlagsOperand(cond Condition) Operand {
@@ -187,10 +231,54 @@ func (o Operand) CheckVar() (index int, ok bool) {
 	return
 }
 
-func (o Operand) Reg() (reg regs.R) {
-	reg, ok := o.CheckTempReg()
+func (o Operand) VarOperand() (x Operand) {
+	switch o.Storage {
+	case VarMem, VarReg:
+		x = VarOperand(int(o.X >> 32))
+
+	default:
+		panic(o)
+	}
+	return
+}
+
+func (o Operand) Offset() (offset int) {
+	offset, ok := o.CheckVarMem()
 	if !ok {
 		panic(o)
+	}
+	return
+}
+
+func (o Operand) CheckVarMem() (offset int, ok bool) {
+	if o.Storage == VarMem {
+		offset = int(o.X & 0xffffffff)
+		ok = true
+	}
+	return
+}
+
+func (o Operand) Reg() (reg regs.R) {
+	reg, ok := o.CheckAnyReg()
+	if !ok {
+		panic(o)
+	}
+	return
+}
+
+func (o Operand) CheckAnyReg() (reg regs.R, ok bool) {
+	switch o.Storage {
+	case VarReg, TempReg:
+		reg = regs.R(byte(o.X))
+		ok = true
+	}
+	return
+}
+
+func (o Operand) CheckVarReg() (reg regs.R, ok bool) {
+	if o.Storage == VarReg {
+		reg = regs.R(byte(o.X))
+		ok = true
 	}
 	return
 }
@@ -222,25 +310,31 @@ func (o Operand) CheckConditionFlags() (cond Condition, ok bool) {
 func (o Operand) String() string {
 	switch o.Storage {
 	case Nowhere:
-		return "nowhere"
+		return o.Storage.String()
 
 	case Imm:
-		return fmt.Sprintf("immediate data 0x%x", o.X)
+		return fmt.Sprintf("%s 0x%x", o.Storage, o.X)
 
 	case ROData:
-		return fmt.Sprintf("read-only data at 0x%x", o.X)
+		return fmt.Sprintf("%s at 0x%x", o.Storage, o.Addr())
 
 	case Var:
-		return fmt.Sprintf("variable #%d", o.X)
+		return fmt.Sprintf("%s #%d", o.Storage, o.Index())
+
+	case VarMem:
+		return fmt.Sprintf("%s #%d at 0x%x", o.Storage, o.VarOperand().Index(), o.Offset())
+
+	case VarReg:
+		return fmt.Sprintf("%s #%d in r%d", o.Storage, o.VarOperand().Index(), o.Reg())
 
 	case TempReg:
-		return fmt.Sprintf("temporary register r%d", o.X)
+		return fmt.Sprintf("%s r%d", o.Storage, o.Reg())
 
 	case Stack:
-		return "stack"
+		return o.Storage.String()
 
 	case ConditionFlags:
-		return "condition flags"
+		return o.Storage.String()
 
 	default:
 		return "corrupted"

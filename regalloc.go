@@ -23,7 +23,7 @@ func (ra *regAllocator) init(availableGroups [][]bool) {
 
 func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
 	for i := range ra.groups {
-		reg, ok = ra.groups[i].alloc()
+		reg, ok = ra.groups[i].allocate()
 		if ok {
 			return
 		}
@@ -34,7 +34,7 @@ func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
 
 func (ra *regAllocator) allocWithPreference(prefGroup int) (reg regs.R, ok bool) {
 	if prefGroup >= 0 {
-		reg, ok = ra.groups[prefGroup].alloc()
+		reg, ok = ra.groups[prefGroup].allocate()
 		if ok {
 			return
 		}
@@ -42,7 +42,7 @@ func (ra *regAllocator) allocWithPreference(prefGroup int) (reg regs.R, ok bool)
 
 	for i := range ra.groups {
 		if i != prefGroup {
-			reg, ok = ra.groups[i].alloc()
+			reg, ok = ra.groups[i].allocate()
 			if ok {
 				return
 			}
@@ -60,6 +60,17 @@ func (ra *regAllocator) free(reg regs.R) {
 	}
 }
 
+func (ra *regAllocator) allocated(reg regs.R) (ok bool) {
+	for _, g := range ra.groups {
+		ok = g.allocated(reg)
+		if ok {
+			return
+		}
+	}
+
+	return
+}
+
 func (ra *regAllocator) postCheck(category string) {
 	for _, g := range ra.groups {
 		g.postCheck(category)
@@ -67,24 +78,24 @@ func (ra *regAllocator) postCheck(category string) {
 }
 
 type regGroupAllocator struct {
-	offset    int
-	available []bool
-	allocated []bool
-	phase     int
+	offset int
+	avail  []bool
+	alloc  []bool
+	phase  int
 }
 
-func (g *regGroupAllocator) init(offset int, available []bool) {
+func (g *regGroupAllocator) init(offset int, avail []bool) {
 	g.offset = offset
-	g.available = available
-	g.allocated = make([]bool, len(available))
+	g.avail = avail
+	g.alloc = make([]bool, len(avail))
 }
 
-func (g *regGroupAllocator) alloc() (reg regs.R, ok bool) {
-	for i := 0; i < len(g.available); i++ {
-		n := (i + g.phase) % len(g.available)
+func (g *regGroupAllocator) allocate() (reg regs.R, ok bool) {
+	for i := 0; i < len(g.avail); i++ {
+		n := (i + g.phase) % len(g.avail)
 
-		if g.available[n] && !g.allocated[n] {
-			g.allocated[n] = true
+		if g.avail[n] && !g.alloc[n] {
+			g.alloc[n] = true
 			reg = regs.R(g.offset + n)
 			ok = true
 
@@ -92,7 +103,7 @@ func (g *regGroupAllocator) alloc() (reg regs.R, ok bool) {
 				for i := 0; i < debugExprDepth; i++ {
 					fmt.Print("    ")
 				}
-				fmt.Printf("<alloc reg=\"%s\"/>\n", reg)
+				fmt.Printf("<!-- reg alloc %s -->\n", reg)
 			}
 
 			break
@@ -105,12 +116,12 @@ func (g *regGroupAllocator) alloc() (reg regs.R, ok bool) {
 func (g *regGroupAllocator) free(reg regs.R) (ok bool) {
 	i := int(reg) - g.offset
 
-	if i >= 0 && i < len(g.available) && g.available[i] {
-		if !g.allocated[i] {
+	if i >= 0 && i < len(g.avail) && g.avail[i] {
+		if !g.alloc[i] {
 			panic(reg)
 		}
 
-		g.allocated[i] = false
+		g.alloc[i] = false
 		ok = true
 
 		g.phase += 3
@@ -119,15 +130,25 @@ func (g *regGroupAllocator) free(reg regs.R) (ok bool) {
 			for i := 0; i < debugExprDepth; i++ {
 				fmt.Print("    ")
 			}
-			fmt.Printf("<free reg=\"%s\"/>\n", reg)
+			fmt.Printf("<!-- reg free %s -->\n", reg)
 		}
 	}
 
 	return
 }
 
+func (g *regGroupAllocator) allocated(reg regs.R) (ok bool) {
+	i := int(reg) - g.offset
+
+	if i >= 0 && i < len(g.avail) {
+		ok = g.alloc[i]
+	}
+
+	return
+}
+
 func (g *regGroupAllocator) postCheck(category string) {
-	for _, alloc := range g.allocated {
+	for _, alloc := range g.alloc {
 		if alloc {
 			panic(fmt.Errorf("some %s registers not freed after function", category))
 		}

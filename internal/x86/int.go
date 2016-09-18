@@ -34,6 +34,7 @@ var (
 
 	MovImm = insnPrefixRegImm{rexSize, 0xb8}
 
+	Neg = insnPrefixModOpReg{rexSize, []byte{0xf7}, 3}
 	Mul = insnPrefixModOpReg{rexSize, []byte{0xf7}, 4}
 	Div = insnPrefixModOpReg{rexSize, []byte{0xf7}, 6}
 	Inc = insnPrefixModOpReg{rexSize, []byte{0xff}, 0}
@@ -89,23 +90,33 @@ var binaryIntConditions = map[string]values.Condition{
 	"ne":   values.NE,
 }
 
-func (x86 X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
+var binaryIntDivMulInsns = map[string]unaryInsn{
+	"div_u": Div,
+	"mul":   Mul,
+}
+
+var binaryIntDivMulShiftInsns = map[string]binaryImmInsn{
+	"div_u": ShrImm,
+	"mul":   ShlImm,
+}
+
+func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
 	switch name {
 	case "ctz":
 		var targetReg regs.R
 
-		sourceReg, own := x86.opBorrowReg(code, t, x)
+		sourceReg, own := mach.opBorrowScratchReg(code, t, x)
 		if own {
 			targetReg = sourceReg
 		} else {
-			targetReg = code.OpAllocReg(t)
+			targetReg = mach.opResultReg(code, t, values.NoOperand)
 		}
 
 		Bsf.opReg(code, t, targetReg, sourceReg)
 		return values.TempRegOperand(targetReg)
 
 	case "eqz":
-		reg, own := x86.opBorrowReg(code, t, x)
+		reg, own := mach.opBorrowScratchReg(code, t, x)
 		if own {
 			defer code.FreeReg(t, reg)
 		}
@@ -117,173 +128,242 @@ func (x86 X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Op
 	panic(name)
 }
 
-func (x86 X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
-	value, immediate := b.CheckImmValue(t)
-
-	if immediate && (value < -0x80000000 || value >= 0x80000000) {
-		reg := code.OpAllocReg(t)
-		b = x86.OpMove(code, t, reg, b)
-		immediate = false
+func (mach X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
+	if a.Storage == values.ConditionFlags {
+		panic("first operand of binary expression is condition flags")
 	}
 
 	switch name {
-	case "add":
-		if immediate {
-			switch value {
-			case 1:
-				reg := x86.opOwnReg(code, t, a)
+	case "div_u", "mul":
+		return mach.binaryIntDivMulOp(code, name, t, a, b)
 
-				Inc.op(code, t, reg)
-				return values.TempRegOperand(reg)
+	default:
+		return mach.binaryIntGenericOp(code, name, t, a, b)
+	}
+}
 
-			case -1:
-				reg := x86.opOwnReg(code, t, a)
-
-				Dec.op(code, t, reg)
-				return values.TempRegOperand(reg)
-			}
-		}
-
-	case "sub":
-		if immediate {
-			switch value {
-			case 1:
-				reg := x86.opOwnReg(code, t, a)
-
-				Dec.op(code, t, reg)
-				return values.TempRegOperand(reg)
-
-			case -1:
-				reg := x86.opOwnReg(code, t, a)
-
-				Inc.op(code, t, reg)
-				return values.TempRegOperand(reg)
-			}
-		}
-
-	case "div_u":
-		if immediate && value > 0 && isPowerOfTwo(uint64(value)) {
-			reg := x86.opOwnReg(code, t, a)
-
-			ShrImm.op(code, t, reg, uimm8(log2(uint64(value))))
+func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
+	if value, ok := a.CheckImmValue(t); ok {
+		switch {
+		case value == 0 && name == "sub":
+			reg := mach.opResultReg(code, t, b)
+			Neg.opReg(code, t, reg)
 			return values.TempRegOperand(reg)
-		} else {
-			reg, own := x86.opPrepareDivMul(code, t, a, b)
-			if own {
-				defer code.FreeReg(t, reg)
-			}
-
-			Test.op(code, t, reg, reg)
-			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
-			Xor.opReg(code, t, regDividendHi, regDividendHi)
-			Div.op(code, t, reg)
-			return values.TempRegOperand(regDividendLo)
-		}
-
-	case "mul":
-		if immediate && value > 0 && isPowerOfTwo(uint64(value)) {
-			reg := x86.opOwnReg(code, t, a)
-
-			ShlImm.op(code, t, reg, uimm8(log2(uint64(value))))
-			return values.TempRegOperand(reg)
-		} else {
-			reg, own := x86.opPrepareDivMul(code, t, a, b)
-			if own {
-				defer code.FreeReg(t, reg)
-			}
-
-			Mul.op(code, t, reg)
-			return values.TempRegOperand(regDividendLo)
 		}
 	}
+
+	bReg, _ := b.CheckAnyReg()
+	bFreeReg := false
+	bConsume := true
+	bStorage := b.Storage
+
+	switch b.Storage {
+	case values.Imm:
+		value := b.ImmValue(t)
+
+		switch {
+		case (name == "add" && value == 1) || (name == "sub" && value == -1):
+			reg := mach.opResultReg(code, t, a)
+			Inc.opReg(code, t, reg)
+			return values.TempRegOperand(reg)
+
+		case (name == "sub" && value == 1) || (name == "add" && value == -1):
+			reg := mach.opResultReg(code, t, a)
+			Dec.opReg(code, t, reg)
+			return values.TempRegOperand(reg)
+
+		case value < -0x80000000 || value >= 0x80000000:
+			bReg, bFreeReg = mach.opBorrowScratchReg(code, t, b)
+			bConsume = false
+			bStorage = values.TempReg
+		}
+
+	case values.Stack, values.ConditionFlags:
+		bReg, bFreeReg = mach.opBorrowScratchReg(code, t, b)
+		bConsume = false
+		bStorage = values.TempReg
+	}
+
+	var result values.Operand
 
 	if insn, found := binaryIntInsns[name]; found {
-		targetReg := x86.opOwnReg(code, t, a)
+		aReg := mach.opResultReg(code, t, a)
 
-		sourceReg, own := x86.opBorrowReg(code, t, b)
-		if own {
-			defer code.FreeReg(t, sourceReg)
+		switch bStorage {
+		case values.ROData:
+			insn.opFromIndirect(code, t, aReg, regRODataPtr, b.Addr())
+
+		case values.VarMem:
+			insn.opFromStack(code, t, aReg, b.Offset())
+
+		case values.Imm:
+			// TODO: use actual immediate opcode
+			bReg, bFreeReg = mach.opBorrowScratchReg(code, t, b)
+			bConsume = false
+			bStorage = values.TempReg
+			fallthrough
+
+		case values.VarReg, values.TempReg:
+			insn.opReg(code, t, aReg, bReg)
+
+		default:
+			panic(bStorage)
 		}
 
-		insn.opReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg)
-	}
-
-	if cond, found := binaryIntConditions[name]; found {
-		aReg, own := x86.opBorrowReg(code, t, a)
+		result = values.TempRegOperand(aReg)
+	} else if cond, found := binaryIntConditions[name]; found {
+		aReg, own := mach.opBorrowResultReg(code, t, a)
 		if own {
 			defer code.FreeReg(t, aReg)
 		}
 
-		switch b.Storage {
+		switch bStorage {
 		case values.Imm:
-			CmpImm32.op(code, t, aReg, imm32(int(value)))
+			CmpImm32.op(code, t, aReg, imm32(int(b.ImmValue(t))))
 
 		case values.ROData:
-			Cmp.opIndirect(code, t, aReg, regRODataPtr, b.Addr())
+			Cmp.opFromIndirect(code, t, aReg, regRODataPtr, b.Addr())
 
-		case values.Var:
-			if bOffset, bReg, inReg := code.Var(b.Index()); inReg {
-				Cmp.opReg(code, t, aReg, bReg)
-			} else {
-				CmpFromStack.op(code, t, aReg, bOffset)
-			}
+		case values.VarMem:
+			CmpFromStack.op(code, t, aReg, b.Offset())
 
-		case values.TempReg:
-			Cmp.opReg(code, t, aReg, b.Reg())
-			code.FreeReg(t, b.Reg())
-
-		case values.Stack:
-			// TODO: try to allocate register for popping
-			AddImm.op(code, types.I64, regStackPtr, wordSize)
-			CmpFromStack.op(code, t, aReg, -wordSize)
+		case values.VarReg, values.TempReg:
+			Cmp.opReg(code, t, aReg, bReg)
 
 		default:
-			panic(b)
+			panic(bStorage)
 		}
 
-		return values.ConditionFlagsOperand(cond)
+		result = values.ConditionFlagsOperand(cond)
 	}
 
-	panic(name)
+	if bConsume {
+		code.Consumed(t, b)
+	} else if bFreeReg {
+		code.FreeReg(t, bReg)
+	}
+
+	return result
 }
 
-func (x86 X86) opPrepareDivMul(code gen.RegCoder, t types.T, a, b values.Operand) (bReg regs.R, own bool) {
-	bIndex, ok := b.CheckVar()
+func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
+	if value, ok := b.CheckImmValue(t); ok {
+		switch {
+		case value == -1:
+			reg := mach.opResultReg(code, t, a)
+			Neg.opReg(code, t, reg)
+			return values.TempRegOperand(reg)
+
+		case value > 0 && isPowerOfTwo(uint64(value)):
+			reg := mach.opResultReg(code, t, a)
+			binaryIntDivMulShiftInsns[name].op(code, t, reg, uimm8(log2(uint64(value))))
+			return values.TempRegOperand(reg)
+		}
+	}
+
+	bStorage := b.Storage
+	bReg, ok := b.CheckAnyReg()
 	if ok {
-		_, bReg, ok = code.Var(bIndex)
-	}
-	if !ok {
-		bReg, ok = b.CheckTempReg()
-		if !ok {
-			bReg, own = x86.opBorrowReg(code, t, b)
-		} else if bReg == regDividendLo {
-			bReg = code.OpAllocReg(t)
-			own = true
+		if name == "div_u" {
+			Test.op(code, t, bReg, bReg)
+			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
+		}
 
-			x86.OpMove(code, t, bReg, b)
+		if bReg == regResult {
+			bStorage = values.TempReg
+
+			switch name {
+			case "div_u":
+				// can't use scratch reg as divisor since it contains the dividend high bits
+				bReg, ok = code.TryAllocReg(t)
+				if ok {
+					defer code.FreeReg(t, bReg)
+				} else {
+					bReg = regTextPtr
+
+					code.AddStackUsage(wordSize)
+					MovToStack.op(code, t, bReg, -wordSize)
+					defer MovFromStack.op(code, t, bReg, -wordSize)
+				}
+
+			case "mul":
+				// scratch reg is the upper target reg, but we can use it as a factor reg
+				bReg = regScratch
+			}
+
+			mach.OpMove(code, t, bReg, b)
+		} else {
+			defer code.Consumed(t, b)
+		}
+	} else {
+		switch name {
+		case "div_u":
+			bStorage = values.TempReg
+			bReg, ok = code.TryAllocReg(t)
+			if ok {
+				defer code.FreeReg(t, bReg)
+				mach.OpMove(code, t, bReg, b)
+				Test.op(code, t, bReg, bReg)
+				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
+			} else {
+				mach.OpMove(code, t, regScratch, b)
+				Test.op(code, t, regScratch, regScratch)
+				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
+
+				bReg = regTextPtr
+
+				code.AddStackUsage(wordSize)
+				Push.op(code, bReg)
+				defer Pop.op(code, bReg)
+
+				Mov.op(code, t, bReg, regScratch)
+			}
+
+		case "mul":
+			switch bStorage {
+			case values.Imm, values.Stack, values.ConditionFlags:
+				bStorage = values.TempReg
+				bReg = regTextPtr
+
+				code.AddStackUsage(wordSize)
+				Push.op(code, bReg)
+				defer Pop.op(code, bReg)
+
+				mach.OpMove(code, t, bReg, b)
+			}
 		}
 	}
 
-	aReg, ok := checkAnyReg(code, a)
-	if !ok || aReg != regDividendLo {
-		x86.OpMove(code, t, regDividendLo, a)
+	aReg, own := mach.opBorrowResultReg(code, t, a)
+	if aReg != regResult {
+		// operand was in register, nothing was done
+		mach.OpMove(code, t, regResult, a)
+	}
+	if own {
+		code.FreeReg(t, aReg)
 	}
 
-	return
-}
-
-func checkAnyReg(code gen.Coder, x values.Operand) (reg regs.R, ok bool) {
-	switch x.Storage {
-	case values.Var:
-		_, reg, ok = code.Var(x.Index())
-
-	case values.TempReg:
-		reg = x.Reg()
-		ok = true
+	if name == "div_u" {
+		Xor.opReg(code, t, regScratch, regScratch) // dividend high bits
 	}
 
-	return
+	insn := binaryIntDivMulInsns[name]
+
+	switch bStorage {
+	case values.ROData:
+		insn.opIndirect(code, t, regRODataPtr, b.Addr())
+
+	case values.VarMem:
+		insn.opStack(code, t, b.Offset())
+
+	case values.VarReg, values.TempReg:
+		insn.opReg(code, t, bReg)
+
+	default:
+		panic(bStorage)
+	}
+
+	return values.TempRegOperand(regResult)
 }
 
 func isPowerOfTwo(value uint64) bool {
