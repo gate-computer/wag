@@ -31,9 +31,9 @@ type liveOperand struct {
 }
 
 type varState struct {
-	refs  int
-	cache values.Operand
-	dirty bool
+	refCount int
+	cache    values.Operand
+	dirty    bool
 }
 
 func (v *varState) init(x values.Operand, dirty bool) {
@@ -242,7 +242,7 @@ func (code *coder) genFunction(f *Function) {
 	for i := range code.vars {
 		v := &code.vars[i]
 
-		if v.refs != 0 {
+		if v.refCount != 0 {
 			panic(fmt.Errorf("internal: variable #%d reference count is non-zero at end of function", i))
 		}
 
@@ -1171,9 +1171,55 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	v := &code.vars[index]
 	oldCache := v.cache
 
-	switch oldCache.Storage {
-	case values.Nowhere, values.VarReg:
-		// XXX: update live operands
+	if v.refCount > 0 {
+		switch oldCache.Storage {
+		case values.Nowhere, values.VarReg:
+			for i := len(code.liveOperands) - 1; i >= code.immutableLiveOperands; i-- {
+				live := code.liveOperands[i]
+				if live.ref.Storage == values.Var && live.ref.Index() == index {
+					reg, ok := code.TryAllocReg(resultType)
+					if !ok {
+						goto push
+					}
+
+					code.opMove(resultType, reg, *live.ref) // TODO: avoid multiple loads
+					*live.ref = values.TempRegOperand(reg)
+
+					v.refCount--
+					if v.refCount == 0 {
+						goto done
+					}
+					if v.refCount < 0 {
+						panic("inconsistent variable reference count")
+					}
+				}
+			}
+			break
+
+		push:
+			for _, live := range code.liveOperands[code.immutableLiveOperands:] {
+				if live.ref.Storage == values.Var && live.ref.Index() == index {
+					x := code.effectiveOperand(*live.ref)
+					mach.OpPush(code, resultType, x) // TODO: avoid multiple loads
+					code.incrementStackOffset()
+					*live.ref = values.StackOperand
+
+					v.refCount--
+					if v.refCount == 0 {
+						goto done
+					}
+					if v.refCount < 0 {
+						panic("inconsistent variable reference count")
+					}
+				}
+			}
+
+		done:
+		}
+
+		if v.refCount != 0 {
+			panic("could not find all variable references")
+		}
 	}
 
 	switch result.Storage {
@@ -1370,7 +1416,7 @@ func (code *coder) opCall(l *links.L) {
 }
 
 func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
-	if t == types.Void {
+	if t == types.Void || x.Storage == values.Nowhere {
 		return
 	}
 
@@ -1435,7 +1481,7 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 	case values.Var:
 		i := ref.Index()
 		v := &code.vars[i]
-		v.refs++
+		v.refCount++
 
 		if v.cache.Storage == values.Nowhere {
 			if reg, ok := code.opTryAllocVarReg(t); ok {
@@ -1469,8 +1515,8 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 
 	case values.Var:
 		v := &code.vars[ref.Index()]
-		v.refs--
-		if v.refs < 0 {
+		v.refCount--
+		if v.refCount < 0 {
 			panic(*ref)
 		}
 		fallthrough
@@ -1518,7 +1564,7 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 			index := live.ref.Index()
 			v := &code.vars[index]
 
-			found = typeMatch && (v.cache.Storage == values.VarReg) && (v.refs == 1)
+			found = typeMatch && (v.cache.Storage == values.VarReg) && (v.refCount == 1)
 			if found {
 				if v.dirty {
 					code.opStoreVar(live.typ, index, values.VarOperand(index)) // XXX: this is ugly
@@ -1532,8 +1578,8 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 				*live.ref = values.StackOperand
 			}
 
-			v.refs--
-			if v.refs < 0 {
+			v.refCount--
+			if v.refCount < 0 {
 				panic(*live.ref)
 			}
 
@@ -1577,7 +1623,7 @@ func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
 
 			index := live.ref.Index()
 			v := &code.vars[index]
-			if v.refs > 1 {
+			if v.refCount > 1 {
 				return // nope
 			}
 			if v.cache.Storage != values.VarReg {
@@ -1590,8 +1636,8 @@ func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
 			reg = v.cache.Reg()
 			v.reset()
 
-			v.refs--
-			if v.refs < 0 {
+			v.refCount--
+			if v.refCount < 0 {
 				panic(*live.ref)
 			}
 
@@ -1622,7 +1668,7 @@ func (code *coder) opTryStealUnusedVarReg(needType types.T) (reg regs.R, ok bool
 
 	for i = range code.vars {
 		v = &code.vars[i]
-		if v.refs == 0 && v.cache.Storage == values.VarReg {
+		if v.refCount == 0 && v.cache.Storage == values.VarReg {
 			t = code.varType(i)
 			if t.Category() == needType.Category() {
 				goto found
