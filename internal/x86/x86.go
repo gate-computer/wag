@@ -210,6 +210,7 @@ func (mach X86) OpAbort(code gen.Coder) {
 	Int3.op(code)
 }
 
+// OpAddImmToStackPtr must not allocate registers.
 func (mach X86) OpAddImmToStackPtr(code gen.Coder, offset int) {
 	switch {
 	case offset > 0:
@@ -220,10 +221,12 @@ func (mach X86) OpAddImmToStackPtr(code gen.Coder, offset int) {
 	}
 }
 
+// OpAddToStackPtr must not allocate registers.
 func (mach X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
 	Add.opReg(code, types.I64, regStackPtr, source)
 }
 
+// OpBranchIndirect must not allocate registers.
 func (mach X86) OpBranchIndirect(code gen.Coder, t types.T, reg regs.R) (branchAddr int) {
 	if t == types.I32 {
 		Movsxd.opReg(code, types.I32, reg, reg)
@@ -349,6 +352,7 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 	code.Consumed(t, x)
 }
 
+// OpMoveReg must not allocate registers.
 func (mach X86) OpMoveReg(code gen.Coder, t types.T, targetReg, sourceReg regs.R) {
 	if targetReg == sourceReg {
 		panic("target and source registers are the same")

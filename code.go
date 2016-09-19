@@ -773,16 +773,34 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 			defer code.freeIntReg(reg2)
 		}
 
-		reg, ok := condOperand.CheckTempReg()
+		var reg regs.R
+		var ok bool
+
+		index, isVar := condOperand.CheckVar()
+		if isVar {
+			if v := code.vars[index]; v.cache.Storage == values.VarReg {
+				reg = v.cache.Reg()
+				ok = true
+			}
+		} else {
+			reg, ok = condOperand.CheckTempReg()
+			if ok {
+				defer code.freeIntReg(reg)
+			}
+		}
 		if !ok {
-			// TODO: if condOperand is a regvar, we could just use that if we stored it first
 			reg = code.opAllocIntReg(types.I32, &condOperand)
+			defer code.freeIntReg(reg)
+
 			code.opMove(types.I32, reg, condOperand)
 		}
-		defer code.freeIntReg(reg)
 
 		code.opInitLocals()
 		code.opStoreRegVars(true)
+
+		// if condOperand yielded a var register, then it was just freed by the
+		// storing of vars, but the register retains its value.  don't call
+		// anything that allocates registers until the critical section ends.
 
 		defaultDelta := code.stackOffset - defaultTarget.stackOffset
 
@@ -804,6 +822,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 
 		branchAddr := mach.OpBranchIndirect(code, addrType, reg)
+
+		// end of critical section.
 
 		tableAlloc.populator = func(data []byte) {
 			for _, target := range tableTargets {
