@@ -15,6 +15,7 @@ type Coder interface {
 	Bytes() []byte
 	Len() int
 
+	RODataAddr() int
 	TrapLinks() *TrapLinks
 
 	Consumed(types.T, values.Operand)

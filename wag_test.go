@@ -21,7 +21,9 @@ const (
 	dumpText   = true
 	dumpROData = true
 
-	stackSize = 0x100000
+	maxRODataSize = 0x100000
+	linearSize    = 0x100000
+	stackSize     = 0x100000
 
 	timeout = time.Second * 3
 )
@@ -190,8 +192,23 @@ func test(t *testing.T, filename string) {
 		"$test",
 	})
 
+	var timedout bool
+
 	m := loadModule(module)
-	text, roData, data, bssSize := m.Code()
+
+	b, err := runner.NewBuffer(maxRODataSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if !timedout {
+			b.Close()
+		}
+	}()
+
+	text, roData, data := m.Code(b.RODataAddr(), b.ROData)
+
+	b.Seal()
 
 	if writeBin {
 		textName := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", "-text.bin", -1))
@@ -241,9 +258,7 @@ func test(t *testing.T, filename string) {
 		}
 	}
 
-	var timedout bool
-
-	p, err := runner.NewProgram(text, roData, data, bssSize)
+	p, err := b.NewProgram(text, data, linearSize)
 	if err != nil {
 		t.Fatal(err)
 	}

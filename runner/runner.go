@@ -1,34 +1,89 @@
 package runner
 
 import (
+	"errors"
+	"reflect"
 	"syscall"
+	"unsafe"
 
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text, roData, stack []byte, arg int) (result int32, trap int)
+func run(text, linear, stack []byte, arg int) (result int32, trap int)
 
-type Program struct {
-	text   []byte
-	roData []byte
+var (
+	pageSize = syscall.Getpagesize()
+)
 
-	dataProto []byte
-	bssSize   int
+type Buffer struct {
+	ROData []byte
+
+	sealed bool
 }
 
-func NewProgram(text, roData, data []byte, bssSize int) (p *Program, err error) {
-	p = &Program{
-		dataProto: data,
-		bssSize:   bssSize,
-	}
+func NewBuffer(maxRODataSize int) (b *Buffer, err error) {
+	b = &Buffer{}
 
-	p.text, err = makeMemoryCopy(text, syscall.PROT_EXEC|syscall.PROT_READ)
+	b.ROData, err = makeMemory(maxRODataSize, syscall.MAP_32BIT)
 	if err != nil {
-		p.Close()
+		b.Close()
 		return
 	}
 
-	p.roData, err = makeMemoryCopy(roData, syscall.PROT_READ)
+	return
+}
+
+func (b *Buffer) RODataAddr() int32 {
+	addr := (*reflect.SliceHeader)(unsafe.Pointer(&b.ROData)).Data
+	if addr == 0 || addr > 0x7fffffff-uintptr(len(b.ROData)) {
+		panic("sanity check failed")
+	}
+	return int32(addr)
+}
+
+func (b *Buffer) Seal() (err error) {
+	if b.ROData != nil {
+		err = syscall.Mprotect(b.ROData, syscall.PROT_READ)
+		if err != nil {
+			return
+		}
+	}
+
+	b.sealed = true
+	return
+}
+
+func (b *Buffer) Close() (first error) {
+	if b.ROData != nil {
+		if err := syscall.Munmap(b.ROData); err != nil && first == nil {
+			first = err
+		}
+	}
+
+	return
+}
+
+type Program struct {
+	buf *Buffer
+
+	text       []byte
+	data       []byte
+	linearSize int
+}
+
+func (b *Buffer) NewProgram(text, data []byte, linearSize int) (p *Program, err error) {
+	if !b.sealed {
+		err = errors.New("buffer has not been sealed")
+		return
+	}
+
+	p = &Program{
+		buf:        b,
+		data:       data,
+		linearSize: linearSize,
+	}
+
+	p.text, err = makeMemoryCopy(text, syscall.PROT_EXEC|syscall.PROT_READ, syscall.MAP_32BIT)
 	if err != nil {
 		p.Close()
 		return
@@ -38,12 +93,6 @@ func NewProgram(text, roData, data []byte, bssSize int) (p *Program, err error) 
 }
 
 func (p *Program) Close() (first error) {
-	if p.roData != nil {
-		if err := syscall.Munmap(p.roData); err != nil && first == nil {
-			first = err
-		}
-	}
-
 	if p.text != nil {
 		if err := syscall.Munmap(p.text); err != nil && first == nil {
 			first = err
@@ -56,27 +105,28 @@ func (p *Program) Close() (first error) {
 type Runner struct {
 	prog *Program
 
-	data  []byte
-	bss   []byte
-	stack []byte
+	dataOffset   int
+	linearOffset int
+	memory       []byte // data + linear
+	stack        []byte
 }
 
 func (p *Program) NewRunner(stackSize int) (r *Runner, err error) {
-	r = &Runner{prog: p}
+	memoryPadding := (pageSize - len(p.data)) & (pageSize - 1)
 
-	r.data, err = makeMemory(len(p.dataProto))
+	r = &Runner{
+		prog:         p,
+		dataOffset:   memoryPadding,
+		linearOffset: memoryPadding + len(p.data),
+	}
+
+	r.memory, err = makeMemory(r.linearOffset+p.linearSize, 0)
 	if err != nil {
 		r.Close()
 		return
 	}
 
-	r.bss, err = makeMemory(p.bssSize)
-	if err != nil {
-		r.Close()
-		return
-	}
-
-	r.stack, err = makeMemory(stackSize)
+	r.stack, err = makeMemory(stackSize, 0)
 	if err != nil {
 		r.Close()
 		return
@@ -92,14 +142,8 @@ func (r *Runner) Close() (first error) {
 		}
 	}
 
-	if r.bss != nil {
-		if err := syscall.Munmap(r.bss); err != nil && first == nil {
-			first = err
-		}
-	}
-
-	if r.data != nil {
-		if err := syscall.Munmap(r.data); err != nil && first == nil {
+	if r.memory != nil {
+		if err := syscall.Munmap(r.memory); err != nil && first == nil {
 			first = err
 		}
 	}
@@ -108,35 +152,36 @@ func (r *Runner) Close() (first error) {
 }
 
 func (r *Runner) Run(arg int) (result int32, err error) {
-	copy(r.data, r.prog.dataProto)
+	copy(r.memory[r.dataOffset:], r.prog.data)
 
-	if len(r.bss) < cap(r.bss) { // dirty?
-		r.bss = r.bss[:cap(r.bss)]
-		for i := range r.bss {
-			r.bss[i] = 0
+	linear := r.memory[r.linearOffset:cap(r.memory)]
+
+	if len(r.memory) < cap(r.memory) { // dirty?
+		for i := range linear {
+			linear[i] = 0
 		}
 	}
 
-	result, trap := run(r.prog.text, r.prog.roData, r.stack, arg)
+	result, trap := run(r.prog.text, linear, r.stack, arg)
 	if trap != 0 {
 		err = traps.Id(trap)
 	}
 
-	r.bss = r.bss[:0] // flag it as dirty
+	r.memory = r.memory[:r.dataOffset+len(r.prog.data)] // flag it as dirty
 
 	return
 }
 
-func makeMemory(size int) (mem []byte, err error) {
+func makeMemory(size int, extraFlags int) (mem []byte, err error) {
 	if size == 0 {
 		return
 	}
 
-	return syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS)
+	return syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
 }
 
-func makeMemoryCopy(buf []byte, prot int) (mem []byte, err error) {
-	mem, err = makeMemory(len(buf))
+func makeMemoryCopy(buf []byte, prot, flags int) (mem []byte, err error) {
+	mem, err = makeMemory(len(buf), flags)
 	if err != nil {
 		return
 	}

@@ -56,8 +56,9 @@ type branchTarget struct {
 type coder struct {
 	module *Module
 
-	text   bytes.Buffer
-	roData dataArena
+	text       bytes.Buffer
+	roData     dataArena
+	roDataAddr int
 
 	functionLinks map[*Function]*links.L
 	trapLinks     gen.TrapLinks
@@ -81,9 +82,10 @@ type coder struct {
 	maxStackOffset int
 }
 
-func (m *Module) Code() (text, roData, data []byte, bssSize int) {
+func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, data []byte) {
 	code := &coder{
 		module:         m,
+		roDataAddr:     int(roDataAddr),
 		roFloat32Addrs: make(map[uint32]int),
 		roFloat64Addrs: make(map[uint64]int),
 	}
@@ -140,7 +142,7 @@ func (m *Module) Code() (text, roData, data []byte, bssSize int) {
 		mach.UpdateCalls(code, link)
 	}
 
-	roData = code.roData.populate()
+	roData = code.roData.populate(roDataBuf)
 
 	text = code.text.Bytes()
 	return
@@ -160,6 +162,10 @@ func (code *coder) Bytes() []byte {
 
 func (code *coder) Len() int {
 	return code.text.Len()
+}
+
+func (code *coder) RODataAddr() int {
+	return code.roDataAddr
 }
 
 func (code *coder) TrapLinks() *gen.TrapLinks {

@@ -19,14 +19,13 @@ const (
 )
 
 const (
-	regResult     = regs.R(0)  // rax or xmm0
-	regTrapFunc   = regs.R(0)  // mm0
-	regScratch    = regs.R(2)  // rdx
-	regStackPtr   = 4          // rsp
-	regTrapArg    = regs.R(7)  // rdi
-	regStackLimit = regs.R(13) // r13
-	regTextPtr    = regs.R(14) // r14
-	regRODataPtr  = regs.R(15) // r15
+	regResult      = regs.R(0)  // rax or xmm0
+	regTrapFuncMMX = regs.R(0)  // mm0
+	regScratch     = regs.R(2)  // rdx or xmm2
+	regStackPtr    = regs.R(4)  // rsp
+	regTrapArg     = regs.R(7)  // rdi
+	regTextPtr     = regs.R(12) // r12
+	regStackLimit  = regs.R(13) // r13
 )
 
 var availableIntRegs = [][]bool{
@@ -45,10 +44,10 @@ var availableIntRegs = [][]bool{
 		true,  // r9
 		true,  // r10
 		true,  // r11
-		true,  // r12
-		false, // r13
-		false, // r14
-		false, // r15
+		false, // r12 = text ptr
+		false, // r13 = stack limit
+		true,  // r14
+		true,  // r15
 	},
 }
 
@@ -252,9 +251,9 @@ func (mach X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.
 	Movsxd.opReg(code, types.I32, reg, reg)
 
 	if signExt && t == types.I32 {
-		MovsxdFromIndirectScaleIndex.op(code, t, reg, scale, reg, regRODataPtr, addr)
+		MovsxdFromIndirectScaleIndex.opFromAddr(code, t, reg, scale, reg, code.RODataAddr()+addr)
 	} else {
-		MovFromIndirectScaleIndex.op(code, t, reg, scale, reg, regRODataPtr, addr)
+		MovFromIndirectScaleIndex.opFromAddr(code, t, reg, scale, reg, code.RODataAddr()+addr)
 	}
 }
 
@@ -319,7 +318,7 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 			XorpsXorpd.op(code, t, targetReg, targetReg)
 
 		case values.ROData:
-			MovssMovsdFromIndirect.op(code, t, targetReg, regRODataPtr, x.Addr())
+			MovssMovsdFromIndirect.opFromAddr(code, t, targetReg, code.RODataAddr()+x.Addr())
 
 		case values.VarMem:
 			MovssMovsdFromStack.op(code, t, targetReg, x.Offset())
@@ -433,7 +432,7 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 
 func (mach X86) OpTrap(code gen.Coder, id traps.Id) {
 	MovImm32.op(code, types.I64, regTrapArg, imm32(int(id)))
-	MovqFromMMX.op(code, types.I64, regScratch, regTrapFunc)
+	MovqFromMMX.op(code, types.I64, regScratch, regTrapFuncMMX)
 	CallIndirect.op(code, regScratch)
 	Int3.op(code) // if trap handler returns
 }

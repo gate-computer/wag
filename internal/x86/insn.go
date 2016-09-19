@@ -29,6 +29,7 @@ type unaryInsn interface {
 
 type binaryRegInsn interface {
 	opReg(code gen.Coder, t types.T, target, source regs.R)
+	opFromAddr(code gen.Coder, t types.T, target regs.R, addr int)
 	opFromIndirect(code gen.Coder, t types.T, target, source regs.R, disp int)
 	opFromStack(code gen.Coder, t types.T, target regs.R, disp int)
 }
@@ -49,7 +50,7 @@ type binaryInsn struct {
 func (i binaryInsn) op(code gen.Coder, t types.T, target regs.R, source values.Operand) {
 	switch source.Storage {
 	case values.ROData:
-		i.opFromIndirect(code, t, target, regRODataPtr, source.Addr())
+		i.opFromAddr(code, t, target, code.RODataAddr()+source.Addr())
 
 	case values.VarMem:
 		i.opFromStack(code, t, target, source.Offset())
@@ -95,6 +96,13 @@ func writeRexTo(code gen.Coder, rex byte, ro, index, rmOrBase regs.R) {
 	}
 }
 
+type mem byte
+
+const (
+	MemSIB    = mem((1 << 2))
+	MemDisp32 = mem((1 << 2) | (1 << 0))
+)
+
 type mod byte
 
 const (
@@ -107,12 +115,6 @@ const (
 func (mod mod) writeTo(code gen.Coder, ro, rm byte) {
 	code.WriteByte(byte(mod) | ((ro & 7) << 3) | (rm & 7))
 }
-
-type mem byte
-
-const (
-	MemDisp32 = mem((1 << 2) | (1 << 0))
-)
 
 type modOp struct {
 	mod    mod
@@ -132,9 +134,9 @@ func (modMem modMem) writeTo(code gen.Coder, ro byte) {
 	modMem.mod.writeTo(code, ro, byte(modMem.mem))
 }
 
-func dispMod(t types.T, offset int) (mod mod, disp imm) {
+func dispMod(t types.T, baseReg regs.R, offset int) (mod mod, disp imm) {
 	switch {
-	case offset == 0:
+	case offset == 0 && (baseReg&7) != 0x5: // rbp and r13 need displacement
 		mod = ModIndir
 
 	case t.Size() == types.Size64 && (offset&7) != 0:
@@ -158,18 +160,23 @@ func dispMod(t types.T, offset int) (mod mod, disp imm) {
 	return
 }
 
-func writeSibTo(code gen.Coder, scale, index, base byte) {
+const (
+	NoIndex = (1 << 2)
+	NoBase  = (1 << 2) | (1 << 0)
+)
+
+func writeSibTo(code gen.Coder, scale byte, index, base regs.R) {
 	if scale >= 4 {
 		panic(strconv.Itoa(int(scale)))
 	}
 
-	code.WriteByte((scale << 6) | ((index & 7) << 3) | (base & 7))
+	code.WriteByte((scale << 6) | (byte(index&7) << 3) | byte(base&7))
 }
 
 type sib struct {
 	scale byte
-	index byte
-	base  byte
+	index regs.R
+	base  regs.R
 }
 
 func (sib sib) writeTo(code gen.Coder) {
@@ -299,7 +306,11 @@ func (i insnPrefixModOpReg) opReg(code gen.Coder, t types.T, reg regs.R) {
 }
 
 func (i insnPrefixModOpReg) opIndirect(code gen.Coder, t types.T, reg regs.R, disp int) {
-	mod, imm := dispMod(t, disp)
+	if reg == 12 {
+		panic("indirection through r12 not implemented")
+	}
+
+	mod, imm := dispMod(t, reg, disp)
 
 	i.prefix.writeTo(code, t, 0, 0, reg)
 	code.Write(i.bytes)
@@ -308,11 +319,11 @@ func (i insnPrefixModOpReg) opIndirect(code gen.Coder, t types.T, reg regs.R, di
 }
 
 func (i insnPrefixModOpReg) opStack(code gen.Coder, t types.T, disp int) {
-	mod, imm := dispMod(t, disp)
+	mod, imm := dispMod(t, regStackPtr, disp)
 
 	i.prefix.writeTo(code, t, 0, 0, 0)
 	code.Write(i.bytes)
-	mod.writeTo(code, i.ro, 1<<2)
+	modMem{mod, MemSIB}.writeTo(code, i.ro)
 	sib{0, regStackPtr, regStackPtr}.writeTo(code)
 	imm.writeTo(code)
 }
@@ -328,8 +339,23 @@ func (i insnPrefixModRegFromReg) opReg(code gen.Coder, t types.T, target, source
 	ModReg.writeTo(code, byte(target), byte(source))
 }
 
+func (i insnPrefixModRegFromReg) opFromAddr(code gen.Coder, t types.T, target regs.R, addr int) {
+	if addr <= 0 || addr > 0x7fffffff {
+		panic("absolute address is out of range")
+	}
+
+	i.prefix.writeTo(code, t, target, 0, 0)
+	code.Write(i.bytes)
+	modMem{ModIndir, MemDisp32}.writeTo(code, byte(target))
+	imm32(addr).writeTo(code)
+}
+
 func (i insnPrefixModRegFromReg) opFromIndirect(code gen.Coder, t types.T, target, source regs.R, disp int) {
-	mod, imm := dispMod(t, disp)
+	if source == 12 {
+		panic("indirection through r12 not implemented")
+	}
+
+	mod, imm := dispMod(t, source, disp)
 
 	i.prefix.writeTo(code, t, target, 0, source)
 	code.Write(i.bytes)
@@ -338,11 +364,11 @@ func (i insnPrefixModRegFromReg) opFromIndirect(code gen.Coder, t types.T, targe
 }
 
 func (i insnPrefixModRegFromReg) opFromStack(code gen.Coder, t types.T, target regs.R, disp int) {
-	mod, imm := dispMod(t, disp)
+	mod, imm := dispMod(t, regStackPtr, disp)
 
 	i.prefix.writeTo(code, t, target, 0, 0)
 	code.Write(i.bytes)
-	mod.writeTo(code, byte(target), 1<<2)
+	modMem{mod, MemSIB}.writeTo(code, byte(target))
 	sib{0, regStackPtr, regStackPtr}.writeTo(code)
 	imm.writeTo(code)
 }
@@ -365,12 +391,24 @@ type insnPrefixModRegFromRegDisp struct {
 }
 
 func (i insnPrefixModRegFromRegDisp) op(code gen.Coder, t types.T, target, source regs.R, disp int) {
-	mod, imm := dispMod(t, disp)
+	mod, imm := dispMod(t, source, disp)
 
 	i.prefix.writeTo(code, t, target, 0, source)
 	code.Write(i.bytes)
 	mod.writeTo(code, byte(target), byte(source))
 	imm.writeTo(code)
+}
+
+func (i insnPrefixModRegFromRegDisp) opFromAddr(code gen.Coder, t types.T, target regs.R, addr int) {
+	if addr <= 0 || addr > 0x7fffffff {
+		panic("absolute address is out of range")
+	}
+
+	i.prefix.writeTo(code, t, target, 0, 0)
+	code.Write(i.bytes)
+	modMem{ModIndir, MemSIB}.writeTo(code, byte(target))
+	writeSibTo(code, 0, NoIndex, NoBase)
+	imm32(addr).writeTo(code)
 }
 
 type insnPrefixModOpRegImm struct {
@@ -393,11 +431,11 @@ type insnPrefixModRegSibImm struct {
 }
 
 func (i insnPrefixModRegSibImm) op(code gen.Coder, t types.T, reg regs.R, disp int) {
-	mod, imm := dispMod(t, disp)
+	mod, imm := dispMod(t, i.sib.base, disp)
 
 	i.prefix.writeTo(code, t, reg, 0, 0)
 	code.Write(i.bytes)
-	mod.writeTo(code, byte(reg), 1<<2)
+	modMem{mod, MemSIB}.writeTo(code, byte(reg))
 	i.sib.writeTo(code)
 	imm.writeTo(code)
 }
@@ -408,13 +446,25 @@ type insnPrefixModRegCustomSibImm struct {
 }
 
 func (i insnPrefixModRegCustomSibImm) op(code gen.Coder, t types.T, reg regs.R, scale uint8, index, base regs.R, disp int) {
-	mod, imm := dispMod(t, disp)
+	mod, imm := dispMod(t, base, disp)
 
 	i.prefix.writeTo(code, t, reg, index, base)
 	code.Write(i.bytes)
-	mod.writeTo(code, byte(reg), 1<<2)
-	writeSibTo(code, scale, byte(index), byte(base))
+	modMem{mod, MemSIB}.writeTo(code, byte(reg))
+	writeSibTo(code, scale, index, base)
 	imm.writeTo(code)
+}
+
+func (i insnPrefixModRegCustomSibImm) opFromAddr(code gen.Coder, t types.T, reg regs.R, scale uint8, index regs.R, addr int) {
+	if addr <= 0 || addr > 0x7fffffff {
+		panic("absolute address is out of range")
+	}
+
+	i.prefix.writeTo(code, t, reg, index, 0)
+	code.Write(i.bytes)
+	modMem{ModIndir, MemSIB}.writeTo(code, byte(reg))
+	writeSibTo(code, scale, index, NoBase)
+	imm32(addr).writeTo(code)
 }
 
 type insnPrefixArithmeticModOpRegImm struct {

@@ -191,7 +191,7 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 			CmpImm32.op(code, t, reg, imm32(int(b.ImmValue(t))))
 
 		case values.ROData:
-			Cmp.opFromIndirect(code, t, reg, regRODataPtr, b.Addr())
+			Cmp.opFromAddr(code, t, reg, code.RODataAddr()+b.Addr())
 
 		case values.VarMem:
 			CmpFromStack.op(code, t, reg, b.Offset())
@@ -315,9 +315,6 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	}
 
 	switch bStorage {
-	case values.ROData:
-		insn.opIndirect(code, t, regRODataPtr, b.Addr())
-
 	case values.VarMem:
 		insn.opStack(code, t, b.Offset())
 

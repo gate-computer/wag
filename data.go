@@ -24,10 +24,18 @@ func (arena *dataArena) allocate(size, alignment int, populator func([]byte)) (a
 	return
 }
 
-func (arena *dataArena) populate() (data []byte) {
-	data = make([]byte, arena.size)
-	for _, x := range arena.allocs {
-		x.populator(data[x.addr : x.addr+x.size])
+func (arena *dataArena) populate(buf []byte) []byte {
+	if buf == nil {
+		buf = make([]byte, arena.size)
+	} else if arena.size <= len(buf) {
+		buf = buf[:arena.size]
+	} else {
+		panic("read-only data buffer is too small")
 	}
-	return
+
+	for _, x := range arena.allocs {
+		x.populator(buf[x.addr : x.addr+x.size])
+	}
+
+	return buf
 }

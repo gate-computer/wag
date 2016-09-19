@@ -1,6 +1,6 @@
 #include "textflag.h"
 
-// func run(text, roData, stack []byte, arg int) (result int32, trap int)
+// func run(text, linear, stack []byte, arg int) (result int32, trap int)
 TEXT ·run(SB),$0-96
 	PUSHQ	AX
 	PUSHQ	CX
@@ -18,8 +18,7 @@ TEXT ·run(SB),$0-96
 	PUSHQ	R14
 	PUSHQ	R15
 
-	MOVQ	text+0(FP), R14
-	MOVQ	roData+24(FP), R15
+	MOVQ	text+0(FP), R12
 	MOVQ	stack+48(FP), R13	// stack limit
 	MOVQ	stack_len+56(FP), CX
 	MOVQ	arg+72(FP), DX
@@ -52,7 +51,7 @@ TEXT run<>(SB),NOSPLIT,$0
 	MOVQ	AX, M0		// trap handler
 	SUBQ	$8, SP
 	MOVQ	DX, (SP)	// arg
-	CALL	R14
+	CALL	R12
 	XORQ	DI, DI		// no trap
 	MOVQ	M7, SP		// restore original stack
 	RET
