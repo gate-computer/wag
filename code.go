@@ -50,6 +50,7 @@ type branchTarget struct {
 	name        string
 	expectType  types.T
 	stackOffset int
+	functionEnd bool
 }
 
 type coder struct {
@@ -200,19 +201,21 @@ func (code *coder) genFunction(f *Function) {
 	stackCheckEndAddr := code.Len()
 
 	end := new(links.L)
-	code.pushTarget(end, "", f.Signature.ResultType)
+	code.pushTarget(end, "", f.Signature.ResultType, true)
 
 	var result values.Operand
 	var resultType types.T
 	var deadend bool
 
 	for i, x := range f.body {
+		final := i == len(f.body)-1
+
 		var t types.T
-		if i == len(f.body)-1 {
+		if final {
 			t = f.Signature.ResultType
 		}
 
-		result, resultType, deadend = code.expr(x, t)
+		result, resultType, deadend = code.expr(x, t, final)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -282,7 +285,7 @@ func (code *coder) genFunction(f *Function) {
 	}
 }
 
-func (code *coder) expr(x interface{}, expectType types.T) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) expr(x interface{}, expectType types.T, final bool) (result values.Operand, resultType types.T, deadend bool) {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
@@ -328,7 +331,7 @@ func (code *coder) expr(x interface{}, expectType types.T) (result values.Operan
 	} else {
 		switch exprName {
 		case "block":
-			result, deadend = code.exprBlock(exprName, args, expectType, nil)
+			result, deadend = code.exprBlock(exprName, args, expectType, nil, final)
 			resultType = expectType
 
 		case "br", "br_if", "br_table":
@@ -344,11 +347,11 @@ func (code *coder) expr(x interface{}, expectType types.T) (result values.Operan
 			result, resultType = code.exprGetLocal(exprName, args)
 
 		case "if":
-			result, deadend = code.exprIf(exprName, args, expectType)
+			result, deadend = code.exprIf(exprName, args, expectType, final)
 			resultType = expectType
 
 		case "loop":
-			result, deadend = code.exprLoop(exprName, args, expectType)
+			result, deadend = code.exprLoop(exprName, args, expectType, final)
 			resultType = expectType
 
 		case "nop":
@@ -403,7 +406,7 @@ func (code *coder) exprUnaryOp(exprName, opName string, opType types.T, args []i
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	x, _, deadend := code.expr(args[0], opType)
+	x, _, deadend := code.expr(args[0], opType, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -430,14 +433,14 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	a, _, deadend := code.expr(args[0], opType)
+	a, _, deadend := code.expr(args[0], opType, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
 	code.opPushLiveOperand(opType, &a)
-	b, _, deadend := code.expr(args[1], opType)
+	b, _, deadend := code.expr(args[1], opType, false)
 	code.popLiveOperand(&a)
 	if deadend {
 		code.discard(opType, a)
@@ -522,7 +525,7 @@ func (code *coder) exprConst(exprName string, opType types.T, args []interface{}
 	return imm
 }
 
-func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L) (result values.Operand, deadend bool) {
+func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L, final bool) (result values.Operand, deadend bool) {
 	var afterName string
 	var beforeName string
 
@@ -541,10 +544,10 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 	}
 
 	after := new(links.L)
-	code.pushTarget(after, afterName, expectType)
+	code.pushTarget(after, afterName, expectType, final)
 
 	if before != nil {
-		code.pushTarget(before, beforeName, types.Void)
+		code.pushTarget(before, beforeName, types.Void, false)
 	}
 
 	var resultType types.T
@@ -555,7 +558,7 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 			t = expectType
 		}
 
-		result, resultType, deadend = code.expr(arg, t)
+		result, resultType, deadend = code.expr(arg, t, false)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -678,7 +681,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	var valueOperand values.Operand
 
 	if valueExpr != nil {
-		valueOperand, _, deadend = code.expr(valueExpr, valueType)
+		valueOperand, _, deadend = code.expr(valueExpr, valueType, false)
 		if deadend {
 			mach.OpAbort(code)
 			return
@@ -689,7 +692,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	if condExpr != nil {
 		code.opPushLiveOperand(valueType, &valueOperand)
-		condOperand, _, deadend = code.expr(condExpr, types.I32)
+		condOperand, _, deadend = code.expr(condExpr, types.I32, false)
 		code.popLiveOperand(&valueOperand)
 		if deadend {
 			code.discard(valueType, valueOperand)
@@ -702,14 +705,19 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	switch exprName {
 	case "br":
-		code.opSaveTempRegOperands()
-		code.opInitLocals()
-		code.opStoreRegVars(true)
+		if defaultTarget.functionEnd {
+			mach.OpAddImmToStackPtr(code, code.stackOffset)
+			mach.OpReturn(code)
+		} else {
+			code.opSaveTempRegOperands()
+			code.opInitLocals()
+			code.opStoreRegVars(true)
 
-		delta := code.stackOffset - defaultTarget.stackOffset
+			delta := code.stackOffset - defaultTarget.stackOffset
 
-		mach.OpAddImmToStackPtr(code, delta)
-		code.opBranch(defaultTarget.label)
+			mach.OpAddImmToStackPtr(code, delta)
+			code.opBranch(defaultTarget.label)
+		}
 
 		deadend = true
 
@@ -882,7 +890,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	indexExpr := args[1]
 	args = args[2:]
 
-	operand, _, deadend := code.expr(indexExpr, types.I32)
+	operand, _, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -940,7 +948,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 
 		var x values.Operand
 
-		x, _, deadend = code.expr(arg, t)
+		x, _, deadend = code.expr(arg, t, false)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -996,7 +1004,7 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 	return
 }
 
-func (code *coder) exprIf(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
+func (code *coder) exprIf(exprName string, args []interface{}, expectType types.T, final bool) (result values.Operand, deadend bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
@@ -1010,7 +1018,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	end := new(links.L)
 	afterThen := new(links.L)
 
-	ifResult, _, deadend := code.expr(args[0], types.I32)
+	ifResult, _, deadend := code.expr(args[0], types.I32, false)
 	if deadend {
 		return
 	}
@@ -1020,7 +1028,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	code.opStoreRegVars(false)
 	code.opBranchIf(ifResult, false, afterThen)
 
-	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType)
+	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType, final)
 
 	if haveElse {
 		if !thenDeadend {
@@ -1031,7 +1039,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		}
 		code.opLabel(afterThen)
 
-		elseDeadend, endReachableFromElse := code.ifExprs(args[2], "else", end, expectType)
+		elseDeadend, endReachableFromElse := code.ifExprs(args[2], "else", end, expectType, final)
 
 		if !elseDeadend {
 			endReachable = true
@@ -1056,7 +1064,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	return
 }
 
-func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType types.T) (deadend, endReached bool) {
+func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType types.T, final bool) (deadend, endReached bool) {
 	args := x.([]interface{})
 
 	var endName string
@@ -1074,7 +1082,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 		}
 	}
 
-	code.pushTarget(end, endName, expectType)
+	code.pushTarget(end, endName, expectType, final)
 
 	var result values.Operand
 	var resultType types.T
@@ -1082,7 +1090,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 	if len(args) > 0 {
 		switch args[0].(type) {
 		case string:
-			result, _, deadend = code.expr(args, expectType)
+			result, _, deadend = code.expr(args, expectType, false)
 
 		case []interface{}:
 			for i, expr := range args {
@@ -1091,7 +1099,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 					t = expectType
 				}
 
-				result, resultType, deadend = code.expr(expr, t)
+				result, resultType, deadend = code.expr(expr, t, false)
 				if deadend {
 					break
 				}
@@ -1114,11 +1122,11 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 	return
 }
 
-func (code *coder) exprLoop(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
+func (code *coder) exprLoop(exprName string, args []interface{}, expectType types.T, final bool) (result values.Operand, deadend bool) {
 	before := new(links.L)
 	code.opLabel(before)
 
-	return code.exprBlock(exprName, args, expectType, before)
+	return code.exprBlock(exprName, args, expectType, before, final)
 }
 
 func (code *coder) exprNop(exprName string, args []interface{}) {
@@ -1139,7 +1147,7 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 	}
 
 	if len(args) > 0 {
-		x, _, deadend := code.expr(args[0], t)
+		x, _, deadend := code.expr(args[0], t, true)
 		if deadend {
 			mach.OpAbort(code)
 			return
@@ -1163,7 +1171,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	result, _, deadend = code.expr(args[1], resultType)
+	result, _, deadend = code.expr(args[1], resultType, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1836,7 +1844,7 @@ func (code *coder) callSite(l *links.L) {
 	}
 }
 
-func (code *coder) pushTarget(l *links.L, name string, expectType types.T) {
+func (code *coder) pushTarget(l *links.L, name string, expectType types.T, functionEnd bool) {
 	offset := code.stackOffset
 
 	if code.pushedLocals < len(code.function.Locals) {
@@ -1845,7 +1853,7 @@ func (code *coder) pushTarget(l *links.L, name string, expectType types.T) {
 		offset = len(code.function.Locals) * mach.WordSize()
 	}
 
-	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, offset})
+	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, offset, functionEnd})
 }
 
 func (code *coder) popTarget() (live bool) {
