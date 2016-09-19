@@ -1516,7 +1516,8 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Operand {
 	x = code.effectiveOperand(x)
 
-	if x.Storage == values.ConditionFlags {
+	switch x.Storage {
+	case values.Stack, values.ConditionFlags:
 		reg := code.opAllocReg(t)
 		code.opMove(t, reg, x)
 		x = values.TempRegOperand(reg)

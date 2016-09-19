@@ -47,7 +47,7 @@ var (
 	MovssMovsdToStack   = insnPrefixModRegSibImm{scalarSize, []byte{0x0f, 0x11}, sib{0, regStackPtr, regStackPtr}}
 )
 
-var binaryFloatInsns = map[string]binaryInsn{
+var binaryFloatInsns = map[string]binaryRegInsn{
 	"add": AddssAddsd,
 	"div": DivssDivsd,
 	"sub": SubssSubsd,

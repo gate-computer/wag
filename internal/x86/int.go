@@ -70,16 +70,24 @@ var (
 	MovFromIndirectScaleIndex    = insnPrefixModRegCustomSibImm{rexSize, []byte{0x8b}}
 
 	AddImm = insnPrefixArithmeticModOpRegImm{rexSize, 0}
+	OrImm  = insnPrefixArithmeticModOpRegImm{rexSize, 1}
+	AndImm = insnPrefixArithmeticModOpRegImm{rexSize, 4}
 	SubImm = insnPrefixArithmeticModOpRegImm{rexSize, 5}
+	XorImm = insnPrefixArithmeticModOpRegImm{rexSize, 6}
 	CmpImm = insnPrefixArithmeticModOpRegImm{rexSize, 7}
 )
 
 var binaryIntInsns = map[string]binaryInsn{
-	"add": Add,
-	"and": And,
-	"or":  Or,
-	"sub": Sub,
-	"xor": Xor,
+	"add": binaryInsn{Add, AddImm},
+	"and": binaryInsn{And, AndImm},
+	"or":  binaryInsn{Or, OrImm},
+	"sub": binaryInsn{Sub, SubImm},
+	"xor": binaryInsn{Xor, XorImm},
+}
+
+var binaryIntDivMulInsns = map[string]binaryIntDivMulInsn{
+	"div_u": binaryIntDivMulInsn{Div, ShrImm},
+	"mul":   binaryIntDivMulInsn{Mul, ShlImm},
 }
 
 var binaryIntConditions = map[string]values.Condition{
@@ -88,16 +96,6 @@ var binaryIntConditions = map[string]values.Condition{
 	"gt_u": values.GT_U,
 	"lt_s": values.LT_S,
 	"ne":   values.NE,
-}
-
-var binaryIntDivMulInsns = map[string]unaryInsn{
-	"div_u": Div,
-	"mul":   Mul,
-}
-
-var binaryIntDivMulShiftInsns = map[string]binaryImmInsn{
-	"div_u": ShrImm,
-	"mul":   ShlImm,
 }
 
 func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
@@ -129,8 +127,9 @@ func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.O
 }
 
 func (mach X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
-	if a.Storage == values.ConditionFlags {
-		panic("first operand of binary expression is condition flags")
+	switch a.Storage {
+	case values.Stack, values.ConditionFlags:
+		panic(a)
 	}
 
 	switch name {
@@ -152,11 +151,6 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 		}
 	}
 
-	bReg, _ := b.CheckAnyReg()
-	bFreeReg := false
-	bConsume := true
-	bStorage := b.Storage
-
 	switch b.Storage {
 	case values.Imm:
 		value := b.ImmValue(t)
@@ -173,80 +167,53 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 			return values.TempRegOperand(reg)
 
 		case value < -0x80000000 || value >= 0x80000000:
-			bReg, bFreeReg = mach.opBorrowScratchReg(code, t, b)
-			bConsume = false
-			bStorage = values.TempReg
+			reg, own := mach.opBorrowScratchReg(code, t, b)
+			b = values.RegOperand(reg, own)
 		}
 
 	case values.Stack, values.ConditionFlags:
-		bReg, bFreeReg = mach.opBorrowScratchReg(code, t, b)
-		bConsume = false
-		bStorage = values.TempReg
+		reg, own := mach.opBorrowScratchReg(code, t, b)
+		b = values.RegOperand(reg, own)
 	}
-
-	var result values.Operand
 
 	if insn, found := binaryIntInsns[name]; found {
-		aReg := mach.opResultReg(code, t, a)
-
-		switch bStorage {
-		case values.ROData:
-			insn.opFromIndirect(code, t, aReg, regRODataPtr, b.Addr())
-
-		case values.VarMem:
-			insn.opFromStack(code, t, aReg, b.Offset())
-
-		case values.Imm:
-			// TODO: use actual immediate opcode
-			bReg, bFreeReg = mach.opBorrowScratchReg(code, t, b)
-			bConsume = false
-			bStorage = values.TempReg
-			fallthrough
-
-		case values.VarReg, values.TempReg:
-			insn.opReg(code, t, aReg, bReg)
-
-		default:
-			panic(bStorage)
-		}
-
-		result = values.TempRegOperand(aReg)
+		reg := mach.opResultReg(code, t, a)
+		insn.op(code, t, reg, b)
+		return values.TempRegOperand(reg)
 	} else if cond, found := binaryIntConditions[name]; found {
-		aReg, own := mach.opBorrowResultReg(code, t, a)
+		reg, own := mach.opBorrowResultReg(code, t, a)
 		if own {
-			defer code.FreeReg(t, aReg)
+			defer code.FreeReg(t, reg)
 		}
 
-		switch bStorage {
+		switch b.Storage {
 		case values.Imm:
-			CmpImm32.op(code, t, aReg, imm32(int(b.ImmValue(t))))
+			CmpImm32.op(code, t, reg, imm32(int(b.ImmValue(t))))
 
 		case values.ROData:
-			Cmp.opFromIndirect(code, t, aReg, regRODataPtr, b.Addr())
+			Cmp.opFromIndirect(code, t, reg, regRODataPtr, b.Addr())
 
 		case values.VarMem:
-			CmpFromStack.op(code, t, aReg, b.Offset())
+			CmpFromStack.op(code, t, reg, b.Offset())
 
-		case values.VarReg, values.TempReg:
-			Cmp.opReg(code, t, aReg, bReg)
+		case values.VarReg, values.TempReg, values.BorrowedReg:
+			Cmp.opReg(code, t, reg, b.Reg())
 
 		default:
-			panic(bStorage)
+			panic(b)
 		}
 
-		result = values.ConditionFlagsOperand(cond)
-	}
-
-	if bConsume {
 		code.Consumed(t, b)
-	} else if bFreeReg {
-		code.FreeReg(t, bReg)
+
+		return values.ConditionFlagsOperand(cond)
 	}
 
-	return result
+	panic(name)
 }
 
 func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
+	insn := binaryIntDivMulInsns[name]
+
 	if value, ok := b.CheckImmValue(t); ok {
 		switch {
 		case value == -1:
@@ -256,7 +223,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 
 		case value > 0 && isPowerOfTwo(uint64(value)):
 			reg := mach.opResultReg(code, t, a)
-			binaryIntDivMulShiftInsns[name].op(code, t, reg, uimm8(log2(uint64(value))))
+			insn.shiftImm.op(code, t, reg, uimm8(log2(uint64(value))))
 			return values.TempRegOperand(reg)
 		}
 	}
@@ -346,8 +313,6 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	if name == "div_u" {
 		Xor.opReg(code, t, regScratch, regScratch) // dividend high bits
 	}
-
-	insn := binaryIntDivMulInsns[name]
 
 	switch bStorage {
 	case values.ROData:

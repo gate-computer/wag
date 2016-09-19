@@ -6,7 +6,71 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/internal/values"
 )
+
+type prefix interface {
+	writeTo(gen.Coder, types.T, regs.R, regs.R, regs.R)
+}
+
+type addrInsn interface {
+	op(code gen.Coder, addr int)
+}
+
+type regInsn interface {
+	op(code gen.Coder, subject regs.R)
+}
+
+type unaryInsn interface {
+	opReg(code gen.Coder, t types.T, source regs.R)
+	opIndirect(code gen.Coder, t types.T, source regs.R, disp int)
+	opStack(code gen.Coder, t types.T, disp int)
+}
+
+type binaryRegInsn interface {
+	opReg(code gen.Coder, t types.T, target, source regs.R)
+	opFromIndirect(code gen.Coder, t types.T, target, source regs.R, disp int)
+	opFromStack(code gen.Coder, t types.T, target regs.R, disp int)
+}
+
+type binaryArithmeticImmInsn interface {
+	op(code gen.Coder, t types.T, target regs.R, value int)
+}
+
+type binaryImmInsn interface {
+	op(code gen.Coder, t types.T, target regs.R, imm imm)
+}
+
+type binaryInsn struct {
+	binaryRegInsn
+	Imm binaryArithmeticImmInsn
+}
+
+func (i binaryInsn) op(code gen.Coder, t types.T, target regs.R, source values.Operand) {
+	switch source.Storage {
+	case values.ROData:
+		i.opFromIndirect(code, t, target, regRODataPtr, source.Addr())
+
+	case values.VarMem:
+		i.opFromStack(code, t, target, source.Offset())
+
+	case values.Imm:
+		i.Imm.op(code, t, target, int(source.ImmValue(t)))
+
+	case values.VarReg, values.TempReg, values.BorrowedReg:
+		i.opReg(code, t, target, source.Reg())
+
+	default:
+		panic(source)
+	}
+
+	code.Consumed(t, source)
+}
+
+type binaryIntDivMulInsn struct {
+	unaryInsn
+	shiftImm binaryImmInsn
+}
 
 const (
 	rexW = (1 << 6) | (1 << 3)
@@ -110,34 +174,6 @@ type sib struct {
 
 func (sib sib) writeTo(code gen.Coder) {
 	writeSibTo(code, sib.scale, sib.index, sib.base)
-}
-
-type prefix interface {
-	writeTo(gen.Coder, types.T, regs.R, regs.R, regs.R)
-}
-
-type addrInsn interface {
-	op(code gen.Coder, addr int)
-}
-
-type regInsn interface {
-	op(code gen.Coder, subject regs.R)
-}
-
-type unaryInsn interface {
-	opReg(code gen.Coder, t types.T, source regs.R)
-	opIndirect(code gen.Coder, t types.T, source regs.R, disp int)
-	opStack(code gen.Coder, t types.T, disp int)
-}
-
-type binaryInsn interface {
-	opReg(code gen.Coder, t types.T, target, source regs.R)
-	opFromIndirect(code gen.Coder, t types.T, target, source regs.R, disp int)
-	opFromStack(code gen.Coder, t types.T, target regs.R, disp int)
-}
-
-type binaryImmInsn interface {
-	op(code gen.Coder, t types.T, target regs.R, count imm)
 }
 
 type insnFixed []byte

@@ -20,6 +20,7 @@ const (
 	VarMem // returned by gen.Coder.Var() for non-cached variables
 	VarReg // used in wag.coder.varState, returned by gen.Coder.Var()
 	TempReg
+	BorrowedReg // may be used by backend implementations
 	Stack
 	ConditionFlags
 )
@@ -46,6 +47,9 @@ func (s Storage) String() string {
 
 	case TempReg:
 		return "temporary register"
+
+	case BorrowedReg:
+		return "borrorwed register"
 
 	case Stack:
 		return "stack"
@@ -131,6 +135,16 @@ func VarRegOperand(index int, reg regs.R) Operand {
 
 func TempRegOperand(reg regs.R) Operand {
 	return Operand{TempReg, uint64(byte(reg))}
+}
+
+func RegOperand(reg regs.R, own bool) Operand {
+	var s Storage
+	if own {
+		s = TempReg
+	} else {
+		s = BorrowedReg
+	}
+	return Operand{s, uint64(byte(reg))}
 }
 
 func ConditionFlagsOperand(cond Condition) Operand {
@@ -268,7 +282,7 @@ func (o Operand) Reg() (reg regs.R) {
 
 func (o Operand) CheckAnyReg() (reg regs.R, ok bool) {
 	switch o.Storage {
-	case VarReg, TempReg:
+	case VarReg, TempReg, BorrowedReg:
 		reg = regs.R(byte(o.X))
 		ok = true
 	}
@@ -327,13 +341,10 @@ func (o Operand) String() string {
 	case VarReg:
 		return fmt.Sprintf("%s #%d in r%d", o.Storage, o.VarOperand().Index(), o.Reg())
 
-	case TempReg:
+	case TempReg, BorrowedReg:
 		return fmt.Sprintf("%s r%d", o.Storage, o.Reg())
 
-	case Stack:
-		return o.Storage.String()
-
-	case ConditionFlags:
+	case Stack, ConditionFlags:
 		return o.Storage.String()
 
 	default:
