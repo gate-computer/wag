@@ -70,15 +70,15 @@ type coder struct {
 	liveOperands          []liveOperand
 	immutableLiveOperands int
 
-	stackOffset int
-
 	targetStack []*branchTarget
 
 	// these must be reset for each function
 	function       *Function
 	vars           []varState
-	labelLinks     map[*links.L]struct{}
+	pushedLocals   int
+	stackOffset    int
 	maxStackOffset int
+	labelLinks     map[*links.L]struct{}
 }
 
 func (m *Module) Code() (text, roData, data []byte, bssSize int) {
@@ -184,20 +184,20 @@ func (code *coder) genFunction(f *Function) {
 		code.vars = make([]varState, n)
 	}
 
-	code.labelLinks = make(map[*links.L]struct{})
+	for local, t := range f.Locals {
+		index := len(f.Params) + local
+		code.vars[index].init(values.ImmOperand(t, 0), true)
+	}
+
+	code.pushedLocals = 0
+	code.stackOffset = 0
 	code.maxStackOffset = 0
+	code.labelLinks = make(map[*links.L]struct{})
 
 	mach.AlignFunction(code)
 	functionAddr := code.Len()
 	stackUsageAddr := mach.OpTrapIfStackExhausted(code)
 	stackCheckEndAddr := code.Len()
-
-	mach.OpAddImmToStackPtr(code, -mach.WordSize()*len(f.Locals))
-
-	for localIndex, localType := range f.Locals {
-		varIndex := len(f.Params) + localIndex
-		code.vars[varIndex].init(values.ImmOperand(localType, 0), true)
-	}
 
 	end := new(links.L)
 	code.pushTarget(end, "", f.Signature.ResultType)
@@ -232,10 +232,8 @@ func (code *coder) genFunction(f *Function) {
 		code.opLabel(end)
 	}
 
-	stackUsage := len(code.function.Locals)*mach.WordSize() + code.maxStackOffset
-
 	if !deadend {
-		mach.OpAddImmToStackPtr(code, len(code.function.Locals)*mach.WordSize())
+		code.opAddImmToStackPtr(code.stackOffset)
 		mach.OpReturn(code)
 	}
 
@@ -260,10 +258,6 @@ func (code *coder) genFunction(f *Function) {
 		panic(errors.New("internal: live operands exist at end of function"))
 	}
 
-	if code.stackOffset != 0 {
-		panic(fmt.Errorf("internal: stack offset is non-zero at end of function: %d", code.stackOffset))
-	}
-
 	if len(code.targetStack) != 0 {
 		panic(errors.New("internal: branch target stack is not empty at end of function"))
 	}
@@ -272,8 +266,8 @@ func (code *coder) genFunction(f *Function) {
 		mach.UpdateBranches(code, link)
 	}
 
-	if stackUsage > 0 {
-		mach.UpdateStackDisp(code, stackUsageAddr, stackUsage)
+	if code.maxStackOffset > 0 {
+		mach.UpdateStackDisp(code, stackUsageAddr, code.maxStackOffset)
 	} else {
 		newAddr := stackCheckEndAddr &^ (mach.FunctionAlignment() - 1)
 		mach.DeleteCode(code, functionAddr, newAddr)
@@ -658,7 +652,6 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	}
 
 	defaultTarget := code.findTarget(defaultIndex)
-	defaultStackDelta := code.stackOffset - defaultTarget.stackOffset
 
 	valueType := defaultTarget.expectType
 
@@ -710,20 +703,26 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	switch exprName {
 	case "br":
 		code.opSaveTempRegOperands()
+		code.opInitLocals()
 		code.opStoreRegVars(true)
 
-		mach.OpAddImmToStackPtr(code, defaultStackDelta)
+		delta := code.stackOffset - defaultTarget.stackOffset
+
+		mach.OpAddImmToStackPtr(code, delta)
 		code.opBranch(defaultTarget.label)
 
 		deadend = true
 
 	case "br_if":
 		code.opSaveTempRegOperands()
+		code.opInitLocals()
 		code.opStoreRegVars(false)
 
-		mach.OpAddImmToStackPtr(code, defaultStackDelta)
+		delta := code.stackOffset - defaultTarget.stackOffset
+
+		mach.OpAddImmToStackPtr(code, delta)
 		code.opBranchIf(condOperand, true, defaultTarget.label)
-		mach.OpAddImmToStackPtr(code, -defaultStackDelta)
+		mach.OpAddImmToStackPtr(code, -delta)
 
 	case "br_table":
 		commonStackOffset := tableTargets[0].stackOffset
@@ -772,10 +771,13 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 		defer code.freeIntReg(reg)
 
+		code.opInitLocals()
 		code.opStoreRegVars(true)
 
-		mach.OpAddImmToStackPtr(code, defaultStackDelta)
-		tableStackOffset := code.stackOffset - defaultStackDelta
+		defaultDelta := code.stackOffset - defaultTarget.stackOffset
+
+		mach.OpAddImmToStackPtr(code, defaultDelta)
+		tableStackOffset := code.stackOffset - defaultDelta
 		code.opBranchIfOutOfBounds(reg, len(tableTargets), defaultTarget.label)
 		mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, tableScale, tableAlloc.addr, true)
 
@@ -836,6 +838,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 	}
 
 	code.opSaveTempRegOperands()
+	code.opInitLocals()
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
 	if deadend {
@@ -896,6 +899,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	}
 
 	code.opSaveTempRegOperands()
+	code.opInitLocals()
 
 	// if the operand yielded a temporary register, then it was just freed by
 	// the eviction, but the register retains its value.  don't call anything
@@ -1012,6 +1016,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	}
 
 	code.opSaveTempRegOperands()
+	code.opInitLocals()
 	code.opStoreRegVars(false)
 	code.opBranchIf(ifResult, false, afterThen)
 
@@ -1143,7 +1148,7 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 		code.opMove(t, mach.ResultReg(), x)
 	}
 
-	mach.OpAddImmToStackPtr(code, code.stackOffset+len(code.function.Locals)*mach.WordSize())
+	mach.OpAddImmToStackPtr(code, code.stackOffset)
 	mach.OpReturn(code)
 }
 
@@ -1197,6 +1202,8 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 			break
 
 		push:
+			code.opInitLocals()
+
 			for _, live := range code.liveOperands[code.immutableLiveOperands:] {
 				if live.ref.Storage == values.Var && live.ref.Index() == index {
 					x := code.effectiveOperand(*live.ref)
@@ -1346,8 +1353,12 @@ func (code *coder) FreeReg(t types.T, reg regs.R) {
 	code.regs(t).free(reg)
 }
 
+func (code *coder) tryAllocIntReg() (reg regs.R, ok bool) {
+	return code.regs(types.I64).alloc()
+}
+
 func (code *coder) opAllocIntReg() (reg regs.R) {
-	reg, ok := code.regs(types.I64).alloc()
+	reg, ok := code.tryAllocIntReg()
 	if !ok {
 		reg = code.opStealReg(types.I64)
 	}
@@ -1373,6 +1384,57 @@ func (code *coder) regs(t types.T) *regAllocator {
 
 	default:
 		panic(t)
+	}
+}
+
+func (code *coder) opInitLocals() {
+	code.opInitLocalsUntil(len(code.function.Locals), values.NoOperand)
+}
+
+func (code *coder) opInitLocalsUntil(lastLocal int, lastValue values.Operand) {
+	var haveZero bool
+	var zeroReg regs.R
+
+	for local := code.pushedLocals; local <= lastLocal && local < len(code.function.Locals); local++ {
+		index := len(code.function.Params) + local
+
+		v := &code.vars[index]
+		x := v.cache
+		if x.Storage == values.Nowhere {
+			panic("variable without cached value during locals initialization")
+		}
+		if !v.dirty {
+			panic("variable not dirty during locals initialization")
+		}
+
+		if local == lastLocal {
+			x = lastValue
+		}
+
+		t := code.function.Locals[local]
+
+		if value, ok := x.CheckImmValue(types.I64); ok && value == 0 {
+			if !haveZero {
+				zeroReg, haveZero = code.tryAllocIntReg()
+				if haveZero {
+					defer code.freeIntReg(zeroReg)
+					code.opMove(t, zeroReg, values.ImmOperand(t, 0))
+				}
+			}
+
+			if haveZero {
+				mach.OpPushIntReg(code, zeroReg)
+				goto pushed
+			}
+		}
+
+		mach.OpPush(code, t, x)
+
+	pushed:
+		code.incrementStackOffset()
+		v.dirty = false
+
+		code.pushedLocals++
 	}
 }
 
@@ -1435,7 +1497,7 @@ func (code *coder) effectiveOperand(x values.Operand) values.Operand {
 	if x.Storage == values.Var {
 		i := x.Index()
 		if v := code.vars[i]; v.cache.Storage == values.Nowhere {
-			x = values.VarMemOperand(i, code.varStackOffset(i))
+			x = values.VarMemOperand(i, code.effectiveVarStackOffset(i))
 		} else {
 			x = v.cache
 		}
@@ -1572,6 +1634,8 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 				reg = v.cache.Reg()
 				v.reset()
 			} else {
+				code.opInitLocals()
+
 				x := code.effectiveOperand(*live.ref)
 				mach.OpPush(code, live.typ, x)
 				code.incrementStackOffset()
@@ -1584,6 +1648,8 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 			}
 
 		case values.TempReg:
+			code.opInitLocals()
+
 			found = typeMatch
 			reg = live.ref.Reg()
 			x := code.effectiveOperand(*live.ref)
@@ -1661,6 +1727,7 @@ func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
 }
 
 // opTryStealUnusedVarReg doesn't change the allocation state of the register.
+// Locals must have been pushed already.
 func (code *coder) opTryStealUnusedVarReg(needType types.T) (reg regs.R, ok bool) {
 	var i int
 	var v *varState
@@ -1694,6 +1761,8 @@ func (code *coder) opSaveTempRegOperands() {
 	for _, live := range code.liveOperands[code.immutableLiveOperands:] {
 		switch live.ref.Storage {
 		case values.TempReg:
+			code.opInitLocals()
+
 			x := code.effectiveOperand(*live.ref)
 			mach.OpPush(code, live.typ, x)
 			code.incrementStackOffset()
@@ -1732,9 +1801,13 @@ func (code *coder) opStoreRegVars(forget bool) {
 }
 
 func (code *coder) opStoreVar(t types.T, index int, x values.Operand) {
-	offset := code.varStackOffset(index)
 	x = code.effectiveOperand(x)
-	mach.OpStoreStack(code, t, offset, x)
+	if local := index - len(code.function.Params); local >= code.pushedLocals {
+		code.opInitLocalsUntil(local, x)
+	} else {
+		offset := code.effectiveVarStackOffset(index)
+		mach.OpStoreStack(code, t, offset, x)
+	}
 }
 
 func (code *coder) opLabel(l *links.L) {
@@ -1764,7 +1837,15 @@ func (code *coder) callSite(l *links.L) {
 }
 
 func (code *coder) pushTarget(l *links.L, name string, expectType types.T) {
-	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, code.stackOffset})
+	offset := code.stackOffset
+
+	if code.pushedLocals < len(code.function.Locals) {
+		// init still in progress, but any branch expressions will have
+		// initialized all locals
+		offset = len(code.function.Locals) * mach.WordSize()
+	}
+
+	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, offset})
 }
 
 func (code *coder) popTarget() (live bool) {
@@ -1801,17 +1882,22 @@ func (code *coder) varType(index int) types.T {
 	}
 }
 
-func (code *coder) varStackOffset(index int) int {
+func (code *coder) effectiveVarStackOffset(index int) int {
 	var offset int
 
 	if index < len(code.function.Params) {
 		pos := len(code.function.Params) - index - 1
-		offset = len(code.function.Locals)*mach.WordSize() + mach.FunctionCallStackOverhead() + pos*mach.WordSize()
+		offset = code.stackOffset + mach.FunctionCallStackOverhead() + pos*mach.WordSize()
 	} else {
-		offset = (index - len(code.function.Params)) * mach.WordSize()
+		index -= len(code.function.Params)
+		offset = code.stackOffset - (index+1)*mach.WordSize()
 	}
 
-	return code.stackOffset + offset
+	if offset < 0 {
+		panic("effective stack offset is negative")
+	}
+
+	return offset
 }
 
 func (code *coder) lookupFunctionVar(name string) (index int, typ types.T, found bool) {
