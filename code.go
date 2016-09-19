@@ -82,7 +82,7 @@ type coder struct {
 	maxStackOffset int
 }
 
-func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, data []byte) {
+func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals, data []byte) {
 	code := &coder{
 		module:         m,
 		roDataAddr:     int(roDataAddr),

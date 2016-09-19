@@ -105,11 +105,33 @@ func loadModule(top []interface{}) (m *Module) {
 
 		switch name {
 		case "memory":
-			if len(expr) > 1 {
-				m.Memory.MinSize = int(values.ParseI32(expr[1]))
+			args := expr[1:]
+
+			if len(args) > 0 {
+				m.Memory.MinSize = int(values.ParseI32(args[0])) << 16
+				args = args[1:]
 			}
-			if len(expr) > 2 {
-				m.Memory.MaxSize = int(values.ParseI32(expr[2]))
+
+			if len(args) > 0 {
+				if _, ok := args[0].(string); ok {
+					m.Memory.MaxSize = int(values.ParseI32(args[0])) << 16
+					args = args[1:]
+				}
+			}
+
+			m.Memory.Segments = make([]Segment, len(args))
+
+			for i, arg := range args {
+				segment := arg.([]interface{})
+				if len(segment) != 3 || segment[0].(string) != "segment" {
+					panic(segment)
+				}
+				offset := int(values.ParseI32(segment[1]))
+				data := []byte(segment[2].(string))
+				if offset < 0 || offset+len(data) > m.Memory.MinSize {
+					panic("data segment out of bounds")
+				}
+				m.Memory.Segments[i] = Segment{offset, data}
 			}
 
 		case "func":
@@ -183,9 +205,15 @@ func loadModule(top []interface{}) (m *Module) {
 	return
 }
 
+type Segment struct {
+	Offset int
+	Data   []byte
+}
+
 type Memory struct {
-	MinSize int
-	MaxSize int
+	MinSize  int
+	MaxSize  int
+	Segments []Segment
 }
 
 type Signature struct {

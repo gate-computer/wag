@@ -66,21 +66,21 @@ func (b *Buffer) Close() (first error) {
 type Program struct {
 	buf *Buffer
 
-	text       []byte
-	data       []byte
-	linearSize int
+	text    []byte
+	data    []byte
+	globals []byte
 }
 
-func (b *Buffer) NewProgram(text, data []byte, linearSize int) (p *Program, err error) {
+func (b *Buffer) NewProgram(text, data, globals []byte) (p *Program, err error) {
 	if !b.sealed {
 		err = errors.New("buffer has not been sealed")
 		return
 	}
 
 	p = &Program{
-		buf:        b,
-		data:       data,
-		linearSize: linearSize,
+		buf:     b,
+		data:    data,
+		globals: globals,
 	}
 
 	p.text, err = makeMemoryCopy(text, syscall.PROT_EXEC|syscall.PROT_READ, syscall.MAP_32BIT)
@@ -105,22 +105,27 @@ func (p *Program) Close() (first error) {
 type Runner struct {
 	prog *Program
 
-	dataOffset   int
-	linearOffset int
-	memory       []byte // data + linear
-	stack        []byte
+	globalsOffset    int
+	memoryOffset     int
+	globalsAndMemory []byte
+	stack            []byte
 }
 
-func (p *Program) NewRunner(stackSize int) (r *Runner, err error) {
-	memoryPadding := (pageSize - len(p.data)) & (pageSize - 1)
-
-	r = &Runner{
-		prog:         p,
-		dataOffset:   memoryPadding,
-		linearOffset: memoryPadding + len(p.data),
+func (p *Program) NewRunner(memorySize, stackSize int) (r *Runner, err error) {
+	if memorySize < len(p.data) {
+		err = errors.New("data does not fit in memory")
+		return
 	}
 
-	r.memory, err = makeMemory(r.linearOffset+p.linearSize, 0)
+	padding := (pageSize - len(p.globals)) & (pageSize - 1)
+
+	r = &Runner{
+		prog:          p,
+		globalsOffset: padding,
+		memoryOffset:  padding + len(p.globals),
+	}
+
+	r.globalsAndMemory, err = makeMemory(r.globalsOffset+memorySize, 0)
 	if err != nil {
 		r.Close()
 		return
@@ -142,8 +147,8 @@ func (r *Runner) Close() (first error) {
 		}
 	}
 
-	if r.memory != nil {
-		if err := syscall.Munmap(r.memory); err != nil && first == nil {
+	if r.globalsAndMemory != nil {
+		if err := syscall.Munmap(r.globalsAndMemory); err != nil && first == nil {
 			first = err
 		}
 	}
@@ -152,22 +157,24 @@ func (r *Runner) Close() (first error) {
 }
 
 func (r *Runner) Run(arg int) (result int32, err error) {
-	copy(r.memory[r.dataOffset:], r.prog.data)
+	copy(r.globalsAndMemory[r.globalsOffset:cap(r.globalsAndMemory)], r.prog.globals)
+	copy(r.globalsAndMemory[r.memoryOffset:cap(r.globalsAndMemory)], r.prog.data)
 
-	linear := r.memory[r.linearOffset:cap(r.memory)]
+	memory := r.globalsAndMemory[r.memoryOffset:cap(r.globalsAndMemory)]
+	tail := memory[len(r.prog.data):]
 
-	if len(r.memory) < cap(r.memory) { // dirty?
-		for i := range linear {
-			linear[i] = 0
+	if len(r.globalsAndMemory) < cap(r.globalsAndMemory) { // dirty?
+		for i := range tail {
+			tail[i] = 0
 		}
 	}
 
-	result, trap := run(r.prog.text, linear, r.stack, arg)
+	result, trap := run(r.prog.text, memory, r.stack, arg)
 	if trap != 0 {
 		err = traps.Id(trap)
 	}
 
-	r.memory = r.memory[:r.dataOffset+len(r.prog.data)] // flag it as dirty
+	r.globalsAndMemory = r.globalsAndMemory[:r.globalsOffset+len(r.prog.data)] // flag it as dirty
 
 	return
 }

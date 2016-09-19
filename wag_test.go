@@ -22,7 +22,7 @@ const (
 	dumpROData = true
 
 	maxRODataSize = 0x100000
-	linearSize    = 0x100000
+	memorySize    = 0x100000
 	stackSize     = 0x100000
 
 	timeout = time.Second * 3
@@ -206,7 +206,7 @@ func test(t *testing.T, filename string) {
 		}
 	}()
 
-	text, roData, data := m.Code(b.RODataAddr(), b.ROData)
+	text, roData, globals, data := m.Code(b.RODataAddr(), b.ROData)
 
 	b.Seal()
 
@@ -258,7 +258,7 @@ func test(t *testing.T, filename string) {
 		}
 	}
 
-	p, err := b.NewProgram(text, data, linearSize)
+	p, err := b.NewProgram(text, data, globals)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func test(t *testing.T, filename string) {
 		}
 	}()
 
-	r, err := p.NewRunner(stackSize)
+	r, err := p.NewRunner(memorySize, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}
