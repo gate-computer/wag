@@ -1014,9 +1014,6 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
-	end := new(links.L)
-	afterThen := new(links.L)
-
 	ifResult, _, deadend := code.expr(args[0], types.I32, false, 0, nil)
 	if deadend {
 		return
@@ -1025,41 +1022,52 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	code.opSaveTempRegOperands()
 	code.opInitLocals()
 	code.opStoreRegVars(false)
-	code.opBranchIf(ifResult, false, afterThen)
 
-	thenDeadend, endReachable := code.ifExprs(args[1], "then", end, expectType, final)
+	end := new(links.L)
+	var endReachable bool
 
 	if haveElse {
-		if !thenDeadend {
-			code.opSaveTempRegOperands()
-			code.opStoreRegVars(true)
-			code.opBranch(end)
-			endReachable = true
-		}
-		code.opLabel(afterThen)
+		afterElse := new(links.L)
+		code.opBranchIf(ifResult, true, afterElse)
 
 		elseDeadend, endReachableFromElse := code.ifExprs(args[2], "else", end, expectType, final)
-
 		if !elseDeadend {
-			endReachable = true
+			if final {
+				mach.OpAddImmToStackPtr(code, code.stackOffset)
+				mach.OpReturn(code)
+			} else {
+				code.opSaveTempRegOperands()
+				code.opStoreRegVars(true)
+				code.opBranch(end)
+				endReachable = true
+			}
 		}
 		if endReachableFromElse {
 			endReachable = true
 		}
+
+		code.opLabel(afterElse)
 	} else {
+		code.opBranchIf(ifResult, false, end)
 		endReachable = true
-		code.opLabel(afterThen)
+	}
+
+	thenDeadend, endReachableFromThen := code.ifExprs(args[1], "then", end, expectType, final)
+	if !thenDeadend {
+		endReachable = true
+	}
+	if endReachableFromThen {
+		endReachable = true
 	}
 
 	if endReachable {
 		code.opLabel(end)
+		if expectType != types.Void {
+			result = values.TempRegOperand(mach.ResultReg())
+		}
+	} else {
+		deadend = true
 	}
-
-	if expectType != types.Void {
-		result = values.TempRegOperand(mach.ResultReg())
-	}
-
-	deadend = !endReachable
 	return
 }
 
