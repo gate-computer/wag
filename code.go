@@ -821,20 +821,20 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 			addrType = types.I32 // upper half of reg still contains stack offset
 		}
 
-		branchAddr := mach.OpBranchIndirect(code, addrType, reg)
+		mach.OpBranchIndirect(code, addrType, reg)
 
 		// end of critical section.
 
 		tableAlloc.populator = func(data []byte) {
 			for _, target := range tableTargets {
-				disp := target.label.FinalAddress() - branchAddr
+				addr := uint32(target.label.FinalAddress())
 
 				if commonStackOffset >= 0 {
-					mach.ByteOrder().PutUint32(data[:4], uint32(disp))
+					mach.ByteOrder().PutUint32(data[:4], addr)
 					data = data[4:]
 				} else {
 					delta := tableStackOffset - target.stackOffset
-					packed := (uint64(uint32(delta)) << 32) | uint64(uint32(disp))
+					packed := (uint64(uint32(delta)) << 32) | uint64(addr)
 					mach.ByteOrder().PutUint64(data[:8], packed)
 					data = data[8:]
 				}

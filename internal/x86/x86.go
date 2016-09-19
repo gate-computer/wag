@@ -226,17 +226,15 @@ func (mach X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
 	Add.opReg(code, types.I64, regStackPtr, source)
 }
 
-// OpBranchIndirect must not allocate registers.
-func (mach X86) OpBranchIndirect(code gen.Coder, t types.T, reg regs.R) (branchAddr int) {
+// OpBranchIndirect must not allocate registers.  The supplied register is
+// trashed.
+func (mach X86) OpBranchIndirect(code gen.Coder, t types.T, reg regs.R) {
 	if t == types.I32 {
 		Movsxd.opReg(code, types.I32, reg, reg)
 	}
 
-	LeaRip.op(code, regScratch, imm32(0))
-	branchAddr = code.Len()
-	Add.opReg(code, types.I64, regScratch, reg)
-	JmpIndirect.op(code, regScratch)
-	return
+	Add.opReg(code, types.I64, reg, regTextPtr)
+	JmpIndirect.op(code, reg)
 }
 
 func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
