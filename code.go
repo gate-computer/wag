@@ -1464,7 +1464,7 @@ func (code *coder) opInitLocalsUntil(lastLocal int, lastValue values.Operand) {
 				zeroReg, haveZero = code.tryAllocIntReg()
 				if haveZero {
 					defer code.freeIntReg(zeroReg)
-					code.opMove(t, zeroReg, values.ImmOperand(t, 0))
+					code.opMove(types.I64, zeroReg, values.ImmOperand(types.I64, 0))
 				}
 			}
 
