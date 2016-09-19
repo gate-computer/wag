@@ -215,7 +215,7 @@ func (code *coder) genFunction(f *Function) {
 			t = f.Signature.ResultType
 		}
 
-		result, resultType, deadend = code.expr(x, t, final)
+		result, resultType, deadend = code.expr(x, t, final, 0, nil)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -285,7 +285,7 @@ func (code *coder) genFunction(f *Function) {
 	}
 }
 
-func (code *coder) expr(x interface{}, expectType types.T, final bool) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) expr(x interface{}, expectType types.T, final bool, liveType types.T, liveOperand *values.Operand) (result values.Operand, resultType types.T, deadend bool) {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
@@ -297,6 +297,17 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool) (result v
 		fmt.Printf("<%s>\n", exprName)
 	}
 	debugExprDepth++
+
+	if liveOperand != nil {
+		switch exprName {
+		case "i32.const", "i64.const", "f32.const", "f64.const", "get_local", "nop", "unreachable":
+			// no side-effects
+
+		default:
+			code.opPushLiveOperand(liveType, liveOperand)
+			defer code.popLiveOperand(liveOperand)
+		}
+	}
 
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
@@ -406,7 +417,7 @@ func (code *coder) exprUnaryOp(exprName, opName string, opType types.T, args []i
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	x, _, deadend := code.expr(args[0], opType, false)
+	x, _, deadend := code.expr(args[0], opType, false, 0, nil)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -433,15 +444,13 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	a, _, deadend := code.expr(args[0], opType, false)
+	a, _, deadend := code.expr(args[0], opType, false, 0, nil)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	code.opPushLiveOperand(opType, &a)
-	b, _, deadend := code.expr(args[1], opType, false)
-	code.popLiveOperand(&a)
+	b, _, deadend := code.expr(args[1], opType, false, opType, &a)
 	if deadend {
 		code.discard(opType, a)
 		mach.OpAbort(code)
@@ -558,7 +567,7 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 			t = expectType
 		}
 
-		result, resultType, deadend = code.expr(arg, t, false)
+		result, resultType, deadend = code.expr(arg, t, false, 0, nil)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -681,7 +690,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	var valueOperand values.Operand
 
 	if valueExpr != nil {
-		valueOperand, _, deadend = code.expr(valueExpr, valueType, false)
+		valueOperand, _, deadend = code.expr(valueExpr, valueType, false, 0, nil)
 		if deadend {
 			mach.OpAbort(code)
 			return
@@ -691,9 +700,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	var condOperand values.Operand
 
 	if condExpr != nil {
-		code.opPushLiveOperand(valueType, &valueOperand)
-		condOperand, _, deadend = code.expr(condExpr, types.I32, false)
-		code.popLiveOperand(&valueOperand)
+		condOperand, _, deadend = code.expr(condExpr, types.I32, false, valueType, &valueOperand)
 		if deadend {
 			code.discard(valueType, valueOperand)
 			mach.OpAbort(code)
@@ -761,20 +768,14 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		var reg2 regs.R
 
 		if commonStackOffset < 0 {
-			code.opPushLiveOperand(types.I32, &condOperand)
-			reg2 = code.opAllocIntReg()
+			reg2 = code.opAllocIntReg(types.I32, &condOperand)
 			defer code.freeIntReg(reg2)
-			code.popLiveOperand(&condOperand)
 		}
 
 		reg, ok := condOperand.CheckTempReg()
 		if !ok {
 			// TODO: if condOperand is a regvar, we could just use that if we stored it first
-
-			code.opPushLiveOperand(types.I32, &condOperand)
-			reg = code.opAllocIntReg()
-			code.popLiveOperand(&condOperand)
-
+			reg = code.opAllocIntReg(types.I32, &condOperand)
 			code.opMove(types.I32, reg, condOperand)
 		}
 		defer code.freeIntReg(reg)
@@ -890,7 +891,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	indexExpr := args[1]
 	args = args[2:]
 
-	operand, _, deadend := code.expr(indexExpr, types.I32, false)
+	operand, _, deadend := code.expr(indexExpr, types.I32, false, 0, nil)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -898,10 +899,8 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 
 	reg, ok := operand.CheckTempReg()
 	if !ok {
-		code.opPushLiveOperand(types.I32, &operand)
-		reg = code.opAllocIntReg()
+		reg = code.opAllocIntReg(types.I32, &operand)
 		defer code.freeIntReg(reg)
-		code.popLiveOperand(&operand)
 
 		code.opMove(types.I32, reg, operand)
 	}
@@ -948,7 +947,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 
 		var x values.Operand
 
-		x, _, deadend = code.expr(arg, t, false)
+		x, _, deadend = code.expr(arg, t, false, 0, nil)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -1018,7 +1017,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	end := new(links.L)
 	afterThen := new(links.L)
 
-	ifResult, _, deadend := code.expr(args[0], types.I32, false)
+	ifResult, _, deadend := code.expr(args[0], types.I32, false, 0, nil)
 	if deadend {
 		return
 	}
@@ -1090,7 +1089,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 	if len(args) > 0 {
 		switch args[0].(type) {
 		case string:
-			result, _, deadend = code.expr(args, expectType, false)
+			result, _, deadend = code.expr(args, expectType, false, 0, nil)
 
 		case []interface{}:
 			for i, expr := range args {
@@ -1099,7 +1098,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 					t = expectType
 				}
 
-				result, resultType, deadend = code.expr(expr, t, false)
+				result, resultType, deadend = code.expr(expr, t, false, 0, nil)
 				if deadend {
 					break
 				}
@@ -1147,7 +1146,7 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 	}
 
 	if len(args) > 0 {
-		x, _, deadend := code.expr(args[0], t, true)
+		x, _, deadend := code.expr(args[0], t, true, 0, nil)
 		if deadend {
 			mach.OpAbort(code)
 			return
@@ -1171,7 +1170,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	result, _, deadend = code.expr(args[1], resultType, false)
+	result, _, deadend = code.expr(args[1], resultType, false, 0, nil)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1330,7 +1329,7 @@ func (code *coder) unaryOp(name string, t types.T, x values.Operand) (result val
 }
 
 func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) (result values.Operand) {
-	a = code.effectiveOperand(a)
+	a = code.opMaterializeOperand(t, a)
 	b = code.effectiveOperand(b)
 	result = mach.BinaryOp(code, name, t, a, b)
 	result = code.virtualOperand(result)
@@ -1365,11 +1364,17 @@ func (code *coder) tryAllocIntReg() (reg regs.R, ok bool) {
 	return code.regs(types.I64).alloc()
 }
 
-func (code *coder) opAllocIntReg() (reg regs.R) {
+func (code *coder) opAllocIntReg(liveType types.T, liveOperand *values.Operand) (reg regs.R) {
 	reg, ok := code.tryAllocIntReg()
 	if !ok {
+		if liveOperand != nil {
+			code.opPushLiveOperand(liveType, liveOperand)
+			defer code.popLiveOperand(liveOperand)
+		}
+
 		reg = code.opStealReg(types.I64)
 	}
+
 	return
 }
 
@@ -1499,6 +1504,18 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 	}
 
 	mach.OpMove(code, t, target, x)
+}
+
+func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Operand {
+	x = code.effectiveOperand(x)
+
+	if x.Storage == values.ConditionFlags {
+		reg := code.opAllocReg(t)
+		code.opMove(t, reg, x)
+		x = values.TempRegOperand(reg)
+	}
+
+	return x
 }
 
 func (code *coder) effectiveOperand(x values.Operand) values.Operand {
