@@ -79,7 +79,6 @@ type coder struct {
 	pushedLocals   int
 	stackOffset    int
 	maxStackOffset int
-	labelLinks     map[*links.L]struct{}
 }
 
 func (m *Module) Code() (text, roData, data []byte, bssSize int) {
@@ -193,7 +192,6 @@ func (code *coder) genFunction(f *Function) {
 	code.pushedLocals = 0
 	code.stackOffset = 0
 	code.maxStackOffset = 0
-	code.labelLinks = make(map[*links.L]struct{})
 
 	mach.AlignFunction(code)
 	functionAddr := code.Len()
@@ -233,6 +231,7 @@ func (code *coder) genFunction(f *Function) {
 	if code.popTarget() {
 		deadend = false
 		code.opLabel(end)
+		mach.UpdateBranches(code, end)
 	}
 
 	if !deadend {
@@ -263,10 +262,6 @@ func (code *coder) genFunction(f *Function) {
 
 	if len(code.targetStack) != 0 {
 		panic(errors.New("internal: branch target stack is not empty at end of function"))
-	}
-
-	for link := range code.labelLinks {
-		mach.UpdateBranches(code, link)
 	}
 
 	if code.maxStackOffset > 0 {
@@ -594,6 +589,7 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 		}
 
 		code.opLabel(after)
+		mach.UpdateBranches(code, after)
 	}
 
 	if deadend {
@@ -671,6 +667,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 	for _, x := range tableIndexes {
 		target := code.findTarget(x)
+		target.label.SetLive()
 
 		if target.expectType != types.Void {
 			switch {
@@ -683,8 +680,6 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 
 		tableTargets = append(tableTargets, target)
-
-		code.labelLinks[target.label] = struct{}{}
 	}
 
 	var valueOperand values.Operand
@@ -1047,6 +1042,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		}
 
 		code.opLabel(afterElse)
+		mach.UpdateBranches(code, afterElse)
 	} else {
 		code.opBranchIf(ifResult, false, end)
 		endReachable = true
@@ -1062,6 +1058,8 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 
 	if endReachable {
 		code.opLabel(end)
+		mach.UpdateBranches(code, end)
+
 		if expectType != types.Void {
 			result = values.TempRegOperand(mach.ResultReg())
 		}
@@ -1132,6 +1130,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 func (code *coder) exprLoop(exprName string, args []interface{}, expectType types.T, final bool) (result values.Operand, deadend bool) {
 	before := new(links.L)
 	code.opLabel(before)
+	defer mach.UpdateBranches(code, before)
 
 	return code.exprBlock(exprName, args, expectType, before, final)
 }
@@ -1859,7 +1858,6 @@ func (code *coder) opLabel(l *links.L) {
 func (code *coder) branchSite(l *links.L) {
 	if l.Address == 0 {
 		l.AddSite(code.Len())
-		code.labelLinks[l] = struct{}{}
 	}
 }
 
@@ -1883,7 +1881,7 @@ func (code *coder) pushTarget(l *links.L, name string, expectType types.T, funct
 
 func (code *coder) popTarget() (live bool) {
 	target := code.targetStack[len(code.targetStack)-1]
-	_, live = code.labelLinks[target.label]
+	live = target.label.Live()
 
 	code.targetStack = code.targetStack[:len(code.targetStack)-1]
 	return

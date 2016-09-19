@@ -5,6 +5,16 @@ type L struct {
 	Address int
 }
 
+func (l *L) SetLive() {
+	if l.Sites == nil {
+		l.Sites = []int{}
+	}
+}
+
+func (l *L) Live() bool {
+	return l.Sites != nil
+}
+
 func (l *L) AddSite(addr int) {
 	l.Sites = append(l.Sites, addr)
 }
