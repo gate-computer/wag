@@ -22,8 +22,8 @@ func imm32(x int) imm {
 	return imm{int32(x)}
 }
 
-func imm64(x int) imm {
-	return imm{int64(x)}
+func imm64(x int64) imm {
+	return imm{x}
 }
 
 func (imm imm) writeTo(code gen.Coder) {

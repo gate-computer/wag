@@ -7,87 +7,94 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-type rexSizePrefix struct{}
+type rexPrefix struct{}
 
-func (rexSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase regs.R) {
-	var rex byte
-
-	switch t.Size() {
-	case types.Size32:
-
-	case types.Size64:
-		rex |= rexW
-
-	default:
-		panic(t)
-	}
-
-	writeRexTo(code, rex, ro, index, rmOrBase)
+func (rexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+	writeRexSizeTo(code, t, ro, index, rmOrBase)
 }
 
 var (
-	rexSize rexSizePrefix
+	Rex rexPrefix
 )
 
 var (
-	Movzx8 = insnModRegFromReg{0x0f, 0xb6}
+	Neg = insnRexM{[]byte{0xf7}, 3}
+	Mul = insnRexM{[]byte{0xf7}, 4}
+	Div = insnRexM{[]byte{0xf7}, 6}
+	Inc = insnRexM{[]byte{0xff}, 0}
+	Dec = insnRexM{[]byte{0xff}, 1}
 
-	MovImm = insnPrefixRegImm{rexSize, 0xb8}
+	Movsxd  = insnPrefix{Rex, []byte{0x63}, nil}
+	Test    = insnPrefix{Rex, []byte{0x85}, nil}
+	Mov     = insnPrefix{Rex, []byte{0x8b}, []byte{0x89}}
+	Cmovl   = insnPrefix{Rex, []byte{0x0f, 0x4c}, nil}
+	Movzx8  = insnPrefix{Rex, []byte{0x0f, 0xb6}, nil}
+	Movzx16 = insnPrefix{Rex, []byte{0x0f, 0xb7}, nil}
+	Bsf     = insnPrefix{Rex, []byte{0x0f, 0xbc}, nil}
 
-	Neg = insnPrefixModOpReg{rexSize, []byte{0xf7}, 3}
-	Mul = insnPrefixModOpReg{rexSize, []byte{0xf7}, 4}
-	Div = insnPrefixModOpReg{rexSize, []byte{0xf7}, 6}
-	Inc = insnPrefixModOpReg{rexSize, []byte{0xff}, 0}
-	Dec = insnPrefixModOpReg{rexSize, []byte{0xff}, 1}
+	ShlImm = shiftImmInsn{
+		insnRexM{[]byte{0xd1}, 4},
+		insnRexMI{0xc1, 0, 0},
+	}
+	ShrImm = shiftImmInsn{
+		insnRexM{[]byte{0xd1}, 5},
+		insnRexMI{0xc1, 0, 5},
+	}
 
-	Push = insnReg_sizeless_PrefixModOpReg{insnReg{0x50}, insnPrefixModOpReg{rexSize, []byte{0xff}, 6}}
-	Pop  = insnReg_sizeless_PrefixModOpReg{insnReg{0x58}, insnPrefixModOpReg{rexSize, []byte{0x8f}, 0}}
+	Push = pushPopInsn{
+		insnO{0x50},
+		insnRexM{[]byte{0xff}, 6},
+	}
+	Pop = pushPopInsn{
+		insnO{0x58},
+		insnRexM{[]byte{0x8f}, 0},
+	}
 
-	Add    = insnPrefixModRegFromReg{rexSize, []byte{0x03}}
-	Or     = insnPrefixModRegFromReg{rexSize, []byte{0x0b}}
-	And    = insnPrefixModRegFromReg{rexSize, []byte{0x23}}
-	Sub    = insnPrefixModRegFromReg{rexSize, []byte{0x2b}}
-	Xor    = insnPrefixModRegFromReg{rexSize, []byte{0x33}}
-	Cmp    = insnPrefixModRegFromReg{rexSize, []byte{0x3b}}
-	Movsxd = insnPrefixModRegFromReg{rexSize, []byte{0x63}}
-	Cmovl  = insnPrefixModRegFromReg{rexSize, []byte{0x0f, 0x4c}}
-	Bsf    = insnPrefixModRegFromReg{rexSize, []byte{0x0f, 0xbc}}
+	MovImm = movImmInsn{
+		insnRexMI{0, 0xc7, 0},
+		insnRexOI{0xb8},
+	}
 
-	Test = insnPrefixModRegToReg{rexSize, []byte{0x85}, ModReg}
-	Mov  = insnPrefixModRegToReg{rexSize, []byte{0x89}, ModReg}
-
-	CmpImm32 = insnPrefixModOpRegImm{rexSize, []byte{0x81}, 7}
-	ShlImm   = insnPrefixModOpRegImm{rexSize, []byte{0xc1}, 0}
-	ShrImm   = insnPrefixModOpRegImm{rexSize, []byte{0xc1}, 5}
-	MovImm32 = insnPrefixModOpRegImm{rexSize, []byte{0xc7}, 0}
-
-	CmpFromStack    = insnPrefixModRegSibImm{rexSize, []byte{0x3b}, sib{0, regStackPtr, regStackPtr}}
-	MovsxdFromStack = insnPrefixModRegSibImm{rexSize, []byte{0x63}, sib{0, regStackPtr, regStackPtr}}
-	MovToStack      = insnPrefixModRegSibImm{rexSize, []byte{0x89}, sib{0, regStackPtr, regStackPtr}}
-	MovFromStack    = insnPrefixModRegSibImm{rexSize, []byte{0x8b}, sib{0, regStackPtr, regStackPtr}}
-
-	MovsxdFromIndirectScaleIndex = insnPrefixModRegCustomSibImm{rexSize, []byte{0x63}}
-	MovFromIndirectScaleIndex    = insnPrefixModRegCustomSibImm{rexSize, []byte{0x8b}}
-
-	AddImm = insnPrefixArithmeticModOpRegImm{rexSize, 0}
-	OrImm  = insnPrefixArithmeticModOpRegImm{rexSize, 1}
-	AndImm = insnPrefixArithmeticModOpRegImm{rexSize, 4}
-	SubImm = insnPrefixArithmeticModOpRegImm{rexSize, 5}
-	XorImm = insnPrefixArithmeticModOpRegImm{rexSize, 6}
-	CmpImm = insnPrefixArithmeticModOpRegImm{rexSize, 7}
+	Add = binaryInsn{
+		insnPrefix{Rex, []byte{0x03}, nil},
+		insnRexMI{0x83, 0x81, 0},
+	}
+	Or = binaryInsn{
+		insnPrefix{Rex, []byte{0x0b}, nil},
+		insnRexMI{0x83, 0x81, 1},
+	}
+	And = binaryInsn{
+		insnPrefix{Rex, []byte{0x23}, nil},
+		insnRexMI{0x83, 0x81, 4},
+	}
+	Sub = binaryInsn{
+		insnPrefix{Rex, []byte{0x2b}, nil},
+		insnRexMI{0x83, 0x81, 5},
+	}
+	Xor = binaryInsn{
+		insnPrefix{Rex, []byte{0x33}, nil},
+		insnRexMI{0x83, 0x81, 6},
+	}
+	Cmp = binaryInsn{
+		insnPrefix{Rex, []byte{0x3b}, nil},
+		insnRexMI{0x83, 0x81, 7},
+	}
 )
 
 var binaryIntInsns = map[string]binaryInsn{
-	"add": binaryInsn{Add, AddImm},
-	"and": binaryInsn{And, AndImm},
-	"or":  binaryInsn{Or, OrImm},
-	"sub": binaryInsn{Sub, SubImm},
-	"xor": binaryInsn{Xor, XorImm},
+	"add": Add,
+	"and": And,
+	"or":  Or,
+	"sub": Sub,
+	"xor": Xor,
 }
 
-var binaryIntDivMulInsns = map[string]binaryIntDivMulInsn{
-	"div_u": binaryIntDivMulInsn{Div, ShrImm},
-	"mul":   binaryIntDivMulInsn{Mul, ShlImm},
+var binaryIntDivMulInsns = map[string]struct {
+	insnRexM
+	shiftImm shiftImmInsn
+}{
+	"div_u": {Div, ShrImm},
+	"mul":   {Mul, ShlImm},
 }
 
 var binaryIntConditions = map[string]values.Condition{
@@ -110,7 +117,7 @@ func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.O
 			targetReg = mach.opResultReg(code, t, values.NoOperand)
 		}
 
-		Bsf.opReg(code, t, targetReg, sourceReg)
+		Bsf.opFromReg(code, t, targetReg, sourceReg)
 		return values.TempRegOperand(targetReg)
 
 	case "eqz":
@@ -119,7 +126,7 @@ func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.O
 			defer code.FreeReg(t, reg)
 		}
 
-		Test.op(code, t, reg, reg)
+		Test.opFromReg(code, t, reg, reg)
 		return values.ConditionFlagsOperand(values.EQ)
 	}
 
@@ -178,7 +185,7 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 
 	if insn, found := binaryIntInsns[name]; found {
 		reg := mach.opResultReg(code, t, a)
-		insn.op(code, t, reg, b)
+		binaryInsnOp(code, insn, t, reg, b)
 		return values.TempRegOperand(reg)
 	} else if cond, found := binaryIntConditions[name]; found {
 		reg, own := mach.opBorrowResultReg(code, t, a)
@@ -188,16 +195,16 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 
 		switch b.Storage {
 		case values.Imm:
-			CmpImm32.op(code, t, reg, imm32(int(b.ImmValue(t))))
+			Cmp.opImm(code, t, reg, int(b.ImmValue(t)))
 
 		case values.ROData:
-			Cmp.opFromAddr(code, t, reg, code.RODataAddr()+b.Addr())
+			Cmp.opFromAddr(code, t, reg, 0, NoIndex, code.RODataAddr()+b.Addr())
 
 		case values.VarMem:
-			CmpFromStack.op(code, t, reg, b.Offset())
+			Cmp.opFromStack(code, t, reg, b.Offset())
 
 		case values.VarReg, values.TempReg, values.BorrowedReg:
-			Cmp.opReg(code, t, reg, b.Reg())
+			Cmp.opFromReg(code, t, reg, b.Reg())
 
 		default:
 			panic(b)
@@ -223,7 +230,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 
 		case value > 0 && isPowerOfTwo(uint64(value)):
 			reg := mach.opResultReg(code, t, a)
-			insn.shiftImm.op(code, t, reg, uimm8(log2(uint64(value))))
+			insn.shiftImm.op(code, t, reg, log2(uint64(value)))
 			return values.TempRegOperand(reg)
 		}
 	}
@@ -232,7 +239,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	bReg, ok := b.CheckAnyReg()
 	if ok {
 		if name == "div_u" {
-			Test.op(code, t, bReg, bReg)
+			Test.opFromReg(code, t, bReg, bReg)
 			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
 		}
 
@@ -249,8 +256,8 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 					bReg = regTextPtr
 
 					code.AddStackUsage(wordSize)
-					MovToStack.op(code, t, bReg, -wordSize)
-					defer MovFromStack.op(code, t, bReg, -wordSize)
+					Mov.opToStack(code, t, bReg, -wordSize)
+					defer Mov.opFromStack(code, t, bReg, -wordSize)
 				}
 
 			case "mul":
@@ -270,11 +277,11 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 			if ok {
 				defer code.FreeReg(t, bReg)
 				mach.OpMove(code, t, bReg, b)
-				Test.op(code, t, bReg, bReg)
+				Test.opFromReg(code, t, bReg, bReg)
 				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
 			} else {
 				mach.OpMove(code, t, regScratch, b)
-				Test.op(code, t, regScratch, regScratch)
+				Test.opFromReg(code, t, regScratch, regScratch)
 				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
 
 				bReg = regTextPtr
@@ -283,7 +290,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 				Push.op(code, bReg)
 				defer Pop.op(code, bReg)
 
-				Mov.op(code, t, bReg, regScratch)
+				Mov.opFromReg(code, t, bReg, regScratch)
 			}
 
 		case "mul":
@@ -311,7 +318,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	}
 
 	if name == "div_u" {
-		Xor.opReg(code, t, regScratch, regScratch) // dividend high bits
+		Xor.opFromReg(code, t, regScratch, regScratch) // dividend high bits
 	}
 
 	switch bStorage {
