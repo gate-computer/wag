@@ -2,6 +2,7 @@ package wag
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strconv"
@@ -59,6 +60,7 @@ type coder struct {
 	text       bytes.Buffer
 	roData     dataArena
 	roDataAddr int
+	callMap    bytes.Buffer
 
 	functionLinks map[*Function]*links.L
 	trapLinks     gen.TrapLinks
@@ -82,7 +84,7 @@ type coder struct {
 	maxStackOffset int
 }
 
-func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals, data []byte) {
+func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, stackMap, callMap []byte) {
 	code := &coder{
 		module:         m,
 		roDataAddr:     int(roDataAddr),
@@ -115,6 +117,8 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 		}
 	}
 
+	var stackMapBuf bytes.Buffer
+
 	mach.OpInit(code)
 
 	// generate trap code first so that we can write their addresses as we go.
@@ -136,7 +140,12 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	code.regsFloat.init(mach.AvailableFloatRegs())
 
 	for _, f := range m.Functions {
-		code.genFunction(f)
+		addr, stackUsage := code.genFunction(f)
+
+		entry := (uint64(stackUsage) << 32) | uint64(addr)
+		if err := binary.Write(&stackMapBuf, mach.ByteOrder(), entry); err != nil {
+			panic(err)
+		}
 	}
 
 	for _, link := range code.functionLinks {
@@ -152,6 +161,8 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	data = memory.populate(nil)
 
 	text = code.text.Bytes()
+	stackMap = stackMapBuf.Bytes()
+	callMap = code.callMap.Bytes()
 	return
 }
 
@@ -200,10 +211,10 @@ func (code *coder) TrapLinks() *gen.TrapLinks {
 
 func (code *coder) genTrap(l *links.L, id traps.Id) {
 	l.SetAddress(code.Len())
-	mach.OpTrap(code, id)
+	mach.OpTrapImplementation(code, id)
 }
 
-func (code *coder) genFunction(f *Function) {
+func (code *coder) genFunction(f *Function) (functionMapAddr, stackUsage int) {
 	if verbose {
 		fmt.Printf("<function names=\"%s\">\n", f.Names)
 	}
@@ -225,9 +236,8 @@ func (code *coder) genFunction(f *Function) {
 	code.stackOffset = 0
 	code.maxStackOffset = 0
 
-	mach.AlignFunction(code)
-	functionAddr := code.Len()
-	stackUsageAddr := mach.OpTrapIfStackExhausted(code)
+	functionMapAddr = code.Len()
+	entryAddr, stackUsageAddr := mach.OpFunctionPrologue(code)
 	stackCheckEndAddr := code.Len()
 
 	end := new(links.L)
@@ -296,20 +306,23 @@ func (code *coder) genFunction(f *Function) {
 		panic(errors.New("internal: branch target stack is not empty at end of function"))
 	}
 
-	if code.maxStackOffset > 0 {
-		mach.UpdateStackDisp(code, stackUsageAddr, code.maxStackOffset)
+	stackUsage = code.maxStackOffset
+	if stackUsage > 0 {
+		mach.UpdateStackDisp(code, stackUsageAddr, stackUsage)
 	} else {
 		newAddr := stackCheckEndAddr &^ (mach.FunctionAlignment() - 1)
-		mach.DeleteCode(code, functionAddr, newAddr)
+		mach.DeleteCode(code, entryAddr, newAddr)
 		mach.DisableCode(code, newAddr, stackCheckEndAddr)
-		functionAddr = newAddr
+		entryAddr = newAddr
 	}
 
-	code.functionLinks[f].SetAddress(functionAddr)
+	code.functionLinks[f].SetAddress(entryAddr)
 
 	if verbose {
 		fmt.Println("</function>")
 	}
+
+	return
 }
 
 func (code *coder) expr(x interface{}, expectType types.T, final bool, liveType types.T, liveOperand *values.Operand) (result values.Operand, resultType types.T, deadend bool) {
@@ -1093,16 +1106,26 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	code.opSaveTempRegOperands()
 	code.opInitLocals()
 
+	outOfBounds := new(links.L)
+	defer mach.UpdateBranches(code, outOfBounds)
+
+	after := new(links.L)
+	defer mach.UpdateBranches(code, after)
+
 	// if the operand yielded a temporary register, then it was just freed by
 	// the eviction, but the register retains its value.  don't call anything
 	// that allocates registers until the critical section ends.
 
-	mach.OpBranchIfOutOfBounds(code, reg, len(code.module.Table), code.trapLinks.IndirectCallIndex.FinalAddress())
+	code.opBranchIfOutOfBounds(reg, len(code.module.Table), outOfBounds)
 	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, regExt, 3, roTableAddr)
 	mach.OpPushIntReg(code, reg) // push func ptr
 	code.incrementStackOffset()
 	mach.OpShiftRightLogical32Bits(code, reg) // signature id
-	mach.OpBranchIfNotEqualImm32(code, reg, sig.Index, code.trapLinks.IndirectCallSignature.FinalAddress())
+	code.opBranchIfEqualImm32(reg, sig.Index, after)
+	mach.OpCall(code, code.trapLinks.IndirectCallSignature.FinalAddress())
+	outOfBounds.SetAddress(code.Len())
+	mach.OpCall(code, code.trapLinks.IndirectCallIndex.FinalAddress())
+	after.SetAddress(code.Len())
 
 	// end of critical section.
 
@@ -1115,7 +1138,8 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		return
 	}
 
-	mach.OpCallIndirectDisp32FromStack(code, argsSize)
+	site := mach.OpCallIndirectDisp32FromStack(code, argsSize)
+	code.mapCallSite(site)
 	code.opAddImmToStackPtr(argsSize + mach.WordSize()) // pop args and func ptr
 	return
 }
@@ -1143,7 +1167,8 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 		code.incrementStackOffset()
 	}
 
-	if n := code.stackOffset + mach.FunctionCallStackOverhead(); n > code.maxStackOffset {
+	// account for the return address
+	if n := code.stackOffset + mach.WordSize(); n > code.maxStackOffset {
 		code.maxStackOffset = n
 	}
 
@@ -1515,7 +1540,7 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	mach.OpBranch(code, code.trapLinks.Unreachable.FinalAddress())
+	mach.OpCall(code, code.trapLinks.Unreachable.FinalAddress())
 }
 
 func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
@@ -1647,6 +1672,11 @@ func (code *coder) opBranchIf(x values.Operand, yes bool, l *links.L) {
 	code.branchSites(l, sites...)
 }
 
+func (code *coder) opBranchIfEqualImm32(reg regs.R, value int, l *links.L) {
+	site := mach.OpBranchIfEqualImm32(code, reg, value, l.Address)
+	code.branchSites(l, site)
+}
+
 func (code *coder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *links.L) {
 	site := mach.OpBranchIfOutOfBounds(code, indexReg, upperBound, l.Address)
 	code.branchSites(l, site)
@@ -1654,7 +1684,10 @@ func (code *coder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *lin
 
 func (code *coder) opCall(l *links.L) {
 	site := mach.OpCall(code, l.Address)
-	code.callSite(l, site)
+	code.mapCallSite(site)
+	if l.Address == 0 {
+		l.AddSite(site)
+	}
 }
 
 func (code *coder) opMove(t types.T, target regs.R, x values.Operand) (ext values.Extension) {
@@ -2026,9 +2059,9 @@ func (code *coder) branchSites(l *links.L, sites ...int) {
 	}
 }
 
-func (code *coder) callSite(l *links.L, addr int) {
-	if l.Address == 0 {
-		l.AddSite(addr)
+func (code *coder) mapCallSite(addr int) {
+	if err := binary.Write(&code.callMap, mach.ByteOrder(), uint32(addr)); err != nil {
+		panic(err)
 	}
 }
 
@@ -2083,7 +2116,8 @@ func (code *coder) effectiveVarStackOffset(index int) int {
 
 	if index < len(code.function.Params) {
 		pos := len(code.function.Params) - index - 1
-		offset = code.stackOffset + mach.FunctionCallStackOverhead() + pos*mach.WordSize()
+		// account for the function return address
+		offset = code.stackOffset + mach.WordSize() + pos*mach.WordSize()
 	} else {
 		index -= len(code.function.Params)
 		offset = code.stackOffset - (index+1)*mach.WordSize()

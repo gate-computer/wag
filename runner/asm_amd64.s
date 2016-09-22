@@ -26,7 +26,7 @@ TEXT ·run(SB),$0-96
 	MOVQ	stack_len+56(FP), CX
 	MOVQ	arg+72(FP), DX
 	CALL	run<>(SB)
-	MOVL	AX, result+80(FP)
+	MOVQ	AX, result+80(FP)
 	MOVQ	DI, trap+88(FP)
 
 	POPQ	R15
@@ -60,6 +60,6 @@ TEXT run<>(SB),NOSPLIT,$0
 	RET
 
 TEXT trap<>(SB),NOSPLIT,$0
-	XORQ	AX, AX		// dummy result
+	MOVQ	SP, AX		// stack ptr
 	MOVQ	M7, SP		// restore original stack
 	RET

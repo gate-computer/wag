@@ -189,13 +189,12 @@ var nopSequences = [][]byte{
 
 type X86 struct{}
 
-func (mach X86) WordSize() int                  { return wordSize }
-func (mach X86) ByteOrder() binary.ByteOrder    { return binary.LittleEndian }
-func (mach X86) FunctionCallStackOverhead() int { return wordSize }
-func (mach X86) FunctionAlignment() int         { return functionAlignment }
-func (mach X86) ResultReg() regs.R              { return regResult }
-func (mach X86) AvailableIntRegs() [][]bool     { return availableIntRegs }
-func (mach X86) AvailableFloatRegs() [][]bool   { return availableFloatRegs }
+func (mach X86) WordSize() int                { return wordSize }
+func (mach X86) ByteOrder() binary.ByteOrder  { return binary.LittleEndian }
+func (mach X86) FunctionAlignment() int       { return functionAlignment }
+func (mach X86) ResultReg() regs.R            { return regResult }
+func (mach X86) AvailableIntRegs() [][]bool   { return availableIntRegs }
+func (mach X86) AvailableFloatRegs() [][]bool { return availableFloatRegs }
 
 func (mach X86) RegGroupPreference(t types.T) int {
 	switch t {
@@ -272,10 +271,11 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regExt values.Ext
 	Jmp.opReg(code, reg)
 }
 
-func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
+func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) int {
 	Movsxd.opFromStack(code, types.I32, regScratch, ptrStackOffset)
 	Add.opFromReg(code, types.I64, regScratch, regTextPtr)
 	Call.opReg(code, regScratch)
+	return code.Len()
 }
 
 func (mach X86) OpInit(code gen.Coder) {
@@ -500,11 +500,10 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 	}
 }
 
-func (mach X86) OpTrap(code gen.Coder, id traps.Id) {
+func (mach X86) OpTrapImplementation(code gen.Coder, id traps.Id) {
 	Mov.opImm(code, types.I32, regTrapArg, int(id)) // automatic zero-extension
 	MovqMMX.opToReg(code, types.I64, regScratch, regTrapFuncMMX)
-	Call.opReg(code, regScratch)
-	Int3.op(code) // if trap handler returns
+	Jmp.opReg(code, regScratch)
 }
 
 func (mach X86) OpBranch(code gen.Coder, addr int) int {
@@ -552,10 +551,11 @@ func (mach X86) OpBranchIf(code gen.Coder, x values.Operand, yes bool, addr int)
 	return
 }
 
-// OpBranchIfNotEqualImm32 must not allocate registers.
-func (mach X86) OpBranchIfNotEqualImm32(code gen.Coder, reg regs.R, value int, addr int) {
+// OpBranchIfEqualImm32 must not allocate registers.
+func (mach X86) OpBranchIfEqualImm32(code gen.Coder, reg regs.R, value int, addr int) int {
 	Cmp.opImm(code, types.I32, reg, value)
-	Jne.op(code, addr)
+	Je.op(code, addr)
+	return code.Len()
 }
 
 // OpBranchIfOutOfBounds must not allocate registers.
@@ -568,11 +568,22 @@ func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBoun
 	return code.Len()
 }
 
-func (mach X86) OpTrapIfStackExhausted(code gen.Coder) (stackUsageAddr int) {
+func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr int) {
+	trampoline := new(links.L)
+	trampoline.SetAddress(code.Len())
+	CallRel.op(code, code.TrapLinks().CallStackExhausted.FinalAddress())
+
+	if n := functionAlignment - (code.Len() & (functionAlignment - 1)); n < functionAlignment {
+		for i := 0; i < n; i++ {
+			code.WriteByte(paddingByte)
+		}
+	}
+
+	entryAddr = code.Len()
 	Lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.opFromReg(code, types.I64, regScratch, regStackLimit)
-	Jl.op(code, code.TrapLinks().CallStackExhausted.FinalAddress())
+	Jl.op(code, trampoline.FinalAddress())
 	return
 }
 
@@ -605,15 +616,6 @@ func (mach X86) updateSites(code gen.Coder, l *links.L) {
 	targetAddr := l.FinalAddress()
 	for _, siteAddr := range l.Sites {
 		mach.updateAddr(code, siteAddr, targetAddr-siteAddr)
-	}
-}
-
-func (mach X86) AlignFunction(code gen.Coder) {
-	size := functionAlignment - (code.Len() & (functionAlignment - 1))
-	if size < functionAlignment {
-		for i := 0; i < size; i++ {
-			code.WriteByte(paddingByte)
-		}
 	}
 }
 

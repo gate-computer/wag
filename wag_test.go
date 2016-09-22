@@ -1,6 +1,7 @@
 package wag
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -17,11 +18,13 @@ import (
 )
 
 const (
-	parallel   = false
-	writeBin   = true
-	dumpText   = true
-	dumpROData = true
-	dumpData   = true
+	parallel     = false
+	writeBin     = true
+	dumpText     = true
+	dumpROData   = true
+	dumpData     = true
+	dumpStackMap = true
+	dumpCallMap  = true
 
 	maxRODataSize = 0x100000
 	memorySize    = 0x100000
@@ -226,7 +229,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}()
 
-		text, roData, globals, data := m.Code(b.RODataAddr(), b.ROData)
+		text, roData, globals, data, stackMap, callMap := m.Code(b.RODataAddr(), b.ROData)
 
 		b.Seal()
 
@@ -270,6 +273,32 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 
 			f.Close()
 
+			stackMapName := path.Join("testdata", filename+"-stackmap.bin")
+
+			f, err = os.Create(stackMapName)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := f.Write(stackMap); err != nil {
+				t.Fatal(err)
+			}
+
+			f.Close()
+
+			callMapName := path.Join("testdata", filename+"-callmap.bin")
+
+			f, err = os.Create(callMapName)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := f.Write(callMap); err != nil {
+				t.Fatal(err)
+			}
+
+			f.Close()
+
 			if dumpText {
 				dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", textName)
 				dump.Stdout = os.Stdout
@@ -303,9 +332,33 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 					t.Fatal(err)
 				}
 			}
+
+			if dumpStackMap {
+				fmt.Println(stackMapName + ":")
+
+				dump := exec.Command("hexdump", "-C", stackMapName)
+				dump.Stdout = os.Stdout
+				dump.Stderr = os.Stderr
+
+				if err := dump.Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if dumpStackMap {
+				fmt.Println(callMapName + ":")
+
+				dump := exec.Command("hexdump", "-C", callMapName)
+				dump.Stdout = os.Stdout
+				dump.Stderr = os.Stderr
+
+				if err := dump.Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 
-		p, err := b.NewProgram(text, data, globals)
+		p, err := b.NewProgram(text, globals, data, stackMap, callMap)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -364,6 +417,15 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 
 			if panicked != nil {
 				t.Fatalf("run: module %s: test #%d: panic: %v", filename, id, panicked)
+			}
+
+			var stackBuf bytes.Buffer
+			if stackErr := r.WriteStacktraceTo(&stackBuf); stackErr == nil {
+				if stackBuf.Len() > 0 {
+					t.Logf("run: module %s: test #%d: stack: %s", filename, id, string(stackBuf.Bytes()))
+				}
+			} else {
+				t.Errorf("run: module %s: test #%d: stack error: %v", filename, id, stackErr)
 			}
 
 			if err != nil {

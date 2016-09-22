@@ -9,7 +9,7 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text, memory, stack []byte, arg int) (result int32, trap int)
+func run(text, memory, stack []byte, arg int) (result int64, trap int)
 
 var (
 	pageSize = syscall.Getpagesize()
@@ -66,12 +66,14 @@ func (b *Buffer) Close() (first error) {
 type Program struct {
 	buf *Buffer
 
-	text    []byte
-	data    []byte
-	globals []byte
+	text     []byte
+	globals  []byte
+	data     []byte
+	stackMap []byte
+	callMap  []byte
 }
 
-func (b *Buffer) NewProgram(text, data, globals []byte) (p *Program, err error) {
+func (b *Buffer) NewProgram(text, globals, data, stackMap, callMap []byte) (p *Program, err error) {
 	if !b.sealed {
 		err = errors.New("buffer has not been sealed")
 		return
@@ -109,6 +111,8 @@ type Runner struct {
 	memoryOffset     int
 	globalsAndMemory []byte
 	stack            []byte
+
+	trapStackPtr int64
 }
 
 func (p *Program) NewRunner(memorySize, stackSize int) (r *Runner, err error) {
@@ -169,8 +173,13 @@ func (r *Runner) Run(arg int) (result int32, err error) {
 		}
 	}
 
-	result, trap := run(r.prog.text, memory, r.stack, arg)
-	if trap != 0 {
+	r.trapStackPtr = 0
+
+	resultOrStackPtr, trap := run(r.prog.text, memory, r.stack, arg)
+	if trap == 0 {
+		result = int32(resultOrStackPtr)
+	} else {
+		r.trapStackPtr = resultOrStackPtr
 		err = traps.Id(trap)
 	}
 
