@@ -33,12 +33,15 @@ var (
 )
 
 var (
-	UcomisSSE = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
-	XorpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
-	MovsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
-	AddsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x58}, nil}
-	SubsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5c}, nil}
-	DivsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
+	UcomisSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
+	XorpSSE     = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
+	MovsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
+	AddsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x58}, nil}
+	SubsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x5c}, nil}
+	DivsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
+	MovSSE      = insnPrefix{Prefixes{Prefix{0x66}, Rex}, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
+	Cvtsi2sdSSE = insnPrefix{Prefixes{Prefix{0xf2}, Rex}, []byte{0x0f, 0x2a}, nil}
+	Cvtsi2ssSSE = insnPrefix{Prefixes{Prefix{0xf3}, Rex}, []byte{0x0f, 0x2a}, nil}
 )
 
 var binaryFloatInsns = map[string]insnPrefix{
@@ -48,21 +51,21 @@ var binaryFloatInsns = map[string]insnPrefix{
 }
 
 var binaryFloatConditions = map[string]values.Condition{
-	"eq": values.EQ,
-	"gt": values.GT_S,
-	"lt": values.LT_S,
-	"ne": values.NE,
+	"eq": values.OrderedAndEQ,
+	"gt": values.OrderedAndGT,
+	"lt": values.OrderedAndLT,
+	"ne": values.UnorderedOrNE,
 }
 
 func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
 	switch name {
 	case "neg":
-		targetReg := mach.opResultReg(code, t, x)
+		targetReg, _ := mach.opResultReg(code, t, x)
 
 		MovsSSE.opFromReg(code, t, regScratch, targetReg)
 		SubsSSE.opFromReg(code, t, targetReg, regScratch)
 		SubsSSE.opFromReg(code, t, targetReg, regScratch)
-		return values.TempRegOperand(targetReg)
+		return values.TempRegOperand(targetReg, values.NoExt)
 	}
 
 	panic(name)
@@ -70,24 +73,24 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values
 
 func (mach X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
 	if insn, found := binaryFloatInsns[name]; found {
-		targetReg := mach.opResultReg(code, t, a)
+		targetReg, _ := mach.opResultReg(code, t, a)
 
-		sourceReg, own := mach.opBorrowScratchReg(code, t, b)
+		sourceReg, _, own := mach.opBorrowScratchReg(code, t, b)
 		if own {
 			defer code.FreeReg(t, sourceReg)
 		}
 
 		insn.opFromReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg)
+		return values.TempRegOperand(targetReg, values.NoExt)
 	}
 
 	if cond, found := binaryFloatConditions[name]; found {
-		aReg, own := mach.opBorrowResultReg(code, t, a)
+		aReg, _, own := mach.opBorrowResultReg(code, t, a)
 		if own {
 			defer code.FreeReg(t, aReg)
 		}
 
-		bReg, own := mach.opBorrowScratchReg(code, t, b)
+		bReg, _, own := mach.opBorrowScratchReg(code, t, b)
 		if own {
 			defer code.FreeReg(t, bReg)
 		}

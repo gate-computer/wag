@@ -58,7 +58,7 @@ func (s Storage) String() string {
 		return "condition flags"
 
 	default:
-		return "unknown"
+		return "(invalid operand storage type)"
 	}
 }
 
@@ -67,32 +67,85 @@ var (
 	StackOperand = Operand{Storage: Stack}
 )
 
+type Extension int32
+
+const (
+	NoExt = Extension(iota)
+	ZeroExt
+	SignExt
+)
+
+func (e Extension) String() string {
+	switch e {
+	case NoExt:
+		return "unextended"
+
+	case ZeroExt:
+		return "zero-extended"
+
+	case SignExt:
+		return "sign-extended"
+
+	default:
+		return "(invalid extension type)"
+	}
+}
+
 type Condition int
 
 const (
 	EQ = Condition(iota)
 	NE
-	GE_S
-	GT_S
-	GE_U
-	GT_U
-	LE_S
-	LT_S
-	LE_U
-	LT_U
+	GESigned
+	GTSigned
+	GEUnsigned
+	GTUnsigned
+	LESigned
+	LTSigned
+	LEUnsigned
+	LTUnsigned
+
+	OrderedAndEQ
+	OrderedAndNE
+	OrderedAndGE
+	OrderedAndGT
+	OrderedAndLE
+	OrderedAndLT
+
+	UnorderedOrEQ
+	UnorderedOrNE
+	UnorderedOrGE
+	UnorderedOrGT
+	UnorderedOrLE
+	UnorderedOrLT
+
+	MinOrderedAndCondition  = OrderedAndEQ
+	MinUnorderedOrCondition = UnorderedOrEQ
 )
 
 var InvertedConditions = []Condition{
-	NE,   // EQ
-	EQ,   // NE
-	LT_S, // GE_S
-	LE_S, // GT_S
-	LT_U, // GE_U
-	LE_U, // GT_U
-	GT_S, // LE_S
-	GE_S, // LT_U
-	GT_U, // LE_U
-	GE_U, // LT_U
+	NE,            // EQ
+	EQ,            // NE
+	LTSigned,      // GESigned
+	LESigned,      // GTSigned
+	LTUnsigned,    // GEUnsigned
+	LEUnsigned,    // GTUnsigned
+	GTSigned,      // LESigned
+	GESigned,      // LTSigned
+	GTUnsigned,    // LEUnsigned
+	GEUnsigned,    // LTUnsigned
+	UnorderedOrNE, // OrderedAndEQ
+	UnorderedOrEQ, // OrderedAndNE
+	UnorderedOrLT, // OrderedAndGE
+	UnorderedOrLE, // OrderedAndGT
+	UnorderedOrGT, // OrderedAndLE
+	UnorderedOrGE, // OrderedAndLT
+	OrderedAndNE,  // UnorderedOrEQ
+	OrderedAndEQ,  // UnorderedOrNE
+	OrderedAndLT,  // UnorderedOrGE
+	OrderedAndLE,  // UnorderedOrGT
+	OrderedAndGT,  // UnorderedOrLE
+	OrderedAndGE,  // UnorderedOrLT
 }
 
 type Operand struct {
@@ -133,8 +186,8 @@ func VarRegOperand(index int, reg regs.R) Operand {
 	return Operand{VarReg, (uint64(index) << 32) | uint64(byte(reg))}
 }
 
-func TempRegOperand(reg regs.R) Operand {
-	return Operand{TempReg, uint64(byte(reg))}
+func TempRegOperand(reg regs.R, ext Extension) Operand {
+	return Operand{TempReg, (uint64(int32(ext)) << 32) | uint64(byte(reg))}
 }
 
 func RegOperand(reg regs.R, own bool) Operand {
@@ -273,17 +326,18 @@ func (o Operand) CheckVarMem() (offset int, ok bool) {
 }
 
 func (o Operand) Reg() (reg regs.R) {
-	reg, ok := o.CheckAnyReg()
+	reg, _, ok := o.CheckAnyReg()
 	if !ok {
 		panic(o)
 	}
 	return
 }
 
-func (o Operand) CheckAnyReg() (reg regs.R, ok bool) {
+func (o Operand) CheckAnyReg() (reg regs.R, ext Extension, ok bool) {
 	switch o.Storage {
 	case VarReg, TempReg, BorrowedReg:
 		reg = regs.R(byte(o.X))
+		ext = Extension(int32(o.X >> 32))
 		ok = true
 	}
 	return
@@ -297,12 +351,20 @@ func (o Operand) CheckVarReg() (reg regs.R, ok bool) {
 	return
 }
 
-func (o Operand) CheckTempReg() (reg regs.R, ok bool) {
+func (o Operand) CheckTempReg() (reg regs.R, ext Extension, ok bool) {
 	if o.Storage == TempReg {
 		reg = regs.R(byte(o.X))
+		ext = Extension(int32(o.X >> 32))
 		ok = true
 	}
 	return
+}
+
+func (o Operand) Ext() Extension {
+	if o.Storage != TempReg {
+		panic(o)
+	}
+	return Extension(int32(o.X >> 32))
 }
 
 func (o Operand) Condition() (cond Condition) {
@@ -348,7 +410,7 @@ func (o Operand) String() string {
 		return o.Storage.String()
 
 	default:
-		return "corrupted"
+		return "(corrupted operand information)"
 	}
 }
 

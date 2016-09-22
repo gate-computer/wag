@@ -18,6 +18,10 @@ func uimm8(x int) imm {
 	return imm{uint8(x)}
 }
 
+func imm16(x int) imm {
+	return imm{int16(x)}
+}
+
 func imm32(x int) imm {
 	return imm{int32(x)}
 }

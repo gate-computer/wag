@@ -129,6 +129,7 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	code.genTrap(&code.trapLinks.CallStackExhausted, traps.CallStackExhausted)
 	code.genTrap(&code.trapLinks.IndirectCallIndex, traps.IndirectCallIndex)
 	code.genTrap(&code.trapLinks.IndirectCallSignature, traps.IndirectCallSignature)
+	code.genTrap(&code.trapLinks.MemoryOutOfBounds, traps.MemoryOutOfBounds)
 	code.genTrap(&code.trapLinks.Unreachable, traps.Unreachable)
 
 	code.regsInt.init(mach.AvailableIntRegs())
@@ -144,8 +145,29 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 
 	roData = code.roData.populate(roDataBuf)
 
+	var memory dataArena
+	for i := range m.Memory.Segments {
+		allocDataSegment(m, &memory, i)
+	}
+	data = memory.populate(nil)
+
 	text = code.text.Bytes()
 	return
+}
+
+func allocDataSegment(module *Module, memory *dataArena, index int) {
+	s := module.Memory.Segments[index]
+
+	if s.Offset < memory.size {
+		// TODO: does this need to be supported?
+		panic("data segment overlaps with previous segment")
+	}
+
+	skip := s.Offset - memory.size
+
+	memory.allocate(skip+len(s.Data), 1, func(data []byte) {
+		copy(data[skip:], s.Data)
+	})
 }
 
 func (code *coder) Write(buf []byte) (int, error) {
@@ -162,6 +184,10 @@ func (code *coder) Bytes() []byte {
 
 func (code *coder) Len() int {
 	return code.text.Len()
+}
+
+func (code *coder) MinMemorySize() int {
+	return code.module.Memory.MinSize
 }
 
 func (code *coder) RODataAddr() int {
@@ -312,14 +338,24 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, liveType 
 
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
+		opName := tokens[1]
 
 		opType, found := types.ByString[tokens[0]]
 		if !found {
 			panic(fmt.Errorf("unknown operand type: %s", exprName))
 		}
 
-		opName := tokens[1]
 		resultType = opType
+
+		if strings.Contains(exprName, "/") {
+			tokens = strings.SplitN(opName, "/", 2)
+			opName = tokens[0]
+
+			opType, found = types.ByString[tokens[1]]
+			if !found {
+				panic(fmt.Errorf("unknown target type: %s", exprName))
+			}
+		}
 
 		switch opName {
 		case "eqz":
@@ -336,6 +372,36 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, liveType 
 
 		case "const":
 			result = code.exprConst(exprName, opType, args)
+
+		case "load32_s", "load32_u":
+			if opType != types.I64 {
+				panic(exprName)
+			}
+			fallthrough
+		case "load8_s", "load8_u", "load16_s", "load16_u":
+			if opType.Category() != types.Int {
+				panic(exprName)
+			}
+			fallthrough
+		case "load":
+			result, deadend = code.exprLoadOp(exprName, opName, opType, args)
+
+		case "store32":
+			if opType != types.I64 {
+				panic(exprName)
+			}
+			fallthrough
+		case "store8", "store16":
+			if opType.Category() != types.Int {
+				panic(exprName)
+			}
+			fallthrough
+		case "store":
+			deadend = code.exprStoreOp(exprName, opName, opType, args)
+			resultType = types.Void
+
+		case "convert_s", "convert_u", "demote", "extend_s", "extend_u", "promote", "reinterpret", "trunc_s", "trunc_u", "wrap":
+			result, deadend = code.exprConversionOp(exprName, resultType, opType, args)
 
 		default:
 			panic(exprName)
@@ -436,7 +502,9 @@ func (code *coder) exprUnaryOp(exprName, opName string, opType types.T, args []i
 		}
 	}
 
-	result = code.unaryOp(opName, opType, x)
+	x = code.effectiveOperand(x)
+	result = mach.UnaryOp(code, opName, opType, x)
+	result = code.virtualOperand(result)
 	return
 }
 
@@ -488,7 +556,10 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		}
 	}
 
-	result = code.binaryOp(opName, opType, a, b)
+	a = code.opMaterializeOperand(opType, a)
+	b = code.effectiveOperand(b)
+	result = mach.BinaryOp(code, opName, opType, a, b)
+	result = code.virtualOperand(result)
 	return
 }
 
@@ -533,6 +604,98 @@ func (code *coder) exprConst(exprName string, opType types.T, args []interface{}
 	}
 
 	return imm
+}
+
+func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+	if len(args) == 2 {
+		// ignore alignment info
+		args = args[1:]
+	}
+
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	x, _, deadend := code.expr(args[0], types.I32, false, 0, nil)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
+	x = code.effectiveOperand(x)
+
+	result, deadend = mach.LoadOp(code, opName, opType, x)
+	if deadend {
+		code.discard(opType, result)
+		mach.OpAbort(code)
+		return
+	}
+
+	result = code.virtualOperand(result)
+	return
+}
+
+func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []interface{}) (deadend bool) {
+	if len(args) < 2 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	if s, ok := args[0].(string); ok && strings.HasPrefix(s, "align=") {
+		// ignore alignment info
+		args = args[1:]
+	}
+
+	a, _, deadend := code.expr(args[0], types.I32, false, 0, nil)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
+	args = args[1:]
+
+	if len(args) == 2 {
+		// ignore alignment info
+		args = args[1:]
+	}
+
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	b, _, deadend := code.expr(args[0], opType, false, types.I32, &a)
+	if deadend {
+		code.discard(opType, a)
+		mach.OpAbort(code)
+		return
+	}
+
+	a = code.opMaterializeOperand(opType, a)
+	b = code.effectiveOperand(b)
+
+	deadend = mach.StoreOp(code, opName, opType, a, b)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
+	return
+}
+
+func (code *coder) exprConversionOp(exprName string, resultType, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	x, _, deadend := code.expr(args[0], opType, false, 0, nil)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
+	x = code.effectiveOperand(x)
+	result = mach.ConversionOp(code, exprName, resultType, opType, x)
+	result = code.virtualOperand(result)
+	return
 }
 
 func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L, final bool) (result values.Operand, deadend bool) {
@@ -584,14 +747,16 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 	}
 
 	if code.popTarget() {
+		ext := values.NoExt
+
 		if deadend {
 			deadend = false
 		} else {
-			code.opMove(expectType, mach.ResultReg(), result)
+			ext = code.opMove(expectType, mach.ResultReg(), result)
 		}
 
 		if expectType != types.Void {
-			result = values.TempRegOperand(mach.ResultReg())
+			result = values.TempRegOperand(mach.ResultReg(), ext)
 		}
 
 		code.opLabel(after)
@@ -774,6 +939,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 
 		var reg regs.R
+		var regExt values.Extension
 		var ok bool
 
 		index, isVar := condOperand.CheckVar()
@@ -783,7 +949,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 				ok = true
 			}
 		} else {
-			reg, ok = condOperand.CheckTempReg()
+			reg, regExt, ok = condOperand.CheckTempReg()
 			if ok {
 				defer code.freeIntReg(reg)
 			}
@@ -792,7 +958,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 			reg = code.opAllocIntReg(types.I32, &condOperand)
 			defer code.freeIntReg(reg)
 
-			code.opMove(types.I32, reg, condOperand)
+			regExt = code.opMove(types.I32, reg, condOperand)
 		}
 
 		code.opInitLocals()
@@ -807,9 +973,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		mach.OpAddImmToStackPtr(code, defaultDelta)
 		tableStackOffset := code.stackOffset - defaultDelta
 		code.opBranchIfOutOfBounds(reg, len(tableTargets), defaultTarget.label)
-		mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, tableScale, tableAlloc.addr, true)
-
-		addrType := types.I64 // loaded with zero-extend
+		regExt = mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, regExt, tableScale, tableAlloc.addr)
 
 		if commonStackOffset >= 0 {
 			mach.OpAddImmToStackPtr(code, tableStackOffset-commonStackOffset)
@@ -818,10 +982,10 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 			mach.OpShiftRightLogical32Bits(code, reg2)
 			mach.OpAddToStackPtr(code, reg2)
 
-			addrType = types.I32 // upper half of reg still contains stack offset
+			regExt = values.NoExt
 		}
 
-		mach.OpBranchIndirect(code, addrType, reg)
+		mach.OpBranchIndirect32(code, reg, regExt)
 
 		// end of critical section.
 
@@ -918,12 +1082,12 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		return
 	}
 
-	reg, ok := operand.CheckTempReg()
+	reg, regExt, ok := operand.CheckTempReg()
 	if !ok {
 		reg = code.opAllocIntReg(types.I32, &operand)
 		defer code.freeIntReg(reg)
 
-		code.opMove(types.I32, reg, operand)
+		regExt = code.opMove(types.I32, reg, operand)
 	}
 
 	code.opSaveTempRegOperands()
@@ -934,7 +1098,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	// that allocates registers until the critical section ends.
 
 	mach.OpBranchIfOutOfBounds(code, reg, len(code.module.Table), code.trapLinks.IndirectCallIndex.FinalAddress())
-	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, 3, roTableAddr, false)
+	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, regExt, 3, roTableAddr)
 	mach.OpPushIntReg(code, reg) // push func ptr
 	code.incrementStackOffset()
 	mach.OpShiftRightLogical32Bits(code, reg) // signature id
@@ -992,7 +1156,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 
 	resultType = sig.ResultType
 	if resultType != types.Void {
-		result = values.TempRegOperand(mach.ResultReg())
+		result = values.TempRegOperand(mach.ResultReg(), values.NoExt)
 	}
 	return
 }
@@ -1087,7 +1251,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		mach.UpdateBranches(code, end)
 
 		if expectType != types.Void {
-			result = values.TempRegOperand(mach.ResultReg())
+			result = values.TempRegOperand(mach.ResultReg(), values.NoExt)
 		}
 	} else {
 		deadend = true
@@ -1227,8 +1391,8 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 						goto push
 					}
 
-					code.opMove(resultType, reg, *live.ref) // TODO: avoid multiple loads
-					*live.ref = values.TempRegOperand(reg)
+					ext := code.opMove(resultType, reg, *live.ref) // TODO: avoid multiple loads
+					*live.ref = values.TempRegOperand(reg, ext)
 
 					v.refCount--
 					if v.refCount == 0 {
@@ -1354,21 +1518,6 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 	mach.OpBranch(code, code.trapLinks.Unreachable.FinalAddress())
 }
 
-func (code *coder) unaryOp(name string, t types.T, x values.Operand) (result values.Operand) {
-	x = code.effectiveOperand(x)
-	result = mach.UnaryOp(code, name, t, x)
-	result = code.virtualOperand(result)
-	return
-}
-
-func (code *coder) binaryOp(name string, t types.T, a, b values.Operand) (result values.Operand) {
-	a = code.opMaterializeOperand(t, a)
-	b = code.effectiveOperand(b)
-	result = mach.BinaryOp(code, name, t, a, b)
-	result = code.virtualOperand(result)
-	return
-}
-
 func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
 	return code.regs(t).allocWithPreference(mach.RegGroupPreference(t))
 }
@@ -1438,9 +1587,6 @@ func (code *coder) opInitLocals() {
 }
 
 func (code *coder) opInitLocalsUntil(lastLocal int, lastValue values.Operand) {
-	var haveZero bool
-	var zeroReg regs.R
-
 	for local := code.pushedLocals; local <= lastLocal && local < len(code.function.Locals); local++ {
 		index := len(code.function.Params) + local
 
@@ -1460,23 +1606,11 @@ func (code *coder) opInitLocalsUntil(lastLocal int, lastValue values.Operand) {
 		t := code.function.Locals[local]
 
 		if value, ok := x.CheckImmValue(types.I64); ok && value == 0 {
-			if !haveZero {
-				zeroReg, haveZero = code.tryAllocIntReg()
-				if haveZero {
-					defer code.freeIntReg(zeroReg)
-					code.opMove(types.I64, zeroReg, values.ImmOperand(types.I64, 0))
-				}
-			}
-
-			if haveZero {
-				mach.OpPushIntReg(code, zeroReg)
-				goto pushed
-			}
+			mach.OpPush(code, types.I64, values.ImmOperand(types.I64, 0))
+		} else {
+			mach.OpPush(code, t, x)
 		}
 
-		mach.OpPush(code, t, x)
-
-	pushed:
 		code.incrementStackOffset()
 		v.dirty = false
 
@@ -1503,27 +1637,27 @@ func (code *coder) opAddImmToStackPtr(offset int) {
 }
 
 func (code *coder) opBranch(l *links.L) {
-	mach.OpBranch(code, l.Address)
-	code.branchSite(l)
+	site := mach.OpBranch(code, l.Address)
+	code.branchSites(l, site)
 }
 
 func (code *coder) opBranchIf(x values.Operand, yes bool, l *links.L) {
 	x = code.effectiveOperand(x)
-	mach.OpBranchIf(code, x, yes, l.Address)
-	code.branchSite(l)
+	sites := mach.OpBranchIf(code, x, yes, l.Address)
+	code.branchSites(l, sites...)
 }
 
 func (code *coder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *links.L) {
-	mach.OpBranchIfOutOfBounds(code, indexReg, upperBound, l.Address)
-	code.branchSite(l)
+	site := mach.OpBranchIfOutOfBounds(code, indexReg, upperBound, l.Address)
+	code.branchSites(l, site)
 }
 
 func (code *coder) opCall(l *links.L) {
-	mach.OpCall(code, l.Address)
-	code.callSite(l)
+	site := mach.OpCall(code, l.Address)
+	code.callSite(l, site)
 }
 
-func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
+func (code *coder) opMove(t types.T, target regs.R, x values.Operand) (ext values.Extension) {
 	if t == types.Void || x.Storage == values.Nowhere {
 		return
 	}
@@ -1531,12 +1665,14 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) {
 	x = code.effectiveOperand(x)
 
 	if target == mach.ResultReg() {
-		if reg, ok := x.CheckTempReg(); ok && reg == mach.ResultReg() {
+		if reg, extension, ok := x.CheckTempReg(); ok && reg == mach.ResultReg() {
+			ext = extension
 			return
 		}
 	}
 
-	mach.OpMove(code, t, target, x)
+	ext = mach.OpMove(code, t, target, x)
+	return
 }
 
 func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Operand {
@@ -1545,8 +1681,8 @@ func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Oper
 	switch x.Storage {
 	case values.Stack, values.ConditionFlags:
 		reg := code.opAllocReg(t)
-		code.opMove(t, reg, x)
-		x = values.TempRegOperand(reg)
+		ext := code.opMove(t, reg, x)
+		x = values.TempRegOperand(reg, ext)
 	}
 
 	return x
@@ -1620,8 +1756,8 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 
 	case values.ConditionFlags:
 		reg := code.opAllocReg(t)
-		code.opMove(t, reg, *ref)
-		*ref = values.TempRegOperand(reg)
+		ext := code.opMove(t, reg, *ref)
+		*ref = values.TempRegOperand(reg, ext)
 
 	default:
 		panic(*ref)
@@ -1882,15 +2018,17 @@ func (code *coder) opLabel(l *links.L) {
 	}
 }
 
-func (code *coder) branchSite(l *links.L) {
+func (code *coder) branchSites(l *links.L, sites ...int) {
 	if l.Address == 0 {
-		l.AddSite(code.Len())
+		for _, addr := range sites {
+			l.AddSite(addr)
+		}
 	}
 }
 
-func (code *coder) callSite(l *links.L) {
+func (code *coder) callSite(l *links.L, addr int) {
 	if l.Address == 0 {
-		l.AddSite(code.Len())
+		l.AddSite(addr)
 	}
 }
 

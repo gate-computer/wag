@@ -13,8 +13,16 @@ func (rexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
 	writeRexSizeTo(code, t, ro, index, rmOrBase)
 }
 
+type data16RexPrefix struct{}
+
+func (data16RexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+	code.WriteByte(0x66)
+	writeRexSizeTo(code, t, ro, index, rmOrBase)
+}
+
 var (
-	Rex rexPrefix
+	Rex       rexPrefix
+	Data16Rex data16RexPrefix
 )
 
 var (
@@ -26,19 +34,51 @@ var (
 
 	Movsxd  = insnPrefix{Rex, []byte{0x63}, nil}
 	Test    = insnPrefix{Rex, []byte{0x85}, nil}
-	Mov     = insnPrefix{Rex, []byte{0x8b}, []byte{0x89}}
 	Cmovl   = insnPrefix{Rex, []byte{0x0f, 0x4c}, nil}
 	Movzx8  = insnPrefix{Rex, []byte{0x0f, 0xb6}, nil}
 	Movzx16 = insnPrefix{Rex, []byte{0x0f, 0xb7}, nil}
 	Bsf     = insnPrefix{Rex, []byte{0x0f, 0xbc}, nil}
+	Movsx8  = insnPrefix{Rex, []byte{0x0f, 0xbe}, nil}
+	Movsx16 = insnPrefix{Rex, []byte{0x0f, 0xbf}, nil}
 
-	ShlImm = shiftImmInsn{
-		insnRexM{[]byte{0xd1}, 4},
-		insnRexMI{0xc1, 0, 0},
+	MovImm   = insnPrefixMI{Rex, 0, 0, 0xc7, 0}
+	CmpImm16 = insnPrefixMI{Data16Rex, 0, 0x81, 0, 7}
+
+	Add = binaryInsn{
+		insnPrefix{Rex, []byte{0x03}, nil},
+		insnPrefixMI{Rex, 0x83, 0, 0x81, 0},
 	}
-	ShrImm = shiftImmInsn{
-		insnRexM{[]byte{0xd1}, 5},
-		insnRexMI{0xc1, 0, 5},
+	Or = binaryInsn{
+		insnPrefix{Rex, []byte{0x0b}, nil},
+		insnPrefixMI{Rex, 0x83, 0, 0x81, 1},
+	}
+	And = binaryInsn{
+		insnPrefix{Rex, []byte{0x23}, nil},
+		insnPrefixMI{Rex, 0x83, 0, 0x81, 4},
+	}
+	Sub = binaryInsn{
+		insnPrefix{Rex, []byte{0x2b}, nil},
+		insnPrefixMI{Rex, 0x83, 0, 0x81, 5},
+	}
+	Xor = binaryInsn{
+		insnPrefix{Rex, []byte{0x33}, nil},
+		insnPrefixMI{Rex, 0x83, 0, 0x81, 6},
+	}
+	Cmp = binaryInsn{
+		insnPrefix{Rex, []byte{0x3b}, nil},
+		insnPrefixMI{Rex, 0x83, 0, 0x81, 7},
+	}
+	Mov8 = binaryInsn{
+		insnPrefix{Rex, []byte{0x8a}, []byte{0x88}},
+		insnPrefixMI{Rex, 0xc6, 0, 0, 0},
+	}
+	Mov16 = binaryInsn{
+		insnPrefix{Data16Rex, []byte{0x8b}, []byte{0x89}},
+		insnPrefixMI{Data16Rex, 0, 0xc7, 0, 0},
+	}
+	Mov = binaryInsn{
+		insnPrefix{Rex, []byte{0x8b}, []byte{0x89}},
+		MovImm,
 	}
 
 	Push = pushPopInsn{
@@ -50,35 +90,23 @@ var (
 		insnRexM{[]byte{0x8f}, 0},
 	}
 
-	MovImm = movImmInsn{
-		insnRexMI{0, 0xc7, 0},
-		insnRexOI{0xb8},
+	ShlImm = shiftImmInsn{
+		insnRexM{[]byte{0xd1}, 4},
+		insnPrefixMI{Rex, 0xc1, 0, 0, 0},
+	}
+	ShrImm = shiftImmInsn{
+		insnRexM{[]byte{0xd1}, 5},
+		insnPrefixMI{Rex, 0xc1, 0, 0, 5},
 	}
 
-	Add = binaryInsn{
-		insnPrefix{Rex, []byte{0x03}, nil},
-		insnRexMI{0x83, 0x81, 0},
+	MovImm64 = movImmInsn{
+		MovImm,
+		insnRexOI{0xb8},
 	}
-	Or = binaryInsn{
-		insnPrefix{Rex, []byte{0x0b}, nil},
-		insnRexMI{0x83, 0x81, 1},
-	}
-	And = binaryInsn{
-		insnPrefix{Rex, []byte{0x23}, nil},
-		insnRexMI{0x83, 0x81, 4},
-	}
-	Sub = binaryInsn{
-		insnPrefix{Rex, []byte{0x2b}, nil},
-		insnRexMI{0x83, 0x81, 5},
-	}
-	Xor = binaryInsn{
-		insnPrefix{Rex, []byte{0x33}, nil},
-		insnRexMI{0x83, 0x81, 6},
-	}
-	Cmp = binaryInsn{
-		insnPrefix{Rex, []byte{0x3b}, nil},
-		insnRexMI{0x83, 0x81, 7},
-	}
+)
+
+var (
+	NoImmInst = insnPrefixMI{nil, 0, 0, 0, 0}
 )
 
 var binaryIntInsns = map[string]binaryInsn{
@@ -99,9 +127,9 @@ var binaryIntDivMulInsns = map[string]struct {
 
 var binaryIntConditions = map[string]values.Condition{
 	"eq":   values.EQ,
-	"gt_s": values.GT_S,
-	"gt_u": values.GT_U,
-	"lt_s": values.LT_S,
+	"gt_s": values.GTSigned,
+	"gt_u": values.GTUnsigned,
+	"lt_s": values.LTSigned,
 	"ne":   values.NE,
 }
 
@@ -110,18 +138,18 @@ func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.O
 	case "ctz":
 		var targetReg regs.R
 
-		sourceReg, own := mach.opBorrowScratchReg(code, t, x)
+		sourceReg, _, own := mach.opBorrowScratchReg(code, t, x)
 		if own {
 			targetReg = sourceReg
 		} else {
-			targetReg = mach.opResultReg(code, t, values.NoOperand)
+			targetReg, _ = mach.opResultReg(code, t, values.NoOperand)
 		}
 
 		Bsf.opFromReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg)
+		return values.TempRegOperand(targetReg, values.NoExt)
 
 	case "eqz":
-		reg, own := mach.opBorrowScratchReg(code, t, x)
+		reg, _, own := mach.opBorrowScratchReg(code, t, x)
 		if own {
 			defer code.FreeReg(t, reg)
 		}
@@ -152,9 +180,9 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 	if value, ok := a.CheckImmValue(t); ok {
 		switch {
 		case value == 0 && name == "sub":
-			reg := mach.opResultReg(code, t, b)
+			reg, _ := mach.opResultReg(code, t, b)
 			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg)
+			return values.TempRegOperand(reg, values.NoExt)
 		}
 	}
 
@@ -164,31 +192,31 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 
 		switch {
 		case (name == "add" && value == 1) || (name == "sub" && value == -1):
-			reg := mach.opResultReg(code, t, a)
+			reg, _ := mach.opResultReg(code, t, a)
 			Inc.opReg(code, t, reg)
-			return values.TempRegOperand(reg)
+			return values.TempRegOperand(reg, values.NoExt)
 
 		case (name == "sub" && value == 1) || (name == "add" && value == -1):
-			reg := mach.opResultReg(code, t, a)
+			reg, _ := mach.opResultReg(code, t, a)
 			Dec.opReg(code, t, reg)
-			return values.TempRegOperand(reg)
+			return values.TempRegOperand(reg, values.NoExt)
 
 		case value < -0x80000000 || value >= 0x80000000:
-			reg, own := mach.opBorrowScratchReg(code, t, b)
+			reg, _, own := mach.opBorrowScratchReg(code, t, b)
 			b = values.RegOperand(reg, own)
 		}
 
 	case values.Stack, values.ConditionFlags:
-		reg, own := mach.opBorrowScratchReg(code, t, b)
+		reg, _, own := mach.opBorrowScratchReg(code, t, b)
 		b = values.RegOperand(reg, own)
 	}
 
 	if insn, found := binaryIntInsns[name]; found {
-		reg := mach.opResultReg(code, t, a)
+		reg, _ := mach.opResultReg(code, t, a)
 		binaryInsnOp(code, insn, t, reg, b)
-		return values.TempRegOperand(reg)
+		return values.TempRegOperand(reg, values.NoExt)
 	} else if cond, found := binaryIntConditions[name]; found {
-		reg, own := mach.opBorrowResultReg(code, t, a)
+		reg, _, own := mach.opBorrowResultReg(code, t, a)
 		if own {
 			defer code.FreeReg(t, reg)
 		}
@@ -224,19 +252,19 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	if value, ok := b.CheckImmValue(t); ok {
 		switch {
 		case value == -1:
-			reg := mach.opResultReg(code, t, a)
+			reg, _ := mach.opResultReg(code, t, a)
 			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg)
+			return values.TempRegOperand(reg, values.NoExt)
 
 		case value > 0 && isPowerOfTwo(uint64(value)):
-			reg := mach.opResultReg(code, t, a)
+			reg, _ := mach.opResultReg(code, t, a)
 			insn.shiftImm.op(code, t, reg, log2(uint64(value)))
-			return values.TempRegOperand(reg)
+			return values.TempRegOperand(reg, values.NoExt)
 		}
 	}
 
 	bStorage := b.Storage
-	bReg, ok := b.CheckAnyReg()
+	bReg, _, ok := b.CheckAnyReg()
 	if ok {
 		if name == "div_u" {
 			Test.opFromReg(code, t, bReg, bReg)
@@ -308,7 +336,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 		}
 	}
 
-	aReg, own := mach.opBorrowResultReg(code, t, a)
+	aReg, _, own := mach.opBorrowResultReg(code, t, a)
 	if aReg != regResult {
 		// operand was in register, nothing was done
 		mach.OpMove(code, t, regResult, a)
@@ -332,7 +360,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 		panic(bStorage)
 	}
 
-	return values.TempRegOperand(regResult)
+	return values.TempRegOperand(regResult, values.NoExt)
 }
 
 func isPowerOfTwo(value uint64) bool {

@@ -9,7 +9,7 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text, linear, stack []byte, arg int) (result int32, trap int)
+func run(text, memory, stack []byte, arg int) (result int32, trap int)
 
 var (
 	pageSize = syscall.Getpagesize()

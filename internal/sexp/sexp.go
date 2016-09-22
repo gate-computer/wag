@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -105,7 +106,7 @@ func parse(pr panicReader) (x interface{}, ok, end bool) {
 		end = true
 
 	case '"':
-		x = parseString(pr)
+		x = parseData(pr)
 		ok = true
 
 	default:
@@ -133,42 +134,29 @@ func parseList(pr panicReader) interface{} {
 	return list
 }
 
-func parseString(pr panicReader) string {
-	var buf []rune
+func parseData(pr panicReader) string {
+	var buf []byte
 
 	for {
 		c := pr.readRune()
-
-		if c == ';' {
-			skipComment(pr)
-			continue
-		}
 
 		if c == '"' {
 			break
 		}
 
 		if c == '\\' {
-			c = pr.readRune()
+			c1 := pr.readRune()
+			c2 := pr.readRune()
 
-			switch c {
-			case '"', '\\':
-
-			case 'n':
-				c = '\n'
-
-			case 'r':
-				c = '\r'
-
-			case '0':
-				c = 0
-
-			default:
-				panic(fmt.Errorf("'\\%c' in string literal not handled", c))
+			b, err := strconv.ParseUint(fmt.Sprintf("%c%c", c1, c2), 16, 8)
+			if err != nil {
+				panic(err)
 			}
-		}
 
-		buf = append(buf, c)
+			buf = append(buf, byte(b))
+		} else {
+			buf = append(buf, byte(c))
+		}
 	}
 
 	c := pr.readRune()

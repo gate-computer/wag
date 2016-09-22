@@ -15,6 +15,7 @@ type Coder interface {
 	Bytes() []byte
 	Len() int
 
+	MinMemorySize() int
 	RODataAddr() int
 	TrapLinks() *TrapLinks
 
@@ -34,5 +35,6 @@ type TrapLinks struct {
 	CallStackExhausted    links.L
 	IndirectCallIndex     links.L
 	IndirectCallSignature links.L
+	MemoryOutOfBounds     links.L
 	Unreachable           links.L
 }

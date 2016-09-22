@@ -1,6 +1,7 @@
 package wag
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -20,12 +21,13 @@ const (
 	writeBin   = true
 	dumpText   = true
 	dumpROData = true
+	dumpData   = true
 
 	maxRODataSize = 0x100000
 	memorySize    = 0x100000
 	stackSize     = 0x100000
 
-	timeout = time.Second * 3
+	timeout = time.Hour // time.Second * 3
 )
 
 type fun func() int32
@@ -49,6 +51,7 @@ func TestI64(t *testing.T)              { test(t, "testdata/i64.wast") }
 func TestIntLiterals(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
 func TestLabels(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/labels.wast") }
 func TestLotsOfLocals(t *testing.T)     { test(t, "testdata/lots_of_locals.wast") }
+func TestMemory(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/memory.wast") }
 func TestNop(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/nop.wast") }
 func TestTypecheck(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
 
@@ -62,7 +65,18 @@ func test(t *testing.T, filename string) {
 		t.Fatal(err)
 	}
 
+	name := strings.Replace(path.Base(filename), ".wast", "", -1)
+
+	for i := 0; len(data) > 0; i++ {
+		data = testModule(t, data, fmt.Sprintf("%s-%d", name, i))
+	}
+}
+
+func testModule(t *testing.T, data []byte, filename string) []byte {
 	module, data := sexp.ParsePanic(data)
+	if module == nil {
+		return nil
+	}
 
 	exports := make(map[string]string)
 
@@ -89,13 +103,18 @@ func test(t *testing.T, filename string) {
 		idCount++
 		id := idCount
 
-		var assert []interface{}
-		assert, data = sexp.ParsePanic(data)
+		assert, tail := sexp.ParsePanic(data)
 		if assert == nil {
+			data = tail
 			break
 		}
 
 		assertName := assert[0].(string)
+		if assertName == "module" {
+			break
+		}
+
+		data = tail
 
 		var argCount int
 		var exprType string
@@ -192,160 +211,191 @@ func test(t *testing.T, filename string) {
 		"$test",
 	})
 
-	var timedout bool
+	{
+		var timedout bool
 
-	m := loadModule(module)
+		m := loadModule(module)
 
-	b, err := runner.NewBuffer(maxRODataSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if !timedout {
-			b.Close()
-		}
-	}()
-
-	text, roData, globals, data := m.Code(b.RODataAddr(), b.ROData)
-
-	b.Seal()
-
-	if writeBin {
-		textName := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", "-text.bin", -1))
-
-		f, err := os.Create(textName)
+		b, err := runner.NewBuffer(maxRODataSize)
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		if _, err := f.Write(text); err != nil {
-			t.Fatal(err)
-		}
-
-		f.Close()
-
-		roDataName := path.Join("testdata", strings.Replace(path.Base(filename), ".wast", "-rodata.bin", -1))
-
-		f, err = os.Create(roDataName)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if _, err := f.Write(roData); err != nil {
-			t.Fatal(err)
-		}
-
-		f.Close()
-
-		if dumpText {
-			dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", textName)
-			dump.Stdout = os.Stdout
-			dump.Stderr = os.Stderr
-
-			if err := dump.Run(); err != nil {
-				t.Fatal(err)
+		defer func() {
+			if !timedout {
+				b.Close()
 			}
-		}
-
-		if dumpROData {
-			dump := exec.Command("hexdump", roDataName)
-			dump.Stdout = os.Stdout
-			dump.Stderr = os.Stderr
-
-			if err := dump.Run(); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-
-	p, err := b.NewProgram(text, data, globals)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if !timedout {
-			p.Close()
-		}
-	}()
-
-	r, err := p.NewRunner(memorySize, stackSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if !timedout {
-			r.Close()
-		}
-	}()
-
-	for id := 1; id != idCount; id++ {
-		assertType, err := r.Run(0x100000 + id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if assertType < -1 || assertType > 1 {
-			panic(assertType)
-		}
-
-		if assertType == -1 {
-			t.Logf("run: test #%d: not supported", id)
-			continue
-		}
-
-		var result int32
-		var panicked interface{}
-		done := make(chan struct{})
-
-		go func() {
-			defer close(done)
-			defer func() {
-				panicked = recover()
-			}()
-			result, err = r.Run(id)
 		}()
 
-		timer := time.NewTimer(timeout)
+		text, roData, globals, data := m.Code(b.RODataAddr(), b.ROData)
 
-		select {
-		case <-done:
-			timer.Stop()
+		b.Seal()
 
-		case <-timer.C:
-			timedout = true
-			t.Fatalf("run: test #%d: timeout", id)
-		}
+		if writeBin {
+			textName := path.Join("testdata", filename+"-text.bin")
 
-		if panicked != nil {
-			t.Fatalf("run: test #%d: panic: %v", id, panicked)
-		}
-
-		if err != nil {
-			if _, ok := err.(traps.Id); ok {
-				if assertType == 1 {
-					t.Logf("run: test #%d: trap ok", id)
-				} else {
-					t.Errorf("run: test #%d: failed due to unexpected trap", id)
-				}
-			} else {
+			f, err := os.Create(textName)
+			if err != nil {
 				t.Fatal(err)
 			}
-		} else {
-			if assertType == 0 {
-				switch result {
-				case 1:
-					t.Logf("run: test #%d: return ok", id)
 
-				case 0:
-					t.Errorf("run: test #%d: return fail", id)
+			if _, err := f.Write(text); err != nil {
+				t.Fatal(err)
+			}
 
-				default:
-					t.Fatalf("run: test #%d: bad result: %d", id, result)
+			f.Close()
+
+			roDataName := path.Join("testdata", filename+"-rodata.bin")
+
+			f, err = os.Create(roDataName)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := f.Write(roData); err != nil {
+				t.Fatal(err)
+			}
+
+			f.Close()
+
+			dataName := path.Join("testdata", filename+"-data.bin")
+
+			f, err = os.Create(dataName)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := f.Write(data); err != nil {
+				t.Fatal(err)
+			}
+
+			f.Close()
+
+			if dumpText {
+				dump := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", textName)
+				dump.Stdout = os.Stdout
+				dump.Stderr = os.Stderr
+
+				if err := dump.Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if dumpROData {
+				fmt.Println(roDataName + ":")
+
+				dump := exec.Command("hexdump", "-C", roDataName)
+				dump.Stdout = os.Stdout
+				dump.Stderr = os.Stderr
+
+				if err := dump.Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			if dumpData {
+				fmt.Println(dataName + ":")
+
+				dump := exec.Command("hexdump", "-C", dataName)
+				dump.Stdout = os.Stdout
+				dump.Stderr = os.Stderr
+
+				if err := dump.Run(); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		p, err := b.NewProgram(text, data, globals)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if !timedout {
+				p.Close()
+			}
+		}()
+
+		r, err := p.NewRunner(memorySize, stackSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if !timedout {
+				r.Close()
+			}
+		}()
+
+		for id := 1; id != idCount; id++ {
+			assertType, err := r.Run(0x100000 + id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if assertType < -1 || assertType > 1 {
+				panic(assertType)
+			}
+
+			if assertType == -1 {
+				t.Logf("run: module %s: test #%d: not supported", filename, id)
+				continue
+			}
+
+			var result int32
+			var panicked interface{}
+			done := make(chan struct{})
+
+			go func() {
+				defer close(done)
+				defer func() {
+					panicked = recover()
+				}()
+				result, err = r.Run(id)
+			}()
+
+			timer := time.NewTimer(timeout)
+
+			select {
+			case <-done:
+				timer.Stop()
+
+			case <-timer.C:
+				timedout = true
+				t.Fatalf("run: module %s: test #%d: timeout", filename, id)
+			}
+
+			if panicked != nil {
+				t.Fatalf("run: module %s: test #%d: panic: %v", filename, id, panicked)
+			}
+
+			if err != nil {
+				if _, ok := err.(traps.Id); ok {
+					if assertType == 1 {
+						t.Logf("run: module %s: test #%d: trap ok", filename, id)
+					} else {
+						t.Errorf("run: module %s: test #%d: failed due to unexpected trap", filename, id)
+					}
+				} else {
+					t.Fatal(err)
 				}
 			} else {
-				t.Fatalf("run: test #%d: failed due to unexpected return (result: %d)", id, result)
+				if assertType == 0 {
+					switch result {
+					case 1:
+						t.Logf("run: module %s: test #%d: return ok", filename, id)
+
+					case 0:
+						t.Errorf("run: module %s: test #%d: return fail", filename, id)
+
+					default:
+						t.Fatalf("run: module %s: test #%d: bad result: %d", filename, id, result)
+					}
+				} else {
+					t.Fatalf("run: module %s: test #%d: failed due to unexpected return (result: %d)", filename, id, result)
+				}
 			}
 		}
 	}
+
+	return data
 }
 
 func invoke2call(exports map[string]string, x interface{}) {

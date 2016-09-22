@@ -7,6 +7,7 @@ const (
 	CallStackExhausted
 	IndirectCallIndex
 	IndirectCallSignature
+	MemoryOutOfBounds
 	Unreachable
 )
 
@@ -23,6 +24,9 @@ func (id Id) String() string {
 
 	case IndirectCallSignature:
 		return "indirect call signature mismatch"
+
+	case MemoryOutOfBounds:
+		return "memory access out of bounds"
 
 	case Unreachable:
 		return "unreachable"
