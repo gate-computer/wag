@@ -164,6 +164,10 @@ func (bytes insnAddr8) op(code gen.Coder, addr int) (ok bool) {
 	return
 }
 
+func (i insnAddr8) opStub(code gen.Coder) {
+	i.op(code, code.Len()) // infinite loop as placeholder
+}
+
 //
 type insnAddr32 []byte
 

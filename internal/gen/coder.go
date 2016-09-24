@@ -21,6 +21,8 @@ type Coder interface {
 
 	Consumed(types.T, values.Operand)
 	FreeReg(types.T, regs.R)
+	AddCallSite(*links.L)
+	AddIndirectCallSite()
 	AddStackUsage(size int)
 }
 

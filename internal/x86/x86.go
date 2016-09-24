@@ -271,18 +271,18 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regExt values.Ext
 	Jmp.opReg(code, reg)
 }
 
-func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) int {
+func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
 	Movsxd.opFromStack(code, types.I32, regScratch, ptrStackOffset)
 	Add.opFromReg(code, types.I64, regScratch, regTextPtr)
 	Call.opReg(code, regScratch)
-	return code.Len()
+	code.AddIndirectCallSite()
 }
 
-func (mach X86) OpInit(code gen.Coder) int {
+func (mach X86) OpInit(code gen.Coder, start *links.L) {
 	Add.opImm(code, types.I64, regStackLimit, wordSize) // reserve space for trap handler call
 	Add.opImm(code, types.I64, regStackPtr, wordSize)   // overwrite return address
-	CallRel.op(code, 0)
-	return code.Len()
+	CallRel.op(code, start.Address)
+	code.AddCallSite(start)
 }
 
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
@@ -571,11 +571,12 @@ func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBoun
 	return code.Len()
 }
 
-func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr, callSite int) {
-	trampoline := new(links.L)
-	trampoline.SetAddress(code.Len())
-	CallRel.op(code, code.TrapLinks().CallStackExhausted.FinalAddress())
-	callSite = code.Len()
+func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr int) {
+	var trap links.L
+
+	trap.SetAddress(code.Len())
+	CallRel.op(code, code.TrapLinks().CallStackExhausted.Address)
+	code.AddCallSite(&code.TrapLinks().CallStackExhausted)
 
 	if n := functionAlignment - (code.Len() & (functionAlignment - 1)); n < functionAlignment {
 		for i := 0; i < n; i++ {
@@ -587,13 +588,13 @@ func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr, c
 	Lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.opFromReg(code, types.I64, regScratch, regStackLimit)
-	Jl.op(code, trampoline.FinalAddress())
+	Jl.op(code, trap.FinalAddress())
 	return
 }
 
-func (mach X86) OpCall(code gen.Coder, addr int) int {
-	CallRel.op(code, addr)
-	return code.Len()
+func (mach X86) OpCall(code gen.Coder, l *links.L) {
+	CallRel.op(code, l.Address)
+	code.AddCallSite(l)
 }
 
 func (mach X86) UpdateBranches(code gen.Coder, l *links.L) {
@@ -616,10 +617,25 @@ func (mach X86) updateAddr(code gen.Coder, addr int, value int) {
 	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(value))
 }
 
+func (mach X86) updateAddr8(code gen.Coder, addr int, value int) {
+	if value < -0x80 || 0x80 <= value {
+		panic(value)
+	}
+
+	code.Bytes()[addr-1] = byte(value)
+}
+
 func (mach X86) updateSites(code gen.Coder, l *links.L) {
 	targetAddr := l.FinalAddress()
 	for _, siteAddr := range l.Sites {
 		mach.updateAddr(code, siteAddr, targetAddr-siteAddr)
+	}
+}
+
+func (mach X86) updateSites8(code gen.Coder, l *links.L) {
+	targetAddr := l.FinalAddress()
+	for _, siteAddr := range l.Sites {
+		mach.updateAddr8(code, siteAddr, targetAddr-siteAddr)
 	}
 }
 
@@ -686,8 +702,8 @@ func (mach X86) opResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg
 
 		if x.Storage != values.Nowhere {
 			mach.OpMove(code, t, reg, x)
+			ext = values.ZeroExt
 		}
-		ext = values.ZeroExt
 	}
 
 	return

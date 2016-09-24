@@ -11,8 +11,18 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-func (p *Program) findCaller(callSite uint32) (num int, ok bool) {
+func (p *Program) findCaller(retAddr uint32) (num int, init, ok bool) {
 	count := len(p.funcMap) / 4
+	if count == 0 {
+		return
+	}
+
+	firstFuncAddr := byteOrder.Uint32(p.funcMap[:4])
+	if retAddr > 0 && retAddr < firstFuncAddr {
+		init = true
+		ok = true
+		return
+	}
 
 	num = sort.Search(count, func(i int) bool {
 		var funcEndAddr uint32
@@ -24,7 +34,7 @@ func (p *Program) findCaller(callSite uint32) (num int, ok bool) {
 			funcEndAddr = byteOrder.Uint32(p.funcMap[i*4 : (i+1)*4])
 		}
 
-		return callSite < funcEndAddr
+		return retAddr <= funcEndAddr
 	})
 
 	if num < count {
@@ -87,8 +97,6 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, func
 	stack := r.stack[unused : len(r.stack)-8] // drop test arg
 	callStackOffsets := r.prog.CallStackOffsets()
 
-	var stackOffset int
-
 	for depth := 1; len(stack) > 0; depth++ {
 		absoluteRetAddr := byteOrder.Uint64(stack[:8])
 
@@ -99,24 +107,23 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, func
 			break
 		}
 
-		var found bool
-
-		stackOffset, found = callStackOffsets[int(retAddr)]
+		stackOffset, found := callStackOffsets[int(retAddr)]
 		if !found {
-			fmt.Fprintf(w, "#%d  <call site at absolute address 0x%x is unknown>\n", depth, absoluteRetAddr, retAddr)
+			fmt.Fprintf(w, "#%d  <unknown absolute return address 0x%x>\n", depth, absoluteRetAddr)
 		}
-		if stackOffset == 0 {
-			if len(stack) > 8 {
-				fmt.Fprintf(w, "warning: %d bytes of untraced stack\n", len(stack)-8)
-			}
+		if stackOffset < 8 || (stackOffset&7) != 0 {
+			fmt.Fprintf(w, "#%d  <invalid stack offset %d>\n", depth, stackOffset)
 			break
 		}
 
 		stack = stack[stackOffset:]
 
-		funcNum, ok := r.prog.findCaller(uint32(retAddr))
+		funcNum, init, ok := r.prog.findCaller(uint32(retAddr))
 		if !ok {
 			fmt.Fprintf(w, "#%d  <function not found for return address 0x%x>\n", depth, retAddr)
+			break
+		}
+		if init {
 			break
 		}
 
@@ -128,8 +135,8 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, func
 		fmt.Fprintf(w, "#%d  %s %s\n", depth, name, funcTypes[funcNum])
 	}
 
-	if stackOffset != 0 {
-		fmt.Fprintf(w, "warning: stack offset of initial caller was %d\n", stackOffset)
+	if len(stack) != 0 {
+		fmt.Fprintf(w, "warning: %d bytes of untraced stack remains\n", len(stack))
 	}
 
 	return

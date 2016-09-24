@@ -2,6 +2,7 @@ package x86
 
 import (
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
@@ -45,8 +46,8 @@ var memoryLoads = memoryAccesses{
 		"load8_u":  {1, values.NoExt, binaryInsn{Movzx8, NoImmInst}},
 		"load16_s": {2, values.NoExt, binaryInsn{Movsx16, NoImmInst}},
 		"load16_u": {2, values.NoExt, binaryInsn{Movzx16, NoImmInst}},
-		"load32_s": {4, values.NoExt, binaryInsn{Movsxd, NoImmInst}}, // type will be I32
-		"load32_u": {4, values.ZeroExt, Mov},                         // type will be I32
+		"load32_s": {4, values.SignExt, binaryInsn{Movsxd, NoImmInst}}, // type will be I32
+		"load32_u": {4, values.ZeroExt, Mov},                           // type will be I32
 	},
 	float: map[string]memoryAccess{
 		"load": {0, values.NoExt, binaryInsn{MovsSSE, NoImmInst}},
@@ -140,25 +141,25 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		size = int(t.Size())
 	}
 
+	var after links.L
+	var runtimeCheck bool
+
 	switch x.Storage {
 	case values.Imm:
 		addr := x.ImmValue(types.I32)
 		end := addr + int64(size)
 
-		if addr < 0 || end > 0x80000000 {
-			JmpRel.op(code, code.TrapLinks().MemoryOutOfBounds.FinalAddress()) // XXX: call
-			deadend = true
-			return
-		}
-
-		if end <= int64(code.MinMemorySize()) {
-			// no runtime bounds check
+		if addr >= 0 && end <= int64(code.MinMemorySize()) {
+			// compile-time check only
 			baseReg = regMemoryPtr
 			disp = int(addr)
 			return
 		}
 
-		Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryPtr, int(end))
+		if addr >= 0 && end <= 0x80000000 {
+			Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryPtr, int(end))
+			runtimeCheck = true
+		}
 
 	default:
 		reg, ext, own := mach.opBorrowScratchReg(code, types.I32, x)
@@ -171,12 +172,24 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		}
 
 		Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryPtr, size)
+		runtimeCheck = true
 	}
 
-	Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
-	Jg.op(code, code.TrapLinks().MemoryOutOfBounds.FinalAddress()) // XXX: call
+	if runtimeCheck {
+		Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
+		Jle.rel8.opStub(code)
+		after.AddSite(code.Len())
 
-	baseReg = regScratch
-	disp = -size
+		baseReg = regScratch
+		disp = -size
+	} else {
+		deadend = true
+	}
+
+	CallRel.op(code, code.TrapLinks().MemoryOutOfBounds.Address)
+	code.AddCallSite(&code.TrapLinks().MemoryOutOfBounds)
+
+	after.SetAddress(code.Len())
+	mach.updateSites8(code, &after)
 	return
 }

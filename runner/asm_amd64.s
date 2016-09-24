@@ -1,7 +1,7 @@
 #include "textflag.h"
 
 // func run(text, memory, stack []byte, arg int) (result int32, trap int, stackPtr uintptr)
-TEXT ·run(SB),$0-96
+TEXT ·run(SB),$0-104
 	PUSHQ	AX
 	PUSHQ	CX
 	PUSHQ	DX

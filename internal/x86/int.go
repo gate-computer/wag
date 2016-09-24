@@ -2,6 +2,7 @@ package x86
 
 import (
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
@@ -138,15 +139,15 @@ func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.O
 	case "ctz":
 		var targetReg regs.R
 
-		sourceReg, _, own := mach.opBorrowScratchReg(code, t, x)
+		sourceReg, ext, own := mach.opBorrowScratchReg(code, t, x)
 		if own {
 			targetReg = sourceReg
 		} else {
-			targetReg, _ = mach.opResultReg(code, t, values.NoOperand)
+			targetReg, ext = mach.opResultReg(code, t, values.NoOperand)
 		}
 
 		Bsf.opFromReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg, values.NoExt)
+		return values.TempRegOperand(targetReg, ext)
 
 	case "eqz":
 		reg, _, own := mach.opBorrowScratchReg(code, t, x)
@@ -180,9 +181,9 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 	if value, ok := a.CheckImmValue(t); ok {
 		switch {
 		case value == 0 && name == "sub":
-			reg, _ := mach.opResultReg(code, t, b)
+			reg, ext := mach.opResultReg(code, t, b)
 			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg, values.NoExt)
+			return values.TempRegOperand(reg, ext)
 		}
 	}
 
@@ -192,14 +193,14 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 
 		switch {
 		case (name == "add" && value == 1) || (name == "sub" && value == -1):
-			reg, _ := mach.opResultReg(code, t, a)
+			reg, ext := mach.opResultReg(code, t, a)
 			Inc.opReg(code, t, reg)
-			return values.TempRegOperand(reg, values.NoExt)
+			return values.TempRegOperand(reg, ext)
 
 		case (name == "sub" && value == 1) || (name == "add" && value == -1):
-			reg, _ := mach.opResultReg(code, t, a)
+			reg, ext := mach.opResultReg(code, t, a)
 			Dec.opReg(code, t, reg)
-			return values.TempRegOperand(reg, values.NoExt)
+			return values.TempRegOperand(reg, ext)
 
 		case value < -0x80000000 || value >= 0x80000000:
 			reg, _, own := mach.opBorrowScratchReg(code, t, b)
@@ -212,9 +213,9 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 	}
 
 	if insn, found := binaryIntInsns[name]; found {
-		reg, _ := mach.opResultReg(code, t, a)
+		reg, ext := mach.opResultReg(code, t, a)
 		binaryInsnOp(code, insn, t, reg, b)
-		return values.TempRegOperand(reg, values.NoExt)
+		return values.TempRegOperand(reg, ext)
 	} else if cond, found := binaryIntConditions[name]; found {
 		reg, _, own := mach.opBorrowResultReg(code, t, a)
 		if own {
@@ -252,14 +253,14 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	if value, ok := b.CheckImmValue(t); ok {
 		switch {
 		case value == -1:
-			reg, _ := mach.opResultReg(code, t, a)
+			reg, ext := mach.opResultReg(code, t, a)
 			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg, values.NoExt)
+			return values.TempRegOperand(reg, ext)
 
 		case value > 0 && isPowerOfTwo(uint64(value)):
-			reg, _ := mach.opResultReg(code, t, a)
+			reg, ext := mach.opResultReg(code, t, a)
 			insn.shiftImm.op(code, t, reg, log2(uint64(value)))
-			return values.TempRegOperand(reg, values.NoExt)
+			return values.TempRegOperand(reg, ext)
 		}
 	}
 
@@ -267,8 +268,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	bReg, _, ok := b.CheckAnyReg()
 	if ok {
 		if name == "div_u" {
-			Test.opFromReg(code, t, bReg, bReg)
-			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress()) // XXX: call
+			mach.opCheckDivideByZero(code, t, bReg)
 		}
 
 		if bReg == regResult {
@@ -305,12 +305,10 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 			if ok {
 				defer code.FreeReg(t, bReg)
 				mach.OpMove(code, t, bReg, b)
-				Test.opFromReg(code, t, bReg, bReg)
-				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress()) // XXX: call
+				mach.opCheckDivideByZero(code, t, bReg)
 			} else {
 				mach.OpMove(code, t, regScratch, b)
-				Test.opFromReg(code, t, regScratch, regScratch)
-				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress()) // XXX: call
+				mach.opCheckDivideByZero(code, t, regScratch)
 
 				bReg = regTextPtr
 
@@ -360,7 +358,21 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 		panic(bStorage)
 	}
 
-	return values.TempRegOperand(regResult, values.NoExt)
+	return values.TempRegOperand(regResult, values.NoExt) // TODO: what sort of extension?
+}
+
+func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {
+	var after links.L
+
+	Test.opFromReg(code, t, reg, reg)
+	Jne.rel8.opStub(code)
+	after.AddSite(code.Len())
+
+	CallRel.op(code, code.TrapLinks().DivideByZero.Address)
+	code.AddCallSite(&code.TrapLinks().DivideByZero)
+
+	after.SetAddress(code.Len())
+	mach.updateSites8(code, &after)
 }
 
 func isPowerOfTwo(value uint64) bool {
