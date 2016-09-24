@@ -30,7 +30,7 @@ const (
 	memorySize    = 0x100000
 	stackSize     = 0x1000 // limit stacktrace length
 
-	timeout = time.Hour // time.Second * 3
+	timeout = time.Second * 3
 )
 
 type fun func() int32
@@ -41,35 +41,111 @@ type startFunc struct {
 
 type startFuncPtr *startFunc
 
-//func TestLoop(t *testing.T) { test(t, "testdata/spec/ml-proto/test/loop.wast") }
+// for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
 
-func TestBlock(t *testing.T)            { test(t, "testdata/spec/ml-proto/test/block.wast") }
-func TestBrIf(t *testing.T)             { test(t, "testdata/spec/ml-proto/test/br_if.wast") }
-func TestBranchStackDelta(t *testing.T) { test(t, "testdata/branch_stack_delta.wast") }
-func TestFac(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/fac.wast") }
-func TestForward(t *testing.T)          { test(t, "testdata/spec/ml-proto/test/forward.wast") }
-func TestFunc(t *testing.T)             { test(t, "testdata/spec/ml-proto/test/func.wast") }
-func TestI32(t *testing.T)              { test(t, "testdata/i32.wast") }
-func TestI64(t *testing.T)              { test(t, "testdata/i64.wast") }
-func TestIntLiterals(t *testing.T)      { test(t, "testdata/spec/ml-proto/test/int_literals.wast") }
-func TestLabels(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/labels.wast") }
-func TestLotsOfLocals(t *testing.T)     { test(t, "testdata/lots_of_locals.wast") }
-func TestMemory(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/memory.wast") }
-func TestNop(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/nop.wast") }
-func TestSelect(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/select.wast") }
-func TestTypecheck(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
+func Test_block(t *testing.T)                           { test(t, "block") }
+func Test_br_if(t *testing.T)                           { test(t, "br_if") }
+func Test_break_drop(t *testing.T)                      { test(t, "break-drop") }
+func Test_exports(t *testing.T)                         { test(t, "exports") }
+func Test_f32_load32_fail(t *testing.T)                 { test(t, "f32.load32.fail") }
+func Test_f32_load64_fail(t *testing.T)                 { test(t, "f32.load64.fail") }
+func Test_f32_store32_fail(t *testing.T)                { test(t, "f32.store32.fail") }
+func Test_f32_store64_fail(t *testing.T)                { test(t, "f32.store64.fail") }
+func Test_f64_load32_fail(t *testing.T)                 { test(t, "f64.load32.fail") }
+func Test_f64_load64_fail(t *testing.T)                 { test(t, "f64.load64.fail") }
+func Test_f64_store32_fail(t *testing.T)                { test(t, "f64.store32.fail") }
+func Test_f64_store64_fail(t *testing.T)                { test(t, "f64.store64.fail") }
+func Test_fac(t *testing.T)                             { test(t, "fac") }
+func Test_forward(t *testing.T)                         { test(t, "forward") }
+func Test_func(t *testing.T)                            { test(t, "func") }
+func Test_func_local_after_body_fail(t *testing.T)      { test(t, "func-local-after-body.fail") }
+func Test_func_param_after_body_fail(t *testing.T)      { test(t, "func-param-after-body.fail") }
+func Test_func_result_after_body_fail(t *testing.T)     { test(t, "func-result-after-body.fail") }
+func Test_i32_load32_s_fail(t *testing.T)               { test(t, "i32.load32_s.fail") }
+func Test_i32_load32_u_fail(t *testing.T)               { test(t, "i32.load32_u.fail") }
+func Test_i32_load64_s_fail(t *testing.T)               { test(t, "i32.load64_s.fail") }
+func Test_i32_load64_u_fail(t *testing.T)               { test(t, "i32.load64_u.fail") }
+func Test_i32_store32_fail(t *testing.T)                { test(t, "i32.store32.fail") }
+func Test_i32_store64_fail(t *testing.T)                { test(t, "i32.store64.fail") }
+func Test_i64_load64_s_fail(t *testing.T)               { test(t, "i64.load64_s.fail") }
+func Test_i64_load64_u_fail(t *testing.T)               { test(t, "i64.load64_u.fail") }
+func Test_i64_store64_fail(t *testing.T)                { test(t, "i64.store64.fail") }
+func Test_int_literals(t *testing.T)                    { test(t, "int_literals") }
+func Test_labels(t *testing.T)                          { test(t, "labels") }
+func Test_memory(t *testing.T)                          { test(t, "memory") }
+func Test_nop(t *testing.T)                             { test(t, "nop") }
+func Test_of_string_overflow_hex_u32_fail(t *testing.T) { test(t, "of_string-overflow-hex-u32.fail") }
+func Test_of_string_overflow_hex_u64_fail(t *testing.T) { test(t, "of_string-overflow-hex-u64.fail") }
+func Test_of_string_overflow_s32_fail(t *testing.T)     { test(t, "of_string-overflow-s32.fail") }
+func Test_of_string_overflow_s64_fail(t *testing.T)     { test(t, "of_string-overflow-s64.fail") }
+func Test_of_string_overflow_u32_fail(t *testing.T)     { test(t, "of_string-overflow-u32.fail") }
+func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-overflow-u64.fail") }
+func Test_select(t *testing.T)                          { test(t, "select") }
+func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 
-func test(t *testing.T, filename string) {
+// func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
+// func Test_address(t *testing.T)                       { test(t, "address") }
+// func Test_binary(t *testing.T)                        { test(t, "binary") }
+// func Test_br(t *testing.T)                            { test(t, "br") }
+// func Test_br_table(t *testing.T)                      { test(t, "br_table") }
+// func Test_call(t *testing.T)                          { test(t, "call") }
+// func Test_call_indirect(t *testing.T)                 { test(t, "call_indirect") }
+// func Test_comments(t *testing.T)                      { test(t, "comments") }
+// func Test_conversions(t *testing.T)                   { test(t, "conversions") }
+// func Test_endianness(t *testing.T)                    { test(t, "endianness") }
+// func Test_f32(t *testing.T)                           { test(t, "f32") }
+// func Test_f32_cmp(t *testing.T)                       { test(t, "f32_cmp") }
+// func Test_f64(t *testing.T)                           { test(t, "f64") }
+// func Test_f64_cmp(t *testing.T)                       { test(t, "f64_cmp") }
+// func Test_float_exprs(t *testing.T)                   { test(t, "float_exprs") }
+// func Test_float_literals(t *testing.T)                { test(t, "float_literals") }
+// func Test_float_memory(t *testing.T)                  { test(t, "float_memory") }
+// func Test_float_misc(t *testing.T)                    { test(t, "float_misc") }
+// func Test_func_local_before_param_fail(t *testing.T)  { test(t, "func-local-before-param.fail") }
+// func Test_func_local_before_result_fail(t *testing.T) { test(t, "func-local-before-result.fail") }
+// func Test_func_ptrs(t *testing.T)                     { test(t, "func_ptrs") }
+// func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
+// func Test_get_local(t *testing.T)                     { test(t, "get_local") }
+// func Test_i32(t *testing.T)                           { test(t, "i32") }
+// func Test_i64(t *testing.T)                           { test(t, "i64") }
+// func Test_imports(t *testing.T)                       { test(t, "imports") }
+// func Test_int_exprs(t *testing.T)                     { test(t, "int_exprs") }
+// func Test_left_to_right(t *testing.T)                 { test(t, "left-to-right") }
+// func Test_loop(t *testing.T)                          { test(t, "loop") }
+// func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }
+// func Test_memory_trap(t *testing.T)                   { test(t, "memory_trap") }
+// func Test_names(t *testing.T)                         { test(t, "names") }
+// func Test_resizing(t *testing.T)                      { test(t, "resizing") }
+// func Test_return(t *testing.T)                        { test(t, "return") }
+// func Test_set_local(t *testing.T)                     { test(t, "set_local") }
+// func Test_start(t *testing.T)                         { test(t, "start") }
+// func Test_store_retval(t *testing.T)                  { test(t, "store_retval") }
+// func Test_switch(t *testing.T)                        { test(t, "switch") }
+// func Test_traps(t *testing.T)                         { test(t, "traps") }
+// func Test_unreachable(t *testing.T)                   { test(t, "unreachable") }
+
+func test(t *testing.T, name string) {
 	if parallel {
 		t.Parallel()
 	}
+
+	filename := path.Join("testdata/spec/ml-proto/test", name) + ".wast"
 
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	name := strings.Replace(path.Base(filename), ".wast", "", -1)
+	if strings.HasSuffix(name, ".fail") {
+		defer func() {
+			x := recover()
+			if x == nil {
+				t.Error()
+			} else {
+				t.Logf("expected panic: %s", x)
+			}
+		}()
+	}
 
 	for i := 0; len(data) > 0; i++ {
 		data = testModule(t, data, fmt.Sprintf("%s-%d", name, i))
