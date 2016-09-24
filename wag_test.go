@@ -70,6 +70,7 @@ func Test_i32_store64_fail(t *testing.T)                { test(t, "i32.store64.f
 func Test_i64_load64_s_fail(t *testing.T)               { test(t, "i64.load64_s.fail") }
 func Test_i64_load64_u_fail(t *testing.T)               { test(t, "i64.load64_u.fail") }
 func Test_i64_store64_fail(t *testing.T)                { test(t, "i64.store64.fail") }
+func Test_int_exprs(t *testing.T)                       { test(t, "int_exprs") }
 func Test_int_literals(t *testing.T)                    { test(t, "int_literals") }
 func Test_labels(t *testing.T)                          { test(t, "labels") }
 func Test_memory(t *testing.T)                          { test(t, "memory") }
@@ -83,7 +84,6 @@ func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_select(t *testing.T)                          { test(t, "select") }
 func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 
-// func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
 // func Test_address(t *testing.T)                       { test(t, "address") }
 // func Test_binary(t *testing.T)                        { test(t, "binary") }
 // func Test_br(t *testing.T)                            { test(t, "br") }
@@ -108,8 +108,8 @@ func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 // func Test_get_local(t *testing.T)                     { test(t, "get_local") }
 // func Test_i32(t *testing.T)                           { test(t, "i32") }
 // func Test_i64(t *testing.T)                           { test(t, "i64") }
+// func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
 // func Test_imports(t *testing.T)                       { test(t, "imports") }
-// func Test_int_exprs(t *testing.T)                     { test(t, "int_exprs") }
 // func Test_left_to_right(t *testing.T)                 { test(t, "left-to-right") }
 // func Test_loop(t *testing.T)                          { test(t, "loop") }
 // func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }

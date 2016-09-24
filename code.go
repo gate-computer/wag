@@ -256,7 +256,7 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 		}
 
 		if i < len(f.body)-1 {
-			code.discard(resultType, result)
+			code.Discard(resultType, result)
 		}
 	}
 
@@ -370,10 +370,10 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		case "ctz", "neg":
 			result, deadend = code.exprUnaryOp(exprName, opName, opType, args)
 
-		case "eq", "gt", "gt_s", "gt_u", "lt", "lt_s", "ne":
+		case "eq", "gt", "gt_s", "gt_u", "lt", "lt_s", "lt_u", "ne":
 			resultType = types.I32
 			fallthrough
-		case "add", "and", "div", "div_u", "mul", "or", "sub", "xor":
+		case "add", "and", "div", "div_s", "div_u", "mul", "or", "rem_s", "rem_u", "shl", "shr_s", "shr_u", "sub", "xor":
 			result, deadend = code.exprBinaryOp(exprName, opName, opType, args)
 
 		case "const":
@@ -534,7 +534,7 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 
 	b, _, deadend := code.expr(args[1], opType, false, liveOperand{opType, &a})
 	if deadend {
-		code.discard(opType, a)
+		code.Discard(opType, a)
 		mach.OpAbort(code)
 		return
 	}
@@ -558,7 +558,7 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		case "mul":
 			switch value {
 			case 0:
-				code.discard(opType, a)
+				code.Discard(opType, a)
 				result = values.ImmOperand(opType, 0)
 				return
 
@@ -571,7 +571,13 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 
 	a = code.opMaterializeOperand(opType, a)
 	b = code.effectiveOperand(b)
-	result = mach.BinaryOp(code, opName, opType, a, b)
+
+	result, deadend = mach.BinaryOp(code, opName, opType, a, b)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
 	result = code.virtualOperand(result)
 	return
 }
@@ -639,7 +645,7 @@ func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []in
 
 	result, deadend = mach.LoadOp(code, opName, opType, x)
 	if deadend {
-		code.discard(opType, result)
+		code.Discard(opType, result)
 		mach.OpAbort(code)
 		return
 	}
@@ -677,7 +683,7 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 
 	b, _, deadend := code.expr(args[0], opType, false, liveOperand{types.I32, &a})
 	if deadend {
-		code.discard(opType, a)
+		code.Discard(opType, a)
 		mach.OpAbort(code)
 		return
 	}
@@ -751,7 +757,7 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 		}
 
 		if i < len(args)-1 {
-			code.discard(resultType, result)
+			code.Discard(resultType, result)
 		}
 	}
 
@@ -881,7 +887,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	if condExpr != nil {
 		condOperand, _, deadend = code.expr(condExpr, types.I32, false, liveOperand{valueType, &valueOperand})
 		if deadend {
-			code.discard(valueType, valueOperand)
+			code.Discard(valueType, valueOperand)
 			mach.OpAbort(code)
 			return
 		}
@@ -1196,7 +1202,7 @@ func (code *coder) exprDrop(exprName string, args []interface{}) {
 		return
 	}
 
-	code.discard(resultType, x)
+	code.Discard(resultType, x)
 }
 
 func (code *coder) exprGetLocal(exprName string, args []interface{}) (result values.Operand, resultType types.T) {
@@ -1338,7 +1344,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 				}
 
 				if i < len(args)-1 {
-					code.discard(resultType, result)
+					code.Discard(resultType, result)
 				}
 			}
 		}
@@ -1409,7 +1415,7 @@ func (code *coder) exprSelect(exprName string, args []interface{}, expectType ty
 
 	b, _, deadend := code.expr(args[1], expectType, false, aLive)
 	if deadend {
-		code.discard(expectType, a)
+		code.Discard(expectType, a)
 		mach.OpAbort(code)
 		return
 	}
@@ -1418,19 +1424,19 @@ func (code *coder) exprSelect(exprName string, args []interface{}, expectType ty
 
 	cond, _, deadend := code.expr(args[2], types.I32, false, aLive, bLive)
 	if deadend {
-		code.discard(expectType, b)
-		code.discard(expectType, a)
+		code.Discard(expectType, b)
+		code.Discard(expectType, a)
 		mach.OpAbort(code)
 		return
 	}
 
 	if value, ok := cond.CheckImmValue(types.I32); ok {
 		if value != 0 {
-			code.discard(expectType, b)
+			code.Discard(expectType, b)
 			result = a
 			return
 		} else {
-			code.discard(expectType, a)
+			code.Discard(expectType, a)
 			result = b
 			return
 		}
@@ -1766,14 +1772,6 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand) (zeroExt b
 	}
 
 	x = code.effectiveOperand(x)
-
-	if target == mach.ResultReg() {
-		if reg, ext, ok := x.CheckTempReg(); ok && reg == mach.ResultReg() {
-			zeroExt = ext
-			return
-		}
-	}
-
 	zeroExt = mach.OpMove(code, t, target, x)
 	return
 }
@@ -1823,7 +1821,7 @@ func (code *coder) Consumed(t types.T, x values.Operand) {
 	}
 }
 
-func (code *coder) discard(t types.T, x values.Operand) {
+func (code *coder) Discard(t types.T, x values.Operand) {
 	switch x.Storage {
 	case values.TempReg:
 		code.FreeReg(t, x.Reg())

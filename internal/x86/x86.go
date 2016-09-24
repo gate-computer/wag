@@ -201,13 +201,14 @@ func (mach X86) UnaryOp(code gen.RegCoder, name string, t types.T, x values.Oper
 	}
 }
 
-func (mach X86) BinaryOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
+func (mach X86) BinaryOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) (result values.Operand, deadend bool) {
 	switch t.Category() {
 	case types.Int:
 		return mach.binaryIntOp(code, name, t, a, b)
 
 	case types.Float:
-		return mach.binaryFloatOp(code, name, t, a, b)
+		result = mach.binaryFloatOp(code, name, t, a, b)
+		return
 
 	default:
 		panic(t)
@@ -246,7 +247,7 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) 
 }
 
 func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
-	Movsxd.opFromStack(code, types.I32, regScratch, ptrStackOffset)
+	Movsxd.opFromStack(code, 0, regScratch, ptrStackOffset)
 	Add.opFromReg(code, types.I64, regScratch, regTextPtr)
 	Call.opReg(code, regScratch)
 	code.AddIndirectCallSite()
@@ -292,12 +293,14 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 			}
 
 		case values.TempReg:
-			sourceReg := x.Reg()
-			if sourceReg == targetReg {
+			if sourceReg := x.Reg(); sourceReg != targetReg {
+				Mov.opFromReg(code, t, targetReg, sourceReg)
+				zeroExt = true
+			} else if targetReg == regResult {
+				zeroExt = x.ZeroExt()
+			} else {
 				panic("moving temporary integer register to itself")
 			}
-			Mov.opFromReg(code, t, targetReg, sourceReg)
-			zeroExt = true
 
 		case values.Stack:
 			Pop.op(code, targetReg)
@@ -361,11 +364,11 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 			}
 
 		case values.TempReg:
-			sourceReg := x.Reg()
-			if sourceReg == targetReg {
+			if sourceReg := x.Reg(); sourceReg != targetReg {
+				MovsSSE.opFromReg(code, t, targetReg, sourceReg)
+			} else if targetReg != regResult {
 				panic("moving temporary float register to itself")
 			}
-			MovsSSE.opFromReg(code, t, targetReg, sourceReg)
 
 		case values.Stack:
 			popFloatOp(code, t, targetReg)
@@ -476,7 +479,7 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 
 	code.Consumed(types.I32, condOperand)
 
-	targetReg, _ := mach.opResultReg(code, t, b)
+	targetReg, _ := mach.opMaybeResultReg(code, t, b)
 
 	switch t.Category() {
 	case types.Int:
@@ -490,7 +493,7 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 			cmov.opFromStack(code, t, targetReg, a.Offset())
 
 		default:
-			aReg, _, own := mach.opBorrowScratchReg(code, t, a)
+			aReg, _, own := mach.opBorrowMaybeScratchReg(code, t, a)
 			if own {
 				defer code.FreeReg(t, aReg)
 			}
@@ -585,7 +588,7 @@ func (mach X86) OpBranch(code gen.Coder, addr int) int {
 func (mach X86) OpBranchIf(code gen.Coder, x values.Operand, yes bool, addr int) (sites []int) {
 	cond, ok := x.CheckConditionFlags()
 	if !ok {
-		reg, _, own := mach.opBorrowScratchReg(code, types.I32, x)
+		reg, _, own := mach.opBorrowMaybeScratchReg(code, types.I32, x)
 		if own {
 			defer code.FreeReg(types.I32, reg)
 		}
@@ -725,9 +728,9 @@ func (mach X86) DisableCode(code gen.Coder, addrBegin, addrEnd int) {
 	}
 }
 
-// opBorrowScratchReg returns either the register of the given operand, or the
-// reserved scratch register with the value of the operand.
-func (mach X86) opBorrowScratchReg(code gen.Coder, t types.T, x values.Operand) (reg regs.R, zeroExt, own bool) {
+// opBorrowMaybeScratchReg returns either the register of the given operand, or
+// the reserved scratch register with the value of the operand.
+func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, t types.T, x values.Operand) (reg regs.R, zeroExt, own bool) {
 	reg, ok := x.CheckVarReg()
 	if ok {
 		return
@@ -745,22 +748,22 @@ func (mach X86) opBorrowScratchReg(code gen.Coder, t types.T, x values.Operand) 
 	return
 }
 
-// opBorrowResultReg returns either the register of the given operand, or the
-// reserved result register with the value of the operand.
-func (mach X86) opBorrowResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, zeroExt, own bool) {
+// opBorrowMaybeResultReg returns either the register of the given operand, or
+// the reserved result register with the value of the operand.
+func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, zeroExt, own bool) {
 	reg, ok := x.CheckVarReg()
 	if !ok {
-		reg, zeroExt = mach.opResultReg(code, t, x)
+		reg, zeroExt = mach.opMaybeResultReg(code, t, x)
 		own = (reg != regResult)
 	}
 
 	return
 }
 
-// opResultReg returns either the register of the given operand, or the
+// opMaybeResultReg returns either the register of the given operand, or the
 // reserved result register with the value of the operand.  The caller has
 // exclusive ownership of the register.
-func (mach X86) opResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, zeroExt bool) {
+func (mach X86) opMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, zeroExt bool) {
 	reg, zeroExt, ok := x.CheckTempReg()
 	if !ok {
 		reg, ok = code.TryAllocReg(t)
@@ -776,6 +779,20 @@ func (mach X86) opResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg
 
 	return
 }
+
+/*
+// opForceResultReg returns the value of the given operand in the reserved
+// result register.
+func (mach X86) opForceResultReg(code gen.RegCoder, t types.T, x values.Operand) (zeroExt bool) {
+	reg, zeroExt, ok := x.CheckTempReg()
+	if ok && reg == regResult {
+		return
+	}
+
+	zeroExt = mach.OpMove(code, t, regResult, x)
+	return
+}
+*/
 
 func binaryInsnOp(code gen.Coder, insn binaryInsn, t types.T, target regs.R, source values.Operand) {
 	switch source.Storage {

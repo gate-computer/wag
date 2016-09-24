@@ -1,13 +1,24 @@
 package x86
 
 import (
+	"fmt"
+
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
 )
 
 func (mach X86) ConversionOp(code gen.RegCoder, name string, resultType, t types.T, x values.Operand) values.Operand {
-	reg, _, own := mach.opBorrowScratchReg(code, t, x)
+	switch name {
+	case "i32.wrap/i64":
+		if reg, zeroExt, ok := x.CheckTempReg(); ok && zeroExt {
+			return values.TempRegOperand(reg, false)
+		} else {
+			return x
+		}
+	}
+
+	reg, _, own := mach.opBorrowMaybeScratchReg(code, t, x)
 	if own {
 		defer code.FreeReg(t, reg)
 	}
@@ -20,7 +31,12 @@ func (mach X86) ConversionOp(code gen.RegCoder, name string, resultType, t types
 		Cvtsi2sdSSE.opFromReg(code, t, regResult, reg)
 
 	case "i64.extend_s/i32":
-		Movsxd.opFromReg(code, t, regResult, reg)
+		fmt.Printf("i64.extend_s/i32: t = %s\n", t)
+		fmt.Printf("i64.extend_s/i32: resultType = %s\n", resultType)
+		Movsxd.opFromReg(code, 0, regResult, reg)
+
+	case "i64.extend_u/i32":
+		Mov.opFromReg(code, t, regResult, reg)
 
 	case "f32.reinterpret/i32", "f64.reinterpret/i64":
 		MovSSE.opFromReg(code, t, regResult, reg)

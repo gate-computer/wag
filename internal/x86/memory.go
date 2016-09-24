@@ -42,15 +42,15 @@ func (as memoryAccesses) lookup(t types.T, name string) (a memoryAccess) {
 var memoryLoads = memoryAccesses{
 	integer: map[string]memoryAccess{
 		"load":     {0, true, Mov},
-		"load8_s":  {1, false, binaryInsn{Movsx8, NoImmInst}},
-		"load8_u":  {1, false, binaryInsn{Movzx8, NoImmInst}},
-		"load16_s": {2, false, binaryInsn{Movsx16, NoImmInst}},
-		"load16_u": {2, false, binaryInsn{Movzx16, NoImmInst}},
-		"load32_s": {4, false, binaryInsn{Movsxd, NoImmInst}}, // type will be I32
-		"load32_u": {4, true, Mov},                            // type will be I32
+		"load8_s":  {1, false, binaryInsn{Movsx8, NoPrefixMIInsn}},
+		"load8_u":  {1, false, binaryInsn{Movzx8, NoPrefixMIInsn}},
+		"load16_s": {2, false, binaryInsn{Movsx16, NoPrefixMIInsn}},
+		"load16_u": {2, false, binaryInsn{Movzx16, NoPrefixMIInsn}},
+		"load32_s": {4, false, binaryInsn{Movsxd, NoPrefixMIInsn}}, // type is ignored
+		"load32_u": {4, true, Mov},                                 // type will be I32
 	},
 	float: map[string]memoryAccess{
-		"load": {0, false, binaryInsn{MovsSSE, NoImmInst}},
+		"load": {0, false, binaryInsn{MovsSSE, NoPrefixMIInsn}},
 	},
 }
 
@@ -123,7 +123,7 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 		}
 	}
 
-	valueReg, _, own := mach.opBorrowResultReg(code, t, b)
+	valueReg, _, own := mach.opBorrowMaybeResultReg(code, t, b)
 	if own {
 		defer code.FreeReg(t, valueReg)
 	}
@@ -162,7 +162,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		}
 
 	default:
-		reg, zeroExt, own := mach.opBorrowScratchReg(code, types.I32, x)
+		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, types.I32, x)
 		if own {
 			defer code.FreeReg(types.I32, reg)
 		}

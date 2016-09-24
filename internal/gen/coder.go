@@ -19,6 +19,7 @@ type Coder interface {
 	RODataAddr() int
 	TrapLinks() *TrapLinks
 
+	Discard(types.T, values.Operand)
 	Consumed(types.T, values.Operand)
 	FreeReg(types.T, regs.R)
 	AddCallSite(*links.L)

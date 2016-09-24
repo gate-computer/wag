@@ -6,6 +6,10 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 )
 
+const (
+	verboseRegAlloc = verbose
+)
+
 type regAllocator struct {
 	groups []regGroupAllocator
 }
@@ -99,7 +103,7 @@ func (g *regGroupAllocator) allocate() (reg regs.R, ok bool) {
 			reg = regs.R(g.offset + n)
 			ok = true
 
-			if verbose {
+			if verboseRegAlloc {
 				for i := 0; i < debugExprDepth; i++ {
 					fmt.Print("    ")
 				}
@@ -126,7 +130,7 @@ func (g *regGroupAllocator) free(reg regs.R) (ok bool) {
 
 		g.phase += 3
 
-		if verbose {
+		if verboseRegAlloc {
 			for i := 0; i < debugExprDepth; i++ {
 				fmt.Print("    ")
 			}

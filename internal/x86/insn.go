@@ -268,6 +268,10 @@ func (i insnRexM) opStack(code gen.Coder, t types.T, disp int) {
 	imm.writeTo(code)
 }
 
+var (
+	NoRexMInsn = insnRexM{nil, 0}
+)
+
 //
 type insnPrefix struct {
 	prefix   prefix
@@ -427,6 +431,10 @@ func (i insnPrefixMI) immOpcode(value int) (opcode byte, imm imm) {
 	return
 }
 
+var (
+	NoPrefixMIInsn = insnPrefixMI{nil, 0, 0, 0, 0}
+)
+
 //
 type binaryInsn struct {
 	insnPrefix
@@ -453,6 +461,10 @@ type shiftImmInsn struct {
 	any insnPrefixMI
 }
 
+func (i shiftImmInsn) defined() bool {
+	return i.one.opcode != nil
+}
+
 func (i shiftImmInsn) op(code gen.Coder, t types.T, reg regs.R, value int) {
 	if value == 1 {
 		i.one.opReg(code, t, reg)
@@ -460,6 +472,10 @@ func (i shiftImmInsn) op(code gen.Coder, t types.T, reg regs.R, value int) {
 		i.any.opImm(code, t, reg, value)
 	}
 }
+
+var (
+	NoShiftImmInsn = shiftImmInsn{NoRexMInsn, NoPrefixMIInsn}
+)
 
 //
 type movImmInsn struct {

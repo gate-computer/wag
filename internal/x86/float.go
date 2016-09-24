@@ -60,7 +60,7 @@ var binaryFloatConditions = map[string]values.Condition{
 func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
 	switch name {
 	case "neg":
-		targetReg, _ := mach.opResultReg(code, t, x)
+		targetReg, _ := mach.opMaybeResultReg(code, t, x)
 
 		MovsSSE.opFromReg(code, t, regScratch, targetReg)
 		SubsSSE.opFromReg(code, t, targetReg, regScratch)
@@ -73,9 +73,9 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values
 
 func (mach X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
 	if insn, found := binaryFloatInsns[name]; found {
-		targetReg, _ := mach.opResultReg(code, t, a)
+		targetReg, _ := mach.opMaybeResultReg(code, t, a)
 
-		sourceReg, _, own := mach.opBorrowScratchReg(code, t, b)
+		sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, t, b)
 		if own {
 			defer code.FreeReg(t, sourceReg)
 		}
@@ -85,12 +85,12 @@ func (mach X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b va
 	}
 
 	if cond, found := binaryFloatConditions[name]; found {
-		aReg, _, own := mach.opBorrowResultReg(code, t, a)
+		aReg, _, own := mach.opBorrowMaybeResultReg(code, t, a)
 		if own {
 			defer code.FreeReg(t, aReg)
 		}
 
-		bReg, _, own := mach.opBorrowScratchReg(code, t, b)
+		bReg, _, own := mach.opBorrowMaybeScratchReg(code, t, b)
 		if own {
 			defer code.FreeReg(t, bReg)
 		}
