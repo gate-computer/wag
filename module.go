@@ -205,6 +205,24 @@ func loadModule(top []interface{}) (m *Module) {
 	return
 }
 
+func (m *Module) FuncTypes() (sigs []types.Function) {
+	sigs = make([]types.Function, len(m.Functions))
+	for i, f := range m.Functions {
+		sigs[i] = f.Signature.Function
+	}
+	return
+}
+
+func (m *Module) FuncNames() (names []string) {
+	names = make([]string, len(m.Functions))
+	for i, f := range m.Functions {
+		if len(f.Names) > 0 {
+			names[i] = f.Names[0]
+		}
+	}
+	return
+}
+
 type Segment struct {
 	Offset int
 	Data   []byte
@@ -217,9 +235,8 @@ type Memory struct {
 }
 
 type Signature struct {
-	Index      int
-	ArgTypes   []types.T
-	ResultType types.T
+	types.Function
+	Index int
 }
 
 func newSignature(m *Module, list []interface{}) (sig *Signature, name string) {
@@ -230,21 +247,13 @@ func newSignature(m *Module, list []interface{}) (sig *Signature, name string) {
 	return
 }
 
-func (sig *Signature) String() (s string) {
-	s = "("
-	for i, t := range sig.ArgTypes {
-		if i > 0 {
-			s += ","
-		}
-		s += t.String()
-	}
-	s += ")->" + sig.ResultType.String()
-	return
+func (sig *Signature) String() string {
+	return sig.Function.String()
 }
 
 func (sig1 *Signature) Compare(sig2 *Signature) int {
-	len1 := len(sig1.ArgTypes)
-	len2 := len(sig2.ArgTypes)
+	len1 := len(sig1.Args)
+	len2 := len(sig2.Args)
 
 	if len1 < len2 {
 		return -1
@@ -253,9 +262,9 @@ func (sig1 *Signature) Compare(sig2 *Signature) int {
 		return 1
 	}
 
-	for n := range sig1.ArgTypes {
-		arg1 := sig1.ArgTypes[n]
-		arg2 := sig2.ArgTypes[n]
+	for n := range sig1.Args {
+		arg1 := sig1.Args[n]
+		arg2 := sig2.Args[n]
 
 		if arg1 < arg2 {
 			return -1
@@ -265,8 +274,8 @@ func (sig1 *Signature) Compare(sig2 *Signature) int {
 		}
 	}
 
-	res1 := sig1.ResultType
-	res2 := sig2.ResultType
+	res1 := sig1.Result
+	res2 := sig2.Result
 
 	if res1 < res2 {
 		return -1
@@ -370,7 +379,7 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 					f.Locals = append(f.Locals, varType)
 
 				case "param":
-					f.Signature.ArgTypes = append(f.Signature.ArgTypes, varType)
+					f.Signature.Args = append(f.Signature.Args, varType)
 
 					v.Param = true
 					v.Index = len(f.Params)
@@ -392,7 +401,7 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 				panic(sigName)
 			}
 
-			for _, varType := range sig.ArgTypes {
+			for _, varType := range sig.Args {
 				numName := strconv.Itoa(len(f.Locals) + len(f.Params))
 
 				f.Vars[numName] = Var{
@@ -404,11 +413,11 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 				f.Params = append(f.Params, varType)
 			}
 
-			f.Signature.ArgTypes = append(f.Signature.ArgTypes, sig.ArgTypes...)
-			f.Signature.ResultType = sig.ResultType
+			f.Signature.Args = append(f.Signature.Args, sig.Args...)
+			f.Signature.Result = sig.Result
 
 		case "result":
-			f.Signature.ResultType = types.ByString[args[0].(string)]
+			f.Signature.Result = types.ByString[args[0].(string)]
 
 		default:
 			f.body = list[i:]

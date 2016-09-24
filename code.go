@@ -84,7 +84,7 @@ type coder struct {
 	maxStackOffset int
 }
 
-func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, stackMap, callMap []byte) {
+func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, funcMap, callMap []byte) {
 	code := &coder{
 		module:         m,
 		roDataAddr:     int(roDataAddr),
@@ -117,18 +117,16 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 		}
 	}
 
-	var stackMapBuf bytes.Buffer
-
-	mach.OpInit(code)
-
-	// generate trap code first so that we can write their addresses as we go.
-	// this also ensures that no link address will be zero (if OpInit is nop).
+	var funcMapBuf bytes.Buffer
 
 	startFunc := m.NamedFunctions[m.Start]
 	startLink := code.functionLinks[startFunc]
-	mach.OpBranch(code, 0)
-	startLink.AddSite(code.Len()) // XXX: this assumes that call and branch displacements are similar
 
+	site := mach.OpInit(code)
+	code.mapCallSite(site, 0)
+	startLink.AddSite(site)
+	// start function will return to init code, and will proceed to execute the exit trap
+	code.genTrap(&code.trapLinks.Exit, traps.Exit)
 	code.genTrap(&code.trapLinks.DivideByZero, traps.DivideByZero)
 	code.genTrap(&code.trapLinks.CallStackExhausted, traps.CallStackExhausted)
 	code.genTrap(&code.trapLinks.IndirectCallIndex, traps.IndirectCallIndex)
@@ -140,10 +138,8 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	code.regsFloat.init(mach.AvailableFloatRegs())
 
 	for _, f := range m.Functions {
-		addr, stackUsage := code.genFunction(f)
-
-		entry := (uint64(stackUsage) << 32) | uint64(addr)
-		if err := binary.Write(&stackMapBuf, mach.ByteOrder(), entry); err != nil {
+		addr := code.genFunction(f)
+		if err := binary.Write(&funcMapBuf, mach.ByteOrder(), uint32(addr)); err != nil {
 			panic(err)
 		}
 	}
@@ -161,7 +157,7 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	data = memory.populate(nil)
 
 	text = code.text.Bytes()
-	stackMap = stackMapBuf.Bytes()
+	funcMap = funcMapBuf.Bytes()
 	callMap = code.callMap.Bytes()
 	return
 }
@@ -214,7 +210,7 @@ func (code *coder) genTrap(l *links.L, id traps.Id) {
 	mach.OpTrapImplementation(code, id)
 }
 
-func (code *coder) genFunction(f *Function) (functionMapAddr, stackUsage int) {
+func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 	if verbose {
 		fmt.Printf("<function names=\"%s\">\n", f.Names)
 	}
@@ -236,12 +232,13 @@ func (code *coder) genFunction(f *Function) (functionMapAddr, stackUsage int) {
 	code.stackOffset = 0
 	code.maxStackOffset = 0
 
-	functionMapAddr = code.Len()
-	entryAddr, stackUsageAddr := mach.OpFunctionPrologue(code)
+	funcMapAddr = code.Len()
+	entryAddr, stackUsageAddr, callSite := mach.OpFunctionPrologue(code)
 	stackCheckEndAddr := code.Len()
+	code.mapCallSite(callSite, code.stackOffset+mach.WordSize())
 
 	end := new(links.L)
-	code.pushTarget(end, "", f.Signature.ResultType, true)
+	code.pushTarget(end, "", f.Signature.Result, true)
 
 	var result values.Operand
 	var resultType types.T
@@ -252,7 +249,7 @@ func (code *coder) genFunction(f *Function) (functionMapAddr, stackUsage int) {
 
 		var t types.T
 		if final {
-			t = f.Signature.ResultType
+			t = f.Signature.Result
 		}
 
 		result, resultType, deadend = code.expr(x, t, final, 0, nil)
@@ -267,7 +264,7 @@ func (code *coder) genFunction(f *Function) (functionMapAddr, stackUsage int) {
 	}
 
 	if !deadend {
-		code.opMove(f.Signature.ResultType, mach.ResultReg(), result)
+		code.opMove(f.Signature.Result, mach.ResultReg(), result)
 	}
 
 	if code.popTarget() {
@@ -306,9 +303,8 @@ func (code *coder) genFunction(f *Function) (functionMapAddr, stackUsage int) {
 		panic(errors.New("internal: branch target stack is not empty at end of function"))
 	}
 
-	stackUsage = code.maxStackOffset
-	if stackUsage > 0 {
-		mach.UpdateStackDisp(code, stackUsageAddr, stackUsage)
+	if code.maxStackOffset > 0 {
+		mach.UpdateStackDisp(code, stackUsageAddr, code.maxStackOffset)
 	} else {
 		newAddr := stackCheckEndAddr &^ (mach.FunctionAlignment() - 1)
 		mach.DeleteCode(code, entryAddr, newAddr)
@@ -1122,9 +1118,9 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	code.incrementStackOffset()
 	mach.OpShiftRightLogical32Bits(code, reg) // signature id
 	code.opBranchIfEqualImm32(reg, sig.Index, after)
-	mach.OpCall(code, code.trapLinks.IndirectCallSignature.FinalAddress())
+	code.opCall(&code.trapLinks.IndirectCallSignature)
 	outOfBounds.SetAddress(code.Len())
-	mach.OpCall(code, code.trapLinks.IndirectCallIndex.FinalAddress())
+	code.opCall(&code.trapLinks.IndirectCallIndex)
 	after.SetAddress(code.Len())
 
 	// end of critical section.
@@ -1139,20 +1135,20 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	}
 
 	site := mach.OpCallIndirectDisp32FromStack(code, argsSize)
-	code.mapCallSite(site)
+	code.mapCallSite(site, code.stackOffset+mach.WordSize())
 	code.opAddImmToStackPtr(argsSize + mach.WordSize()) // pop args and func ptr
 	return
 }
 
 func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []interface{}) (result values.Operand, resultType types.T, deadend bool, argsStackSize int) {
-	if len(sig.ArgTypes) != len(args) {
+	if len(sig.Args) != len(args) {
 		panic(fmt.Errorf("%s: wrong number of arguments", exprName))
 	}
 
 	initialStackOffset := code.stackOffset
 
 	for i, arg := range args {
-		t := sig.ArgTypes[i]
+		t := sig.Args[i]
 
 		var x values.Operand
 
@@ -1179,7 +1175,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 
 	argsStackSize = code.stackOffset - initialStackOffset
 
-	resultType = sig.ResultType
+	resultType = sig.Result
 	if resultType != types.Void {
 		result = values.TempRegOperand(mach.ResultReg(), values.NoExt)
 	}
@@ -1361,7 +1357,7 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
-	t := code.function.Signature.ResultType
+	t := code.function.Signature.Result
 
 	if t != types.Void && len(args) == 0 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
@@ -1540,7 +1536,7 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	mach.OpCall(code, code.trapLinks.Unreachable.FinalAddress())
+	code.opCall(&code.trapLinks.Unreachable)
 }
 
 func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
@@ -1684,7 +1680,7 @@ func (code *coder) opBranchIfOutOfBounds(indexReg regs.R, upperBound int, l *lin
 
 func (code *coder) opCall(l *links.L) {
 	site := mach.OpCall(code, l.Address)
-	code.mapCallSite(site)
+	code.mapCallSite(site, code.stackOffset+mach.WordSize())
 	if l.Address == 0 {
 		l.AddSite(site)
 	}
@@ -2059,8 +2055,9 @@ func (code *coder) branchSites(l *links.L, sites ...int) {
 	}
 }
 
-func (code *coder) mapCallSite(addr int) {
-	if err := binary.Write(&code.callMap, mach.ByteOrder(), uint32(addr)); err != nil {
+func (code *coder) mapCallSite(addr, stackOffset int) {
+	entry := (uint64(stackOffset) << 32) | uint64(addr)
+	if err := binary.Write(&code.callMap, mach.ByteOrder(), uint64(entry)); err != nil {
 		panic(err)
 	}
 }

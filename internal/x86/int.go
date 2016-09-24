@@ -268,7 +268,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	if ok {
 		if name == "div_u" {
 			Test.opFromReg(code, t, bReg, bReg)
-			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
+			Je.op(code, code.TrapLinks().DivideByZero.FinalAddress()) // XXX: call
 		}
 
 		if bReg == regResult {
@@ -306,11 +306,11 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 				defer code.FreeReg(t, bReg)
 				mach.OpMove(code, t, bReg, b)
 				Test.opFromReg(code, t, bReg, bReg)
-				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
+				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress()) // XXX: call
 			} else {
 				mach.OpMove(code, t, regScratch, b)
 				Test.opFromReg(code, t, regScratch, regScratch)
-				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress())
+				Je.op(code, code.TrapLinks().DivideByZero.FinalAddress()) // XXX: call
 
 				bReg = regTextPtr
 

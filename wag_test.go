@@ -18,17 +18,17 @@ import (
 )
 
 const (
-	parallel     = false
-	writeBin     = true
-	dumpText     = true
-	dumpROData   = true
-	dumpData     = true
-	dumpStackMap = true
-	dumpCallMap  = true
+	parallel    = false
+	writeBin    = true
+	dumpText    = true
+	dumpROData  = true
+	dumpData    = true
+	dumpFuncMap = true
+	dumpCallMap = true
 
 	maxRODataSize = 0x100000
 	memorySize    = 0x100000
-	stackSize     = 0x100000
+	stackSize     = 0x1000 // limit stacktrace length
 
 	timeout = time.Hour // time.Second * 3
 )
@@ -229,7 +229,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}()
 
-		text, roData, globals, data, stackMap, callMap := m.Code(b.RODataAddr(), b.ROData)
+		text, roData, globals, data, funcMap, callMap := m.Code(b.RODataAddr(), b.ROData)
 
 		b.Seal()
 
@@ -273,14 +273,14 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 
 			f.Close()
 
-			stackMapName := path.Join("testdata", filename+"-stackmap.bin")
+			funcMapName := path.Join("testdata", filename+"-funcmap.bin")
 
-			f, err = os.Create(stackMapName)
+			f, err = os.Create(funcMapName)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if _, err := f.Write(stackMap); err != nil {
+			if _, err := f.Write(funcMap); err != nil {
 				t.Fatal(err)
 			}
 
@@ -333,10 +333,10 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 				}
 			}
 
-			if dumpStackMap {
-				fmt.Println(stackMapName + ":")
+			if dumpFuncMap {
+				fmt.Println(funcMapName + ":")
 
-				dump := exec.Command("hexdump", "-C", stackMapName)
+				dump := exec.Command("hexdump", "-C", funcMapName)
 				dump.Stdout = os.Stdout
 				dump.Stderr = os.Stderr
 
@@ -345,7 +345,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 				}
 			}
 
-			if dumpStackMap {
+			if dumpCallMap {
 				fmt.Println(callMapName + ":")
 
 				dump := exec.Command("hexdump", "-C", callMapName)
@@ -358,7 +358,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}
 
-		p, err := b.NewProgram(text, globals, data, stackMap, callMap)
+		p, err := b.NewProgram(text, globals, data, funcMap, callMap)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -420,8 +420,9 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 
 			var stackBuf bytes.Buffer
-			if stackErr := r.WriteStacktraceTo(&stackBuf); stackErr == nil {
-				if stackBuf.Len() > 0 {
+			stackBuf.WriteByte(10)
+			if stackErr := r.WriteStacktraceTo(&stackBuf, m.FuncTypes(), m.FuncNames()); stackErr == nil {
+				if stackBuf.Len() > 1 {
 					t.Logf("run: module %s: test #%d: stack: %s", filename, id, string(stackBuf.Bytes()))
 				}
 			} else {

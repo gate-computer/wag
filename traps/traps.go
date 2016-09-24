@@ -3,7 +3,8 @@ package traps
 type Id int
 
 const (
-	DivideByZero = Id(iota + 1)
+	Exit = Id(iota)
+	DivideByZero
 	CallStackExhausted
 	IndirectCallIndex
 	IndirectCallSignature
@@ -13,6 +14,9 @@ const (
 
 func (id Id) String() string {
 	switch id {
+	case Exit:
+		return "exit"
+
 	case DivideByZero:
 		return "divide by zero"
 

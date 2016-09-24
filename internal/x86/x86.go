@@ -278,8 +278,11 @@ func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int
 	return code.Len()
 }
 
-func (mach X86) OpInit(code gen.Coder) {
+func (mach X86) OpInit(code gen.Coder) int {
 	Add.opImm(code, types.I64, regStackLimit, wordSize) // reserve space for trap handler call
+	Add.opImm(code, types.I64, regStackPtr, wordSize)   // overwrite return address
+	CallRel.op(code, 0)
+	return code.Len()
 }
 
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
@@ -568,10 +571,11 @@ func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBoun
 	return code.Len()
 }
 
-func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr int) {
+func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr, callSite int) {
 	trampoline := new(links.L)
 	trampoline.SetAddress(code.Len())
 	CallRel.op(code, code.TrapLinks().CallStackExhausted.FinalAddress())
+	callSite = code.Len()
 
 	if n := functionAlignment - (code.Len() & (functionAlignment - 1)); n < functionAlignment {
 		for i := 0; i < n; i++ {

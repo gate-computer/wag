@@ -31,6 +31,7 @@ type RegCoder interface {
 }
 
 type TrapLinks struct {
+	Exit                  links.L
 	DivideByZero          links.L
 	CallStackExhausted    links.L
 	IndirectCallIndex     links.L

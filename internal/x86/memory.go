@@ -146,7 +146,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		end := addr + int64(size)
 
 		if addr < 0 || end > 0x80000000 {
-			JmpRel.op(code, code.TrapLinks().MemoryOutOfBounds.FinalAddress())
+			JmpRel.op(code, code.TrapLinks().MemoryOutOfBounds.FinalAddress()) // XXX: call
 			deadend = true
 			return
 		}
@@ -174,7 +174,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 	}
 
 	Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
-	Jg.op(code, code.TrapLinks().MemoryOutOfBounds.FinalAddress())
+	Jg.op(code, code.TrapLinks().MemoryOutOfBounds.FinalAddress()) // XXX: call
 
 	baseReg = regScratch
 	disp = -size

@@ -89,6 +89,18 @@
       )
     )
   )
+
+  (func "f6" (result i32)
+    (call "f6.1")
+  )
+
+  (func "f6.1" (result i32)
+    (call "f6.2")
+  )
+
+  (func "f6.2" (result i32)
+    (unreachable)
+  )
 )
 
 (assert_return (invoke "f0") (i32.const 10))
@@ -97,3 +109,4 @@
 (assert_return (invoke "f3") (i32.const 13))
 (assert_return (invoke "f4") (i32.const 14))
 (assert_return (invoke "f5" (i32.const 2) (i32.const 500)) (i32.const 49))
+(assert_trap (invoke "f6"))

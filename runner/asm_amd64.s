@@ -1,6 +1,6 @@
 #include "textflag.h"
 
-// func run(text, memory, stack []byte, arg int) (result int32, trap int)
+// func run(text, memory, stack []byte, arg int) (result int32, trap int, stackPtr uintptr)
 TEXT ·run(SB),$0-96
 	PUSHQ	AX
 	PUSHQ	CX
@@ -26,8 +26,9 @@ TEXT ·run(SB),$0-96
 	MOVQ	stack_len+56(FP), CX
 	MOVQ	arg+72(FP), DX
 	CALL	run<>(SB)
-	MOVQ	AX, result+80(FP)
+	MOVL	AX, result+80(FP)
 	MOVQ	DI, trap+88(FP)
+	MOVQ	BX, stackPtr+96(FP)
 
 	POPQ	R15
 	POPQ	R14
@@ -55,11 +56,9 @@ TEXT run<>(SB),NOSPLIT,$0
 	SUBQ	$8, SP
 	MOVQ	DX, (SP)	// arg
 	CALL	R12
-	XORQ	DI, DI		// no trap
-	MOVQ	M7, SP		// restore original stack
-	RET
+	// exits via trap handler
 
 TEXT trap<>(SB),NOSPLIT,$0
-	MOVQ	SP, AX		// stack ptr
+	MOVQ	SP, BX		// stack ptr
 	MOVQ	M7, SP		// restore original stack
 	RET

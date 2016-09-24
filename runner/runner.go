@@ -9,7 +9,7 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text, memory, stack []byte, arg int) (result int64, trap int)
+func run(text, memory, stack []byte, arg int) (result int32, trap int, stackPtr uintptr)
 
 var (
 	pageSize = syscall.Getpagesize()
@@ -66,14 +66,17 @@ func (b *Buffer) Close() (first error) {
 type Program struct {
 	buf *Buffer
 
-	text     []byte
-	globals  []byte
-	data     []byte
-	stackMap []byte
-	callMap  []byte
+	text    []byte
+	globals []byte
+	data    []byte
+	funcMap []byte
+	callMap []byte
+
+	funcAddrs        map[int]int
+	callStackOffsets map[int]int
 }
 
-func (b *Buffer) NewProgram(text, globals, data, stackMap, callMap []byte) (p *Program, err error) {
+func (b *Buffer) NewProgram(text, globals, data, funcMap, callMap []byte) (p *Program, err error) {
 	if !b.sealed {
 		err = errors.New("buffer has not been sealed")
 		return
@@ -81,8 +84,10 @@ func (b *Buffer) NewProgram(text, globals, data, stackMap, callMap []byte) (p *P
 
 	p = &Program{
 		buf:     b,
-		data:    data,
 		globals: globals,
+		data:    data,
+		funcMap: funcMap,
+		callMap: callMap,
 	}
 
 	p.text, err = makeMemoryCopy(text, syscall.PROT_EXEC|syscall.PROT_READ, syscall.MAP_32BIT)
@@ -112,7 +117,9 @@ type Runner struct {
 	globalsAndMemory []byte
 	stack            []byte
 
-	trapStackPtr int64
+	dirty        bool
+	lastTrap     traps.Id
+	lastStackPtr uintptr
 }
 
 func (p *Program) NewRunner(memorySize, stackSize int) (r *Runner, err error) {
@@ -161,30 +168,27 @@ func (r *Runner) Close() (first error) {
 }
 
 func (r *Runner) Run(arg int) (result int32, err error) {
-	copy(r.globalsAndMemory[r.globalsOffset:cap(r.globalsAndMemory)], r.prog.globals)
-	copy(r.globalsAndMemory[r.memoryOffset:cap(r.globalsAndMemory)], r.prog.data)
+	copy(r.globalsAndMemory[r.globalsOffset:], r.prog.globals)
+	copy(r.globalsAndMemory[r.memoryOffset:], r.prog.data)
 
-	memory := r.globalsAndMemory[r.memoryOffset:cap(r.globalsAndMemory)]
+	memory := r.globalsAndMemory[r.memoryOffset:]
 	tail := memory[len(r.prog.data):]
 
-	if len(r.globalsAndMemory) < cap(r.globalsAndMemory) { // dirty?
+	if r.dirty {
 		for i := range tail {
 			tail[i] = 0
 		}
 	}
 
-	r.trapStackPtr = 0
+	result, trap, stackPtr := run(r.prog.text, memory, r.stack, arg)
 
-	resultOrStackPtr, trap := run(r.prog.text, memory, r.stack, arg)
-	if trap == 0 {
-		result = int32(resultOrStackPtr)
-	} else {
-		r.trapStackPtr = resultOrStackPtr
-		err = traps.Id(trap)
+	r.dirty = true
+	r.lastTrap = traps.Id(trap)
+	r.lastStackPtr = stackPtr
+
+	if trap != 0 {
+		err = r.lastTrap
 	}
-
-	r.globalsAndMemory = r.globalsAndMemory[:r.globalsOffset+len(r.prog.data)] // flag it as dirty
-
 	return
 }
 
