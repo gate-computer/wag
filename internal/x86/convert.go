@@ -32,5 +32,5 @@ func (mach X86) ConversionOp(code gen.RegCoder, name string, resultType, t types
 		panic(name)
 	}
 
-	return values.TempRegOperand(regResult, values.NoExt)
+	return values.TempRegOperand(regResult, false)
 }

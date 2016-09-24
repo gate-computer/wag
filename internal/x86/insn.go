@@ -4,7 +4,6 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
-	"github.com/tsavola/wag/internal/values"
 )
 
 type prefix interface {
@@ -395,6 +394,18 @@ func (i insnPrefixMI) opImmToIndirect(code gen.Coder, t types.T, reg regs.R, dis
 	immValue.writeTo(code)
 }
 
+func (i insnPrefixMI) opImmToStack(code gen.Coder, t types.T, disp, value int) {
+	mod, immDisp := dispMod(t, regStackPtr, disp)
+	opcode, immValue := i.immOpcode(value)
+
+	i.prefix.writeTo(code, t, 0, 0, 0)
+	code.WriteByte(opcode)
+	writeModTo(code, mod, i.ro, MemSIB)
+	writeSibTo(code, 0, regStackPtr, regStackPtr)
+	immDisp.writeTo(code)
+	immValue.writeTo(code)
+}
+
 func (i insnPrefixMI) immOpcode(value int) (opcode byte, imm imm) {
 	switch {
 	case i.opcode8 != 0 && -0x80 <= value && value < 0x80:
@@ -456,18 +467,18 @@ type movImmInsn struct {
 	imm   insnRexOI
 }
 
-func (i movImmInsn) op(code gen.Coder, t types.T, reg regs.R, value int64) values.Extension {
+func (i movImmInsn) op(code gen.Coder, t types.T, reg regs.R, value int64) (zeroExt bool) {
 	switch {
 	case -0x80000000 <= value && value < 0x80000000:
 		i.imm32.opImm(code, t, reg, int(value))
-		return values.SignExt
 
 	case t.Size() == types.Size64 && value >= 0 && value < 0x100000000:
 		i.imm.op(code, types.I32, reg, imm{uint32(value)})
-		return values.ZeroExt
+		zeroExt = true
 
 	default:
 		i.imm.op(code, t, reg, imm64(value))
-		return values.NoExt
 	}
+
+	return
 }

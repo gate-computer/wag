@@ -35,7 +35,16 @@ var (
 
 	Movsxd  = insnPrefix{Rex, []byte{0x63}, nil}
 	Test    = insnPrefix{Rex, []byte{0x85}, nil}
+	Cmovb   = insnPrefix{Rex, []byte{0x0f, 0x42}, nil}
+	Cmovae  = insnPrefix{Rex, []byte{0x0f, 0x43}, nil}
+	Cmove   = insnPrefix{Rex, []byte{0x0f, 0x44}, nil}
+	Cmovne  = insnPrefix{Rex, []byte{0x0f, 0x45}, nil}
+	Cmovbe  = insnPrefix{Rex, []byte{0x0f, 0x46}, nil}
+	Cmova   = insnPrefix{Rex, []byte{0x0f, 0x47}, nil}
 	Cmovl   = insnPrefix{Rex, []byte{0x0f, 0x4c}, nil}
+	Cmovge  = insnPrefix{Rex, []byte{0x0f, 0x4d}, nil}
+	Cmovle  = insnPrefix{Rex, []byte{0x0f, 0x4e}, nil}
+	Cmovg   = insnPrefix{Rex, []byte{0x0f, 0x4f}, nil}
 	Movzx8  = insnPrefix{Rex, []byte{0x0f, 0xb6}, nil}
 	Movzx16 = insnPrefix{Rex, []byte{0x0f, 0xb7}, nil}
 	Bsf     = insnPrefix{Rex, []byte{0x0f, 0xbc}, nil}
@@ -139,15 +148,15 @@ func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.O
 	case "ctz":
 		var targetReg regs.R
 
-		sourceReg, ext, own := mach.opBorrowScratchReg(code, t, x)
+		sourceReg, zeroExt, own := mach.opBorrowScratchReg(code, t, x)
 		if own {
 			targetReg = sourceReg
 		} else {
-			targetReg, ext = mach.opResultReg(code, t, values.NoOperand)
+			targetReg, zeroExt = mach.opResultReg(code, t, values.NoOperand)
 		}
 
 		Bsf.opFromReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg, ext)
+		return values.TempRegOperand(targetReg, zeroExt)
 
 	case "eqz":
 		reg, _, own := mach.opBorrowScratchReg(code, t, x)
@@ -181,9 +190,9 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 	if value, ok := a.CheckImmValue(t); ok {
 		switch {
 		case value == 0 && name == "sub":
-			reg, ext := mach.opResultReg(code, t, b)
+			reg, zeroExt := mach.opResultReg(code, t, b)
 			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg, ext)
+			return values.TempRegOperand(reg, zeroExt)
 		}
 	}
 
@@ -193,14 +202,14 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 
 		switch {
 		case (name == "add" && value == 1) || (name == "sub" && value == -1):
-			reg, ext := mach.opResultReg(code, t, a)
+			reg, zeroExt := mach.opResultReg(code, t, a)
 			Inc.opReg(code, t, reg)
-			return values.TempRegOperand(reg, ext)
+			return values.TempRegOperand(reg, zeroExt)
 
 		case (name == "sub" && value == 1) || (name == "add" && value == -1):
-			reg, ext := mach.opResultReg(code, t, a)
+			reg, zeroExt := mach.opResultReg(code, t, a)
 			Dec.opReg(code, t, reg)
-			return values.TempRegOperand(reg, ext)
+			return values.TempRegOperand(reg, zeroExt)
 
 		case value < -0x80000000 || value >= 0x80000000:
 			reg, _, own := mach.opBorrowScratchReg(code, t, b)
@@ -213,9 +222,9 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 	}
 
 	if insn, found := binaryIntInsns[name]; found {
-		reg, ext := mach.opResultReg(code, t, a)
+		reg, zeroExt := mach.opResultReg(code, t, a)
 		binaryInsnOp(code, insn, t, reg, b)
-		return values.TempRegOperand(reg, ext)
+		return values.TempRegOperand(reg, zeroExt)
 	} else if cond, found := binaryIntConditions[name]; found {
 		reg, _, own := mach.opBorrowResultReg(code, t, a)
 		if own {
@@ -253,14 +262,14 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	if value, ok := b.CheckImmValue(t); ok {
 		switch {
 		case value == -1:
-			reg, ext := mach.opResultReg(code, t, a)
+			reg, zeroExt := mach.opResultReg(code, t, a)
 			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg, ext)
+			return values.TempRegOperand(reg, zeroExt)
 
 		case value > 0 && isPowerOfTwo(uint64(value)):
-			reg, ext := mach.opResultReg(code, t, a)
+			reg, zeroExt := mach.opResultReg(code, t, a)
 			insn.shiftImm.op(code, t, reg, log2(uint64(value)))
-			return values.TempRegOperand(reg, ext)
+			return values.TempRegOperand(reg, zeroExt)
 		}
 	}
 
@@ -358,7 +367,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 		panic(bStorage)
 	}
 
-	return values.TempRegOperand(regResult, values.NoExt) // TODO: what sort of extension?
+	return values.TempRegOperand(regResult, false) // TODO: extension?
 }
 
 func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {

@@ -56,6 +56,7 @@ func TestLabels(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/l
 func TestLotsOfLocals(t *testing.T)     { test(t, "testdata/lots_of_locals.wast") }
 func TestMemory(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/memory.wast") }
 func TestNop(t *testing.T)              { test(t, "testdata/spec/ml-proto/test/nop.wast") }
+func TestSelect(t *testing.T)           { test(t, "testdata/spec/ml-proto/test/select.wast") }
 func TestTypecheck(t *testing.T)        { test(t, "testdata/spec/ml-proto/test/typecheck.wast") }
 
 func test(t *testing.T, filename string) {
@@ -151,10 +152,29 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 
 			if argCount > 1 {
-				test = []interface{}{
-					"return",
-					append([]interface{}{exprType + ".eq"}, assert[1:]...),
+				var check interface{}
+
+				switch exprType {
+				case "f32", "f64":
+					bitsType := strings.Replace(exprType, "f", "i", 1)
+
+					check = []interface{}{
+						bitsType + ".eq",
+						[]interface{}{
+							bitsType + ".reinterpret/" + exprType,
+							assert[1],
+						},
+						[]interface{}{
+							bitsType + ".reinterpret/" + exprType,
+							assert[2],
+						},
+					}
+
+				default:
+					check = []interface{}{exprType + ".eq", assert[1], assert[2]}
 				}
+
+				test = []interface{}{"return", check}
 			} else {
 				test = append([]interface{}{"block"}, assert[1:]...)
 				test = append(test, []interface{}{"return", []interface{}{"i32.const", "1"}})

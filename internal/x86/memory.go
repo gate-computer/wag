@@ -10,7 +10,7 @@ import (
 
 type memoryAccess struct {
 	truncate int
-	ext      values.Extension
+	zeroExt  bool
 	insn     binaryInsn
 }
 
@@ -41,28 +41,28 @@ func (as memoryAccesses) lookup(t types.T, name string) (a memoryAccess) {
 
 var memoryLoads = memoryAccesses{
 	integer: map[string]memoryAccess{
-		"load":     {0, values.ZeroExt, Mov},
-		"load8_s":  {1, values.NoExt, binaryInsn{Movsx8, NoImmInst}},
-		"load8_u":  {1, values.NoExt, binaryInsn{Movzx8, NoImmInst}},
-		"load16_s": {2, values.NoExt, binaryInsn{Movsx16, NoImmInst}},
-		"load16_u": {2, values.NoExt, binaryInsn{Movzx16, NoImmInst}},
-		"load32_s": {4, values.SignExt, binaryInsn{Movsxd, NoImmInst}}, // type will be I32
-		"load32_u": {4, values.ZeroExt, Mov},                           // type will be I32
+		"load":     {0, true, Mov},
+		"load8_s":  {1, false, binaryInsn{Movsx8, NoImmInst}},
+		"load8_u":  {1, false, binaryInsn{Movzx8, NoImmInst}},
+		"load16_s": {2, false, binaryInsn{Movsx16, NoImmInst}},
+		"load16_u": {2, false, binaryInsn{Movzx16, NoImmInst}},
+		"load32_s": {4, false, binaryInsn{Movsxd, NoImmInst}}, // type will be I32
+		"load32_u": {4, true, Mov},                            // type will be I32
 	},
 	float: map[string]memoryAccess{
-		"load": {0, values.NoExt, binaryInsn{MovsSSE, NoImmInst}},
+		"load": {0, false, binaryInsn{MovsSSE, NoImmInst}},
 	},
 }
 
 var memoryStores = memoryAccesses{
 	integer: map[string]memoryAccess{
-		"store":   {0, values.NoExt, Mov},
-		"store8":  {1, values.NoExt, Mov8},
-		"store16": {2, values.NoExt, Mov16},
-		"store32": {4, values.NoExt, Mov}, // type will be I32
+		"store":   {0, false, Mov},
+		"store8":  {1, false, Mov8},
+		"store16": {2, false, Mov16},
+		"store32": {4, false, Mov}, // type will be I32
 	},
 	float: map[string]memoryAccess{
-		"store": {0, values.NoExt, binaryInsn{MovsSSE, MovImm}}, // integer immediate instruction will do
+		"store": {0, false, binaryInsn{MovsSSE, MovImm}}, // integer immediate instruction will do
 	},
 }
 
@@ -76,7 +76,7 @@ func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Opera
 	}
 
 	load.insn.opFromIndirect(code, t, regResult, 0, NoIndex, baseReg, disp)
-	result = values.TempRegOperand(regResult, load.ext)
+	result = values.TempRegOperand(regResult, load.zeroExt)
 	return
 }
 
@@ -162,12 +162,12 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		}
 
 	default:
-		reg, ext, own := mach.opBorrowScratchReg(code, types.I32, x)
+		reg, zeroExt, own := mach.opBorrowScratchReg(code, types.I32, x)
 		if own {
 			defer code.FreeReg(types.I32, reg)
 		}
 
-		if ext != values.ZeroExt {
+		if !zeroExt {
 			Mov.opFromReg(code, types.I32, reg, reg)
 		}
 

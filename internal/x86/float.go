@@ -65,7 +65,7 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values
 		MovsSSE.opFromReg(code, t, regScratch, targetReg)
 		SubsSSE.opFromReg(code, t, targetReg, regScratch)
 		SubsSSE.opFromReg(code, t, targetReg, regScratch)
-		return values.TempRegOperand(targetReg, values.NoExt)
+		return values.TempRegOperand(targetReg, false)
 	}
 
 	panic(name)
@@ -81,7 +81,7 @@ func (mach X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b va
 		}
 
 		insn.opFromReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg, values.NoExt)
+		return values.TempRegOperand(targetReg, false)
 	}
 
 	if cond, found := binaryFloatConditions[name]; found {
