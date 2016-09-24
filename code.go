@@ -427,6 +427,9 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, liveType 
 		case "call_indirect":
 			result, resultType, deadend = code.exprCallIndirect(exprName, args)
 
+		case "drop":
+			code.exprDrop(exprName, args)
+
 		case "get_local":
 			result, resultType = code.exprGetLocal(exprName, args)
 
@@ -1176,6 +1179,20 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 		result = values.TempRegOperand(mach.ResultReg(), values.NoExt)
 	}
 	return
+}
+
+func (code *coder) exprDrop(exprName string, args []interface{}) {
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	x, resultType, deadend := code.expr(args[0], types.Void, false, 0, nil)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
+	code.discard(resultType, x)
 }
 
 func (code *coder) exprGetLocal(exprName string, args []interface{}) (result values.Operand, resultType types.T) {
