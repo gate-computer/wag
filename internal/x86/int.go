@@ -65,7 +65,7 @@ var (
 	Movsx8  = insnPrefix{Rex, []byte{0x0f, 0xbe}, nil}
 	Movsx16 = insnPrefix{Rex, []byte{0x0f, 0xbf}, nil}
 	Movsxd  = insnPrefix{RexW, []byte{0x63}, nil} // variable rexR, rexX and rexB
-	Popcnt  = insnPrefix{Rex, []byte{0xf3, 0x0f, 0xb8}, nil}
+	Popcnt  = insnPrefix{Prefixes{Prefix{0xf3}, Rex}, []byte{0x0f, 0xb8}, nil}
 
 	MovImm   = insnPrefixMI{Rex, 0, 0, 0xc7, 0}
 	CmpImm16 = insnPrefixMI{Data16Rex, 0, 0x81, 0, 7}
@@ -445,7 +445,18 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 				Je.rel8.opStub(code)
 				doNot.AddSite(code.Len())
 			} else {
-				Cmp.opImm(code, t, regResult, -0x80000000)
+				switch t.Size() {
+				case types.Size32:
+					Cmp.opImm(code, t, regResult, -0x80000000)
+
+				case types.Size64:
+					MovImm64.op(code, t, regScratch, -0x8000000000000000)
+					Cmp.opFromReg(code, t, regResult, regScratch)
+
+				default:
+					panic(t)
+				}
+
 				Jne.rel8.opStub(code)
 				do.AddSite(code.Len())
 

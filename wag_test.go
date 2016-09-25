@@ -68,6 +68,7 @@ func Test_i32_load64_s_fail(t *testing.T)               { test(t, "i32.load64_s.
 func Test_i32_load64_u_fail(t *testing.T)               { test(t, "i32.load64_u.fail") }
 func Test_i32_store32_fail(t *testing.T)                { test(t, "i32.store32.fail") }
 func Test_i32_store64_fail(t *testing.T)                { test(t, "i32.store64.fail") }
+func Test_i64(t *testing.T)                             { test(t, "i64") }
 func Test_i64_load64_s_fail(t *testing.T)               { test(t, "i64.load64_s.fail") }
 func Test_i64_load64_u_fail(t *testing.T)               { test(t, "i64.load64_u.fail") }
 func Test_i64_store64_fail(t *testing.T)                { test(t, "i64.store64.fail") }
@@ -107,7 +108,6 @@ func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 // func Test_func_ptrs(t *testing.T)                     { test(t, "func_ptrs") }
 // func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
 // func Test_get_local(t *testing.T)                     { test(t, "get_local") }
-// func Test_i64(t *testing.T)                           { test(t, "i64") }
 // func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
 // func Test_imports(t *testing.T)                       { test(t, "imports") }
 // func Test_left_to_right(t *testing.T)                 { test(t, "left-to-right") }
