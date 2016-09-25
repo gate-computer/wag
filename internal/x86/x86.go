@@ -21,6 +21,7 @@ const (
 const (
 	regResult      = regs.R(0)  // rax or xmm0
 	regTrapFuncMMX = regs.R(0)  // mm0
+	regShiftCount  = regs.R(1)  // rcx
 	regScratch     = regs.R(2)  // rdx or xmm2
 	regStackPtr    = regs.R(4)  // rsp
 	regTrapArg     = regs.R(7)  // rdi
@@ -33,7 +34,7 @@ const (
 var availableIntRegs = [][]bool{
 	[]bool{
 		false, // rax = result / dividend low bits
-		true,  // rcx
+		true,  // rcx = shift count (allocatable) -- TODO: allocate this last
 		false, // rdx = scratch / dividend high bits
 		true,  // rbx
 		false, // rsp = stack ptr
@@ -101,6 +102,8 @@ var (
 	Jge     = insnAddr{insnAddr8{0x7d}, insnAddr32{0x0f, 0x8d}}
 	Jle     = insnAddr{insnAddr8{0x7e}, insnAddr32{0x0f, 0x8e}}
 	Jg      = insnAddr{insnAddr8{0x7f}, insnAddr32{0x0f, 0x8f}}
+
+	CdqCqo = insnRex{0x99}
 
 	Call  = insnRexOM{[]byte{0xff}, 2}
 	Jmp   = insnRexOM{[]byte{0xff}, 4}
@@ -271,16 +274,22 @@ func (mach X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.
 	return
 }
 
-// OpMove must not update CPU's condition flags.
+// OpMove must not update CPU's condition flags if preserveFlags is set.
 //
-// X86 implementation note: must not use regScratch or regResult in this
-// function, because we may be moving to one of them.
-func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Operand) (zeroExt bool) {
+// X86 implementation note: must not rely on regScratch or regResult in this
+// function because we may be moving to one of them.
+func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	switch t.Category() {
 	case types.Int:
 		switch x.Storage {
 		case values.Imm:
-			zeroExt = MovImm64.op(code, t, targetReg, x.ImmValue(t))
+			if value := x.ImmValue(t); value == 0 && !preserveFlags {
+				Xor.opFromReg(code, types.I32, targetReg, targetReg)
+				zeroExt = true
+			} else {
+				MovImm64.op(code, t, targetReg, value)
+				zeroExt = true
+			}
 
 		case values.VarMem:
 			Mov.opFromStack(code, t, targetReg, x.Offset())
@@ -322,15 +331,11 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 				end.AddSite(code.Len())             //
 				setcc.opReg(code, targetReg)        // cond
 
-				zeroExt = true
-
 			case cond >= values.MinOrderedAndCondition:
 				MovImm.opImm(code, t, targetReg, 0) // false
 				Jp.rel8.opStub(code)                // if unordered, else
 				end.AddSite(code.Len())             //
 				setcc.opReg(code, targetReg)        // cond
-
-				zeroExt = true
 
 			default:
 				setcc.opReg(code, targetReg)
@@ -339,6 +344,8 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 
 			end.SetAddress(code.Len())
 			mach.updateSites8(code, &end)
+
+			zeroExt = true
 
 		default:
 			panic(x)
@@ -427,7 +434,7 @@ func (mach X86) OpPush(code gen.Coder, t types.T, x values.Operand) {
 		reg, ok = x.CheckVarReg()
 		if !ok {
 			reg = regScratch
-			mach.OpMove(code, t, reg, x)
+			mach.OpMove(code, t, reg, x, true)
 		}
 	}
 
@@ -479,7 +486,7 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 
 	code.Consumed(types.I32, condOperand)
 
-	targetReg, _ := mach.opMaybeResultReg(code, t, b)
+	targetReg, _ := mach.opMaybeResultReg(code, t, b, true)
 
 	switch t.Category() {
 	case types.Int:
@@ -493,7 +500,7 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 			cmov.opFromStack(code, t, targetReg, a.Offset())
 
 		default:
-			aReg, _, own := mach.opBorrowMaybeScratchReg(code, t, a)
+			aReg, _, own := mach.opBorrowMaybeScratchReg(code, t, a, true)
 			if own {
 				defer code.FreeReg(t, aReg)
 			}
@@ -531,7 +538,7 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 		moveIt.SetAddress(code.Len())
 		mach.updateSites8(code, &moveIt)
 
-		mach.OpMove(code, t, targetReg, a)
+		mach.OpMove(code, t, targetReg, a, false)
 
 		end.SetAddress(code.Len())
 		mach.updateSites8(code, &end)
@@ -558,7 +565,7 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 		reg, ok = x.CheckVarReg()
 		if !ok {
 			reg = regScratch
-			mach.OpMove(code, t, reg, x)
+			mach.OpMove(code, t, reg, x, true)
 		}
 	}
 
@@ -588,7 +595,7 @@ func (mach X86) OpBranch(code gen.Coder, addr int) int {
 func (mach X86) OpBranchIf(code gen.Coder, x values.Operand, yes bool, addr int) (sites []int) {
 	cond, ok := x.CheckConditionFlags()
 	if !ok {
-		reg, _, own := mach.opBorrowMaybeScratchReg(code, types.I32, x)
+		reg, _, own := mach.opBorrowMaybeScratchReg(code, types.I32, x, false)
 		if own {
 			defer code.FreeReg(types.I32, reg)
 		}
@@ -730,7 +737,7 @@ func (mach X86) DisableCode(code gen.Coder, addrBegin, addrEnd int) {
 
 // opBorrowMaybeScratchReg returns either the register of the given operand, or
 // the reserved scratch register with the value of the operand.
-func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, t types.T, x values.Operand) (reg regs.R, zeroExt, own bool) {
+func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, t types.T, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
 	reg, ok := x.CheckVarReg()
 	if ok {
 		return
@@ -743,17 +750,17 @@ func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, t types.T, x values.Oper
 	}
 
 	reg = regScratch
-	mach.OpMove(code, t, reg, x)
+	mach.OpMove(code, t, reg, x, preserveFlags)
 	zeroExt = true
 	return
 }
 
 // opBorrowMaybeResultReg returns either the register of the given operand, or
 // the reserved result register with the value of the operand.
-func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, zeroExt, own bool) {
+func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
 	reg, ok := x.CheckVarReg()
 	if !ok {
-		reg, zeroExt = mach.opMaybeResultReg(code, t, x)
+		reg, zeroExt = mach.opMaybeResultReg(code, t, x, preserveFlags)
 		own = (reg != regResult)
 	}
 
@@ -763,7 +770,7 @@ func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, t types.T, x values.Op
 // opMaybeResultReg returns either the register of the given operand, or the
 // reserved result register with the value of the operand.  The caller has
 // exclusive ownership of the register.
-func (mach X86) opMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand) (reg regs.R, zeroExt bool) {
+func (mach X86) opMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
 	reg, zeroExt, ok := x.CheckTempReg()
 	if !ok {
 		reg, ok = code.TryAllocReg(t)
@@ -772,27 +779,13 @@ func (mach X86) opMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand)
 		}
 
 		if x.Storage != values.Nowhere {
-			mach.OpMove(code, t, reg, x)
+			mach.OpMove(code, t, reg, x, preserveFlags)
 			zeroExt = true
 		}
 	}
 
 	return
 }
-
-/*
-// opForceResultReg returns the value of the given operand in the reserved
-// result register.
-func (mach X86) opForceResultReg(code gen.RegCoder, t types.T, x values.Operand) (zeroExt bool) {
-	reg, zeroExt, ok := x.CheckTempReg()
-	if ok && reg == regResult {
-		return
-	}
-
-	zeroExt = mach.OpMove(code, t, regResult, x)
-	return
-}
-*/
 
 func binaryInsnOp(code gen.Coder, insn binaryInsn, t types.T, target regs.R, source values.Operand) {
 	switch source.Storage {

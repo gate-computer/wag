@@ -123,7 +123,7 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 		}
 	}
 
-	valueReg, _, own := mach.opBorrowMaybeResultReg(code, t, b)
+	valueReg, _, own := mach.opBorrowMaybeResultReg(code, t, b, false)
 	if own {
 		defer code.FreeReg(t, valueReg)
 	}
@@ -162,7 +162,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		}
 
 	default:
-		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, types.I32, x)
+		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, types.I32, x, true)
 		if own {
 			defer code.FreeReg(types.I32, reg)
 		}

@@ -4,21 +4,21 @@ type Id int
 
 const (
 	Exit = Id(iota)
-	DivideByZero
+
 	CallStackExhausted
 	IndirectCallIndex
 	IndirectCallSignature
 	MemoryOutOfBounds
 	Unreachable
+
+	IntegerDivideByZero
+	IntegerOverflow
 )
 
 func (id Id) String() string {
 	switch id {
 	case Exit:
 		return "exit"
-
-	case DivideByZero:
-		return "divide by zero"
 
 	case CallStackExhausted:
 		return "call stack exhausted"
@@ -34,6 +34,12 @@ func (id Id) String() string {
 
 	case Unreachable:
 		return "unreachable"
+
+	case IntegerDivideByZero:
+		return "integer divide by zero"
+
+	case IntegerOverflow:
+		return "integer overflow"
 
 	default:
 		return "unknown trap"

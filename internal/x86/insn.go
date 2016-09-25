@@ -117,8 +117,8 @@ func writeSibTo(code gen.Coder, scale byte, index, base regs.R) {
 //
 type insnConst []byte
 
-func (bytes insnConst) op(code gen.Coder) {
-	code.Write(bytes)
+func (opcode insnConst) op(code gen.Coder) {
+	code.Write(opcode)
 }
 
 //
@@ -137,25 +137,25 @@ func (i insnO) op(code gen.Coder, reg regs.R) {
 //
 type insnI []byte
 
-func (bytes insnI) op(code gen.Coder, imm imm) {
-	code.Write(bytes)
+func (opcode insnI) op(code gen.Coder, imm imm) {
+	code.Write(opcode)
 	imm.writeTo(code)
 }
 
 //
 type insnAddr8 []byte
 
-func (bytes insnAddr8) size() int {
-	return len(bytes) + 1
+func (opcode insnAddr8) size() int {
+	return len(opcode) + 1
 }
 
-func (bytes insnAddr8) op(code gen.Coder, addr int) (ok bool) {
-	insnSize := len(bytes) + 1
+func (opcode insnAddr8) op(code gen.Coder, addr int) (ok bool) {
+	insnSize := len(opcode) + 1
 	siteAddr := code.Len() + insnSize
 	offset := addr - siteAddr
 
 	if offset >= -0x80 && offset < 0x80 {
-		code.Write(bytes)
+		code.Write(opcode)
 		imm8(offset).writeTo(code)
 		ok = true
 	}
@@ -170,12 +170,12 @@ func (i insnAddr8) opStub(code gen.Coder) {
 //
 type insnAddr32 []byte
 
-func (bytes insnAddr32) size() int {
-	return len(bytes) + 4
+func (opcode insnAddr32) size() int {
+	return len(opcode) + 4
 }
 
-func (bytes insnAddr32) op(code gen.Coder, addr int) {
-	insnSize := len(bytes) + 4
+func (opcode insnAddr32) op(code gen.Coder, addr int) {
+	insnSize := len(opcode) + 4
 	var offset int
 
 	if addr != 0 {
@@ -186,7 +186,7 @@ func (bytes insnAddr32) op(code gen.Coder, addr int) {
 	}
 
 	if offset >= -0x80000000 && offset < 0x80000000 {
-		code.Write(bytes)
+		code.Write(opcode)
 		imm32(offset).writeTo(code)
 		return
 	}
@@ -208,6 +208,14 @@ func (i insnAddr) op(code gen.Coder, addr int) {
 	if !ok {
 		i.rel32.op(code, addr)
 	}
+}
+
+//
+type insnRex []byte
+
+func (opcode insnRex) op(code gen.Coder, t types.T) {
+	writeRexSizeTo(code, t, 0, 0, 0)
+	code.Write(opcode)
 }
 
 //
@@ -483,18 +491,15 @@ type movImmInsn struct {
 	imm   insnRexOI
 }
 
-func (i movImmInsn) op(code gen.Coder, t types.T, reg regs.R, value int64) (zeroExt bool) {
+func (i movImmInsn) op(code gen.Coder, t types.T, reg regs.R, value int64) {
 	switch {
 	case -0x80000000 <= value && value < 0x80000000:
 		i.imm32.opImm(code, t, reg, int(value))
 
 	case t.Size() == types.Size64 && value >= 0 && value < 0x100000000:
 		i.imm.op(code, types.I32, reg, imm{uint32(value)})
-		zeroExt = true
 
 	default:
 		i.imm.op(code, t, reg, imm64(value))
 	}
-
-	return
 }

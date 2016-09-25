@@ -125,12 +125,13 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	mach.OpInit(code, startLink)
 	// start function will return to init code, and will proceed to execute the exit trap
 	code.genTrap(&code.trapLinks.Exit, traps.Exit)
-	code.genTrap(&code.trapLinks.DivideByZero, traps.DivideByZero)
 	code.genTrap(&code.trapLinks.CallStackExhausted, traps.CallStackExhausted)
 	code.genTrap(&code.trapLinks.IndirectCallIndex, traps.IndirectCallIndex)
 	code.genTrap(&code.trapLinks.IndirectCallSignature, traps.IndirectCallSignature)
 	code.genTrap(&code.trapLinks.MemoryOutOfBounds, traps.MemoryOutOfBounds)
 	code.genTrap(&code.trapLinks.Unreachable, traps.Unreachable)
+	code.genTrap(&code.trapLinks.IntegerDivideByZero, traps.IntegerDivideByZero)
+	code.genTrap(&code.trapLinks.IntegerOverflow, traps.IntegerOverflow)
 
 	code.regsInt.init(mach.AvailableIntRegs())
 	code.regsFloat.init(mach.AvailableFloatRegs())
@@ -261,7 +262,7 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 	}
 
 	if !deadend {
-		code.opMove(f.Signature.Result, mach.ResultReg(), result)
+		code.opMove(f.Signature.Result, mach.ResultReg(), result, false)
 	}
 
 	if code.popTarget() {
@@ -367,13 +368,13 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		case "eqz":
 			resultType = types.I32
 			fallthrough
-		case "ctz", "neg":
+		case "clz", "ctz", "neg", "popcnt":
 			result, deadend = code.exprUnaryOp(exprName, opName, opType, args)
 
-		case "eq", "gt", "gt_s", "gt_u", "lt", "lt_s", "lt_u", "ne":
+		case "eq", "ge", "ge_s", "ge_u", "gt", "gt_s", "gt_u", "le", "le_s", "le_u", "lt", "lt_s", "lt_u", "ne":
 			resultType = types.I32
 			fallthrough
-		case "add", "and", "div", "div_s", "div_u", "mul", "or", "rem_s", "rem_u", "shl", "shr_s", "shr_u", "sub", "xor":
+		case "add", "and", "div", "div_s", "div_u", "mul", "or", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub", "xor":
 			result, deadend = code.exprBinaryOp(exprName, opName, opType, args)
 
 		case "const":
@@ -564,6 +565,22 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 
 			case 1:
 				result = a
+				return
+			}
+
+		case "div_s":
+			switch value {
+			case -1, 1:
+				code.Discard(opType, a)
+				result = values.ImmOperand(opType, 0)
+				return
+			}
+
+		case "div_u":
+			switch value {
+			case 1:
+				code.Discard(opType, a)
+				result = values.ImmOperand(opType, 0)
 				return
 			}
 		}
@@ -771,7 +788,7 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 		if deadend {
 			deadend = false
 		} else {
-			zeroExt = code.opMove(expectType, mach.ResultReg(), result)
+			zeroExt = code.opMove(expectType, mach.ResultReg(), result, false)
 		}
 
 		if expectType != types.Void {
@@ -893,7 +910,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 	}
 
-	code.opMove(valueType, mach.ResultReg(), valueOperand)
+	code.opMove(valueType, mach.ResultReg(), valueOperand, true)
 
 	switch exprName {
 	case "br":
@@ -977,7 +994,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 			reg = code.opAllocIntReg(liveOperand{types.I32, &condOperand})
 			defer code.freeIntReg(reg)
 
-			regZeroExt = code.opMove(types.I32, reg, condOperand)
+			regZeroExt = code.opMove(types.I32, reg, condOperand, false)
 		}
 
 		code.opInitLocals()
@@ -1106,7 +1123,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		reg = code.opAllocIntReg(liveOperand{types.I32, &operand})
 		defer code.freeIntReg(reg)
 
-		regZeroExt = code.opMove(types.I32, reg, operand)
+		regZeroExt = code.opMove(types.I32, reg, operand, false)
 	}
 
 	code.opSaveTempRegOperands()
@@ -1353,7 +1370,7 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 	if deadend {
 		mach.OpAbort(code)
 	} else {
-		code.opMove(expectType, mach.ResultReg(), result)
+		code.opMove(expectType, mach.ResultReg(), result, false)
 	}
 
 	endReached = code.popTarget()
@@ -1393,7 +1410,7 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 			return
 		}
 
-		code.opMove(t, mach.ResultReg(), x)
+		code.opMove(t, mach.ResultReg(), x, false)
 	}
 
 	mach.OpAddImmToStackPtr(code, code.stackOffset)
@@ -1484,7 +1501,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 						goto push
 					}
 
-					zeroExt := code.opMove(resultType, reg, *live.ref) // TODO: avoid multiple loads
+					zeroExt := code.opMove(resultType, reg, *live.ref, true) // TODO: avoid multiple loads
 					*live.ref = values.TempRegOperand(reg, zeroExt)
 
 					v.refCount--
@@ -1541,7 +1558,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		}
 
 		if ok {
-			code.opMove(resultType, reg, result)
+			code.opMove(resultType, reg, result, false)
 			v.cache = values.VarRegOperand(index, reg)
 			v.dirty = true
 		} else {
@@ -1554,7 +1571,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		var ok bool
 
 		reg := result.Reg()
-		if code.regAllocated(resultType, reg) {
+		if code.RegAllocated(resultType, reg) {
 			// repurposing the register which already contains the value
 			ok = true
 		} else {
@@ -1570,7 +1587,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 
 			if ok {
 				// we got a register for the value
-				code.opMove(resultType, reg, result)
+				code.opMove(resultType, reg, result, false)
 			}
 		}
 
@@ -1657,8 +1674,8 @@ func (code *coder) freeIntReg(reg regs.R) {
 	code.regs(types.I64).free(reg)
 }
 
-// regAllocated indicates if we can hang onto a register returned by mach ops.
-func (code *coder) regAllocated(t types.T, reg regs.R) bool {
+// RegAllocated indicates if we can hang onto a register returned by mach ops.
+func (code *coder) RegAllocated(t types.T, reg regs.R) bool {
 	return code.regs(t).allocated(reg)
 }
 
@@ -1766,13 +1783,13 @@ func (code *coder) AddIndirectCallSite() {
 	}
 }
 
-func (code *coder) opMove(t types.T, target regs.R, x values.Operand) (zeroExt bool) {
+func (code *coder) opMove(t types.T, target regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	if t == types.Void || x.Storage == values.Nowhere {
 		return
 	}
 
 	x = code.effectiveOperand(x)
-	zeroExt = mach.OpMove(code, t, target, x)
+	zeroExt = mach.OpMove(code, t, target, x, preserveFlags)
 	return
 }
 
@@ -1782,7 +1799,7 @@ func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Oper
 	switch x.Storage {
 	case values.Stack, values.ConditionFlags:
 		reg := code.opAllocReg(t)
-		zeroExt := code.opMove(t, reg, x)
+		zeroExt := code.opMove(t, reg, x, false)
 		x = values.TempRegOperand(reg, zeroExt)
 	}
 
@@ -1843,21 +1860,21 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 
 		if v.cache.Storage == values.Nowhere {
 			if reg, ok := code.opTryAllocVarReg(t); ok {
-				code.opMove(t, reg, *ref)
+				code.opMove(t, reg, *ref, false)
 				v.cache = values.VarRegOperand(i, reg)
 				v.dirty = false
 			}
 		}
 
 	case values.TempReg:
-		if code.regAllocated(t, ref.Reg()) {
+		if code.RegAllocated(t, ref.Reg()) {
 			break // ok
 		}
 		fallthrough // can't keep the transient register
 
 	case values.ConditionFlags:
 		reg := code.opAllocReg(t)
-		zeroExt := code.opMove(t, reg, *ref)
+		zeroExt := code.opMove(t, reg, *ref, false)
 		*ref = values.TempRegOperand(reg, zeroExt)
 
 	default:

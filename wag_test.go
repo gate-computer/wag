@@ -61,6 +61,7 @@ func Test_func(t *testing.T)                            { test(t, "func") }
 func Test_func_local_after_body_fail(t *testing.T)      { test(t, "func-local-after-body.fail") }
 func Test_func_param_after_body_fail(t *testing.T)      { test(t, "func-param-after-body.fail") }
 func Test_func_result_after_body_fail(t *testing.T)     { test(t, "func-result-after-body.fail") }
+func Test_i32(t *testing.T)                             { test(t, "i32") }
 func Test_i32_load32_s_fail(t *testing.T)               { test(t, "i32.load32_s.fail") }
 func Test_i32_load32_u_fail(t *testing.T)               { test(t, "i32.load32_u.fail") }
 func Test_i32_load64_s_fail(t *testing.T)               { test(t, "i32.load64_s.fail") }
@@ -106,7 +107,6 @@ func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 // func Test_func_ptrs(t *testing.T)                     { test(t, "func_ptrs") }
 // func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
 // func Test_get_local(t *testing.T)                     { test(t, "get_local") }
-// func Test_i32(t *testing.T)                           { test(t, "i32") }
 // func Test_i64(t *testing.T)                           { test(t, "i64") }
 // func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
 // func Test_imports(t *testing.T)                       { test(t, "imports") }

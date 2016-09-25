@@ -21,6 +21,7 @@ type Coder interface {
 
 	Discard(types.T, values.Operand)
 	Consumed(types.T, values.Operand)
+	RegAllocated(types.T, regs.R) bool
 	FreeReg(types.T, regs.R)
 	AddCallSite(*links.L)
 	AddIndirectCallSite()
@@ -34,11 +35,14 @@ type RegCoder interface {
 }
 
 type TrapLinks struct {
-	Exit                  links.L
-	DivideByZero          links.L
+	Exit links.L
+
 	CallStackExhausted    links.L
 	IndirectCallIndex     links.L
 	IndirectCallSignature links.L
 	MemoryOutOfBounds     links.L
 	Unreachable           links.L
+
+	IntegerDivideByZero links.L
+	IntegerOverflow     links.L
 }
