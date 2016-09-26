@@ -665,16 +665,38 @@ func (code *coder) exprConst(exprName string, opType types.T, args []interface{}
 }
 
 func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
-	if len(args) == 2 {
-		// ignore alignment info
+	if len(args) < 1 {
+		panic(fmt.Errorf("%s: too few operands", exprName))
+	}
+
+	indexExpr := args[len(args)-1]
+	args = args[:len(args)-1]
+
+	var offset int
+
+	for len(args) > 0 {
+		parts := strings.SplitN(args[0].(string), "=", 2)
+
+		value, err := strconv.Atoi(parts[1])
+		if err != nil {
+			panic(err)
+		}
+
+		switch parts[0] {
+		case "align":
+			// TODO
+
+		case "offset":
+			offset = value
+
+		default:
+			panic(args[0])
+		}
+
 		args = args[1:]
 	}
 
-	if len(args) != 1 {
-		panic(fmt.Errorf("%s: wrong number of operands", exprName))
-	}
-
-	x, _, deadend := code.expr(args[0], types.I32, false)
+	x, _, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -682,7 +704,7 @@ func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []in
 
 	x = code.effectiveOperand(x)
 
-	result, deadend = mach.LoadOp(code, opName, opType, x)
+	result, deadend = mach.LoadOp(code, opName, opType, x, offset)
 	if deadend {
 		code.Discard(opType, result)
 		mach.OpAbort(code)
@@ -698,29 +720,46 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	if s, ok := args[0].(string); ok && strings.HasPrefix(s, "align=") {
-		// ignore alignment info
+	indexExpr := args[len(args)-2]
+	valueExpr := args[len(args)-1]
+	args = args[:len(args)-2]
+
+	var offset int
+
+	for len(args) > 0 {
+		parts := strings.SplitN(args[0].(string), "=", 2)
+
+		value, err := strconv.Atoi(parts[1])
+		if err != nil {
+			panic(err)
+		}
+
+		switch parts[0] {
+		case "align":
+			// TODO
+
+		case "offset":
+			offset = value
+
+		default:
+			panic(args[0])
+		}
+
 		args = args[1:]
 	}
 
-	a, _, deadend := code.expr(args[0], types.I32, false)
+	a, _, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
-
-	args = args[1:]
 
 	if len(args) == 2 {
 		// ignore alignment info
 		args = args[1:]
 	}
 
-	if len(args) != 1 {
-		panic(fmt.Errorf("%s: wrong number of operands", exprName))
-	}
-
-	b, _, deadend := code.expr(args[0], opType, false, liveOperand{types.I32, &a})
+	b, _, deadend := code.expr(valueExpr, opType, false, liveOperand{types.I32, &a})
 	if deadend {
 		code.Discard(opType, a)
 		mach.OpAbort(code)
@@ -730,7 +769,7 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 	a = code.opMaterializeOperand(opType, a)
 	b = code.effectiveOperand(b)
 
-	deadend = mach.StoreOp(code, opName, opType, a, b)
+	deadend = mach.StoreOp(code, opName, opType, a, b, offset)
 	if deadend {
 		mach.OpAbort(code)
 		return

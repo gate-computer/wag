@@ -43,7 +43,6 @@ type startFuncPtr *startFunc
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
 
-// func Test_address(t *testing.T)                       { test(t, "address") }
 // func Test_binary(t *testing.T)                        { test(t, "binary") }
 // func Test_br(t *testing.T)                            { test(t, "br") }
 // func Test_br_table(t *testing.T)                      { test(t, "br_table") }
@@ -80,6 +79,7 @@ type startFuncPtr *startFunc
 // func Test_traps(t *testing.T)                         { test(t, "traps") }
 // func Test_unreachable(t *testing.T)                   { test(t, "unreachable") }
 
+func Test_address(t *testing.T)                         { test(t, "address") }
 func Test_block(t *testing.T)                           { test(t, "block") }
 func Test_br_if(t *testing.T)                           { test(t, "br_if") }
 func Test_break_drop(t *testing.T)                      { test(t, "break-drop") }

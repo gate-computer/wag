@@ -66,10 +66,10 @@ var memoryStores = memoryAccesses{
 	},
 }
 
-func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Operand) (result values.Operand, deadend bool) {
+func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Operand, offset int) (result values.Operand, deadend bool) {
 	load := memoryLoads.lookup(t, name)
 
-	baseReg, disp, deadend := mach.opMemoryAddress(code, t, x, load.truncate)
+	baseReg, disp, deadend := mach.opMemoryAddress(code, t, x, offset, load.truncate)
 	if deadend {
 		result = values.ImmOperand(t, 0)
 		return
@@ -80,10 +80,10 @@ func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Opera
 	return
 }
 
-func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) (deadend bool) {
+func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand, offset int) (deadend bool) {
 	store := memoryStores.lookup(t, name)
 
-	baseReg, disp, deadend := mach.opMemoryAddress(code, t, a, store.truncate)
+	baseReg, disp, deadend := mach.opMemoryAddress(code, t, a, offset, store.truncate)
 	if deadend {
 		return
 	}
@@ -133,7 +133,7 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 }
 
 // opMemoryAddress may return the scratch register as the base.
-func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, truncate int) (baseReg regs.R, disp int, deadend bool) {
+func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, offset, truncate int) (baseReg regs.R, disp int, deadend bool) {
 	var size int
 	if truncate != 0 {
 		size = truncate
@@ -141,12 +141,19 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		size = int(t.Size())
 	}
 
-	var after links.L
-	var runtimeCheck bool
+	var endChecked links.L
+	// var fail links.L
+
+	var runtimeEndCheck bool
+	// var runtimeStartCheck bool
+
+	if offset < 0 {
+		panic("negative offset")
+	}
 
 	switch x.Storage {
 	case values.Imm:
-		addr := x.ImmValue(types.I32)
+		addr := x.ImmValue(types.I32) + int64(offset)
 		end := addr + int64(size)
 
 		if addr >= 0 && end <= int64(code.MinMemorySize()) {
@@ -158,7 +165,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 
 		if addr >= 0 && end <= 0x80000000 {
 			Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryPtr, int(end))
-			runtimeCheck = true
+			runtimeEndCheck = true
 		}
 
 	default:
@@ -171,14 +178,22 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 			Mov.opFromReg(code, types.I32, reg, reg)
 		}
 
-		Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryPtr, size)
-		runtimeCheck = true
+		end := int64(size) + int64(offset)
+
+		if end <= 0x80000000 {
+			Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryPtr, int(end))
+			runtimeEndCheck = true
+
+			// if offset < 0 {
+			// 	runtimeStartCheck = true
+			// }
+		}
 	}
 
-	if runtimeCheck {
+	if runtimeEndCheck {
 		Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
 		Jle.rel8.opStub(code)
-		after.AddSite(code.Len())
+		endChecked.AddSite(code.Len())
 
 		baseReg = regScratch
 		disp = -size
@@ -186,10 +201,21 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		deadend = true
 	}
 
+	// fail.SetAddress(code.Len())
+
 	CallRel.op(code, code.TrapLinks().MemoryOutOfBounds.Address)
 	code.AddCallSite(&code.TrapLinks().MemoryOutOfBounds)
 
-	after.SetAddress(code.Len())
-	mach.updateSites8(code, &after)
+	endChecked.SetAddress(code.Len())
+	mach.updateSites8(code, &endChecked)
+
+	// if runtimeStartCheck {
+	// 	Sub.opImm(code, types.I64, regScratch, size)
+	// 	Cmp.opFromReg(code, types.I64, regScratch, regMemoryPtr)
+	// 	Jl.op(code, fail.FinalAddress())
+
+	// 	disp = 0
+	// }
+
 	return
 }
