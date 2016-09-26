@@ -20,11 +20,11 @@ import (
 const (
 	parallel    = false
 	writeBin    = true
-	dumpText    = true
-	dumpROData  = true
-	dumpData    = true
-	dumpFuncMap = true
-	dumpCallMap = true
+	dumpText    = false
+	dumpROData  = false
+	dumpData    = false
+	dumpFuncMap = false
+	dumpCallMap = false
 
 	maxRODataSize = 0x100000
 	memorySize    = 0x100000
@@ -42,6 +42,43 @@ type startFunc struct {
 type startFuncPtr *startFunc
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
+
+// func Test_address(t *testing.T)                       { test(t, "address") }
+// func Test_binary(t *testing.T)                        { test(t, "binary") }
+// func Test_br(t *testing.T)                            { test(t, "br") }
+// func Test_br_table(t *testing.T)                      { test(t, "br_table") }
+// func Test_call(t *testing.T)                          { test(t, "call") }
+// func Test_call_indirect(t *testing.T)                 { test(t, "call_indirect") }
+// func Test_comments(t *testing.T)                      { test(t, "comments") }
+// func Test_conversions(t *testing.T)                   { test(t, "conversions") }
+// func Test_endianness(t *testing.T)                    { test(t, "endianness") }
+// func Test_f32(t *testing.T)                           { test(t, "f32") }
+// func Test_f32_cmp(t *testing.T)                       { test(t, "f32_cmp") }
+// func Test_f64(t *testing.T)                           { test(t, "f64") }
+// func Test_f64_cmp(t *testing.T)                       { test(t, "f64_cmp") }
+// func Test_float_exprs(t *testing.T)                   { test(t, "float_exprs") }
+// func Test_float_literals(t *testing.T)                { test(t, "float_literals") }
+// func Test_float_memory(t *testing.T)                  { test(t, "float_memory") }
+// func Test_float_misc(t *testing.T)                    { test(t, "float_misc") }
+// func Test_func_local_before_param_fail(t *testing.T)  { test(t, "func-local-before-param.fail") }
+// func Test_func_local_before_result_fail(t *testing.T) { test(t, "func-local-before-result.fail") }
+// func Test_func_ptrs(t *testing.T)                     { test(t, "func_ptrs") }
+// func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
+// func Test_get_local(t *testing.T)                     { test(t, "get_local") }
+// func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
+// func Test_left_to_right(t *testing.T)                 { test(t, "left-to-right") }
+// func Test_loop(t *testing.T)                          { test(t, "loop") }
+// func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }
+// func Test_memory_trap(t *testing.T)                   { test(t, "memory_trap") }
+// func Test_names(t *testing.T)                         { test(t, "names") }
+// func Test_resizing(t *testing.T)                      { test(t, "resizing") }
+// func Test_return(t *testing.T)                        { test(t, "return") }
+// func Test_set_local(t *testing.T)                     { test(t, "set_local") }
+// func Test_start(t *testing.T)                         { test(t, "start") }
+// func Test_store_retval(t *testing.T)                  { test(t, "store_retval") }
+// func Test_switch(t *testing.T)                        { test(t, "switch") }
+// func Test_traps(t *testing.T)                         { test(t, "traps") }
+// func Test_unreachable(t *testing.T)                   { test(t, "unreachable") }
 
 func Test_block(t *testing.T)                           { test(t, "block") }
 func Test_br_if(t *testing.T)                           { test(t, "br_if") }
@@ -72,6 +109,7 @@ func Test_i64(t *testing.T)                             { test(t, "i64") }
 func Test_i64_load64_s_fail(t *testing.T)               { test(t, "i64.load64_s.fail") }
 func Test_i64_load64_u_fail(t *testing.T)               { test(t, "i64.load64_u.fail") }
 func Test_i64_store64_fail(t *testing.T)                { test(t, "i64.store64.fail") }
+func Test_imports(t *testing.T)                         { test(t, "imports") }
 func Test_int_exprs(t *testing.T)                       { test(t, "int_exprs") }
 func Test_int_literals(t *testing.T)                    { test(t, "int_literals") }
 func Test_labels(t *testing.T)                          { test(t, "labels") }
@@ -85,44 +123,6 @@ func Test_of_string_overflow_u32_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-overflow-u64.fail") }
 func Test_select(t *testing.T)                          { test(t, "select") }
 func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
-
-// func Test_address(t *testing.T)                       { test(t, "address") }
-// func Test_binary(t *testing.T)                        { test(t, "binary") }
-// func Test_br(t *testing.T)                            { test(t, "br") }
-// func Test_br_table(t *testing.T)                      { test(t, "br_table") }
-// func Test_call(t *testing.T)                          { test(t, "call") }
-// func Test_call_indirect(t *testing.T)                 { test(t, "call_indirect") }
-// func Test_comments(t *testing.T)                      { test(t, "comments") }
-// func Test_conversions(t *testing.T)                   { test(t, "conversions") }
-// func Test_endianness(t *testing.T)                    { test(t, "endianness") }
-// func Test_f32(t *testing.T)                           { test(t, "f32") }
-// func Test_f32_cmp(t *testing.T)                       { test(t, "f32_cmp") }
-// func Test_f64(t *testing.T)                           { test(t, "f64") }
-// func Test_f64_cmp(t *testing.T)                       { test(t, "f64_cmp") }
-// func Test_float_exprs(t *testing.T)                   { test(t, "float_exprs") }
-// func Test_float_literals(t *testing.T)                { test(t, "float_literals") }
-// func Test_float_memory(t *testing.T)                  { test(t, "float_memory") }
-// func Test_float_misc(t *testing.T)                    { test(t, "float_misc") }
-// func Test_func_local_before_param_fail(t *testing.T)  { test(t, "func-local-before-param.fail") }
-// func Test_func_local_before_result_fail(t *testing.T) { test(t, "func-local-before-result.fail") }
-// func Test_func_ptrs(t *testing.T)                     { test(t, "func_ptrs") }
-// func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
-// func Test_get_local(t *testing.T)                     { test(t, "get_local") }
-// func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
-// func Test_imports(t *testing.T)                       { test(t, "imports") }
-// func Test_left_to_right(t *testing.T)                 { test(t, "left-to-right") }
-// func Test_loop(t *testing.T)                          { test(t, "loop") }
-// func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }
-// func Test_memory_trap(t *testing.T)                   { test(t, "memory_trap") }
-// func Test_names(t *testing.T)                         { test(t, "names") }
-// func Test_resizing(t *testing.T)                      { test(t, "resizing") }
-// func Test_return(t *testing.T)                        { test(t, "return") }
-// func Test_set_local(t *testing.T)                     { test(t, "set_local") }
-// func Test_start(t *testing.T)                         { test(t, "start") }
-// func Test_store_retval(t *testing.T)                  { test(t, "store_retval") }
-// func Test_switch(t *testing.T)                        { test(t, "switch") }
-// func Test_traps(t *testing.T)                         { test(t, "traps") }
-// func Test_unreachable(t *testing.T)                   { test(t, "unreachable") }
 
 func test(t *testing.T, name string) {
 	if parallel {
@@ -325,7 +325,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}()
 
-		text, roData, globals, data, funcMap, callMap := m.Code(b.RODataAddr(), b.ROData)
+		text, roData, globals, data, funcMap, callMap := m.Code(b.Imports, b.RODataAddr(), b.ROData)
 
 		b.Seal()
 
@@ -474,8 +474,16 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}()
 
+		importSigs := m.ImportTypes()
+
 		for id := 1; id != idCount; id++ {
-			assertType, err := r.Run(0x100000 + id)
+			var printBuf bytes.Buffer
+			printBuf.WriteByte(10)
+
+			assertType, err := r.Run(0x100000+id, importSigs, &printBuf)
+			if printBuf.Len() > 1 {
+				t.Logf("run: module %s: print: %s", filename, string(printBuf.Bytes()))
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -497,7 +505,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 				defer func() {
 					panicked = recover()
 				}()
-				result, err = r.Run(id)
+				result, err = r.Run(id, importSigs, &printBuf)
 			}()
 
 			timer := time.NewTimer(timeout)
@@ -511,18 +519,22 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 				t.Fatalf("run: module %s: test #%d: timeout", filename, id)
 			}
 
+			if printBuf.Len() > 1 {
+				t.Logf("run: module %s: test #%d: printed: %s", filename, id, string(printBuf.Bytes()))
+			}
+
 			if panicked != nil {
 				t.Fatalf("run: module %s: test #%d: panic: %v", filename, id, panicked)
 			}
 
 			var stackBuf bytes.Buffer
 			stackBuf.WriteByte(10)
-			if stackErr := r.WriteStacktraceTo(&stackBuf, m.FuncTypes(), m.FuncNames()); stackErr == nil {
+			if err := r.WriteStacktraceTo(&stackBuf, m.FuncTypes(), m.FuncNames()); err == nil {
 				if stackBuf.Len() > 1 {
 					t.Logf("run: module %s: test #%d: stack: %s", filename, id, string(stackBuf.Bytes()))
 				}
 			} else {
-				t.Errorf("run: module %s: test #%d: stack error: %v", filename, id, stackErr)
+				t.Errorf("run: module %s: test #%d: stack error: %v", filename, id, err)
 			}
 
 			if err != nil {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/imports"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
@@ -62,7 +63,7 @@ type coder struct {
 	roDataAddr int
 	callMap    bytes.Buffer
 
-	functionLinks map[*Function]*links.L
+	functionLinks map[*Callable]*links.L
 	trapLinks     gen.TrapLinks
 
 	roFloat32Addrs map[uint32]int
@@ -84,18 +85,13 @@ type coder struct {
 	maxStackOffset int
 }
 
-func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, funcMap, callMap []byte) {
+func (m *Module) Code(importImpls map[string]map[string]imports.Function, roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, funcMap, callMap []byte) {
 	code := &coder{
 		module:         m,
 		roDataAddr:     int(roDataAddr),
 		roFloat32Addrs: make(map[uint32]int),
 		roFloat64Addrs: make(map[uint64]int),
-	}
-
-	code.functionLinks = make(map[*Function]*links.L)
-
-	for _, f := range m.Functions {
-		code.functionLinks[f] = new(links.L)
+		functionLinks:  make(map[*Callable]*links.L),
 	}
 
 	if len(m.Table) > 0 {
@@ -117,9 +113,11 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 		}
 	}
 
-	var funcMapBuf bytes.Buffer
+	for _, f := range m.Functions {
+		code.functionLinks[&f.Callable] = new(links.L)
+	}
 
-	startFunc := m.NamedFunctions[m.Start]
+	startFunc := m.NamedCallables[m.Start]
 	startLink := code.functionLinks[startFunc]
 
 	mach.OpInit(code, startLink)
@@ -133,8 +131,20 @@ func (m *Module) Code(roDataAddr int32, roDataBuf []byte) (text, roData, globals
 	code.genTrap(&code.trapLinks.IntegerDivideByZero, traps.IntegerDivideByZero)
 	code.genTrap(&code.trapLinks.IntegerOverflow, traps.IntegerOverflow)
 
+	for _, im := range m.Imports {
+		impl, found := importImpls[im.Namespace][im.Name]
+		if !found {
+			panic(im)
+		}
+
+		code.functionLinks[&im.Callable] = new(links.L)
+		code.genImportTrampoline(im, impl)
+	}
+
 	code.regsInt.init(mach.AvailableIntRegs())
 	code.regsFloat.init(mach.AvailableFloatRegs())
+
+	var funcMapBuf bytes.Buffer
 
 	for _, f := range m.Functions {
 		addr := code.genFunction(f)
@@ -207,6 +217,18 @@ func (code *coder) TrapLinks() *gen.TrapLinks {
 func (code *coder) genTrap(l *links.L, id traps.Id) {
 	l.SetAddress(code.Len())
 	mach.OpTrapImplementation(code, id)
+}
+
+func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) {
+	if !impl.Implements(instance.Function) {
+		panic(instance)
+	}
+
+	varArgsCount := len(instance.Callable.Args) - len(impl.Args)
+
+	mach.AlignFunction(code)
+	code.functionLinks[&instance.Callable].SetAddress(code.Len())
+	mach.OpImportTrampoline(code, impl.Address, instance.Signature.Index, varArgsCount)
 }
 
 func (code *coder) genFunction(f *Function) (funcMapAddr int) {
@@ -310,7 +332,7 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 		entryAddr = newAddr
 	}
 
-	code.functionLinks[f].SetAddress(entryAddr)
+	code.functionLinks[&f.Callable].SetAddress(entryAddr)
 
 	if verbose {
 		fmt.Println("</function>")
@@ -422,7 +444,7 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		case "br", "br_if", "br_table":
 			deadend = code.exprBr(exprName, args)
 
-		case "call":
+		case "call", "call_import":
 			result, resultType, deadend = code.exprCall(exprName, args)
 
 		case "call_indirect":
@@ -1050,7 +1072,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
-	var target *Function
+	var target *Callable
 
 	funcName := args[0].(string)
 	funcNum, err := strconv.ParseUint(funcName, 10, 32)
@@ -1058,10 +1080,10 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		if funcNum < 0 || funcNum >= uint64(len(code.module.Functions)) {
 			panic(funcName)
 		}
-		target = code.module.Functions[funcNum]
+		target = &code.module.Functions[funcNum].Callable
 	} else {
 		var found bool
-		target, found = code.module.NamedFunctions[funcName]
+		target, found = code.module.NamedCallables[funcName]
 		if !found {
 			panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
 		}

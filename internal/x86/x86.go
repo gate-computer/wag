@@ -19,24 +19,26 @@ const (
 )
 
 const (
-	regResult      = regs.R(0)  // rax or xmm0
-	regTrapFuncMMX = regs.R(0)  // mm0
-	regShiftCount  = regs.R(1)  // rcx
-	regScratch     = regs.R(2)  // rdx or xmm2
-	regStackPtr    = regs.R(4)  // rsp
-	regTrapArg     = regs.R(7)  // rdi
-	regTextPtr     = regs.R(12) // r12
-	regStackLimit  = regs.R(13) // r13
-	regMemoryPtr   = regs.R(14) // r14
-	regMemoryLimit = regs.R(15) // r15
+	regResult        = regs.R(0)  // rax or xmm0
+	regTrapFuncMMX   = regs.R(0)  // mm0
+	regShiftCount    = regs.R(1)  // rcx
+	regScratch       = regs.R(2)  // rdx or xmm2
+	regImportVarArgs = regs.R(2)  // rdx
+	regImportSig     = regs.R(3)  // rbx
+	regStackPtr      = regs.R(4)  // rsp
+	regTrapArg       = regs.R(7)  // rdi
+	regTextPtr       = regs.R(12) // r12
+	regStackLimit    = regs.R(13) // r13
+	regMemoryPtr     = regs.R(14) // r14
+	regMemoryLimit   = regs.R(15) // r15
 )
 
 var availableIntRegs = [][]bool{
 	[]bool{
 		false, // rax = result / dividend low bits
-		true,  // rcx = shift count (allocatable) -- TODO: allocate this last
-		false, // rdx = scratch / dividend high bits
-		true,  // rbx
+		true,  // rcx = shift count / var args count (allocatable) -- TODO: allocate this last
+		false, // rdx = scratch / dividend high bits / import varargs count
+		true,  // rbx = import signature index (allocatable)
 		false, // rsp = stack ptr
 		true,  // rbp
 		true,  // rsi
@@ -238,6 +240,13 @@ func (mach X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
 	Add.opFromReg(code, types.I64, regStackPtr, source)
 }
 
+func (mach X86) OpImportTrampoline(code gen.Coder, absoluteAddr int64, signature, varArgsCount int) {
+	mach.OpMove(code, types.I32, regImportVarArgs, values.ImmOperand(types.I32, varArgsCount), false)
+	mach.OpMove(code, types.I32, regImportSig, values.ImmOperand(types.I32, signature), false)
+	MovImm64.op(code, types.I64, regResult, absoluteAddr)
+	Jmp.opReg(code, regResult)
+}
+
 // OpBranchIndirect32 must not allocate registers.  The supplied register is
 // trashed.
 func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) {
@@ -247,6 +256,11 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) 
 
 	Add.opFromReg(code, types.I64, reg, regTextPtr)
 	Jmp.opReg(code, reg)
+}
+
+func (mach X86) OpCall(code gen.Coder, l *links.L) {
+	CallRel.op(code, l.Address)
+	code.AddCallSite(l)
 }
 
 func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
@@ -656,12 +670,7 @@ func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr in
 	CallRel.op(code, code.TrapLinks().CallStackExhausted.Address)
 	code.AddCallSite(&code.TrapLinks().CallStackExhausted)
 
-	if n := functionAlignment - (code.Len() & (functionAlignment - 1)); n < functionAlignment {
-		for i := 0; i < n; i++ {
-			code.WriteByte(paddingByte)
-		}
-	}
-
+	mach.AlignFunction(code)
 	entryAddr = code.Len()
 	Lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
@@ -670,9 +679,12 @@ func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr in
 	return
 }
 
-func (mach X86) OpCall(code gen.Coder, l *links.L) {
-	CallRel.op(code, l.Address)
-	code.AddCallSite(l)
+func (mach X86) AlignFunction(code gen.Coder) {
+	if n := functionAlignment - (code.Len() & (functionAlignment - 1)); n < functionAlignment {
+		for i := 0; i < n; i++ {
+			code.WriteByte(paddingByte)
+		}
+	}
 }
 
 func (mach X86) UpdateBranches(code gen.Coder, l *links.L) {

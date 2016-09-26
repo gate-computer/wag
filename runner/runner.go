@@ -2,27 +2,42 @@ package runner
 
 import (
 	"errors"
+	"io"
 	"reflect"
+	"runtime"
 	"syscall"
 	"unsafe"
 
+	"github.com/tsavola/wag/internal/imports"
+	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text, memory, stack []byte, arg int) (result int32, trap int, stackPtr uintptr)
+func run(text, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
+func importSpectestPrint() int64
 
 var (
 	pageSize = syscall.Getpagesize()
 )
 
 type Buffer struct {
-	ROData []byte
+	Imports map[string]map[string]imports.Function
+	ROData  []byte
 
 	sealed bool
 }
 
 func NewBuffer(maxRODataSize int) (b *Buffer, err error) {
-	b = &Buffer{}
+	b = &Buffer{
+		Imports: map[string]map[string]imports.Function{
+			"spectest": {
+				"print": imports.Function{
+					Variadic: true,
+					Address:  importSpectestPrint(),
+				},
+			},
+		},
+	}
 
 	b.ROData, err = makeMemory(maxRODataSize, syscall.MAP_32BIT)
 	if err != nil {
@@ -167,7 +182,7 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int) (result int32, err error) {
+func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer) (result int32, err error) {
 	copy(r.globalsAndMemory[r.globalsOffset:], r.prog.globals)
 	copy(r.globalsAndMemory[r.memoryOffset:], r.prog.data)
 
@@ -180,7 +195,29 @@ func (r *Runner) Run(arg int) (result int32, err error) {
 		}
 	}
 
-	result, trap, stackPtr := run(r.prog.text, memory, r.stack, arg)
+	pipe := make([]int, 2)
+
+	err = syscall.Pipe2(pipe, syscall.O_CLOEXEC)
+	if err != nil {
+		return
+	}
+
+	printed := make(chan struct{})
+
+	defer func() {
+		syscall.Close(pipe[1])
+		<-printed
+	}()
+
+	go func() {
+		defer close(printed)
+		spectestPrintServer(pipe[0], sigs, printer)
+	}()
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	result, trap, stackPtr := run(r.prog.text, memory, r.stack, arg, pipe[1])
 
 	r.dirty = true
 	r.lastTrap = traps.Id(trap)

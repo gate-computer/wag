@@ -61,8 +61,9 @@ type Module struct {
 	Signatures      SignaturesByIndex
 	NamedSignatures map[string]*Signature
 	Functions       []*Function
-	NamedFunctions  map[string]*Function
-	Table           []*Function
+	Imports         []*Import
+	NamedCallables  map[string]*Callable
+	Table           []*Callable
 	Start           string
 
 	code []byte
@@ -89,7 +90,7 @@ func loadModule(top []interface{}) (m *Module) {
 
 	m = &Module{
 		NamedSignatures: make(map[string]*Signature),
-		NamedFunctions:  make(map[string]*Function),
+		NamedCallables:  make(map[string]*Callable),
 	}
 
 	var sigs []*Signature
@@ -149,7 +150,7 @@ func loadModule(top []interface{}) (m *Module) {
 			m.Functions = append(m.Functions, f)
 
 			for _, name := range f.Names {
-				m.NamedFunctions[name] = f
+				m.NamedCallables[name] = &f.Callable
 			}
 
 		case "start":
@@ -165,6 +166,23 @@ func loadModule(top []interface{}) (m *Module) {
 
 		case "table":
 			tableTokens = expr[1:]
+
+		case "import":
+			importName := expr[1].(string)
+			namespace := expr[2].(string)
+			name := expr[3].(string)
+			newSig = newFunction(m, expr[3:]).Signature
+
+			i := sort.Search(len(sigs), func(i int) bool {
+				return sigs[i].Compare(newSig) >= 0
+			})
+			if i < len(sigs) && sigs[i].Compare(newSig) == 0 {
+				newSig = sigs[i]
+			}
+
+			im := &Import{Callable{newSig}, namespace, name}
+			m.Imports = append(m.Imports, im)
+			m.NamedCallables[importName] = &im.Callable
 
 		default:
 			panic(fmt.Errorf("unknown module child: %s", name))
@@ -186,17 +204,17 @@ func loadModule(top []interface{}) (m *Module) {
 	if !startSet {
 		panic(errors.New("start function not defined"))
 	}
-	if _, found := m.NamedFunctions[m.Start]; !found {
+	if _, found := m.NamedCallables[m.Start]; !found {
 		panic(fmt.Errorf("start function not found: %s", m.Start))
 	}
 
 	for _, x := range tableTokens {
 		funcName := x.(string)
-		f, found := m.NamedFunctions[funcName]
+		c, found := m.NamedCallables[funcName]
 		if !found {
 			panic(funcName)
 		}
-		m.Table = append(m.Table, f)
+		m.Table = append(m.Table, c)
 	}
 
 	m.Signatures = SignaturesByIndex(sigs)
@@ -219,6 +237,14 @@ func (m *Module) FuncNames() (names []string) {
 		if len(f.Names) > 0 {
 			names[i] = f.Names[0]
 		}
+	}
+	return
+}
+
+func (m *Module) ImportTypes() (sigs map[uint64]types.Function) {
+	sigs = make(map[uint64]types.Function)
+	for _, im := range m.Imports {
+		sigs[uint64(im.Signature.Index)] = im.Signature.Function
 	}
 	return
 }
@@ -307,12 +333,32 @@ type Var struct {
 	Type  types.T
 }
 
+type Callable struct {
+	*Signature
+}
+
+func (c *Callable) String() string {
+	return c.Signature.String()
+}
+
+type Import struct {
+	Callable
+
+	Namespace string
+	Name      string
+}
+
+func (im *Import) String() string {
+	return fmt.Sprintf("%s %s %s", im.Namespace, im.Name, im.Callable)
+}
+
 type Function struct {
-	Names     []string
-	Signature *Signature
-	Params    []types.T
-	Locals    []types.T
-	Vars      map[string]Var
+	Callable
+
+	Names  []string
+	Params []types.T
+	Locals []types.T
+	Vars   map[string]Var
 
 	body []interface{}
 }
@@ -321,8 +367,10 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 	list = list[1:] // skip "func" token
 
 	f = &Function{
-		Signature: &Signature{Index: -1},
-		Vars:      make(map[string]Var),
+		Callable: Callable{
+			&Signature{Index: -1},
+		},
+		Vars: make(map[string]Var),
 	}
 
 	for len(list) > 0 {
