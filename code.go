@@ -131,6 +131,8 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 	code.genTrap(&code.trapLinks.IntegerDivideByZero, traps.IntegerDivideByZero)
 	code.genTrap(&code.trapLinks.IntegerOverflow, traps.IntegerOverflow)
 
+	var funcMapBuf bytes.Buffer
+
 	for _, im := range m.Imports {
 		impl, found := importImpls[im.Namespace][im.Name]
 		if !found {
@@ -138,16 +140,20 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 		}
 
 		code.functionLinks[&im.Callable] = new(links.L)
-		code.genImportTrampoline(im, impl)
+
+		addr := code.genImportTrampoline(im, impl)
+
+		if err := binary.Write(&funcMapBuf, mach.ByteOrder(), uint32(addr)); err != nil {
+			panic(err)
+		}
 	}
 
 	code.regsInt.init(mach.AvailableIntRegs())
 	code.regsFloat.init(mach.AvailableFloatRegs())
 
-	var funcMapBuf bytes.Buffer
-
 	for _, f := range m.Functions {
 		addr := code.genFunction(f)
+
 		if err := binary.Write(&funcMapBuf, mach.ByteOrder(), uint32(addr)); err != nil {
 			panic(err)
 		}
@@ -219,7 +225,7 @@ func (code *coder) genTrap(l *links.L, id traps.Id) {
 	mach.OpTrapImplementation(code, id)
 }
 
-func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) {
+func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) (funcMapAddr int) {
 	if !impl.Implements(instance.Function) {
 		panic(instance)
 	}
@@ -227,8 +233,10 @@ func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) 
 	varArgsCount := len(instance.Callable.Args) - len(impl.Args)
 
 	mach.AlignFunction(code)
+	funcMapAddr = code.Len()
 	code.functionLinks[&instance.Callable].SetAddress(code.Len())
 	mach.OpImportTrampoline(code, impl.Address, instance.Signature.Index, varArgsCount)
+	return
 }
 
 func (code *coder) genFunction(f *Function) (funcMapAddr int) {

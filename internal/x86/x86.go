@@ -269,8 +269,11 @@ func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int
 }
 
 func (mach X86) OpInit(code gen.Coder, start *links.L) {
-	Add.opImm(code, types.I64, regStackLimit, wordSize) // reserve space for trap handler call
-	Add.opImm(code, types.I64, regStackPtr, wordSize)   // overwrite return address
+	// reserve space for trap handler call, and a bonus word for trap handler
+	// implementation
+	Add.opImm(code, types.I64, regStackLimit, wordSize*2)
+
+	Add.opImm(code, types.I64, regStackPtr, wordSize) // overwrite return address
 	CallRel.op(code, start.Address)
 	code.AddCallSite(start)
 }

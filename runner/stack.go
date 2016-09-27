@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"sort"
 	"unsafe"
-
-	"github.com/tsavola/wag/internal/types"
 )
 
 func (p *Program) findCaller(retAddr uint32) (num int, init, ok bool) {
@@ -57,9 +55,14 @@ func (p *Program) FuncAddrs() map[int]int {
 	return p.funcAddrs
 }
 
-func (p *Program) CallStackOffsets() map[int]int {
-	if p.callStackOffsets == nil {
-		p.callStackOffsets = make(map[int]int)
+type callSite struct {
+	index       uint64
+	stackOffset int
+}
+
+func (p *Program) CallSites() map[int]callSite {
+	if p.callSites == nil {
+		p.callSites = make(map[int]callSite)
 
 		buf := p.callMap
 		for i := 0; len(buf) > 0; i++ {
@@ -69,33 +72,67 @@ func (p *Program) CallStackOffsets() map[int]int {
 			addr := int(uint32(entry))
 			stackOffset := int(entry >> 32)
 
-			p.callStackOffsets[addr] = stackOffset
+			p.callSites[addr] = callSite{uint64(i), stackOffset}
 		}
 	}
 
-	return p.callStackOffsets
+	return p.callSites
 }
 
-func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, funcNames []string) (err error) {
-	if r.lastTrap != 0 {
-		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
+func (p *Program) exportStack(native []byte) (portable []byte, err error) {
+	portable = make([]byte, len(native))
+	copy(portable, native)
+
+	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.text)).Data)
+	callSites := p.CallSites()
+
+	buf := portable[:len(portable)-8] // drop test arg
+
+	for len(buf) > 0 {
+		absoluteRetAddr := byteOrder.Uint64(buf[:8])
+
+		retAddr := absoluteRetAddr - textAddr
+		if retAddr > 0x7ffffffe {
+			err = errors.New("absolute return address is not in text section")
+			return
+		}
+
+		site, found := callSites[int(retAddr)]
+		if !found {
+			err = errors.New("unknown absolute return address")
+			return
+		}
+		if site.stackOffset < 8 || (site.stackOffset&7) != 0 {
+			err = errors.New("invalid stack offset")
+			return
+		}
+
+		byteOrder.PutUint64(buf[:8], site.index) // native address -> portable index
+
+		buf = buf[site.stackOffset:]
+
+		_, init, ok := p.findCaller(uint32(retAddr))
+		if !ok {
+			err = errors.New("function not found for absolute return address")
+			return
+		}
+		if init {
+			if len(buf) != 0 {
+				err = errors.New("excess data remains at end of stack")
+			}
+			return
+		}
 	}
 
-	if r.lastStackPtr == 0 {
-		return
-	}
+	err = errors.New("ran out of stack before reaching initial function")
+	return
+}
 
-	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&r.prog.text)).Data)
+func (p *Program) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
+	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.text)).Data)
+	callSites := p.CallSites()
 
-	stackLimit := (*reflect.SliceHeader)(unsafe.Pointer(&r.stack)).Data
-	unused := uintptr(r.lastStackPtr) - stackLimit
-	if unused < 0 || unused > uintptr(len(r.stack)) {
-		err = errors.New("stack pointer out of range")
-		return
-	}
-
-	stack := r.stack[unused : len(r.stack)-8] // drop test arg
-	callStackOffsets := r.prog.CallStackOffsets()
+	stack = stack[:len(stack)-8] // drop test arg
 
 	for depth := 1; len(stack) > 0; depth++ {
 		absoluteRetAddr := byteOrder.Uint64(stack[:8])
@@ -107,18 +144,18 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, func
 			break
 		}
 
-		stackOffset, found := callStackOffsets[int(retAddr)]
+		site, found := callSites[int(retAddr)]
 		if !found {
 			fmt.Fprintf(w, "#%d  <unknown absolute return address 0x%x>\n", depth, absoluteRetAddr)
 		}
-		if stackOffset < 8 || (stackOffset&7) != 0 {
-			fmt.Fprintf(w, "#%d  <invalid stack offset %d>\n", depth, stackOffset)
+		if site.stackOffset < 8 || (site.stackOffset&7) != 0 {
+			fmt.Fprintf(w, "#%d  <invalid stack offset %d>\n", depth, site.stackOffset)
 			break
 		}
 
-		stack = stack[stackOffset:]
+		stack = stack[site.stackOffset:]
 
-		funcNum, init, ok := r.prog.findCaller(uint32(retAddr))
+		funcNum, init, ok := p.findCaller(uint32(retAddr))
 		if !ok {
 			fmt.Fprintf(w, "#%d  <function not found for return address 0x%x>\n", depth, retAddr)
 			break
@@ -127,12 +164,7 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, func
 			break
 		}
 
-		name := funcNames[funcNum]
-		if name == "" {
-			name = fmt.Sprintf("unnamed function #%d", funcNum)
-		}
-
-		fmt.Fprintf(w, "#%d  %s %s\n", depth, name, funcTypes[funcNum])
+		fmt.Fprintf(w, "#%d  %s %s\n", depth, p.funcNames[funcNum], p.funcTypes[funcNum])
 	}
 
 	if len(stack) != 0 {
@@ -140,4 +172,23 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcTypes []types.Function, func
 	}
 
 	return
+}
+
+func (r *Runner) WriteStacktraceTo(w io.Writer) (err error) {
+	if r.lastTrap != 0 {
+		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
+	}
+
+	if r.lastStackPtr == 0 {
+		return
+	}
+
+	stackLimit := (*reflect.SliceHeader)(unsafe.Pointer(&r.stack)).Data
+	unused := uintptr(r.lastStackPtr) - stackLimit
+	if unused < 0 || unused > uintptr(len(r.stack)) {
+		err = errors.New("stack pointer out of range")
+		return
+	}
+
+	return r.prog.writeStacktraceTo(w, r.stack[unused:])
 }

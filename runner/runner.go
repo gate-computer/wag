@@ -14,7 +14,9 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resume, arg, slaveFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
+
+func importSnapshot() int64
 func importSpectestPrint() int64
 
 const (
@@ -39,6 +41,14 @@ func NewBuffer(maxRODataSize int) (b *Buffer, err error) {
 				"print": imports.Function{
 					Variadic: true,
 					Address:  importSpectestPrint(),
+				},
+			},
+			"wag": {
+				"snapshot": imports.Function{
+					Function: types.Function{
+						Result: types.I32,
+					},
+					Address: importSnapshot(),
 				},
 			},
 		},
@@ -83,31 +93,44 @@ func (b *Buffer) Close() (first error) {
 	return
 }
 
+type runnable interface {
+	getText() []byte
+	getGlobals() []byte
+	getData() []byte
+	getStack() []byte
+	writeStacktraceTo(w io.Writer, stack []byte) error
+	exportStack(native []byte) (portable []byte, err error)
+}
+
 type Program struct {
 	buf *Buffer
 
-	text    []byte
-	globals []byte
-	data    []byte
-	funcMap []byte
-	callMap []byte
+	text      []byte
+	globals   []byte
+	data      []byte
+	funcMap   []byte
+	callMap   []byte
+	funcTypes []types.Function
+	funcNames []string
 
-	funcAddrs        map[int]int
-	callStackOffsets map[int]int
+	funcAddrs map[int]int
+	callSites map[int]callSite
 }
 
-func (b *Buffer) NewProgram(text, globals, data, funcMap, callMap []byte) (p *Program, err error) {
+func (b *Buffer) NewProgram(text, globals, data, funcMap, callMap []byte, funcTypes []types.Function, funcNames []string) (p *Program, err error) {
 	if !b.sealed {
 		err = errors.New("buffer has not been sealed")
 		return
 	}
 
 	p = &Program{
-		buf:     b,
-		globals: globals,
-		data:    data,
-		funcMap: funcMap,
-		callMap: callMap,
+		buf:       b,
+		globals:   globals,
+		data:      data,
+		funcMap:   funcMap,
+		callMap:   callMap,
+		funcTypes: funcTypes,
+		funcNames: funcNames,
 	}
 
 	p.text, err = makeMemoryCopy(text, syscall.PROT_EXEC|syscall.PROT_READ, syscall.MAP_32BIT)
@@ -129,20 +152,42 @@ func (p *Program) Close() (first error) {
 	return
 }
 
-type Runner struct {
-	prog *Program
+func (p *Program) getText() []byte {
+	return p.text
+}
 
-	globalsOffset    int
-	memoryOffset     int
-	memorySize       int
-	globalsAndMemory []byte
-	stack            []byte
+func (p *Program) getGlobals() []byte {
+	return p.globals
+}
+
+func (p *Program) getData() []byte {
+	return p.data
+}
+
+func (p *Program) getStack() []byte {
+	return nil
+}
+
+type Runner struct {
+	prog runnable
+
+	globalsOffset int
+	memoryOffset  int
+	memorySize    int
+	globalsMemory []byte
+	stack         []byte
 
 	lastTrap     traps.Id
 	lastStackPtr uintptr
+
+	Snapshots []*Snapshot
 }
 
 func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+	return newRunner(p, initMemorySize, growMemorySize, stackSize)
+}
+
+func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
 	if (initMemorySize & (memoryIncrementSize - 1)) != 0 {
 		err = fmt.Errorf("initial memory size is not multiple of %d", memoryIncrementSize)
 		return
@@ -152,7 +197,7 @@ func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *R
 		return
 	}
 
-	if initMemorySize < len(p.data) {
+	if initMemorySize < len(prog.getData()) {
 		err = errors.New("data does not fit in initial memory")
 		return
 	}
@@ -170,16 +215,16 @@ func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *R
 		return
 	}
 
-	padding := (systemPageSize - len(p.globals)) & (systemPageSize - 1)
+	padding := (systemPageSize - len(prog.getGlobals())) & (systemPageSize - 1)
 
 	r = &Runner{
-		prog:          p,
+		prog:          prog,
 		globalsOffset: padding,
-		memoryOffset:  padding + len(p.globals),
+		memoryOffset:  padding + len(prog.getGlobals()),
 		memorySize:    initMemorySize,
 	}
 
-	r.globalsAndMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0)
+	r.globalsMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0)
 	if err != nil {
 		r.Close()
 		return
@@ -202,8 +247,8 @@ func (r *Runner) Close() (first error) {
 		}
 	}
 
-	if r.globalsAndMemory != nil {
-		if err := syscall.Munmap(r.globalsAndMemory); err != nil && first == nil {
+	if r.globalsMemory != nil {
+		if err := syscall.Munmap(r.globalsMemory); err != nil && first == nil {
 			first = err
 		}
 	}
@@ -211,10 +256,13 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer) (result int32, err error) {
-	pipe := make([]int, 2)
+func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) (result int32, err error) {
+	stackState := r.prog.getStack()
+	resume := len(stackState) // boolean
+	stackOffset := len(r.stack) - len(stackState)
+	copy(r.stack[stackOffset:], stackState)
 
-	err = syscall.Pipe2(pipe, syscall.O_CLOEXEC)
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
 		return
 	}
@@ -222,29 +270,25 @@ func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer)
 	printed := make(chan struct{})
 
 	defer func() {
-		syscall.Close(pipe[1])
+		syscall.Close(fds[1])
 		<-printed
 	}()
 
 	go func() {
 		defer close(printed)
-		spectestPrintServer(pipe[0], sigs, printer)
+		r.slave(fds[0], sigs, printer)
 	}()
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	memory := r.globalsAndMemory[r.memoryOffset:]
+	memory := r.globalsMemory[r.memoryOffset:]
 
-	fmt.Printf("runner: memory size before = %d\n", r.memorySize)
-
-	result, trap, memorySize, stackPtr := run(r.prog.text, r.memorySize, memory, r.stack, arg, pipe[1])
+	result, trap, memorySize, stackPtr := run(r.prog.getText(), r.memorySize, memory, r.stack, stackOffset, resume, arg, fds[1])
 
 	r.memorySize = memorySize
 	r.lastTrap = traps.Id(trap)
 	r.lastStackPtr = stackPtr
-
-	fmt.Printf("runner: memory size after  = %d\n", r.memorySize)
 
 	if trap != 0 {
 		err = r.lastTrap
@@ -256,7 +300,7 @@ func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer)
 func (r *Runner) ResetMemory() {
 	r.initData()
 
-	tail := r.globalsAndMemory[r.memoryOffset+len(r.prog.data):]
+	tail := r.globalsMemory[r.memoryOffset+len(r.prog.data):]
 	for i := range tail {
 		tail[i] = 0
 	}
@@ -266,8 +310,8 @@ func (r *Runner) ResetMemory() {
 */
 
 func (r *Runner) initData() {
-	copy(r.globalsAndMemory[r.globalsOffset:], r.prog.globals)
-	copy(r.globalsAndMemory[r.memoryOffset:], r.prog.data)
+	copy(r.globalsMemory[r.globalsOffset:], r.prog.getGlobals())
+	copy(r.globalsMemory[r.memoryOffset:], r.prog.getData())
 }
 
 func makeMemory(size int, extraFlags int) (mem []byte, err error) {

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	parallel    = true
+	parallel    = false
 	writeBin    = true
 	dumpText    = false
 	dumpROData  = false
@@ -32,14 +32,6 @@ const (
 
 	timeout = time.Second * 3
 )
-
-type fun func() int32
-
-type startFunc struct {
-	f *fun
-}
-
-type startFuncPtr *startFunc
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
 
@@ -454,7 +446,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}
 
-		p, err := b.NewProgram(text, globals, data, funcMap, callMap)
+		p, err := b.NewProgram(text, globals, data, funcMap, callMap, m.FuncTypes(), m.FuncNames())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -534,7 +526,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 
 			var stackBuf bytes.Buffer
 			stackBuf.WriteByte(10)
-			if err := r.WriteStacktraceTo(&stackBuf, m.FuncTypes(), m.FuncNames()); err == nil {
+			if err := r.WriteStacktraceTo(&stackBuf); err == nil {
 				if stackBuf.Len() > 1 {
 					t.Logf("run: module %s: test #%d: stack: %s", filename, id, string(stackBuf.Bytes()))
 				}

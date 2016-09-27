@@ -235,27 +235,44 @@ func loadModule(top []interface{}) (m *Module) {
 }
 
 func (m *Module) FuncTypes() (sigs []types.Function) {
-	sigs = make([]types.Function, len(m.Functions))
-	for i, f := range m.Functions {
-		sigs[i] = f.Signature.Function
+	sigs = make([]types.Function, 0, len(m.Imports)+len(m.Functions))
+
+	for _, im := range m.Imports {
+		sigs = append(sigs, im.Signature.Function)
 	}
+
+	for _, f := range m.Functions {
+		sigs = append(sigs, f.Signature.Function)
+	}
+
 	return
 }
 
 func (m *Module) FuncNames() (names []string) {
-	names = make([]string, len(m.Functions))
-	for i, f := range m.Functions {
-		if len(f.Names) > 0 {
-			names[i] = f.Names[0]
-		}
+	names = make([]string, 0, len(m.Imports)+len(m.Functions))
+
+	for _, im := range m.Imports {
+		name := fmt.Sprintf("%s %s", im.Namespace, im.Name)
+		names = append(names, name)
 	}
+
+	for i, f := range m.Functions {
+		var name string
+		if len(f.Names) > 0 {
+			name = f.Names[0]
+		} else {
+			name = fmt.Sprintf("unnamed function #%d", i)
+		}
+		names = append(names, name)
+	}
+
 	return
 }
 
-func (m *Module) ImportTypes() (sigs map[uint64]types.Function) {
-	sigs = make(map[uint64]types.Function)
+func (m *Module) ImportTypes() (sigs map[int64]types.Function) {
+	sigs = make(map[int64]types.Function)
 	for _, im := range m.Imports {
-		sigs[uint64(im.Signature.Index)] = im.Signature.Function
+		sigs[int64(im.Signature.Index)] = im.Signature.Function
 	}
 	return
 }
