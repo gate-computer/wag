@@ -96,6 +96,7 @@ var (
 	Jne     = insnAddr{insnAddr8{0x75}, insnAddr32{0x0f, 0x85}}
 	Jbe     = insnAddr{insnAddr8{0x76}, insnAddr32{0x0f, 0x86}}
 	Ja      = insnAddr{insnAddr8{0x77}, insnAddr32{0x0f, 0x87}}
+	Js      = insnAddr{insnAddr8{0x78}, insnAddr32{0x0f, 0x88}}
 	Jp      = insnAddr{insnAddr8{0x7a}, insnAddr32{0x0f, 0x8a}}
 	Jnp     = insnAddr{insnAddr8{0x7b}, insnAddr32{0x0f, 0x8b}}
 	Jl      = insnAddr{insnAddr8{0x7c}, insnAddr32{0x0f, 0x8c}}

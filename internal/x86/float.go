@@ -33,15 +33,17 @@ var (
 )
 
 var (
-	UcomisSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
-	XorpSSE     = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
-	MovsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
-	AddsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x58}, nil}
-	SubsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x5c}, nil}
-	DivsSSE     = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
-	MovSSE      = insnPrefix{Prefixes{Prefix{0x66}, Rex}, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
-	Cvtsi2sdSSE = insnPrefix{Prefixes{Prefix{0xf2}, Rex}, []byte{0x0f, 0x2a}, nil}
-	Cvtsi2ssSSE = insnPrefix{Prefixes{Prefix{0xf3}, Rex}, []byte{0x0f, 0x2a}, nil}
+	UcomisSSE = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
+	XorpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
+	MovsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
+	AddsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x58}, nil}
+	Cvts2sSSE = insnPrefix{ScalarSize, []byte{0x0f, 0x5a}, nil} // convert float to float
+	SubsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5c}, nil}
+	DivsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
+	MovSSE    = insnPrefix{Prefixes{Prefix{0x66}, Rex}, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
+
+	Cvtsi2sSSE  = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2a}}
+	CvttsSSE2si = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2c}}
 )
 
 var binaryFloatInsns = map[string]insnPrefix{

@@ -378,6 +378,19 @@ func writePrefixStackInsnTo(code gen.Coder, p prefix, t types.T, opcode []byte, 
 }
 
 //
+type insnPrefixRexRM struct {
+	prefix prefix
+	opcode []byte
+}
+
+func (i insnPrefixRexRM) opReg(code gen.Coder, floatType, intType types.T, target, source regs.R) {
+	i.prefix.writeTo(code, floatType, 0, 0, 0)
+	writeRexSizeTo(code, intType, byte(target), 0, byte(source))
+	code.Write(i.opcode)
+	writeModTo(code, ModReg, byte(target), byte(source))
+}
+
+//
 type insnPrefixMI struct {
 	prefix   prefix
 	opcode8  byte
