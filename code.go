@@ -1121,15 +1121,24 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
+	funcName := args[0].(string)
 	var target *Callable
 
-	funcName := args[0].(string)
-	funcNum, err := strconv.ParseUint(funcName, 10, 32)
-	if err == nil {
-		if funcNum < 0 || funcNum >= uint64(len(code.module.Functions)) {
+	if num, err := strconv.ParseUint(funcName, 10, 32); err == nil {
+		if num < 0 || num >= uint64(len(code.module.Functions)) {
 			panic(funcName)
 		}
-		target = &code.module.Functions[funcNum].Callable
+
+		switch exprName {
+		case "call":
+			target = &code.module.Functions[num].Callable
+
+		case "call_import":
+			target = &code.module.Imports[num].Callable
+
+		default:
+			panic(exprName)
+		}
 	} else {
 		var found bool
 		target, found = code.module.NamedCallables[funcName]

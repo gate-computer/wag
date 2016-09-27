@@ -168,10 +168,18 @@ func loadModule(top []interface{}) (m *Module) {
 			tableTokens = expr[1:]
 
 		case "import":
-			importName := expr[1].(string)
-			namespace := expr[2].(string)
-			name := expr[3].(string)
-			newSig = newFunction(m, expr[3:]).Signature
+			expr = expr[1:]
+
+			var importName string
+
+			if _, ok := expr[2].(string); ok {
+				importName = expr[0].(string)
+				expr = expr[1:]
+			}
+
+			namespace := expr[0].(string)
+			name := expr[1].(string)
+			newSig = newFunction(m, expr[1:]).Signature
 
 			i := sort.Search(len(sigs), func(i int) bool {
 				return sigs[i].Compare(newSig) >= 0
@@ -182,7 +190,10 @@ func loadModule(top []interface{}) (m *Module) {
 
 			im := &Import{Callable{newSig}, namespace, name}
 			m.Imports = append(m.Imports, im)
-			m.NamedCallables[importName] = &im.Callable
+
+			if importName != "" {
+				m.NamedCallables[importName] = &im.Callable
+			}
 
 		default:
 			panic(fmt.Errorf("unknown module child: %s", name))

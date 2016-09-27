@@ -76,7 +76,6 @@ type startFuncPtr *startFunc
 // func Test_store_retval(t *testing.T)                  { test(t, "store_retval") }
 // func Test_switch(t *testing.T)                        { test(t, "switch") }
 // func Test_traps(t *testing.T)                         { test(t, "traps") }
-// func Test_unreachable(t *testing.T)                   { test(t, "unreachable") }
 
 func Test_address(t *testing.T)                         { test(t, "address") }
 func Test_block(t *testing.T)                           { test(t, "block") }
@@ -123,6 +122,7 @@ func Test_of_string_overflow_u32_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-overflow-u64.fail") }
 func Test_select(t *testing.T)                          { test(t, "select") }
 func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
+func Test_unreachable(t *testing.T)                     { test(t, "unreachable") }
 
 func test(t *testing.T, name string) {
 	if parallel {
