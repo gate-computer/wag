@@ -1,7 +1,7 @@
 #include "textflag.h"
 
-// func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
-TEXT ·run(SB),$0-120
+// func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
+TEXT ·run(SB),$0-128
 	PUSHQ	AX
 	PUSHQ	CX
 	PUSHQ	DX
@@ -31,7 +31,9 @@ TEXT ·run(SB),$0-120
 	CALL	run<>(SB)
 	MOVL	AX, result+96(FP)
 	MOVQ	DI, trap+104(FP)
-	MOVQ	BX, stackPtr+112(FP)
+	SUBQ	R14, R15
+	MOVQ	R15, currentMemorySize+112(FP)
+	MOVQ	BX, stackPtr+120(FP)
 
 	POPQ	R15
 	POPQ	R14
@@ -76,7 +78,7 @@ TEXT ·importSpectestPrint(SB),$0-8
 	RET
 
 TEXT spectestPrint<>(SB),NOSPLIT,$0
-	MOVQ	(SP), R15	// save return address
+	MOVQ	(SP), R10	// save return address
 	MOVQ	$1, AX		// sys_write
 	MOVQ	M6, DI 		// print fd
 	MOVQ	BX, (SP)	// write signature index over return address
@@ -84,5 +86,5 @@ TEXT spectestPrint<>(SB),NOSPLIT,$0
 	INCQ	DX		// arg count + 1
 	SHLQ	$3, DX		// (arg count + 1) size
 	SYSCALL
-	MOVQ	R15, (SP)	// restore return address
+	MOVQ	R10, (SP)	// restore return address
 	RET

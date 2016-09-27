@@ -14,7 +14,7 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
 func importSpectestPrint() int64
 
 const (
@@ -134,7 +134,7 @@ type Runner struct {
 
 	globalsOffset    int
 	memoryOffset     int
-	initMemorySize   int
+	memorySize       int
 	globalsAndMemory []byte
 	stack            []byte
 
@@ -161,13 +161,22 @@ func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *R
 		return
 	}
 
+	if initMemorySize > 0x7fffffff {
+		err = errors.New("initial memory size must be below 2 GB")
+		return
+	}
+	if growMemorySize > 0x7fffffff {
+		err = errors.New("memory growth limit must be below 2 GB")
+		return
+	}
+
 	padding := (systemPageSize - len(p.globals)) & (systemPageSize - 1)
 
 	r = &Runner{
-		prog:           p,
-		globalsOffset:  padding,
-		memoryOffset:   padding + len(p.globals),
-		initMemorySize: initMemorySize,
+		prog:          p,
+		globalsOffset: padding,
+		memoryOffset:  padding + len(p.globals),
+		memorySize:    initMemorySize,
 	}
 
 	r.globalsAndMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0)
@@ -227,10 +236,15 @@ func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer)
 
 	memory := r.globalsAndMemory[r.memoryOffset:]
 
-	result, trap, stackPtr := run(r.prog.text, r.initMemorySize, memory, r.stack, arg, pipe[1])
+	fmt.Printf("runner: memory size before = %d\n", r.memorySize)
 
+	result, trap, memorySize, stackPtr := run(r.prog.text, r.memorySize, memory, r.stack, arg, pipe[1])
+
+	r.memorySize = memorySize
 	r.lastTrap = traps.Id(trap)
 	r.lastStackPtr = stackPtr
+
+	fmt.Printf("runner: memory size after  = %d\n", r.memorySize)
 
 	if trap != 0 {
 		err = r.lastTrap
@@ -238,6 +252,7 @@ func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer)
 	return
 }
 
+/*
 func (r *Runner) ResetMemory() {
 	r.initData()
 
@@ -245,7 +260,10 @@ func (r *Runner) ResetMemory() {
 	for i := range tail {
 		tail[i] = 0
 	}
+
+	// TODO: reset memorySize
 }
+*/
 
 func (r *Runner) initData() {
 	copy(r.globalsAndMemory[r.globalsOffset:], r.prog.globals)

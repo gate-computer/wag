@@ -69,7 +69,6 @@ type startFuncPtr *startFunc
 // func Test_loop(t *testing.T)                          { test(t, "loop") }
 // func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }
 // func Test_names(t *testing.T)                         { test(t, "names") }
-// func Test_resizing(t *testing.T)                      { test(t, "resizing") }
 // func Test_return(t *testing.T)                        { test(t, "return") }
 // func Test_set_local(t *testing.T)                     { test(t, "set_local") }
 // func Test_start(t *testing.T)                         { test(t, "start") }
@@ -120,6 +119,7 @@ func Test_of_string_overflow_s32_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_of_string_overflow_s64_fail(t *testing.T)     { test(t, "of_string-overflow-s64.fail") }
 func Test_of_string_overflow_u32_fail(t *testing.T)     { test(t, "of_string-overflow-u32.fail") }
 func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-overflow-u64.fail") }
+func Test_resizing(t *testing.T)                        { test(t, "resizing") }
 func Test_select(t *testing.T)                          { test(t, "select") }
 func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 func Test_unreachable(t *testing.T)                     { test(t, "unreachable") }
@@ -147,7 +147,7 @@ func test(t *testing.T, name string) {
 		}()
 	}
 
-	for i := 0; len(data) > 0; i++ {
+	for i := 1; len(data) > 0; i++ {
 		data = testModule(t, data, fmt.Sprintf("%s-%d", name, i))
 	}
 }
@@ -545,9 +545,9 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			if err != nil {
 				if _, ok := err.(traps.Id); ok {
 					if assertType == 1 {
-						t.Logf("run: module %s: test #%d: trap ok", filename, id)
+						t.Logf("run: module %s: test #%d: pass", filename, id)
 					} else {
-						t.Errorf("run: module %s: test #%d: failed due to unexpected trap", filename, id)
+						t.Errorf("run: module %s: test #%d: FAIL due to unexpected trap", filename, id)
 					}
 				} else {
 					t.Fatal(err)
@@ -556,16 +556,16 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 				if assertType == 0 {
 					switch result {
 					case 1:
-						t.Logf("run: module %s: test #%d: return ok", filename, id)
+						t.Logf("run: module %s: test #%d: pass", filename, id)
 
 					case 0:
-						t.Errorf("run: module %s: test #%d: return fail", filename, id)
+						t.Errorf("run: module %s: test #%d: FAIL", filename, id)
 
 					default:
 						t.Fatalf("run: module %s: test #%d: bad result: %d", filename, id, result)
 					}
 				} else {
-					t.Errorf("run: module %s: test #%d: failed due to unexpected return (result: %d)", filename, id, result)
+					t.Errorf("run: module %s: test #%d: FAIL due to unexpected return (result: %d)", filename, id, result)
 				}
 			}
 		}

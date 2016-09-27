@@ -439,7 +439,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 			var do links.L
 
 			if insn.remainder {
-				Xor.opFromReg(code, t, regScratch, regScratch) // moved to result at the end
+				Xor.opFromReg(code, types.I32, regScratch, regScratch) // moved to result at the end
 
 				Cmp.opImm(code, t, b.Reg(), -1)
 				Je.rel8.opStub(code)
@@ -477,7 +477,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 			CdqCqo.op(code, t)
 		} else {
 			// zero-extend dividend high bits
-			Xor.opFromReg(code, t, regScratch, regScratch)
+			Xor.opFromReg(code, types.I32, regScratch, regScratch) // automatic zero-extension
 		}
 	}
 

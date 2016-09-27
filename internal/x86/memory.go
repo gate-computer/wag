@@ -240,31 +240,38 @@ func (mach X86) OpCurrentMemory(code gen.RegCoder) values.Operand {
 
 func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand {
 	var out links.L
+	var fail links.L
 
 	MovqMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
 
-	reg, zeroExt := mach.opMaybeResultReg(code, types.I32, x, false)
+	targetReg, zeroExt := mach.opMaybeResultReg(code, types.I32, x, false)
 	if !zeroExt {
-		Mov.opFromReg(code, types.I32, reg, reg)
+		Mov.opFromReg(code, types.I32, targetReg, targetReg)
 	}
 
-	ShlImm.op(code, types.I64, reg, 16)
-	Add.opFromReg(code, types.I64, reg, regMemoryLimit) // new memory limit
-	Cmp.opFromReg(code, types.I64, reg, regScratch)
-
-	MovImm.opImm(code, types.I32, regScratch, -1) // value on failure
+	ShlImm.op(code, types.I64, targetReg, 16)
+	Add.opFromReg(code, types.I64, targetReg, regMemoryLimit) // new memory limit
+	Cmp.opFromReg(code, types.I64, targetReg, regScratch)
 
 	Jg.rel8.opStub(code)
-	out.AddSite(code.Len())
+	fail.AddSite(code.Len())
 
-	Mov.opFromReg(code, types.I64, regMemoryLimit, regScratch)
+	Mov.opFromReg(code, types.I64, regScratch, regMemoryLimit)
+	Mov.opFromReg(code, types.I64, regMemoryLimit, targetReg)
 	Sub.opFromReg(code, types.I64, regScratch, regMemoryBase)
 	ShrImm.op(code, types.I64, regScratch, 16) // value on success
+	Mov.opFromReg(code, types.I64, targetReg, regScratch)
+
+	JmpRel.rel8.opStub(code)
+	out.AddSite(code.Len())
+
+	fail.SetAddress(code.Len())
+	mach.updateSites8(code, &fail)
+
+	MovImm.opImm(code, types.I32, targetReg, -1) // value on failure
 
 	out.SetAddress(code.Len())
 	mach.updateSites8(code, &out)
 
-	Mov.opFromReg(code, types.I64, reg, regScratch)
-
-	return values.TempRegOperand(reg, true)
+	return values.TempRegOperand(targetReg, true)
 }
