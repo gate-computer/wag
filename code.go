@@ -1734,7 +1734,7 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 }
 
 func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
-	return code.regs(t).allocWithPreference(mach.RegGroupPreference(t))
+	return code.regs(t).allocate()
 }
 
 func (code *coder) opAllocReg(t types.T) (reg regs.R) {
@@ -1758,7 +1758,7 @@ func (code *coder) FreeReg(t types.T, reg regs.R) {
 }
 
 func (code *coder) tryAllocIntReg() (reg regs.R, ok bool) {
-	return code.regs(types.I64).alloc()
+	return code.regs(types.I64).allocate()
 }
 
 func (code *coder) opAllocIntReg(save ...liveOperand) (reg regs.R) {

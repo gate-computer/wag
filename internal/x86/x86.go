@@ -39,50 +39,42 @@ const (
 	regMemoryGrowLimitMMX = regs.R(1) // mm1
 )
 
-var availableIntRegs = [][]bool{
-	[]bool{
-		false, // rax = result / dividend low bits
-		true,  // rcx = shift count (allocatable) -- TODO: allocate this last
-		false, // rdx = scratch / dividend high bits
-		true,  // rbx
-		false, // rsp = stack ptr
-		true,  // rbp
-		true,  // rsi
-		true,  // rdi
-	},
-	[]bool{
-		true,  // r8
-		true,  // r9
-		true,  // r10
-		true,  // r11
-		false, // r12 = text base
-		false, // r13 = stack limit
-		false, // r14 = memory base
-		false, // r15 = memory limit
-	},
+var availableIntRegs = []int32{
+	-1, // rax = result / dividend low bits
+	1,  // rcx = shift count (allocatable)
+	-1, // rdx = scratch / dividend high bits
+	3,  // rbx
+	-1, // rsp = stack ptr
+	3,  // rbp
+	3,  // rsi
+	3,  // rdi
+	2,  // r8
+	2,  // r9
+	2,  // r10
+	2,  // r11
+	-1, // r12 = text base
+	-1, // r13 = stack limit
+	-1, // r14 = memory base
+	-1, // r15 = memory limit
 }
 
-var availableFloatRegs = [][]bool{
-	[]bool{
-		false, // xmm0 = result
-		true,
-		false, // xmm2 = scratch
-		true,
-		true,
-		true,
-		true,
-		true,
-	},
-	[]bool{
-		true,
-		true,
-		true,
-		true,
-		true,
-		true,
-		true,
-		true,
-	},
+var availableFloatRegs = []int32{
+	-1, // xmm0 = result
+	2,
+	-1, // xmm2 = scratch
+	2,
+	2,
+	2,
+	2,
+	2,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
 }
 
 var (
@@ -177,12 +169,12 @@ var nopSequences = [][]byte{
 
 type X86 struct{}
 
-func (mach X86) WordSize() int                { return wordSize }
-func (mach X86) ByteOrder() binary.ByteOrder  { return binary.LittleEndian }
-func (mach X86) FunctionAlignment() int       { return functionAlignment }
-func (mach X86) ResultReg() regs.R            { return regResult }
-func (mach X86) AvailableIntRegs() [][]bool   { return availableIntRegs }
-func (mach X86) AvailableFloatRegs() [][]bool { return availableFloatRegs }
+func (mach X86) WordSize() int               { return wordSize }
+func (mach X86) ByteOrder() binary.ByteOrder { return binary.LittleEndian }
+func (mach X86) FunctionAlignment() int      { return functionAlignment }
+func (mach X86) ResultReg() regs.R           { return regResult }
+func (mach X86) AvailableIntRegs() []int32   { return availableIntRegs }
+func (mach X86) AvailableFloatRegs() []int32 { return availableFloatRegs }
 
 func (mach X86) RegGroupPreference(t types.T) int {
 	switch t {
