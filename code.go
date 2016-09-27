@@ -1200,46 +1200,19 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	indexExpr := args[1]
 	args = args[2:]
 
-	operand, _, deadend := code.expr(indexExpr, types.I32, false)
+	indexOperand, _, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	reg, regZeroExt, ok := operand.CheckTempReg()
-	if !ok {
-		reg = code.opAllocIntReg(liveOperand{types.I32, &operand})
-		defer code.freeIntReg(reg)
-
-		regZeroExt = code.opMove(types.I32, reg, operand, false)
-	}
+	// TODO: check if it's already on stack
+	indexOperand = code.effectiveOperand(indexOperand)
+	mach.OpPush(code, types.I32, indexOperand)
+	code.incrementStackOffset()
 
 	code.opSaveTempRegOperands()
 	code.opInitLocals()
-
-	outOfBounds := new(links.L)
-	defer mach.UpdateBranches(code, outOfBounds)
-
-	after := new(links.L)
-	defer mach.UpdateBranches(code, after)
-
-	// if the operand yielded a temporary register, then it was just freed by
-	// the eviction, but the register retains its value.  don't call anything
-	// that allocates registers until the critical section ends.
-
-	code.opBranchIfOutOfBounds(reg, len(code.module.Table), outOfBounds)
-	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, reg, regZeroExt, 3, roTableAddr)
-	mach.OpPushIntReg(code, reg) // push func ptr
-	code.incrementStackOffset()
-	mach.OpShiftRightLogical32Bits(code, reg) // signature id
-	code.opBranchIfEqualImm32(reg, sig.Index, after)
-	mach.OpCall(code, &code.trapLinks.IndirectCallSignature)
-	outOfBounds.SetAddress(code.Len())
-	mach.OpCall(code, &code.trapLinks.IndirectCallIndex)
-	after.SetAddress(code.Len())
-
-	// end of critical section.
-
 	code.opStoreRegVars(true)
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, sig, args)
@@ -1249,8 +1222,33 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		return
 	}
 
-	mach.OpCallIndirectDisp32FromStack(code, argsSize)
-	code.opAddImmToStackPtr(argsSize + mach.WordSize()) // pop args and func ptr
+	outOfBounds := new(links.L)
+	defer mach.UpdateBranches(code, outOfBounds)
+
+	doCall := new(links.L)
+	defer mach.UpdateBranches(code, doCall)
+
+	mach.OpLoadResult32ZeroExtFromStack(code, argsSize)
+	code.opBranchIfOutOfBounds(mach.ResultReg(), len(code.module.Table), outOfBounds)
+	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, mach.ResultReg(), true, 3, roTableAddr)
+
+	sigReg, ok := code.TryAllocReg(types.I64)
+	if !ok {
+		panic("impossible situation")
+	}
+	mach.OpMoveReg(code, types.I64, sigReg, mach.ResultReg())
+	mach.OpShiftRightLogical32Bits(code, sigReg)
+	code.opBranchIfEqualImm32(sigReg, sig.Index, doCall)
+	code.FreeReg(types.I64, sigReg)
+
+	mach.OpCall(code, &code.trapLinks.IndirectCallSignature)
+
+	outOfBounds.SetAddress(code.Len())
+	mach.OpCall(code, &code.trapLinks.IndirectCallIndex)
+
+	doCall.SetAddress(code.Len())
+	mach.OpCallIndirect32(code, mach.ResultReg())
+	code.opAddImmToStackPtr(argsSize + mach.WordSize()) // args + index operand
 	return
 }
 

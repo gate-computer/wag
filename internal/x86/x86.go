@@ -261,8 +261,12 @@ func (mach X86) OpCall(code gen.Coder, l *links.L) {
 	code.AddCallSite(l)
 }
 
-func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
-	Movsxd.opFromStack(code, 0, regScratch, ptrStackOffset)
+func (mach X86) OpLoadResult32ZeroExtFromStack(code gen.Coder, offset int) {
+	Movsxd.opFromStack(code, 0, regResult, offset)
+}
+
+func (mach X86) OpCallIndirect32(code gen.Coder, reg regs.R) {
+	Mov.opFromReg(code, types.I32, regScratch, reg)
 	Add.opFromReg(code, types.I64, regScratch, regTextBase)
 	Call.opReg(code, regScratch)
 	code.AddIndirectCallSite()
