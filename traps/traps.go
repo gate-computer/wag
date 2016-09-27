@@ -30,7 +30,7 @@ func (id Id) String() string {
 		return "indirect call signature mismatch"
 
 	case MemoryOutOfBounds:
-		return "memory access out of bounds"
+		return "out of bounds memory access"
 
 	case Unreachable:
 		return "unreachable"

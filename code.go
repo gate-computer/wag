@@ -426,8 +426,8 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 			}
 			fallthrough
 		case "store":
-			deadend = code.exprStoreOp(exprName, opName, opType, args)
-			resultType = types.Void
+			result, deadend = code.exprStoreOp(exprName, opName, opType, args)
+			// TODO: resultType to values.Void when we no longer return a result
 
 		case "convert_s", "convert_u", "demote", "extend_s", "extend_u", "promote", "reinterpret", "trunc_s", "trunc_u", "wrap":
 			result, deadend = code.exprConversionOp(exprName, resultType, opType, args)
@@ -450,11 +450,19 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		case "call_indirect":
 			result, resultType, deadend = code.exprCallIndirect(exprName, args)
 
+		case "current_memory":
+			result = code.exprCurrentMemory(exprName, args)
+			resultType = types.I32
+
 		case "drop":
 			code.exprDrop(exprName, args)
 
 		case "get_local":
 			result, resultType = code.exprGetLocal(exprName, args)
+
+		case "grow_memory":
+			result, deadend = code.exprGrowMemory(exprName, args)
+			resultType = types.I32
 
 		case "if":
 			result, deadend = code.exprIf(exprName, args, expectType, final)
@@ -715,7 +723,7 @@ func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []in
 	return
 }
 
-func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []interface{}) (deadend bool) {
+func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
@@ -769,7 +777,9 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 	a = code.opMaterializeOperand(opType, a)
 	b = code.effectiveOperand(b)
 
-	deadend = mach.StoreOp(code, opName, opType, a, b, offset)
+	// the design doc says that stores don't return a value, but it's needed
+	// for the memory_trap.wast test to work.
+	result, deadend = mach.StoreOp(code, opName, opType, a, b, offset)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1269,6 +1279,14 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 	return
 }
 
+func (code *coder) exprCurrentMemory(exprName string, args []interface{}) values.Operand {
+	if len(args) != 0 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	return mach.OpCurrentMemory(code)
+}
+
 func (code *coder) exprDrop(exprName string, args []interface{}) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
@@ -1310,6 +1328,22 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 	return
 }
 
+func (code *coder) exprGrowMemory(exprName string, args []interface{}) (result values.Operand, deadend bool) {
+	if len(args) != 1 {
+		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	x, _, deadend := code.expr(args[0], types.I32, false)
+	if deadend {
+		mach.OpAbort(code)
+		return
+	}
+
+	x = code.effectiveOperand(x)
+	result = mach.OpGrowMemory(code, x)
+	return
+}
+
 func (code *coder) exprIf(exprName string, args []interface{}, expectType types.T, final bool) (result values.Operand, deadend bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
@@ -1323,6 +1357,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 
 	ifResult, _, deadend := code.expr(args[0], types.I32, false)
 	if deadend {
+		mach.OpAbort(code)
 		return
 	}
 

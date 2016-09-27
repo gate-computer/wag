@@ -11,6 +11,7 @@ import (
 type memoryAccess struct {
 	truncate int
 	zeroExt  bool
+	opType   types.T
 	insn     binaryInsn
 }
 
@@ -41,28 +42,28 @@ func (as memoryAccesses) lookup(t types.T, name string) (a memoryAccess) {
 
 var memoryLoads = memoryAccesses{
 	integer: map[string]memoryAccess{
-		"load":     {0, true, Mov},
-		"load8_s":  {1, false, binaryInsn{Movsx8, NoPrefixMIInsn}},
-		"load8_u":  {1, false, binaryInsn{Movzx8, NoPrefixMIInsn}},
-		"load16_s": {2, false, binaryInsn{Movsx16, NoPrefixMIInsn}},
-		"load16_u": {2, false, binaryInsn{Movzx16, NoPrefixMIInsn}},
-		"load32_s": {4, false, binaryInsn{Movsxd, NoPrefixMIInsn}}, // type is ignored
-		"load32_u": {4, true, Mov},                                 // type will be I32
+		"load":     {0, true, 0, Mov},
+		"load8_s":  {1, false, 0, binaryInsn{Movsx8, NoPrefixMIInsn}},
+		"load8_u":  {1, false, 0, binaryInsn{Movzx8, NoPrefixMIInsn}},
+		"load16_s": {2, false, 0, binaryInsn{Movsx16, NoPrefixMIInsn}},
+		"load16_u": {2, false, 0, binaryInsn{Movzx16, NoPrefixMIInsn}},
+		"load32_s": {4, false, 0, binaryInsn{Movsxd, NoPrefixMIInsn}}, // type is ignored
+		"load32_u": {4, true, types.I32, Mov},
 	},
 	float: map[string]memoryAccess{
-		"load": {0, false, binaryInsn{MovsSSE, NoPrefixMIInsn}},
+		"load": {0, false, 0, binaryInsn{MovsSSE, NoPrefixMIInsn}},
 	},
 }
 
 var memoryStores = memoryAccesses{
 	integer: map[string]memoryAccess{
-		"store":   {0, false, Mov},
-		"store8":  {1, false, Mov8},
-		"store16": {2, false, Mov16},
-		"store32": {4, false, Mov}, // type will be I32
+		"store":   {0, false, 0, Mov},
+		"store8":  {1, false, types.I32, Mov8},
+		"store16": {2, false, types.I32, Mov16},
+		"store32": {4, false, types.I32, Mov},
 	},
 	float: map[string]memoryAccess{
-		"store": {0, false, binaryInsn{MovsSSE, MovImm}}, // integer immediate instruction will do
+		"store": {0, false, 0, binaryInsn{MovsSSE, MovImm}}, // integer immediate instruction will do
 	},
 }
 
@@ -75,12 +76,17 @@ func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Opera
 		return
 	}
 
-	load.insn.opFromIndirect(code, t, regResult, 0, NoIndex, baseReg, disp)
+	opType := load.opType
+	if opType == 0 {
+		opType = t
+	}
+
+	load.insn.opFromIndirect(code, opType, regResult, 0, NoIndex, baseReg, disp)
 	result = values.TempRegOperand(regResult, load.zeroExt)
 	return
 }
 
-func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand, offset int) (deadend bool) {
+func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand, offset int) (result values.Operand, deadend bool) {
 	store := memoryStores.lookup(t, name)
 
 	baseReg, disp, deadend := mach.opMemoryAddress(code, t, a, offset, store.truncate)
@@ -88,9 +94,9 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 		return
 	}
 
-	opType := t
-	if store.truncate >= 1 && store.truncate <= 4 {
-		opType = types.I32 // prevents rexW prefix.  also needed by store32.
+	opType := store.opType
+	if opType == 0 {
+		opType = t
 	}
 
 	if b.Storage == values.Imm {
@@ -100,15 +106,15 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 		var ok bool
 
 		switch {
-		case store.truncate == 8:
+		case store.truncate == 1:
 			bits = int(int8(value))
 			ok = true
 
-		case store.truncate == 16:
+		case store.truncate == 2:
 			bits = int(int16(value))
 			ok = true
 
-		case store.truncate == 32:
+		case store.truncate == 4:
 			bits = int(int32(value))
 			ok = true
 
@@ -119,16 +125,20 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 
 		if ok {
 			store.insn.opImmToIndirect(code, opType, baseReg, disp, bits)
+
+			result = values.ImmOperand(t, bits)
 			return
 		}
 	}
 
-	valueReg, _, own := mach.opBorrowMaybeResultReg(code, t, b, false)
-	if own {
-		defer code.FreeReg(t, valueReg)
-	}
+	valueReg, zeroExt := mach.opMaybeResultReg(code, t, b, false)
+	// TODO: only borrow reg when we no longer return a result
 
 	store.insn.opToIndirect(code, opType, valueReg, 0, NoIndex, baseReg, disp)
+
+	// the design doc says that stores don't return a value, but it's needed
+	// for the memory_trap.wast test to work.
+	result = values.TempRegOperand(valueReg, zeroExt)
 	return
 }
 
@@ -158,13 +168,13 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 
 		if addr >= 0 && end <= int64(code.MinMemorySize()) {
 			// compile-time check only
-			baseReg = regMemoryPtr
+			baseReg = regMemoryBase
 			disp = int(addr)
 			return
 		}
 
 		if addr >= 0 && end <= 0x80000000 {
-			Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryPtr, int(end))
+			Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryBase, int(end))
 			runtimeEndCheck = true
 		}
 
@@ -181,7 +191,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		end := int64(size) + int64(offset)
 
 		if end <= 0x80000000 {
-			Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryPtr, int(end))
+			Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryBase, int(end))
 			runtimeEndCheck = true
 
 			// if offset < 0 {
@@ -211,11 +221,50 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 
 	// if runtimeStartCheck {
 	// 	Sub.opImm(code, types.I64, regScratch, size)
-	// 	Cmp.opFromReg(code, types.I64, regScratch, regMemoryPtr)
+	// 	Cmp.opFromReg(code, types.I64, regScratch, regMemoryBase)
 	// 	Jl.op(code, fail.FinalAddress())
 
 	// 	disp = 0
 	// }
 
 	return
+}
+
+func (mach X86) OpCurrentMemory(code gen.RegCoder) values.Operand {
+	Mov.opFromReg(code, types.I64, regResult, regMemoryLimit)
+	Sub.opFromReg(code, types.I64, regResult, regMemoryBase)
+	ShrImm.op(code, types.I64, regResult, 16)
+
+	return values.TempRegOperand(regResult, true)
+}
+
+func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand {
+	var out links.L
+
+	MovqMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
+
+	reg, zeroExt := mach.opMaybeResultReg(code, types.I32, x, false)
+	if !zeroExt {
+		Mov.opFromReg(code, types.I32, reg, reg)
+	}
+
+	ShlImm.op(code, types.I64, reg, 16)
+	Add.opFromReg(code, types.I64, reg, regMemoryLimit) // new memory limit
+	Cmp.opFromReg(code, types.I64, reg, regScratch)
+
+	MovImm.opImm(code, types.I32, regScratch, -1) // value on failure
+
+	Jg.rel8.opStub(code)
+	out.AddSite(code.Len())
+
+	Mov.opFromReg(code, types.I64, regMemoryLimit, regScratch)
+	Sub.opFromReg(code, types.I64, regScratch, regMemoryBase)
+	ShrImm.op(code, types.I64, regScratch, 16) // value on success
+
+	out.SetAddress(code.Len())
+	mach.updateSites8(code, &out)
+
+	Mov.opFromReg(code, types.I64, reg, regScratch)
+
+	return values.TempRegOperand(reg, true)
 }

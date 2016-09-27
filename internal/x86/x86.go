@@ -19,26 +19,32 @@ const (
 )
 
 const (
-	regResult        = regs.R(0)  // rax or xmm0
-	regTrapFuncMMX   = regs.R(0)  // mm0
-	regShiftCount    = regs.R(1)  // rcx
-	regScratch       = regs.R(2)  // rdx or xmm2
-	regImportVarArgs = regs.R(2)  // rdx
-	regImportSig     = regs.R(3)  // rbx
-	regStackPtr      = regs.R(4)  // rsp
-	regTrapArg       = regs.R(7)  // rdi
-	regTextPtr       = regs.R(12) // r12
-	regStackLimit    = regs.R(13) // r13
-	regMemoryPtr     = regs.R(14) // r14
-	regMemoryLimit   = regs.R(15) // r15
+	// use mixed with register allocation
+	regResult      = regs.R(0)  // rax or xmm0
+	regShiftCount  = regs.R(1)  // rcx
+	regScratch     = regs.R(2)  // rdx or xmm2
+	regStackPtr    = regs.R(4)  // rsp
+	regTextBase    = regs.R(12) // r12
+	regStackLimit  = regs.R(13) // r13
+	regMemoryBase  = regs.R(14) // r14
+	regMemoryLimit = regs.R(15) // r15
+
+	// used only when all allocated registers have been saved
+	regImportVarArgs = regs.R(2) // rdx
+	regImportSig     = regs.R(3) // rbx
+	regTrapId        = regs.R(7) // rdi
+
+	// MMX registers
+	regTrapHandlerMMX     = regs.R(0) // mm0
+	regMemoryGrowLimitMMX = regs.R(1) // mm1
 )
 
 var availableIntRegs = [][]bool{
 	[]bool{
 		false, // rax = result / dividend low bits
-		true,  // rcx = shift count / var args count (allocatable) -- TODO: allocate this last
-		false, // rdx = scratch / dividend high bits / import varargs count
-		true,  // rbx = import signature index (allocatable)
+		true,  // rcx = shift count (allocatable) -- TODO: allocate this last
+		false, // rdx = scratch / dividend high bits
+		true,  // rbx
 		false, // rsp = stack ptr
 		true,  // rbp
 		true,  // rsi
@@ -49,9 +55,9 @@ var availableIntRegs = [][]bool{
 		true,  // r9
 		true,  // r10
 		true,  // r11
-		false, // r12 = text ptr
+		false, // r12 = text base
 		false, // r13 = stack limit
-		false, // r14 = memory ptr
+		false, // r14 = memory base
 		false, // r15 = memory limit
 	},
 }
@@ -254,7 +260,7 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) 
 		Mov.opFromReg(code, types.I32, reg, reg)
 	}
 
-	Add.opFromReg(code, types.I64, reg, regTextPtr)
+	Add.opFromReg(code, types.I64, reg, regTextBase)
 	Jmp.opReg(code, reg)
 }
 
@@ -265,7 +271,7 @@ func (mach X86) OpCall(code gen.Coder, l *links.L) {
 
 func (mach X86) OpCallIndirectDisp32FromStack(code gen.Coder, ptrStackOffset int) {
 	Movsxd.opFromStack(code, 0, regScratch, ptrStackOffset)
-	Add.opFromReg(code, types.I64, regScratch, regTextPtr)
+	Add.opFromReg(code, types.I64, regScratch, regTextBase)
 	Call.opReg(code, regScratch)
 	code.AddIndirectCallSite()
 }
@@ -596,8 +602,8 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 }
 
 func (mach X86) OpTrapImplementation(code gen.Coder, id traps.Id) {
-	Mov.opImm(code, types.I32, regTrapArg, int(id)) // automatic zero-extension
-	MovqMMX.opToReg(code, types.I64, regScratch, regTrapFuncMMX)
+	Mov.opImm(code, types.I32, regTrapId, int(id)) // automatic zero-extension
+	MovqMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
 	Jmp.opReg(code, regScratch)
 }
 

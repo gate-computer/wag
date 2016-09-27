@@ -2,6 +2,7 @@ package runner
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"runtime"
@@ -13,11 +14,15 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
 func importSpectestPrint() int64
 
+const (
+	memoryIncrementSize = 65536
+)
+
 var (
-	pageSize = syscall.Getpagesize()
+	systemPageSize = syscall.Getpagesize()
 )
 
 type Buffer struct {
@@ -129,29 +134,43 @@ type Runner struct {
 
 	globalsOffset    int
 	memoryOffset     int
+	initMemorySize   int
 	globalsAndMemory []byte
 	stack            []byte
 
-	dirty        bool
 	lastTrap     traps.Id
 	lastStackPtr uintptr
 }
 
-func (p *Program) NewRunner(memorySize, stackSize int) (r *Runner, err error) {
-	if memorySize < len(p.data) {
-		err = errors.New("data does not fit in memory")
+func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+	if (initMemorySize & (memoryIncrementSize - 1)) != 0 {
+		err = fmt.Errorf("initial memory size is not multiple of %d", memoryIncrementSize)
+		return
+	}
+	if (growMemorySize & (memoryIncrementSize - 1)) != 0 {
+		err = fmt.Errorf("memory growth limit is not multiple of %d", memoryIncrementSize)
 		return
 	}
 
-	padding := (pageSize - len(p.globals)) & (pageSize - 1)
-
-	r = &Runner{
-		prog:          p,
-		globalsOffset: padding,
-		memoryOffset:  padding + len(p.globals),
+	if initMemorySize < len(p.data) {
+		err = errors.New("data does not fit in initial memory")
+		return
+	}
+	if initMemorySize > growMemorySize {
+		err = errors.New("initial memory exceeds memory growth limit")
+		return
 	}
 
-	r.globalsAndMemory, err = makeMemory(r.globalsOffset+memorySize, 0)
+	padding := (systemPageSize - len(p.globals)) & (systemPageSize - 1)
+
+	r = &Runner{
+		prog:           p,
+		globalsOffset:  padding,
+		memoryOffset:   padding + len(p.globals),
+		initMemorySize: initMemorySize,
+	}
+
+	r.globalsAndMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0)
 	if err != nil {
 		r.Close()
 		return
@@ -163,6 +182,7 @@ func (p *Program) NewRunner(memorySize, stackSize int) (r *Runner, err error) {
 		return
 	}
 
+	r.initData()
 	return
 }
 
@@ -183,18 +203,6 @@ func (r *Runner) Close() (first error) {
 }
 
 func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer) (result int32, err error) {
-	copy(r.globalsAndMemory[r.globalsOffset:], r.prog.globals)
-	copy(r.globalsAndMemory[r.memoryOffset:], r.prog.data)
-
-	memory := r.globalsAndMemory[r.memoryOffset:]
-	tail := memory[len(r.prog.data):]
-
-	if r.dirty {
-		for i := range tail {
-			tail[i] = 0
-		}
-	}
-
 	pipe := make([]int, 2)
 
 	err = syscall.Pipe2(pipe, syscall.O_CLOEXEC)
@@ -217,9 +225,10 @@ func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer)
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	result, trap, stackPtr := run(r.prog.text, memory, r.stack, arg, pipe[1])
+	memory := r.globalsAndMemory[r.memoryOffset:]
 
-	r.dirty = true
+	result, trap, stackPtr := run(r.prog.text, r.initMemorySize, memory, r.stack, arg, pipe[1])
+
 	r.lastTrap = traps.Id(trap)
 	r.lastStackPtr = stackPtr
 
@@ -227,6 +236,20 @@ func (r *Runner) Run(arg int, sigs map[uint64]types.Function, printer io.Writer)
 		err = r.lastTrap
 	}
 	return
+}
+
+func (r *Runner) ResetMemory() {
+	r.initData()
+
+	tail := r.globalsAndMemory[r.memoryOffset+len(r.prog.data):]
+	for i := range tail {
+		tail[i] = 0
+	}
+}
+
+func (r *Runner) initData() {
+	copy(r.globalsAndMemory[r.globalsOffset:], r.prog.globals)
+	copy(r.globalsAndMemory[r.memoryOffset:], r.prog.data)
 }
 
 func makeMemory(size int, extraFlags int) (mem []byte, err error) {

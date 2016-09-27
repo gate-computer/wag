@@ -1,7 +1,7 @@
 #include "textflag.h"
 
-// func run(text, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
-TEXT ·run(SB),$0-112
+// func run(text []byte, initialMemorySize int, memory, stack []byte, arg, printFd int) (result int32, trap int, stackPtr uintptr)
+TEXT ·run(SB),$0-120
 	PUSHQ	AX
 	PUSHQ	CX
 	PUSHQ	DX
@@ -19,17 +19,19 @@ TEXT ·run(SB),$0-112
 	PUSHQ	R15
 
 	MOVQ	text+0(FP), R12
-	MOVQ	memory+24(FP), R14
-	MOVQ	memory_len+32(FP), R15
-	ADDQ	R14, R15		// memory limit
-	MOVQ	stack+48(FP), R13	// stack limit
-	MOVQ	stack_len+56(FP), CX
-	MOVQ	arg+72(FP), DX
-	MOVQ	printFd+80(FP), M6	// print fd
+	MOVQ	initialMemorySize+24(FP), R15
+	MOVQ	memory+32(FP), R14
+	MOVQ	memory_len+40(FP), BX
+	ADDQ	R14, R15		// current memory limit
+	ADDQ	R14, BX
+	MOVQ	stack+56(FP), R13	// stack limit
+	MOVQ	stack_len+64(FP), CX
+	MOVQ	arg+80(FP), DX
+	MOVQ	printFd+88(FP), M6	// print fd
 	CALL	run<>(SB)
-	MOVL	AX, result+88(FP)
-	MOVQ	DI, trap+96(FP)
-	MOVQ	BX, stackPtr+104(FP)
+	MOVL	AX, result+96(FP)
+	MOVQ	DI, trap+104(FP)
+	MOVQ	BX, stackPtr+112(FP)
 
 	POPQ	R15
 	POPQ	R14
@@ -54,6 +56,7 @@ TEXT run<>(SB),NOSPLIT,$0
 	ADDQ	CX, SP		// stack
 	LEAQ	trap<>(SB), AX
 	MOVQ	AX, M0		// trap handler
+	MOVQ	BX, M1		// memory growth limit
 	SUBQ	$8, SP
 	MOVQ	DX, (SP)	// arg
 	CALL	R12
