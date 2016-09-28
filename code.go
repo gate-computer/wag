@@ -398,13 +398,13 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		case "eqz":
 			resultType = types.I32
 			fallthrough
-		case "clz", "ctz", "neg", "popcnt":
+		case "ceil", "clz", "ctz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
 			result, deadend = code.exprUnaryOp(exprName, opName, opType, args)
 
 		case "eq", "ge", "ge_s", "ge_u", "gt", "gt_s", "gt_u", "le", "le_s", "le_u", "lt", "lt_s", "lt_u", "ne":
 			resultType = types.I32
 			fallthrough
-		case "add", "and", "div", "div_s", "div_u", "mul", "or", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub", "xor":
+		case "add", "and", "div", "div_s", "div_u", "max", "min", "mul", "or", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub", "xor":
 			result, deadend = code.exprBinaryOp(exprName, opName, opType, args)
 
 		case "const":

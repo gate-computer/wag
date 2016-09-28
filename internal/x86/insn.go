@@ -458,6 +458,19 @@ var (
 )
 
 //
+type insnSuffixRMI struct {
+	opcode []byte
+	suffix prefix
+}
+
+func (i insnSuffixRMI) opReg(code gen.Coder, t types.T, target, source regs.R, value int8) {
+	code.Write(i.opcode)
+	i.suffix.writeTo(code, t, byte(target), 0, byte(source))
+	writeModTo(code, ModReg, byte(target), byte(source))
+	imm{value}.writeTo(code)
+}
+
+//
 type binaryInsn struct {
 	insnPrefix
 	insnPrefixMI
