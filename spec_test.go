@@ -36,7 +36,6 @@ const (
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
 
 // func Test_binary(t *testing.T)                        { test(t, "binary") }
-// func Test_br_table(t *testing.T)                      { test(t, "br_table") }
 // func Test_call(t *testing.T)                          { test(t, "call") }
 // func Test_call_indirect(t *testing.T)                 { test(t, "call_indirect") }
 // func Test_comments(t *testing.T)                      { test(t, "comments") }
@@ -71,6 +70,7 @@ func Test_address(t *testing.T)                         { test(t, "address") }
 func Test_block(t *testing.T)                           { test(t, "block") }
 func Test_br(t *testing.T)                              { test(t, "br") }
 func Test_br_if(t *testing.T)                           { test(t, "br_if") }
+func Test_br_table(t *testing.T)                        { test(t, "br_table") }
 func Test_break_drop(t *testing.T)                      { test(t, "break-drop") }
 func Test_exports(t *testing.T)                         { test(t, "exports") }
 func Test_f32_load32_fail(t *testing.T)                 { test(t, "f32.load32.fail") }

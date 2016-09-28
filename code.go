@@ -1114,6 +1114,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 		// end of critical section.
 
+		deadend = true
+
 		tableAlloc.populator = func(data []byte) {
 			for _, target := range tableTargets {
 				addr := uint32(target.label.FinalAddress())
