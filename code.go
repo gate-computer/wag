@@ -313,7 +313,7 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 			panic(fmt.Errorf("internal: variable #%d reference count is non-zero at end of function", i))
 		}
 
-		if reg, ok := v.cache.CheckVarReg(); ok {
+		if reg, _, ok := v.cache.CheckVarReg(); ok {
 			code.FreeReg(code.varType(i), reg)
 		}
 
@@ -1340,10 +1340,20 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 	v := &code.vars[index]
 
 	switch v.cache.Storage {
+	case values.Nowhere:
+		if reg, ok := code.opTryAllocVarReg(resultType); ok {
+			offset := code.effectiveVarStackOffset(index)
+			x := values.VarMemOperand(index, offset)
+			zeroExt := code.opMove(resultType, reg, x, false)
+			v.cache = values.VarRegOperand(index, reg, zeroExt)
+			v.dirty = false
+		}
+		result = values.VarOperand(index)
+
 	case values.Imm, values.ROData:
 		result = v.cache
 
-	case values.Nowhere, values.VarReg:
+	case values.VarReg:
 		result = values.VarOperand(index)
 
 	default:
@@ -1679,7 +1689,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		v.dirty = true
 
 	case values.Var, values.Stack, values.ConditionFlags:
-		reg, ok := oldCache.CheckVarReg()
+		reg, _, ok := oldCache.CheckVarReg()
 		if ok {
 			// reusing cache register, don't free it
 			oldCache = values.NoOperand
@@ -1688,8 +1698,8 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		}
 
 		if ok {
-			code.opMove(resultType, reg, result, false)
-			v.cache = values.VarRegOperand(index, reg)
+			zeroExt := code.opMove(resultType, reg, result, false)
+			v.cache = values.VarRegOperand(index, reg, zeroExt)
 			v.dirty = true
 		} else {
 			code.opStoreVar(resultType, index, result)
@@ -1699,15 +1709,17 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 
 	case values.TempReg:
 		var ok bool
+		var zeroExt bool
 
 		reg := result.Reg()
 		if code.RegAllocated(resultType, reg) {
 			// repurposing the register which already contains the value
+			zeroExt = result.ZeroExt()
 			ok = true
 		} else {
 			// can't keep the transient register which contains the value
 
-			reg, ok = oldCache.CheckVarReg()
+			reg, zeroExt, ok = oldCache.CheckVarReg()
 			if ok {
 				// reusing cache register, don't free it
 				oldCache = values.NoOperand
@@ -1717,12 +1729,12 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 
 			if ok {
 				// we got a register for the value
-				code.opMove(resultType, reg, result, false)
+				zeroExt = code.opMove(resultType, reg, result, false)
 			}
 		}
 
 		if ok {
-			v.cache = values.VarRegOperand(index, reg)
+			v.cache = values.VarRegOperand(index, reg, zeroExt)
 			v.dirty = true
 		} else {
 			code.opStoreVar(resultType, index, result)
@@ -1990,14 +2002,6 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 		i := ref.Index()
 		v := &code.vars[i]
 		v.refCount++
-
-		if v.cache.Storage == values.Nowhere {
-			if reg, ok := code.opTryAllocVarReg(t); ok {
-				code.opMove(t, reg, *ref, false)
-				v.cache = values.VarRegOperand(i, reg)
-				v.dirty = false
-			}
-		}
 
 	case values.TempReg:
 		if code.RegAllocated(t, ref.Reg()) {

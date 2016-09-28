@@ -131,14 +131,20 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 		}
 	}
 
-	valueReg, zeroExt := mach.opMaybeResultReg(code, t, b, false)
-	// TODO: only borrow reg when we no longer return a result
-
-	store.insn.opToIndirect(code, opType, valueReg, 0, NoIndex, baseReg, disp)
-
 	// the design doc says that stores don't return a value, but it's needed
 	// for the memory_trap.wast test to work.
-	result = values.TempRegOperand(valueReg, zeroExt)
+
+	valueReg, _, ok := b.CheckAnyReg()
+	if ok {
+		result = b
+	} else {
+		// TODO: only borrow reg when we no longer return a result
+		var zeroExt bool
+		valueReg, zeroExt = mach.opMaybeResultReg(code, t, b, false)
+		result = values.TempRegOperand(valueReg, zeroExt)
+	}
+
+	store.insn.opToIndirect(code, opType, valueReg, 0, NoIndex, baseReg, disp)
 	return
 }
 

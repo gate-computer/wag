@@ -451,7 +451,7 @@ func (mach X86) OpPush(code gen.Coder, t types.T, x values.Operand) {
 	if ok {
 		defer code.FreeReg(t, reg)
 	} else {
-		reg, ok = x.CheckVarReg()
+		reg, _, ok = x.CheckVarReg()
 		if !ok {
 			reg = regScratch
 			mach.OpMove(code, t, reg, x, true)
@@ -582,7 +582,7 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 	if ok {
 		defer code.FreeReg(t, reg)
 	} else {
-		reg, ok = x.CheckVarReg()
+		reg, _, ok = x.CheckVarReg()
 		if !ok {
 			reg = regScratch
 			mach.OpMove(code, t, reg, x, true)
@@ -756,7 +756,7 @@ func (mach X86) DisableCode(code gen.Coder, addrBegin, addrEnd int) {
 // opBorrowMaybeScratchReg returns either the register of the given operand, or
 // the reserved scratch register with the value of the operand.
 func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, t types.T, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
-	reg, ok := x.CheckVarReg()
+	reg, zeroExt, ok := x.CheckVarReg()
 	if ok {
 		return
 	}
@@ -776,7 +776,7 @@ func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, t types.T, x values.Oper
 // opBorrowMaybeResultReg returns either the register of the given operand, or
 // the reserved result register with the value of the operand.
 func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
-	reg, ok := x.CheckVarReg()
+	reg, zeroExt, ok := x.CheckVarReg()
 	if !ok {
 		reg, zeroExt = mach.opMaybeResultReg(code, t, x, preserveFlags)
 		own = (reg != regResult)

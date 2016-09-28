@@ -125,7 +125,7 @@ var InvertedConditions = []Condition{
 }
 
 const (
-	zeroExtFlag = uint64(1 << 32)
+	zeroExtFlag = uint64(1 << 16)
 )
 
 type Operand struct {
@@ -162,8 +162,12 @@ func VarMemOperand(index int, offset int) Operand {
 	return Operand{VarMem, (uint64(index) << 32) | uint64(offset)}
 }
 
-func VarRegOperand(index int, reg regs.R) Operand {
-	return Operand{VarReg, (uint64(index) << 32) | uint64(byte(reg))}
+func VarRegOperand(index int, reg regs.R, zeroExt bool) Operand {
+	var flags uint64
+	if zeroExt {
+		flags = zeroExtFlag
+	}
+	return Operand{VarReg, (uint64(index) << 32) | flags | uint64(byte(reg))}
 }
 
 func TempRegOperand(reg regs.R, zeroExt bool) Operand {
@@ -327,9 +331,10 @@ func (o Operand) CheckAnyReg() (reg regs.R, zeroExt bool, ok bool) {
 	return
 }
 
-func (o Operand) CheckVarReg() (reg regs.R, ok bool) {
+func (o Operand) CheckVarReg() (reg regs.R, zeroExt bool, ok bool) {
 	if o.Storage == VarReg {
 		reg = regs.R(byte(o.X))
+		zeroExt = (o.X & zeroExtFlag) != 0
 		ok = true
 	}
 	return
@@ -345,10 +350,11 @@ func (o Operand) CheckTempReg() (reg regs.R, zeroExt bool, ok bool) {
 }
 
 func (o Operand) ZeroExt() bool {
-	if o.Storage != TempReg {
-		panic(o)
+	switch o.Storage {
+	case VarReg, TempReg:
+		return (o.X & zeroExtFlag) != 0
 	}
-	return (o.X & zeroExtFlag) != 0
+	panic(o)
 }
 
 func (o Operand) Condition() (cond Condition) {
