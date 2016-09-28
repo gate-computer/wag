@@ -1059,8 +1059,8 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		var reg2 regs.R
 
 		if commonStackOffset < 0 {
-			reg2 = code.opAllocIntReg(liveOperand{types.I32, &condOperand})
-			defer code.freeIntReg(reg2)
+			reg2 = code.opAllocReg(types.I32, liveOperand{types.I32, &condOperand})
+			defer code.FreeReg(types.I32, reg2)
 		}
 
 		var reg regs.R
@@ -1076,12 +1076,12 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		} else {
 			reg, regZeroExt, ok = condOperand.CheckTempReg()
 			if ok {
-				defer code.freeIntReg(reg)
+				defer code.FreeReg(types.I32, reg)
 			}
 		}
 		if !ok {
-			reg = code.opAllocIntReg(liveOperand{types.I32, &condOperand})
-			defer code.freeIntReg(reg)
+			reg = code.opAllocReg(types.I32, liveOperand{types.I32, &condOperand})
+			defer code.FreeReg(types.I32, reg)
 
 			regZeroExt = code.opMove(types.I32, reg, condOperand, false)
 		}
@@ -1778,18 +1778,24 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 }
 
 func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
-	return code.regs(t).allocate()
+	return code.regs(t).alloc()
 }
 
 func (code *coder) AllocSpecificReg(t types.T, reg regs.R) {
-	code.regs(t).allocateSpecific(reg)
+	code.regs(t).allocSpecific(reg)
 }
 
-func (code *coder) opAllocReg(t types.T) (reg regs.R) {
+func (code *coder) opAllocReg(t types.T, save ...liveOperand) (reg regs.R) {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
+		for _, live := range save {
+			code.opPushLiveOperand(live.typ, live.ref)
+			defer code.popLiveOperand(live.ref)
+		}
+
 		reg = code.opStealReg(t)
 	}
+
 	return
 }
 
@@ -1803,28 +1809,6 @@ func (code *coder) opTryAllocVarReg(t types.T) (reg regs.R, ok bool) {
 
 func (code *coder) FreeReg(t types.T, reg regs.R) {
 	code.regs(t).free(reg)
-}
-
-func (code *coder) tryAllocIntReg() (reg regs.R, ok bool) {
-	return code.regs(types.I64).allocate()
-}
-
-func (code *coder) opAllocIntReg(save ...liveOperand) (reg regs.R) {
-	reg, ok := code.tryAllocIntReg()
-	if !ok {
-		for _, live := range save {
-			code.opPushLiveOperand(live.typ, live.ref)
-			defer code.popLiveOperand(live.ref)
-		}
-
-		reg = code.opStealReg(types.I64)
-	}
-
-	return
-}
-
-func (code *coder) freeIntReg(reg regs.R) {
-	code.regs(types.I64).free(reg)
 }
 
 // RegAllocated indicates if we can hang onto a register returned by mach ops.

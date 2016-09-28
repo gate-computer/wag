@@ -39,39 +39,43 @@ const (
 	regMemoryGrowLimitMMX = regs.R(1) // mm1
 )
 
-var availableIntRegs = []int32{
-	0, // rax
-	2, // rcx (may need to be relocated by shift ops)
-	0, // rdx
-	3, // rbx
-	0, // rsp
-	2, // rbp (needs dummy displacement when used as base register)
-	3, // rsi
-	3, // rdi
-	1, // r8  (these always need rex prefix)
-	1, // r9
-	1, // r10
-	1, // r11
-}
+var availableIntRegs = gen.RegMask(
+	false, // rax
+	true,  // rcx
+	false, // rdx
+	true,  // rbx
+	false, // rsp
+	true,  // rbp
+	true,  // rsi
+	true,  // rdi
+	true,  // r8
+	true,  // r9
+	true,  // r10
+	true,  // r11
+	false, // r12
+	false, // r13
+	false, // r14
+	false, // r15
+)
 
-var availableFloatRegs = []int32{
-	0, // xmm0
-	2, // xmm1
-	0, // xmm2
-	2, // xmm3
-	2, // xmm4
-	2, // xmm5
-	2, // xmm6
-	2, // xmm7
-	1, // xmm8 (these always need rex prefix)
-	1, // xmm9
-	1, // xmm10
-	1, // xmm11
-	1, // xmm12
-	1, // xmm13
-	1, // xmm14
-	1, // xmm15
-}
+var availableFloatRegs = gen.RegMask(
+	false, // xmm0
+	true,  // xmm1
+	false, // xmm2
+	true,  // xmm3
+	true,  // xmm4
+	true,  // xmm5
+	true,  // xmm6
+	true,  // xmm7
+	true,  // xmm8
+	true,  // xmm9
+	true,  // xmm10
+	true,  // xmm11
+	true,  // xmm12
+	true,  // xmm13
+	true,  // xmm14
+	true,  // xmm15
+)
 
 var (
 	byteOrder = binary.LittleEndian
@@ -170,8 +174,8 @@ func (mach X86) WordSize() int               { return wordSize }
 func (mach X86) ByteOrder() binary.ByteOrder { return binary.LittleEndian }
 func (mach X86) FunctionAlignment() int      { return functionAlignment }
 func (mach X86) ResultReg() regs.R           { return regResult }
-func (mach X86) AvailableIntRegs() []int32   { return availableIntRegs }
-func (mach X86) AvailableFloatRegs() []int32 { return availableFloatRegs }
+func (mach X86) AvailableIntRegs() uint32    { return availableIntRegs }
+func (mach X86) AvailableFloatRegs() uint32  { return availableFloatRegs }
 
 func (mach X86) RegGroupPreference(t types.T) int {
 	switch t {

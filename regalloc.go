@@ -11,77 +11,66 @@ const (
 )
 
 type regAllocator struct {
-	avail []int32
-	alloc uint64 // support up to 64 registers
+	avail uint32
+	freed uint32
 }
 
-func (ra *regAllocator) init(avail []int32) {
+func (ra *regAllocator) init(avail uint32) {
 	ra.avail = avail
+	ra.freed = avail
 }
 
-func (ra *regAllocator) allocate() (reg regs.R, ok bool) {
-	bestScore := int32(0)
-	var bestMask uint64
-
-	mask := uint64(1)
-	for i, score := range ra.avail {
-		if (ra.alloc & mask) == 0 {
-			if score > bestScore {
-				bestScore = score
-				bestMask = mask
-				reg = regs.R(i)
-			}
-		}
-		mask <<= 1
-	}
-
-	if bestScore > 0 {
-		ra.alloc |= bestMask
-		ok = true
-
-		if verboseRegAlloc {
-			for i := 0; i < debugExprDepth; i++ {
-				fmt.Print("    ")
-			}
-			fmt.Printf("<!-- reg alloc %s -->\n", reg)
-		}
-	}
-
-	return
-}
-
-func (ra *regAllocator) allocateSpecific(reg regs.R) {
-	mask := uint64(1 << uint(reg))
-
-	if (ra.alloc & mask) == 0 {
-		if i := int(reg); i < len(ra.avail) && ra.avail[i] > 0 {
-			ra.alloc |= mask
+func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
+	for bits := ra.freed; bits != 0; bits >>= 1 {
+		if (bits & 1) != 0 {
+			ra.freed &^= uint32(1 << reg)
+			ok = true
 
 			if verboseRegAlloc {
 				for i := 0; i < debugExprDepth; i++ {
 					fmt.Print("    ")
 				}
-				fmt.Printf("<!-- reg alloc %s specifically -->\n", reg)
+				fmt.Printf("<!-- reg alloc %s -->\n", reg)
 			}
 
-			return
+			break
 		}
+
+		reg++
 	}
 
-	panic(reg)
+	return
 }
 
-func (ra *regAllocator) free(reg regs.R) {
-	mask := uint64(1 << uint(reg))
+func (ra *regAllocator) allocSpecific(reg regs.R) {
+	mask := uint32(1 << reg)
 
-	if (ra.alloc & mask) == 0 {
-		if i := int(reg); i < len(ra.avail) && ra.avail[i] <= 0 {
-			return
-		}
+	if (ra.freed & mask) == 0 {
 		panic(reg)
 	}
 
-	ra.alloc &^= mask
+	ra.freed &^= mask
+
+	if verboseRegAlloc {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- reg alloc %s specifically -->\n", reg)
+	}
+}
+
+func (ra *regAllocator) free(reg regs.R) {
+	mask := uint32(1 << reg)
+
+	if (ra.freed & mask) != 0 {
+		panic(reg)
+	}
+
+	if (ra.avail & mask) == 0 {
+		return
+	}
+
+	ra.freed |= mask
 
 	if verboseRegAlloc {
 		for i := 0; i < debugExprDepth; i++ {
@@ -92,8 +81,6 @@ func (ra *regAllocator) free(reg regs.R) {
 }
 
 func (ra *regAllocator) allocated(reg regs.R) bool {
-	mask := uint64(1 << uint(reg))
-
 	if verboseRegAlloc {
 		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
@@ -101,11 +88,13 @@ func (ra *regAllocator) allocated(reg regs.R) bool {
 		fmt.Printf("<!-- reg check %s -->\n", reg)
 	}
 
-	return (ra.alloc & mask) != 0
+	mask := uint32(1 << reg)
+
+	return ((ra.avail &^ ra.freed) & mask) != 0
 }
 
 func (ra *regAllocator) postCheck(category string) {
-	if ra.alloc != 0 {
+	if ra.freed != ra.avail {
 		panic(fmt.Errorf("some %s registers not freed after function", category))
 	}
 }
