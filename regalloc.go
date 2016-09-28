@@ -20,7 +20,7 @@ func (ra *regAllocator) init(avail []int32) {
 }
 
 func (ra *regAllocator) allocate() (reg regs.R, ok bool) {
-	bestScore := int32(-1)
+	bestScore := int32(0)
 	var bestMask uint64
 
 	mask := uint64(1)
@@ -35,7 +35,7 @@ func (ra *regAllocator) allocate() (reg regs.R, ok bool) {
 		mask <<= 1
 	}
 
-	if bestScore >= 0 {
+	if bestScore > 0 {
 		ra.alloc |= bestMask
 		ok = true
 
@@ -50,14 +50,34 @@ func (ra *regAllocator) allocate() (reg regs.R, ok bool) {
 	return
 }
 
-func (ra *regAllocator) free(reg regs.R) {
-	if ra.avail[int(reg)] < 0 {
-		return
-	}
-
+func (ra *regAllocator) allocateSpecific(reg regs.R) {
 	mask := uint64(1 << uint(reg))
 
 	if (ra.alloc & mask) == 0 {
+		if i := int(reg); i < len(ra.avail) && ra.avail[i] > 0 {
+			ra.alloc |= mask
+
+			if verboseRegAlloc {
+				for i := 0; i < debugExprDepth; i++ {
+					fmt.Print("    ")
+				}
+				fmt.Printf("<!-- reg alloc %s specifically -->\n", reg)
+			}
+
+			return
+		}
+	}
+
+	panic(reg)
+}
+
+func (ra *regAllocator) free(reg regs.R) {
+	mask := uint64(1 << uint(reg))
+
+	if (ra.alloc & mask) == 0 {
+		if i := int(reg); i < len(ra.avail) && ra.avail[i] <= 0 {
+			return
+		}
 		panic(reg)
 	}
 

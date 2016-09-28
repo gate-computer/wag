@@ -40,41 +40,37 @@ const (
 )
 
 var availableIntRegs = []int32{
-	-1, // rax = result / dividend low bits
-	1,  // rcx = shift count (allocatable)
-	-1, // rdx = scratch / dividend high bits
-	3,  // rbx
-	-1, // rsp = stack ptr
-	3,  // rbp
-	3,  // rsi
-	3,  // rdi
-	2,  // r8
-	2,  // r9
-	2,  // r10
-	2,  // r11
-	-1, // r12 = text base
-	-1, // r13 = stack limit
-	-1, // r14 = memory base
-	-1, // r15 = memory limit
+	0, // rax
+	2, // rcx (may need to be relocated by shift ops)
+	0, // rdx
+	3, // rbx
+	0, // rsp
+	2, // rbp (needs dummy displacement when used as base register)
+	3, // rsi
+	3, // rdi
+	1, // r8  (these always need rex prefix)
+	1, // r9
+	1, // r10
+	1, // r11
 }
 
 var availableFloatRegs = []int32{
-	-1, // xmm0 = result
-	2,
-	-1, // xmm2 = scratch
-	2,
-	2,
-	2,
-	2,
-	2,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
-	1,
+	0, // xmm0
+	2, // xmm1
+	0, // xmm2
+	2, // xmm3
+	2, // xmm4
+	2, // xmm5
+	2, // xmm6
+	2, // xmm7
+	1, // xmm8 (these always need rex prefix)
+	1, // xmm9
+	1, // xmm10
+	1, // xmm11
+	1, // xmm12
+	1, // xmm13
+	1, // xmm14
+	1, // xmm15
 }
 
 var (
