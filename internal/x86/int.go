@@ -312,9 +312,6 @@ func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a,
 		case values.Imm:
 			Cmp.opImm(code, t, reg, int(b.ImmValue(t)))
 
-		case values.ROData:
-			Cmp.opFromAddr(code, t, reg, 0, NoIndex, code.RODataAddr()+b.Addr())
-
 		case values.VarMem:
 			Cmp.opFromStack(code, t, reg, b.Offset())
 

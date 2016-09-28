@@ -296,8 +296,8 @@ func (mach X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.
 
 // OpMove must not update CPU's condition flags if preserveFlags is set.
 //
-// X86 implementation note: must not rely on regScratch or regResult in this
-// function because we may be moving to one of them.
+// X86 implementation note: must not blindly rely on regScratch or regResult in
+// this function because we may be moving to one of them.
 func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	switch t.Category() {
 	case types.Int:
@@ -374,13 +374,12 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 	case types.Float:
 		switch x.Storage {
 		case values.Imm:
-			if x.ImmValue(t) != 0 {
-				panic(x)
+			if value := x.ImmValue(t); value == 0 {
+				XorpSSE.opFromReg(code, t, targetReg, targetReg)
+			} else {
+				MovImm64.op(code, t, regScratch, value) // integer scratch register
+				MovSSE.opFromReg(code, t, targetReg, regScratch)
 			}
-			XorpSSE.opFromReg(code, t, targetReg, targetReg)
-
-		case values.ROData:
-			MovsSSE.opFromAddr(code, t, targetReg, 0, NoIndex, code.RODataAddr()+x.Addr())
 
 		case values.VarMem:
 			MovsSSE.opFromStack(code, t, targetReg, x.Offset())
@@ -513,9 +512,6 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 		cmov := conditionInsns[cond].cmov
 
 		switch a.Storage {
-		case values.ROData:
-			cmov.opFromAddr(code, t, targetReg, 0, NoIndex, a.Addr())
-
 		case values.VarMem:
 			cmov.opFromStack(code, t, targetReg, a.Offset())
 
@@ -807,9 +803,6 @@ func (mach X86) opMaybeResultReg(code gen.RegCoder, t types.T, x values.Operand,
 
 func binaryInsnOp(code gen.Coder, insn binaryInsn, t types.T, target regs.R, source values.Operand) {
 	switch source.Storage {
-	case values.ROData:
-		insn.opFromAddr(code, t, target, 0, NoIndex, code.RODataAddr()+source.Addr())
-
 	case values.VarMem:
 		insn.opFromStack(code, t, target, source.Offset())
 

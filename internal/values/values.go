@@ -15,7 +15,6 @@ type Storage int
 const (
 	Nowhere = Storage(iota)
 	Imm
-	ROData
 	Var    // backed by wag.coder.varOperands array, containing other Operand types
 	VarMem // returned by gen.Coder.Var() for non-cached variables
 	VarReg // used in wag.coder.varState, returned by gen.Coder.Var()
@@ -32,9 +31,6 @@ func (s Storage) String() string {
 
 	case Imm:
 		return "immediate data"
-
-	case ROData:
-		return "read-only data"
 
 	case Var:
 		return "variable"
@@ -150,10 +146,6 @@ func ImmOperand(t types.T, value int) Operand {
 	return Operand{Imm, x}
 }
 
-func RODataOperand(addr int) Operand {
-	return Operand{ROData, uint64(addr)}
-}
-
 func VarOperand(index int) Operand {
 	return Operand{Var, uint64(index)}
 }
@@ -244,28 +236,6 @@ func (o Operand) CheckImmValue(t types.T) (value int64, ok bool) {
 		panic(t)
 	}
 
-	ok = true
-	return
-}
-
-func (o Operand) Addr() (addr int) {
-	addr, ok := o.CheckROData()
-	if !ok {
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) CheckROData() (addr int, ok bool) {
-	if o.Storage != ROData {
-		return
-	}
-
-	if o.X >= 0x80000000-8 {
-		panic(o)
-	}
-
-	addr = int(o.X)
 	ok = true
 	return
 }
@@ -380,9 +350,6 @@ func (o Operand) String() string {
 
 	case Imm:
 		return fmt.Sprintf("%s 0x%x", o.Storage, o.X)
-
-	case ROData:
-		return fmt.Sprintf("%s at 0x%x", o.Storage, o.Addr())
 
 	case Var:
 		return fmt.Sprintf("%s #%d", o.Storage, o.Index())

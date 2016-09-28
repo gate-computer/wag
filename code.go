@@ -66,9 +66,6 @@ type coder struct {
 	functionLinks map[*Callable]*links.L
 	trapLinks     gen.TrapLinks
 
-	roFloat32Addrs map[uint32]int
-	roFloat64Addrs map[uint64]int
-
 	regsInt   regAllocator
 	regsFloat regAllocator
 
@@ -87,11 +84,9 @@ type coder struct {
 
 func (m *Module) Code(importImpls map[string]map[string]imports.Function, roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, funcMap, callMap []byte) {
 	code := &coder{
-		module:         m,
-		roDataAddr:     int(roDataAddr),
-		roFloat32Addrs: make(map[uint32]int),
-		roFloat64Addrs: make(map[uint64]int),
-		functionLinks:  make(map[*Callable]*links.L),
+		module:        m,
+		roDataAddr:    int(roDataAddr),
+		functionLinks: make(map[*Callable]*links.L),
 	}
 
 	if len(m.Table) > 0 {
@@ -642,42 +637,7 @@ func (code *coder) exprConst(exprName string, opType types.T, args []interface{}
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	imm := values.ParseImm(opType, args[0])
-
-	// TODO: possible optimization: move RODataOperands to registers in
-	//       opPushLiveOperand(), using a RegVar-like operand type.
-
-	switch opType {
-	case types.F32:
-		if bits := imm.Imm(opType).(uint32); bits != 0 {
-			addr, found := code.roFloat32Addrs[bits]
-			if !found {
-				alloc := code.roData.allocate(4, 4, func(data []byte) {
-					mach.ByteOrder().PutUint32(data, bits)
-				})
-				code.roFloat32Addrs[bits] = alloc.addr
-				addr = alloc.addr
-			}
-
-			return values.RODataOperand(addr)
-		}
-
-	case types.F64:
-		if bits := imm.Imm(opType).(uint64); bits != 0 {
-			addr, found := code.roFloat64Addrs[bits]
-			if !found {
-				alloc := code.roData.allocate(8, 8, func(data []byte) {
-					mach.ByteOrder().PutUint64(data, bits)
-				})
-				code.roFloat64Addrs[bits] = alloc.addr
-				addr = alloc.addr
-			}
-
-			return values.RODataOperand(addr)
-		}
-	}
-
-	return imm
+	return values.ParseImm(opType, args[0])
 }
 
 func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
@@ -1352,7 +1312,7 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 		}
 		result = values.VarOperand(index)
 
-	case values.Imm, values.ROData:
+	case values.Imm:
 		result = v.cache
 
 	case values.VarReg:
@@ -1693,7 +1653,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	}
 
 	switch result.Storage {
-	case values.Imm, values.ROData:
+	case values.Imm:
 		v.cache = result
 		v.dirty = true
 
@@ -1756,7 +1716,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	}
 
 	switch oldCache.Storage {
-	case values.Nowhere, values.Imm, values.ROData:
+	case values.Nowhere, values.Imm:
 
 	case values.VarReg:
 		code.FreeReg(resultType, oldCache.Reg())
@@ -1999,7 +1959,7 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 	}
 
 	switch ref.Storage {
-	case values.Nowhere, values.Imm, values.ROData:
+	case values.Nowhere, values.Imm:
 		return
 
 	case values.Var:
@@ -2027,7 +1987,7 @@ func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
 
 func (code *coder) popLiveOperand(ref *values.Operand) {
 	switch ref.Storage {
-	case values.Nowhere, values.Imm, values.ROData:
+	case values.Nowhere, values.Imm:
 
 	case values.Var:
 		v := &code.vars[ref.Index()]
@@ -2088,7 +2048,7 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 		typeMatch := (live.typ.Category() == needType.Category())
 
 		switch live.ref.Storage {
-		case values.Imm, values.ROData:
+		case values.Imm:
 
 		case values.Var:
 			index := live.ref.Index()
@@ -2154,7 +2114,7 @@ func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
 
 	for _, live := range code.liveOperands[code.immutableLiveOperands:] {
 		switch live.ref.Storage {
-		case values.Imm, values.ROData:
+		case values.Imm:
 
 		case values.Var:
 			if live.typ.Category() != needType.Category() {
