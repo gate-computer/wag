@@ -32,6 +32,7 @@ type RegCoder interface {
 	Coder
 
 	TryAllocReg(t types.T) (reg regs.R, ok bool)
+	AllocSpecificReg(t types.T, reg regs.R)
 }
 
 type TrapLinks struct {

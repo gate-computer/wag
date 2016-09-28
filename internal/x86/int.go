@@ -512,27 +512,44 @@ func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {
 func (mach X86) binaryIntShiftOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
 	insn := binaryIntShiftInsns[name]
 
-	targetReg, _ := mach.opMaybeResultReg(code, t, a, true)
-	if targetReg == regShiftCount {
-		Mov.opFromReg(code, t, regResult, targetReg)
-		code.FreeReg(t, targetReg)
-		targetReg = regResult
-	}
+	var targetReg regs.R
 
 	switch b.Storage {
 	case values.Imm:
+		targetReg, _ = mach.opMaybeResultReg(code, t, a, true)
 		insn.imm.op(code, t, targetReg, int(b.ImmValue(t)))
 
 	default:
-		if reg, _, ok := b.CheckAnyReg(); !ok || reg != regShiftCount {
-			if code.RegAllocated(types.I32, regShiftCount) {
-				Mov.opFromReg(code, types.I64, regScratch, regShiftCount)
-				defer Mov.opFromReg(code, types.I64, regShiftCount, regScratch)
+		move := true
+
+		if code.RegAllocated(types.I32, regShiftCount) {
+			targetReg, _ = mach.opMaybeResultReg(code, t, a, true)
+			if targetReg == regShiftCount {
+				Mov.opFromReg(code, t, regResult, regShiftCount)
+				targetReg = regResult
+
+				defer code.FreeReg(types.I32, regShiftCount)
+			} else {
+				if reg, _, ok := b.CheckAnyReg(); ok && reg == regShiftCount {
+					// already there
+					move = false
+				} else {
+					// unknown operand in regShiftCount
+					Mov.opFromReg(code, types.I64, regScratch, regShiftCount)
+					defer Mov.opFromReg(code, types.I64, regShiftCount, regScratch)
+				}
 			}
 
-			mach.OpMove(code, types.I32, regShiftCount, b, false) // TODO: 8-bit mov
+		} else {
+			code.AllocSpecificReg(types.I32, regShiftCount)
+			defer code.FreeReg(types.I32, regShiftCount)
+
+			targetReg, _ = mach.opMaybeResultReg(code, t, a, true)
 		}
 
+		if move {
+			mach.OpMove(code, types.I32, regShiftCount, b, false) // TODO: 8-bit mov
+		}
 		insn.opReg(code, t, targetReg)
 	}
 

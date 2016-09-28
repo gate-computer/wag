@@ -1781,6 +1781,10 @@ func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
 	return code.regs(t).allocate()
 }
 
+func (code *coder) AllocSpecificReg(t types.T, reg regs.R) {
+	code.regs(t).allocateSpecific(reg)
+}
+
 func (code *coder) opAllocReg(t types.T) (reg regs.R) {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
