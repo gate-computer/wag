@@ -268,31 +268,31 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 	end := new(links.L)
 	code.pushTarget(end, "", f.Signature.Result, true)
 
-	var result values.Operand
-	var resultType types.T
 	var deadend bool
 
 	for i, x := range f.body {
 		final := i == len(f.body)-1
 
-		var t types.T
+		var expectType types.T
 		if final {
-			t = f.Signature.Result
+			expectType = f.Signature.Result
 		}
 
-		result, resultType, deadend = code.expr(x, t, final)
+		var resultType types.T
+		var result values.Operand
+
+		result, resultType, deadend = code.expr(x, expectType, final)
 		if deadend {
 			mach.OpAbort(code)
 			break
 		}
 
-		if i < len(f.body)-1 {
+		if final && f.Signature.Result != types.Void {
+			code.opMove(f.Signature.Result, mach.ResultReg(), result, false)
+		} else {
 			code.Discard(resultType, result)
+			result = values.NoOperand
 		}
-	}
-
-	if !deadend {
-		code.opMove(f.Signature.Result, mach.ResultReg(), result, false)
 	}
 
 	if code.popTarget() {
@@ -358,7 +358,7 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
-		fmt.Printf("<%s>\n", exprName)
+		fmt.Printf("<%s expect=\"%s\">\n", exprName, expectType)
 	}
 	debugExprDepth++
 
@@ -813,7 +813,7 @@ func (code *coder) exprConversionOp(exprName string, resultType, opType types.T,
 	return
 }
 
-func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, before *links.L, final bool) (result values.Operand, deadend bool) {
+func (code *coder) exprBlock(exprName string, args []interface{}, blockType types.T, before *links.L, final bool) (result values.Operand, deadend bool) {
 	var afterName string
 	var beforeName string
 
@@ -832,28 +832,31 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 	}
 
 	after := new(links.L)
-	code.pushTarget(after, afterName, expectType, final)
+	code.pushTarget(after, afterName, blockType, final)
 
 	if before != nil {
 		code.pushTarget(before, beforeName, types.Void, false)
 	}
 
-	var resultType types.T
-
 	for i, arg := range args {
-		var t types.T
-		if i == len(args)-1 {
-			t = expectType
+		final := (i == len(args)-1)
+
+		var expectType types.T
+		if final {
+			expectType = blockType
 		}
 
-		result, resultType, deadend = code.expr(arg, t, false)
+		var resultType types.T
+
+		result, resultType, deadend = code.expr(arg, expectType, false)
 		if deadend {
 			mach.OpAbort(code)
 			break
 		}
 
-		if i < len(args)-1 {
+		if !final || blockType == types.Void {
 			code.Discard(resultType, result)
+			result = values.NoOperand
 		}
 	}
 
@@ -862,16 +865,14 @@ func (code *coder) exprBlock(exprName string, args []interface{}, expectType typ
 	}
 
 	if code.popTarget() {
-		zeroExt := false
-
-		if deadend {
-			deadend = false
-		} else {
-			zeroExt = code.opMove(expectType, mach.ResultReg(), result, false)
+		if !deadend && blockType != types.Void {
+			code.opMove(blockType, mach.ResultReg(), result, false)
 		}
 
-		if expectType != types.Void {
-			result = values.TempRegOperand(mach.ResultReg(), zeroExt)
+		deadend = false
+
+		if blockType != types.Void {
+			result = values.TempRegOperand(mach.ResultReg(), false)
 		}
 
 		code.opLabel(after)
@@ -971,10 +972,17 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	var valueOperand values.Operand
 
 	if valueExpr != nil {
-		valueOperand, _, deadend = code.expr(valueExpr, valueType, false)
+		var resultType types.T
+
+		valueOperand, resultType, deadend = code.expr(valueExpr, valueType, false)
 		if deadend {
 			mach.OpAbort(code)
 			return
+		}
+
+		if valueType == types.Void {
+			code.Discard(resultType, valueOperand)
+			valueOperand = values.NoOperand
 		}
 	}
 
@@ -989,7 +997,9 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 	}
 
-	code.opMove(valueType, mach.ResultReg(), valueOperand, true)
+	if valueType != types.Void {
+		code.opMove(valueType, mach.ResultReg(), valueOperand, true)
+	}
 
 	switch exprName {
 	case "br":
@@ -1431,7 +1441,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	return
 }
 
-func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType types.T, final bool) (deadend, endReached bool) {
+func (code *coder) ifExprs(x interface{}, name string, end *links.L, ifType types.T, final bool) (deadend, endReached bool) {
 	args := x.([]interface{})
 
 	var endName string
@@ -1449,42 +1459,45 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType 
 		}
 	}
 
-	code.pushTarget(end, endName, expectType, final)
-
-	var result values.Operand
-	var resultType types.T
-
 	if len(args) > 0 {
+		code.pushTarget(end, endName, ifType, final)
+
+		var result values.Operand
+		var resultType types.T
+
 		switch args[0].(type) {
 		case string:
-			result, _, deadend = code.expr(args, expectType, false)
+			result, resultType, deadend = code.expr(args, ifType, false)
 
 		case []interface{}:
 			for i, expr := range args {
-				var t types.T
-				if i == len(args)-1 {
-					t = expectType
+				final := (i == len(args)-1)
+
+				var expectType types.T
+				if final {
+					expectType = ifType
 				}
 
-				result, resultType, deadend = code.expr(expr, t, false)
+				result, resultType, deadend = code.expr(expr, expectType, false)
 				if deadend {
 					break
 				}
 
-				if i < len(args)-1 {
+				if !final || ifType == types.Void {
 					code.Discard(resultType, result)
+					result = values.NoOperand
 				}
 			}
 		}
-	}
 
-	if deadend {
-		mach.OpAbort(code)
-	} else {
-		code.opMove(expectType, mach.ResultReg(), result, false)
-	}
+		if deadend {
+			mach.OpAbort(code)
+		} else if ifType != types.Void {
+			code.opMove(ifType, mach.ResultReg(), result, false)
+		}
 
-	endReached = code.popTarget()
+		endReached = code.popTarget()
+	}
 
 	return
 }
@@ -1508,20 +1521,26 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
-	t := code.function.Signature.Result
+	funcType := code.function.Signature.Result
 
-	if t != types.Void && len(args) == 0 {
+	if funcType != types.Void && len(args) == 0 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
 	if len(args) > 0 {
-		x, _, deadend := code.expr(args[0], t, true)
+		var resultType types.T
+
+		x, resultType, deadend := code.expr(args[0], funcType, true)
 		if deadend {
 			mach.OpAbort(code)
 			return
 		}
 
-		code.opMove(t, mach.ResultReg(), x, false)
+		if funcType == types.Void {
+			code.Discard(resultType, x)
+		} else {
+			code.opMove(funcType, mach.ResultReg(), x, false)
+		}
 	}
 
 	mach.OpAddImmToStackPtr(code, code.stackOffset)
@@ -1895,8 +1914,11 @@ func (code *coder) AddIndirectCallSite() {
 }
 
 func (code *coder) opMove(t types.T, target regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
-	if t == types.Void || x.Storage == values.Nowhere {
-		return
+	if t == types.Void && x.Storage != values.Nowhere {
+		panic(x)
+	}
+	if t != types.Void && x.Storage == values.Nowhere {
+		panic(t)
 	}
 
 	x = code.effectiveOperand(x)
