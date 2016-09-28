@@ -1630,6 +1630,13 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	v := &code.vars[index]
 	oldCache := v.cache
 
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- set_local refcount=%d -->\n", v.refCount)
+	}
+
 	if v.refCount > 0 {
 		switch oldCache.Storage {
 		case values.Nowhere, values.VarReg:
@@ -1994,6 +2001,13 @@ func (code *coder) Discard(t types.T, x values.Operand) {
 }
 
 func (code *coder) opPushLiveOperand(t types.T, ref *values.Operand) {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- push live operand -->\n")
+	}
+
 	switch ref.Storage {
 	case values.Nowhere, values.Imm, values.ROData:
 		return
@@ -2051,10 +2065,24 @@ func (code *coder) popLiveOperand(ref *values.Operand) {
 	default:
 		panic(*ref)
 	}
+
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- pop live operand -->\n")
+	}
 }
 
 // opStealReg doesn't change the allocation state of the register.
 func (code *coder) opStealReg(needType types.T) (reg regs.R) {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- stealing %s register -->\n", needType)
+	}
+
 	// first, try to commit unreferenced variable from register to stack
 
 	reg, ok := code.opTryStealUnusedVarReg(needType)
@@ -2102,8 +2130,7 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 
 			found = typeMatch
 			reg = live.ref.Reg()
-			x := code.effectiveOperand(*live.ref)
-			mach.OpPush(code, live.typ, x)
+			mach.OpPushIntReg(code, reg)
 			code.incrementStackOffset()
 			*live.ref = values.StackOperand
 
@@ -2123,6 +2150,13 @@ func (code *coder) opStealReg(needType types.T) (reg regs.R) {
 
 // opTryStealVarReg doesn't change the allocation state of the register.
 func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- trying to steal %s register -->\n", needType)
+	}
+
 	reg, ok = code.opTryStealUnusedVarReg(needType)
 	if ok {
 		return
@@ -2179,6 +2213,13 @@ func (code *coder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
 // opTryStealUnusedVarReg doesn't change the allocation state of the register.
 // Locals must have been pushed already.
 func (code *coder) opTryStealUnusedVarReg(needType types.T) (reg regs.R, ok bool) {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- trying to steal unused %s variable register -->\n", needType)
+	}
+
 	var i int
 	var v *varState
 	var t types.T
@@ -2206,6 +2247,13 @@ found:
 }
 
 func (code *coder) opSaveTempRegOperands() {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- saving temporary register operands -->\n")
+	}
+
 	pushed := false
 
 	for _, live := range code.liveOperands[code.immutableLiveOperands:] {
@@ -2232,6 +2280,13 @@ func (code *coder) opSaveTempRegOperands() {
 
 // opStoreRegVars is only safe when there are no live Var operands.
 func (code *coder) opStoreRegVars(forget bool) {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- storing register variables with forget=%v -->\n", forget)
+	}
+
 	for i := range code.vars {
 		v := &code.vars[i]
 		t := code.varType(i)
@@ -2251,6 +2306,13 @@ func (code *coder) opStoreRegVars(forget bool) {
 }
 
 func (code *coder) opStoreVar(t types.T, index int, x values.Operand) {
+	if verbose {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- storing %s variable #%d from %s -->\n", t, index, x)
+	}
+
 	x = code.effectiveOperand(x)
 	if local := index - len(code.function.Params); local >= code.pushedLocals {
 		code.opInitLocalsUntil(local, x)

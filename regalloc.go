@@ -73,6 +73,14 @@ func (ra *regAllocator) free(reg regs.R) {
 
 func (ra *regAllocator) allocated(reg regs.R) bool {
 	mask := uint64(1 << uint(reg))
+
+	if verboseRegAlloc {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- reg check %s -->\n", reg)
+	}
+
 	return (ra.alloc & mask) != 0
 }
 
