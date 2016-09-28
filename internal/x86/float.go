@@ -40,7 +40,7 @@ var (
 	Cvts2sSSE = insnPrefix{ScalarSize, []byte{0x0f, 0x5a}, nil} // convert float to float
 	SubsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5c}, nil}
 	DivsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
-	MovSSE    = insnPrefix{Prefixes{Prefix{0x66}, Rex}, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
+	MovSSE    = insnPrefix{Prefixes{Prefix{0x66}, RexSize}, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
 
 	Cvtsi2sSSE  = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2a}}
 	CvttsSSE2si = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2c}}

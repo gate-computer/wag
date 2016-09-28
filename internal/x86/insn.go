@@ -25,10 +25,11 @@ func (array Prefixes) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byt
 }
 
 const (
-	rexW = (1 << 6) | (1 << 3)
-	rexR = (1 << 6) | (1 << 2)
-	rexX = (1 << 6) | (1 << 1)
-	rexB = (1 << 6) | (1 << 0)
+	rex  = (1 << 6)
+	rexW = rex | (1 << 3)
+	rexR = rex | (1 << 2)
+	rexX = rex | (1 << 1)
+	rexB = rex | (1 << 0)
 )
 
 func writeRexTo(code gen.Coder, rex, ro, index, rmOrBase byte) {

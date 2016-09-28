@@ -117,8 +117,8 @@ var (
 	Setle = insnRexOM{[]byte{0x0f, 0x9e}, 0}
 	Setg  = insnRexOM{[]byte{0x0f, 0x9f}, 0}
 
-	Lea     = insnPrefix{Rex, []byte{0x8d}, nil}
-	MovqMMX = insnPrefix{Rex, nil, []byte{0x0f, 0x7e}}
+	Lea     = insnPrefix{RexSize, []byte{0x8d}, nil}
+	MovqMMX = insnPrefix{RexSize, nil, []byte{0x0f, 0x7e}}
 )
 
 var conditionInsns = []struct {

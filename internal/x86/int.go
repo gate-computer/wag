@@ -8,29 +8,30 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-type rexPrefix struct{}
+type rexPrefix byte
 
-func (rexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (rex rexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+	writeRexTo(code, byte(rex), ro, index, rmOrBase)
+}
+
+type rexSizePrefix struct{}
+
+func (rexSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
 	writeRexSizeTo(code, t, ro, index, rmOrBase)
 }
 
-type rexWPrefix struct{}
+type data16RexSizePrefix struct{}
 
-func (rexWPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
-	writeRexTo(code, rexW, ro, index, rmOrBase)
-}
-
-type data16RexPrefix struct{}
-
-func (data16RexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (data16RexSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
 	code.WriteByte(0x66)
 	writeRexSizeTo(code, t, ro, index, rmOrBase)
 }
 
 var (
-	Rex       rexPrefix
-	RexW      rexWPrefix
-	Data16Rex data16RexPrefix
+	Rex           = rexPrefix(rex)
+	RexW          = rexPrefix(rexW)
+	RexSize       rexSizePrefix
+	Data16RexSize data16RexSizePrefix
 )
 
 var (
@@ -46,64 +47,63 @@ var (
 	Shr  = insnRexM{[]byte{0xd3}, 5}
 	Sar  = insnRexM{[]byte{0xd3}, 7}
 
-	Test    = insnPrefix{Rex, []byte{0x85}, nil}
-	Xchg    = insnPrefix{Rex, []byte{0x87}, []byte{0x87}}
-	Cmovb   = insnPrefix{Rex, []byte{0x0f, 0x42}, nil}
-	Cmovae  = insnPrefix{Rex, []byte{0x0f, 0x43}, nil}
-	Cmove   = insnPrefix{Rex, []byte{0x0f, 0x44}, nil}
-	Cmovne  = insnPrefix{Rex, []byte{0x0f, 0x45}, nil}
-	Cmovbe  = insnPrefix{Rex, []byte{0x0f, 0x46}, nil}
-	Cmova   = insnPrefix{Rex, []byte{0x0f, 0x47}, nil}
-	Cmovl   = insnPrefix{Rex, []byte{0x0f, 0x4c}, nil}
-	Cmovge  = insnPrefix{Rex, []byte{0x0f, 0x4d}, nil}
-	Cmovle  = insnPrefix{Rex, []byte{0x0f, 0x4e}, nil}
-	Cmovg   = insnPrefix{Rex, []byte{0x0f, 0x4f}, nil}
-	Movzx8  = insnPrefix{Rex, []byte{0x0f, 0xb6}, nil}
-	Movzx16 = insnPrefix{Rex, []byte{0x0f, 0xb7}, nil}
-	Bsf     = insnPrefix{Rex, []byte{0x0f, 0xbc}, nil}
-	Bsr     = insnPrefix{Rex, []byte{0x0f, 0xbd}, nil}
-	Movsx8  = insnPrefix{Rex, []byte{0x0f, 0xbe}, nil}
-	Movsx16 = insnPrefix{Rex, []byte{0x0f, 0xbf}, nil}
+	Test    = insnPrefix{RexSize, []byte{0x85}, nil}
+	Xchg    = insnPrefix{RexSize, []byte{0x87}, []byte{0x87}}
+	Cmovb   = insnPrefix{RexSize, []byte{0x0f, 0x42}, nil}
+	Cmovae  = insnPrefix{RexSize, []byte{0x0f, 0x43}, nil}
+	Cmove   = insnPrefix{RexSize, []byte{0x0f, 0x44}, nil}
+	Cmovne  = insnPrefix{RexSize, []byte{0x0f, 0x45}, nil}
+	Cmovbe  = insnPrefix{RexSize, []byte{0x0f, 0x46}, nil}
+	Cmova   = insnPrefix{RexSize, []byte{0x0f, 0x47}, nil}
+	Cmovl   = insnPrefix{RexSize, []byte{0x0f, 0x4c}, nil}
+	Cmovge  = insnPrefix{RexSize, []byte{0x0f, 0x4d}, nil}
+	Cmovle  = insnPrefix{RexSize, []byte{0x0f, 0x4e}, nil}
+	Cmovg   = insnPrefix{RexSize, []byte{0x0f, 0x4f}, nil}
+	Movzx8  = insnPrefix{RexSize, []byte{0x0f, 0xb6}, nil}
+	Movzx16 = insnPrefix{RexSize, []byte{0x0f, 0xb7}, nil}
+	Bsf     = insnPrefix{RexSize, []byte{0x0f, 0xbc}, nil}
+	Bsr     = insnPrefix{RexSize, []byte{0x0f, 0xbd}, nil}
+	Movsx8  = insnPrefix{RexSize, []byte{0x0f, 0xbe}, nil}
+	Movsx16 = insnPrefix{RexSize, []byte{0x0f, 0xbf}, nil}
 	Movsxd  = insnPrefix{RexW, []byte{0x63}, nil} // variable rexR, rexX and rexB
-	Popcnt  = insnPrefix{Prefixes{Prefix{0xf3}, Rex}, []byte{0x0f, 0xb8}, nil}
+	Popcnt  = insnPrefix{Prefixes{Prefix{0xf3}, RexSize}, []byte{0x0f, 0xb8}, nil}
 
-	MovImm   = insnPrefixMI{Rex, 0, 0, 0xc7, 0}
-	CmpImm16 = insnPrefixMI{Data16Rex, 0, 0x81, 0, 7}
+	MovImm = insnPrefixMI{RexSize, 0, 0, 0xc7, 0}
 
 	Add = binaryInsn{
-		insnPrefix{Rex, []byte{0x03}, nil},
-		insnPrefixMI{Rex, 0x83, 0, 0x81, 0},
+		insnPrefix{RexSize, []byte{0x03}, nil},
+		insnPrefixMI{RexSize, 0x83, 0, 0x81, 0},
 	}
 	Or = binaryInsn{
-		insnPrefix{Rex, []byte{0x0b}, nil},
-		insnPrefixMI{Rex, 0x83, 0, 0x81, 1},
+		insnPrefix{RexSize, []byte{0x0b}, nil},
+		insnPrefixMI{RexSize, 0x83, 0, 0x81, 1},
 	}
 	And = binaryInsn{
-		insnPrefix{Rex, []byte{0x23}, nil},
-		insnPrefixMI{Rex, 0x83, 0, 0x81, 4},
+		insnPrefix{RexSize, []byte{0x23}, nil},
+		insnPrefixMI{RexSize, 0x83, 0, 0x81, 4},
 	}
 	Sub = binaryInsn{
-		insnPrefix{Rex, []byte{0x2b}, nil},
-		insnPrefixMI{Rex, 0x83, 0, 0x81, 5},
+		insnPrefix{RexSize, []byte{0x2b}, nil},
+		insnPrefixMI{RexSize, 0x83, 0, 0x81, 5},
 	}
 	Xor = binaryInsn{
-		insnPrefix{Rex, []byte{0x33}, nil},
-		insnPrefixMI{Rex, 0x83, 0, 0x81, 6},
+		insnPrefix{RexSize, []byte{0x33}, nil},
+		insnPrefixMI{RexSize, 0x83, 0, 0x81, 6},
 	}
 	Cmp = binaryInsn{
-		insnPrefix{Rex, []byte{0x3b}, nil},
-		insnPrefixMI{Rex, 0x83, 0, 0x81, 7},
+		insnPrefix{RexSize, []byte{0x3b}, nil},
+		insnPrefixMI{RexSize, 0x83, 0, 0x81, 7},
 	}
 	Mov8 = binaryInsn{
 		insnPrefix{Rex, []byte{0x8a}, []byte{0x88}},
-		insnPrefixMI{Rex, 0xc6, 0, 0, 0},
+		insnPrefixMI{RexSize, 0xc6, 0, 0, 0},
 	}
 	Mov16 = binaryInsn{
-		insnPrefix{Data16Rex, []byte{0x8b}, []byte{0x89}},
-		insnPrefixMI{Data16Rex, 0, 0xc7, 0, 0},
+		insnPrefix{Data16RexSize, []byte{0x8b}, []byte{0x89}},
+		insnPrefixMI{Data16RexSize, 0, 0xc7, 0, 0},
 	}
 	Mov = binaryInsn{
-		insnPrefix{Rex, []byte{0x8b}, []byte{0x89}},
+		insnPrefix{RexSize, []byte{0x8b}, []byte{0x89}},
 		MovImm,
 	}
 
@@ -118,23 +118,23 @@ var (
 
 	RolImm = shiftImmInsn{
 		insnRexM{[]byte{0xd1}, 0},
-		insnPrefixMI{Rex, 0xc1, 0, 0, 0},
+		insnPrefixMI{RexSize, 0xc1, 0, 0, 0},
 	}
 	RorImm = shiftImmInsn{
 		insnRexM{[]byte{0xd1}, 1},
-		insnPrefixMI{Rex, 0xc1, 0, 0, 1},
+		insnPrefixMI{RexSize, 0xc1, 0, 0, 1},
 	}
 	ShlImm = shiftImmInsn{
 		insnRexM{[]byte{0xd1}, 4},
-		insnPrefixMI{Rex, 0xc1, 0, 0, 4},
+		insnPrefixMI{RexSize, 0xc1, 0, 0, 4},
 	}
 	ShrImm = shiftImmInsn{
 		insnRexM{[]byte{0xd1}, 5},
-		insnPrefixMI{Rex, 0xc1, 0, 0, 5},
+		insnPrefixMI{RexSize, 0xc1, 0, 0, 5},
 	}
 	SarImm = shiftImmInsn{
 		insnRexM{[]byte{0xd1}, 7},
-		insnPrefixMI{Rex, 0xc1, 0, 0, 7},
+		insnPrefixMI{RexSize, 0xc1, 0, 0, 7},
 	}
 
 	MovImm64 = movImmInsn{
