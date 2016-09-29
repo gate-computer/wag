@@ -84,7 +84,9 @@ var binaryFloatInsns = map[string]insnPrefix{
 
 var binaryFloatConditions = map[string]values.Condition{
 	"eq": values.OrderedAndEQ,
+	"ge": values.OrderedAndGE,
 	"gt": values.OrderedAndGT,
+	"le": values.OrderedAndLE,
 	"lt": values.OrderedAndLT,
 	"ne": values.UnorderedOrNE,
 }
