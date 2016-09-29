@@ -99,7 +99,7 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 				addr := uint32(code.functionLinks[f].FinalAddress())
 				sigId := uint32(f.Signature.Index)
 				packed := (uint64(sigId) << 32) | uint64(addr)
-				mach.ByteOrder().PutUint64(data[:8], packed)
+				binary.LittleEndian.PutUint64(data[:8], packed)
 				data = data[8:]
 			}
 		})
@@ -138,7 +138,7 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 
 		addr := code.genImportTrampoline(im, impl)
 
-		if err := binary.Write(&funcMapBuf, mach.ByteOrder(), uint32(addr)); err != nil {
+		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(addr)); err != nil {
 			panic(err)
 		}
 	}
@@ -149,7 +149,7 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 	for _, f := range m.Functions {
 		addr := code.genFunction(f)
 
-		if err := binary.Write(&funcMapBuf, mach.ByteOrder(), uint32(addr)); err != nil {
+		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(addr)); err != nil {
 			panic(err)
 		}
 	}
@@ -1081,12 +1081,12 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 				addr := uint32(target.label.FinalAddress())
 
 				if commonStackOffset >= 0 {
-					mach.ByteOrder().PutUint32(data[:4], addr)
+					binary.LittleEndian.PutUint32(data[:4], addr)
 					data = data[4:]
 				} else {
 					delta := tableStackOffset - target.stackOffset
 					packed := (uint64(uint32(delta)) << 32) | uint64(addr)
-					mach.ByteOrder().PutUint64(data[:8], packed)
+					binary.LittleEndian.PutUint64(data[:8], packed)
 					data = data[8:]
 				}
 			}
@@ -1189,7 +1189,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 
 	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, sig, args)
 	if deadend {
-		code.stackOffset -= mach.WordSize() // pop func ptr
+		code.stackOffset -= gen.WordSize // pop func ptr
 		mach.OpAbort(code)
 		return
 	}
@@ -1220,7 +1220,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 
 	doCall.SetAddress(code.Len())
 	mach.OpCallIndirect32(code, mach.ResultReg())
-	code.opAddImmToStackPtr(argsSize + mach.WordSize()) // args + index operand
+	code.opAddImmToStackPtr(argsSize + gen.WordSize) // args + index operand
 	return
 }
 
@@ -1248,7 +1248,7 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 	}
 
 	// account for the return address
-	if n := code.stackOffset + mach.WordSize(); n > code.maxStackOffset {
+	if n := code.stackOffset + gen.WordSize; n > code.maxStackOffset {
 		code.maxStackOffset = n
 	}
 
@@ -1842,7 +1842,7 @@ func (code *coder) opInitLocalsUntil(lastLocal int, lastValue values.Operand) {
 }
 
 func (code *coder) incrementStackOffset() {
-	code.stackOffset += mach.WordSize()
+	code.stackOffset += gen.WordSize
 	if code.stackOffset > code.maxStackOffset {
 		code.maxStackOffset = code.stackOffset
 	}
@@ -1889,9 +1889,9 @@ func (code *coder) AddCallSite(l *links.L) {
 
 func (code *coder) AddIndirectCallSite() {
 	retAddr := code.Len()
-	stackOffset := code.stackOffset + mach.WordSize()
+	stackOffset := code.stackOffset + gen.WordSize
 	entry := (uint64(stackOffset) << 32) | uint64(retAddr)
-	if err := binary.Write(&code.callMap, mach.ByteOrder(), uint64(entry)); err != nil {
+	if err := binary.Write(&code.callMap, binary.LittleEndian, uint64(entry)); err != nil {
 		panic(err)
 	}
 }
@@ -1950,7 +1950,7 @@ func (code *coder) Consumed(t types.T, x values.Operand) {
 		code.FreeReg(t, x.Reg())
 
 	case values.Stack:
-		code.stackOffset -= mach.WordSize()
+		code.stackOffset -= gen.WordSize
 	}
 }
 
@@ -1960,7 +1960,7 @@ func (code *coder) Discard(t types.T, x values.Operand) {
 		code.FreeReg(t, x.Reg())
 
 	case values.Stack:
-		code.opAddImmToStackPtr(mach.WordSize())
+		code.opAddImmToStackPtr(gen.WordSize)
 	}
 }
 
@@ -2313,7 +2313,7 @@ func (code *coder) pushTarget(l *links.L, name string, expectType types.T, funct
 	if code.pushedLocals < len(code.function.Locals) {
 		// init still in progress, but any branch expressions will have
 		// initialized all locals
-		offset = len(code.function.Locals) * mach.WordSize()
+		offset = len(code.function.Locals) * gen.WordSize
 	}
 
 	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, offset, functionEnd})
@@ -2359,10 +2359,10 @@ func (code *coder) effectiveVarStackOffset(index int) int {
 	if index < len(code.function.Params) {
 		pos := len(code.function.Params) - index - 1
 		// account for the function return address
-		offset = code.stackOffset + mach.WordSize() + pos*mach.WordSize()
+		offset = code.stackOffset + gen.WordSize + pos*gen.WordSize
 	} else {
 		index -= len(code.function.Params)
-		offset = code.stackOffset - (index+1)*mach.WordSize()
+		offset = code.stackOffset - (index+1)*gen.WordSize
 	}
 
 	if offset < 0 {

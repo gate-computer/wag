@@ -382,7 +382,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 					mach.OpMove(code, t, regScratch, b, true)
 
 					Push.op(code, regTextBase)
-					code.AddStackUsage(wordSize)
+					code.AddStackUsage(gen.WordSize)
 					defer Pop.op(code, regTextBase)
 
 					reg = regTextBase
@@ -417,7 +417,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 			mach.OpMove(code, t, regScratch, b, true)
 
 			Push.op(code, regTextBase)
-			code.AddStackUsage(wordSize)
+			code.AddStackUsage(gen.WordSize)
 			defer Pop.op(code, regTextBase)
 
 			reg = regTextBase

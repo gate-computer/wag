@@ -154,11 +154,11 @@ func (mach X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b va
 }
 
 func pushFloatOp(code gen.Coder, t types.T, source regs.R) {
-	Sub.opImm(code, types.I64, regStackPtr, wordSize)
+	Sub.opImm(code, types.I64, regStackPtr, gen.WordSize)
 	MovsSSE.opToStack(code, t, source, 0)
 }
 
 func popFloatOp(code gen.Coder, t types.T, target regs.R) {
 	MovsSSE.opFromStack(code, t, target, 0)
-	Add.opImm(code, types.I64, regStackPtr, wordSize)
+	Add.opImm(code, types.I64, regStackPtr, gen.WordSize)
 }

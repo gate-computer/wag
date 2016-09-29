@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	wordSize          = 8
 	functionAlignment = 16
 
 	paddingByte = 0xcc // int3 instruction
@@ -75,10 +74,6 @@ var availableFloatRegs = gen.RegMask(
 	true,  // xmm13
 	true,  // xmm14
 	true,  // xmm15
-)
-
-var (
-	byteOrder = binary.LittleEndian
 )
 
 var (
@@ -170,12 +165,10 @@ var nopSequences = [][]byte{
 
 type X86 struct{}
 
-func (mach X86) WordSize() int               { return wordSize }
-func (mach X86) ByteOrder() binary.ByteOrder { return binary.LittleEndian }
-func (mach X86) FunctionAlignment() int      { return functionAlignment }
-func (mach X86) ResultReg() regs.R           { return regResult }
-func (mach X86) AvailableIntRegs() uint32    { return availableIntRegs }
-func (mach X86) AvailableFloatRegs() uint32  { return availableFloatRegs }
+func (mach X86) FunctionAlignment() int     { return functionAlignment }
+func (mach X86) ResultReg() regs.R          { return regResult }
+func (mach X86) AvailableIntRegs() uint32   { return availableIntRegs }
+func (mach X86) AvailableFloatRegs() uint32 { return availableFloatRegs }
 
 func (mach X86) RegGroupPreference(t types.T) int {
 	switch t {
@@ -274,11 +267,9 @@ func (mach X86) OpCallIndirect32(code gen.Coder, reg regs.R) {
 }
 
 func (mach X86) OpInit(code gen.Coder, start *links.L) {
-	// reserve space for trap handler call, and a bonus word for trap handler
-	// implementation
-	Add.opImm(code, types.I64, regStackLimit, wordSize*2)
+	Add.opImm(code, types.I64, regStackLimit, gen.StackReserve)
 
-	Add.opImm(code, types.I64, regStackPtr, wordSize) // overwrite return address
+	Add.opImm(code, types.I64, regStackPtr, gen.WordSize) // overwrite return address
 	CallRel.op(code, start.Address)
 	code.AddCallSite(start)
 }
@@ -706,7 +697,7 @@ func (mach X86) updateAddr(code gen.Coder, addr int, value int) {
 		panic(value)
 	}
 
-	byteOrder.PutUint32(code.Bytes()[addr-4:addr], uint32(value))
+	binary.LittleEndian.PutUint32(code.Bytes()[addr-4:addr], uint32(value))
 }
 
 func (mach X86) updateAddr8(code gen.Coder, addr int, value int) {

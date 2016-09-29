@@ -9,6 +9,11 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
+const (
+	WordSize     = 8              // stack entry size
+	StackReserve = WordSize + 128 // trap/import call return address + red zone
+)
+
 type Coder interface {
 	io.Writer
 	WriteByte(byte) error

@@ -32,7 +32,7 @@ func imm64(x int64) imm {
 
 func (imm imm) writeTo(code gen.Coder) {
 	if imm.value != nil {
-		if err := binary.Write(code, byteOrder, imm.value); err != nil {
+		if err := binary.Write(code, binary.LittleEndian, imm.value); err != nil {
 			panic(err)
 		}
 	}
