@@ -51,7 +51,6 @@ const (
 // func Test_float_misc(t *testing.T)                    { test(t, "float_misc") }
 // func Test_func_local_before_param_fail(t *testing.T)  { test(t, "func-local-before-param.fail") }
 // func Test_func_local_before_result_fail(t *testing.T) { test(t, "func-local-before-result.fail") }
-// func Test_func_ptrs(t *testing.T)                     { test(t, "func_ptrs") }
 // func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
 // func Test_get_local(t *testing.T)                     { test(t, "get_local") }
 // func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
@@ -59,11 +58,6 @@ const (
 // func Test_loop(t *testing.T)                          { test(t, "loop") }
 // func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }
 // func Test_names(t *testing.T)                         { test(t, "names") }
-// func Test_return(t *testing.T)                        { test(t, "return") }
-// func Test_set_local(t *testing.T)                     { test(t, "set_local") }
-// func Test_start(t *testing.T)                         { test(t, "start") }
-// func Test_store_retval(t *testing.T)                  { test(t, "store_retval") }
-// func Test_switch(t *testing.T)                        { test(t, "switch") }
 // func Test_traps(t *testing.T)                         { test(t, "traps") }
 
 func Test_address(t *testing.T)                         { test(t, "address") }
@@ -86,6 +80,7 @@ func Test_forward(t *testing.T)                         { test(t, "forward") }
 func Test_func(t *testing.T)                            { test(t, "func") }
 func Test_func_local_after_body_fail(t *testing.T)      { test(t, "func-local-after-body.fail") }
 func Test_func_param_after_body_fail(t *testing.T)      { test(t, "func-param-after-body.fail") }
+func Test_func_ptrs(t *testing.T)                       { test(t, "func_ptrs") }
 func Test_func_result_after_body_fail(t *testing.T)     { test(t, "func-result-after-body.fail") }
 func Test_i32(t *testing.T)                             { test(t, "i32") }
 func Test_i32_load32_s_fail(t *testing.T)               { test(t, "i32.load32_s.fail") }
@@ -112,7 +107,12 @@ func Test_of_string_overflow_s64_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_of_string_overflow_u32_fail(t *testing.T)     { test(t, "of_string-overflow-u32.fail") }
 func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-overflow-u64.fail") }
 func Test_resizing(t *testing.T)                        { test(t, "resizing") }
+func Test_return(t *testing.T)                          { test(t, "return") }
 func Test_select(t *testing.T)                          { test(t, "select") }
+func Test_set_local(t *testing.T)                       { test(t, "set_local") }
+func Test_start(t *testing.T)                           { test(t, "start") }
+func Test_store_retval(t *testing.T)                    { test(t, "store_retval") }
+func Test_switch(t *testing.T)                          { test(t, "switch") }
 func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 func Test_unreachable(t *testing.T)                     { test(t, "unreachable") }
 
@@ -150,14 +150,27 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 		return nil
 	}
 
+	if name := module[0].(string); name != "module" {
+		t.Logf("%s not supported", name)
+		return data
+	}
+
+	var realStartName string
 	exports := make(map[string]string)
 
 	for i := 1; i < len(module); {
 		item := module[i].([]interface{})
-		if item[0].(string) == "export" {
+
+		switch item[0].(string) {
+		case "start":
+			realStartName = item[1].(string)
+			module = append(module[:i], module[i+1:]...)
+
+		case "export":
 			exports[item[1].(string)] = item[2].(string)
 			module = append(module[:i], module[i+1:]...)
-		} else {
+
+		default:
 			i++
 		}
 	}
@@ -167,6 +180,25 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 		"$test",
 		[]interface{}{"param", "$arg", "i32"},
 		[]interface{}{"result", "i32"},
+	}
+
+	if realStartName != "" {
+		testFunc = append(testFunc, []interface{}{
+			"if",
+			[]interface{}{
+				"i32.eq",
+				[]interface{}{"get_local", "$arg"},
+				[]interface{}{"i32.const", "0"},
+			},
+			[]interface{}{
+				"block",
+				[]interface{}{"call", realStartName},
+				[]interface{}{
+					"return",
+					[]interface{}{"i32.const", "777"},
+				},
+			},
+		})
 	}
 
 	var idCount int
@@ -257,6 +289,27 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			test = []interface{}{
 				"block",
 				assert[1],
+				[]interface{}{
+					"return",
+					[]interface{}{"i32.const", "0"},
+				},
+			}
+
+		case "invoke":
+			n := assert[1].(string)
+			name, found := exports[n]
+			if !found {
+				panic(n)
+			}
+
+			spec = []interface{}{
+				"return",
+				[]interface{}{"i32.const", "2"},
+			}
+
+			test = []interface{}{
+				"block",
+				append([]interface{}{"call", name}, assert[2:]...),
 				[]interface{}{
 					"return",
 					[]interface{}{"i32.const", "0"},
@@ -473,6 +526,21 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 
 		importSigs := m.ImportTypes()
 
+		if realStartName != "" {
+			var printBuf bytes.Buffer
+			result, err := r.Run(0, importSigs, &printBuf)
+			if printBuf.Len() > 0 {
+				t.Logf("run: module %s: print:\n%s", filename, string(printBuf.Bytes()))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result != 777 {
+				t.Fatal(result)
+			}
+			t.Logf("run: module %s: start", filename)
+		}
+
 		for id := 1; id != idCount; id++ {
 			var printBuf bytes.Buffer
 			printBuf.WriteByte(10)
@@ -484,7 +552,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if assertType < -1 || assertType > 1 {
+			if assertType < -1 || assertType > 2 {
 				panic(assertType)
 			}
 
@@ -552,6 +620,14 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 
 					case 0:
 						t.Errorf("run: module %s: test #%d: FAIL", filename, id)
+
+					default:
+						t.Fatalf("run: module %s: test #%d: bad result: %d", filename, id, result)
+					}
+				} else if assertType == 2 {
+					switch result {
+					case 0:
+						t.Logf("run: module %s: test #%d: invoke", filename, id)
 
 					default:
 						t.Fatalf("run: module %s: test #%d: bad result: %d", filename, id, result)

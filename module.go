@@ -138,13 +138,15 @@ func loadModule(top []interface{}) (m *Module) {
 		case "func":
 			f := newFunction(m, expr)
 
-			i := sort.Search(len(sigs), func(i int) bool {
-				return sigs[i].Compare(f.Signature) >= 0
-			})
-			if i < len(sigs) && sigs[i].Compare(f.Signature) == 0 {
-				f.Signature = sigs[i]
-			} else {
-				newSig = f.Signature
+			if f.Signature.Index < 0 {
+				i := sort.Search(len(sigs), func(i int) bool {
+					return sigs[i].Compare(f.Signature) >= 0
+				})
+				if i < len(sigs) && sigs[i].Compare(f.Signature) == 0 {
+					f.Signature = sigs[i]
+				} else {
+					newSig = f.Signature
+				}
 			}
 
 			m.Functions = append(m.Functions, f)
@@ -159,7 +161,7 @@ func loadModule(top []interface{}) (m *Module) {
 
 		case "type":
 			var sigName string
-			newSig, sigName = newSignature(m, expr)
+			newSig, sigName = newSignature(m, expr[1:])
 			if sigName != "" {
 				m.NamedSignatures[sigName] = newSig
 			}
@@ -200,12 +202,13 @@ func loadModule(top []interface{}) (m *Module) {
 		}
 
 		if newSig != nil {
+			newSig.Index = len(sigs) // in order of appearance
+			m.Signatures = append(m.Signatures, newSig)
+			sort.Sort(m.Signatures)
+
 			i := sort.Search(len(sigs), func(i int) bool {
 				return sigs[i].Compare(newSig) >= 0
 			})
-
-			newSig.Index = len(sigs) // in order of appearance
-
 			sigs = append(sigs, nil)
 			copy(sigs[i+1:], sigs[i:])
 			sigs[i] = newSig
@@ -221,15 +224,20 @@ func loadModule(top []interface{}) (m *Module) {
 
 	for _, x := range tableTokens {
 		funcName := x.(string)
-		c, found := m.NamedCallables[funcName]
-		if !found {
-			panic(funcName)
+		var c *Callable
+
+		if i, err := strconv.Atoi(funcName); err == nil {
+			c = &m.Functions[i].Callable
+		} else {
+			var found bool
+			c, found = m.NamedCallables[funcName]
+			if !found {
+				panic(funcName)
+			}
 		}
+
 		m.Table = append(m.Table, c)
 	}
-
-	m.Signatures = SignaturesByIndex(sigs)
-	sort.Sort(m.Signatures)
 
 	return
 }
@@ -294,10 +302,12 @@ type Signature struct {
 }
 
 func newSignature(m *Module, list []interface{}) (sig *Signature, name string) {
-	f := newFunction(m, list[2].([]interface{}))
+	name, ok := list[0].(string)
+	if ok {
+		list = list[1:]
+	}
 
-	sig = f.Signature
-	name = list[1].(string)
+	sig = newFunction(m, list[0].([]interface{})).Signature
 	return
 }
 
@@ -412,6 +422,9 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 		list = list[1:]
 	}
 
+	var typeName *string
+
+loop:
 	for i, x := range list {
 		expr := x.([]interface{})
 		exprName := expr[0].(string)
@@ -471,34 +484,48 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 			}
 
 		case "type":
-			sigName := args[0].(string)
-			sig, found := m.NamedSignatures[sigName]
-			if !found {
-				panic(sigName)
-			}
-
-			for _, varType := range sig.Args {
-				numName := strconv.Itoa(len(f.Locals) + len(f.Params))
-
-				f.Vars[numName] = Var{
-					Param: true,
-					Index: len(f.Params),
-					Type:  varType,
-				}
-
-				f.Params = append(f.Params, varType)
-			}
-
-			f.Signature.Args = append(f.Signature.Args, sig.Args...)
-			f.Signature.Result = sig.Result
+			typeName = new(string)
+			*typeName = args[0].(string)
 
 		case "result":
 			f.Signature.Result = types.ByString[args[0].(string)]
 
 		default:
 			f.body = list[i:]
-			return
+			break loop
 		}
+	}
+
+	if typeName != nil {
+		var sig *Signature
+
+		if i, err := strconv.Atoi(*typeName); err == nil {
+			sig = m.Signatures[i]
+		} else {
+			var found bool
+			sig, found = m.NamedSignatures[*typeName]
+			if !found {
+				panic(*typeName)
+			}
+		}
+
+		if len(f.Signature.Args) == 0 && f.Signature.Result == types.Void {
+			for i, varType := range sig.Args {
+				numName := strconv.Itoa(len(f.Locals) + i)
+
+				f.Vars[numName] = Var{
+					Param: true,
+					Index: i,
+					Type:  varType,
+				}
+
+				f.Params = append(f.Params, varType)
+			}
+		} else if !f.Signature.Equal(sig.Function) {
+			panic(fmt.Errorf("%s vs. %s", f.Signature, sig))
+		}
+
+		f.Signature = sig
 	}
 
 	return
