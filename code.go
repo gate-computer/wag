@@ -195,6 +195,14 @@ func (code *coder) WriteByte(b byte) error {
 	return code.text.WriteByte(b)
 }
 
+func (code *coder) Align(alignment int, padding byte) {
+	n := (alignment - (code.Len() & (alignment - 1))) & (alignment - 1)
+	code.text.Grow(n)
+	for i := 0; i < n; i++ {
+		code.text.WriteByte(padding)
+	}
+}
+
 func (code *coder) Bytes() []byte {
 	return code.text.Bytes()
 }
@@ -227,7 +235,7 @@ func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) 
 
 	varArgsCount := len(instance.Callable.Args) - len(impl.Args)
 
-	mach.AlignFunction(code)
+	code.Align(mach.FunctionAlignment(), mach.PaddingByte())
 	funcMapAddr = code.Len()
 	code.functionLinks[&instance.Callable].SetAddress(code.Len())
 	mach.OpImportTrampoline(code, impl.Address, instance.Signature.Index, varArgsCount)

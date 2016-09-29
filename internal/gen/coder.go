@@ -17,6 +17,7 @@ const (
 type Coder interface {
 	io.Writer
 	WriteByte(byte) error
+	Align(alignment int, padding byte)
 	Bytes() []byte
 	Len() int
 

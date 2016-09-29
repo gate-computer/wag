@@ -166,6 +166,7 @@ var nopSequences = [][]byte{
 type X86 struct{}
 
 func (mach X86) FunctionAlignment() int     { return functionAlignment }
+func (mach X86) PaddingByte() byte          { return paddingByte }
 func (mach X86) ResultReg() regs.R          { return regResult }
 func (mach X86) AvailableIntRegs() uint32   { return availableIntRegs }
 func (mach X86) AvailableFloatRegs() uint32 { return availableFloatRegs }
@@ -672,21 +673,13 @@ func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr in
 	CallRel.op(code, code.TrapLinks().CallStackExhausted.Address)
 	code.AddCallSite(&code.TrapLinks().CallStackExhausted)
 
-	mach.AlignFunction(code)
+	code.Align(functionAlignment, paddingByte)
 	entryAddr = code.Len()
 	Lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.opFromReg(code, types.I64, regScratch, regStackLimit)
 	Jl.op(code, trap.FinalAddress())
 	return
-}
-
-func (mach X86) AlignFunction(code gen.Coder) {
-	if n := functionAlignment - (code.Len() & (functionAlignment - 1)); n < functionAlignment {
-		for i := 0; i < n; i++ {
-			code.WriteByte(paddingByte)
-		}
-	}
 }
 
 func (mach X86) UpdateBranches(code gen.Coder, l *links.L) {
