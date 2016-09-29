@@ -28,14 +28,17 @@ func (p *floatSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase
 }
 
 var (
-	OperandSize = &floatSizePrefix{nil, []byte{0x66}}
-	ScalarSize  = &floatSizePrefix{[]byte{0xf3}, []byte{0xf2}}
-	RoundSize   = &floatSizePrefix{[]byte{0x0a}, []byte{0x0b}}
+	Const66RexSize = multiPrefix{constPrefix{0x66}, RexSize}
+	OperandSize    = &floatSizePrefix{nil, []byte{0x66}}
+	ScalarSize     = &floatSizePrefix{[]byte{0xf3}, []byte{0xf2}}
+	RoundSize      = &floatSizePrefix{[]byte{0x0a}, []byte{0x0b}}
 )
 
 var (
 	UcomisSSE = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
 	XorpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
+	MovSSE    = insnPrefix{Const66RexSize, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
+	PxorSSE   = insnPrefix{Const66RexSize, []byte{0x0f, 0xef}, nil}
 	MovsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
 	SqrtsSSE  = insnPrefix{ScalarSize, []byte{0x0f, 0x51}, nil}
 	AddsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x58}, nil}
@@ -45,7 +48,6 @@ var (
 	MinsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5d}, nil}
 	DivsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
 	MaxsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5f}, nil}
-	MovSSE    = insnPrefix{Prefixes{Prefix{0x66}, RexSize}, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
 
 	Cvtsi2sSSE  = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2a}}
 	CvttsSSE2si = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2c}}
@@ -92,11 +94,15 @@ var binaryFloatConditions = map[string]values.Condition{
 func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
 	switch name {
 	case "neg":
-		reg, _ := mach.opMaybeResultReg(code, t, x, false)
-		MovsSSE.opFromReg(code, t, regScratch, reg)
-		SubsSSE.opFromReg(code, t, reg, regScratch)
-		SubsSSE.opFromReg(code, t, reg, regScratch)
-		return values.TempRegOperand(reg, false)
+		targetReg, _ := mach.opMaybeResultReg(code, t, x, false)
+
+		signMask := int64(-1) << (uint(t.Size())*8 - 1)
+
+		MovImm64.op(code, t, regScratch, signMask)        // integer scratch register
+		MovSSE.opFromReg(code, t, regScratch, regScratch) // float scratch register
+		XorpSSE.opFromReg(code, t, targetReg, regScratch)
+
+		return values.TempRegOperand(targetReg, false)
 	}
 
 	if mode, found := unaryFloatRoundModes[name]; found {

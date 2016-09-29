@@ -35,6 +35,10 @@ var (
 )
 
 var (
+	ConstF3RexSize = multiPrefix{constPrefix{0xf3}, RexSize}
+)
+
+var (
 	Neg  = insnRexM{[]byte{0xf7}, 3}
 	Mul  = insnRexM{[]byte{0xf7}, 4}
 	Div  = insnRexM{[]byte{0xf7}, 6}
@@ -66,7 +70,7 @@ var (
 	Movsx8  = insnPrefix{RexSize, []byte{0x0f, 0xbe}, nil}
 	Movsx16 = insnPrefix{RexSize, []byte{0x0f, 0xbf}, nil}
 	Movsxd  = insnPrefix{RexW, []byte{0x63}, nil} // variable rexR, rexX and rexB
-	Popcnt  = insnPrefix{Prefixes{Prefix{0xf3}, RexSize}, []byte{0x0f, 0xb8}, nil}
+	Popcnt  = insnPrefix{ConstF3RexSize, []byte{0x0f, 0xb8}, nil}
 
 	MovImm = insnPrefixMI{RexSize, 0, 0, 0xc7, 0}
 

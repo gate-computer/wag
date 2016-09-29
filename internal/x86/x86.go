@@ -375,7 +375,7 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 		switch x.Storage {
 		case values.Imm:
 			if value := x.ImmValue(t); value == 0 {
-				XorpSSE.opFromReg(code, t, targetReg, targetReg)
+				PxorSSE.opFromReg(code, t, targetReg, targetReg)
 			} else {
 				MovImm64.op(code, t, regScratch, value) // integer scratch register
 				MovSSE.opFromReg(code, t, targetReg, regScratch)

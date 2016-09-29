@@ -10,15 +10,15 @@ type prefix interface {
 	writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte)
 }
 
-type Prefix []byte
+type constPrefix []byte
 
-func (bytes Prefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (bytes constPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
 	code.Write(bytes)
 }
 
-type Prefixes []prefix
+type multiPrefix []prefix
 
-func (array Prefixes) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (array multiPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
 	for _, p := range array {
 		p.writeTo(code, t, ro, index, rmOrBase)
 	}
