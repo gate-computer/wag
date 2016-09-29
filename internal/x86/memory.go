@@ -91,6 +91,7 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 
 	baseReg, disp, deadend := mach.opMemoryAddress(code, t, a, offset, store.truncate)
 	if deadend {
+		code.Discard(t, b)
 		return
 	}
 

@@ -143,8 +143,8 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 		}
 	}
 
-	code.regsInt.init(mach.AvailableIntRegs())
-	code.regsFloat.init(mach.AvailableFloatRegs())
+	code.regsInt.init(mach.AvailableIntRegs(), "integer")
+	code.regsFloat.init(mach.AvailableFloatRegs(), "float")
 
 	for _, f := range m.Functions {
 		addr := code.genFunction(f)
@@ -315,8 +315,8 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 		v.reset()
 	}
 
-	code.regsInt.postCheck("integer")
-	code.regsFloat.postCheck("float")
+	code.regsInt.postCheck()
+	code.regsFloat.postCheck()
 
 	if len(code.liveOperands) != 0 {
 		panic(errors.New("internal: live operands exist at end of function"))
@@ -737,12 +737,12 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 
 	b, _, deadend := code.expr(valueExpr, opType, false, liveOperand{types.I32, &a})
 	if deadend {
-		code.Discard(opType, a)
+		code.Discard(types.I32, a)
 		mach.OpAbort(code)
 		return
 	}
 
-	a = code.opMaterializeOperand(opType, a)
+	a = code.opMaterializeOperand(types.I32, a)
 	b = code.effectiveOperand(b)
 
 	// the design doc says that stores don't return a value, but it's needed
@@ -1524,47 +1524,61 @@ func (code *coder) exprSelect(exprName string, args []interface{}, expectType ty
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	a, _, deadend := code.expr(args[0], expectType, false)
+	var operands []liveOperand
+
+	a, aType, deadend := code.expr(args[0], expectType, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	aLive := liveOperand{expectType, &a}
+	if expectType == types.Void {
+		code.Discard(aType, a)
+		a = values.NoOperand
+	} else {
+		operands = append(operands, liveOperand{aType, &a})
+	}
 
-	b, _, deadend := code.expr(args[1], expectType, false, aLive)
+	b, bType, deadend := code.expr(args[1], expectType, false, operands...)
 	if deadend {
-		code.Discard(expectType, a)
+		code.Discard(aType, a)
 		mach.OpAbort(code)
 		return
 	}
 
-	bLive := liveOperand{expectType, &b}
+	if expectType == types.Void {
+		code.Discard(bType, b)
+		b = values.NoOperand
+	} else {
+		operands = append(operands, liveOperand{bType, &b})
+	}
 
-	cond, _, deadend := code.expr(args[2], types.I32, false, aLive, bLive)
+	cond, _, deadend := code.expr(args[2], types.I32, false, operands...)
 	if deadend {
-		code.Discard(expectType, b)
-		code.Discard(expectType, a)
+		code.Discard(bType, b)
+		code.Discard(aType, a)
 		mach.OpAbort(code)
 		return
 	}
 
 	if value, ok := cond.CheckImmValue(types.I32); ok {
 		if value != 0 {
-			code.Discard(expectType, b)
+			code.Discard(bType, b)
 			result = a
 			return
 		} else {
-			code.Discard(expectType, a)
+			code.Discard(aType, a)
 			result = b
 			return
 		}
 	}
 
-	b = code.opMaterializeOperand(expectType, b)
-	a = code.opMaterializeOperand(expectType, a)
-	cond = code.effectiveOperand(cond)
-	result = mach.OpSelect(code, expectType, a, b, cond)
+	if expectType != types.Void {
+		b = code.opMaterializeOperand(bType, b)
+		a = code.opMaterializeOperand(aType, a)
+		cond = code.effectiveOperand(cond)
+		result = mach.OpSelect(code, expectType, a, b, cond)
+	}
 	return
 }
 

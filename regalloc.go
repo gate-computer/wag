@@ -13,11 +13,13 @@ const (
 type regAllocator struct {
 	avail uint32
 	freed uint32
+	name  string
 }
 
-func (ra *regAllocator) init(avail uint32) {
+func (ra *regAllocator) init(avail uint32, name string) {
 	ra.avail = avail
 	ra.freed = avail
+	ra.name = name
 }
 
 func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
@@ -30,7 +32,7 @@ func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
 				for i := 0; i < debugExprDepth; i++ {
 					fmt.Print("    ")
 				}
-				fmt.Printf("<!-- reg alloc %s -->\n", reg)
+				fmt.Printf("<!-- reg alloc %s %s -->\n", ra.name, reg)
 			}
 
 			break
@@ -43,6 +45,13 @@ func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
 }
 
 func (ra *regAllocator) allocSpecific(reg regs.R) {
+	if verboseRegAlloc {
+		for i := 0; i < debugExprDepth; i++ {
+			fmt.Print("    ")
+		}
+		fmt.Printf("<!-- reg alloc %s %s specifically -->\n", ra.name, reg)
+	}
+
 	mask := uint32(1 << reg)
 
 	if (ra.freed & mask) == 0 {
@@ -50,17 +59,21 @@ func (ra *regAllocator) allocSpecific(reg regs.R) {
 	}
 
 	ra.freed &^= mask
+}
+
+func (ra *regAllocator) free(reg regs.R) {
+	mask := uint32(1 << reg)
 
 	if verboseRegAlloc {
 		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
-		fmt.Printf("<!-- reg alloc %s specifically -->\n", reg)
+		if (ra.avail & mask) == 0 {
+			fmt.Printf("<!-- reg free %s %s (nop) -->\n", ra.name, reg)
+		} else {
+			fmt.Printf("<!-- reg free %s %s -->\n", ra.name, reg)
+		}
 	}
-}
-
-func (ra *regAllocator) free(reg regs.R) {
-	mask := uint32(1 << reg)
 
 	if (ra.freed & mask) != 0 {
 		panic(reg)
@@ -71,13 +84,6 @@ func (ra *regAllocator) free(reg regs.R) {
 	}
 
 	ra.freed |= mask
-
-	if verboseRegAlloc {
-		for i := 0; i < debugExprDepth; i++ {
-			fmt.Print("    ")
-		}
-		fmt.Printf("<!-- reg free %s -->\n", reg)
-	}
 }
 
 func (ra *regAllocator) allocated(reg regs.R) bool {
@@ -85,7 +91,7 @@ func (ra *regAllocator) allocated(reg regs.R) bool {
 		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
-		fmt.Printf("<!-- reg check %s -->\n", reg)
+		fmt.Printf("<!-- reg check %s %s -->\n", ra.name, reg)
 	}
 
 	mask := uint32(1 << reg)
@@ -93,8 +99,8 @@ func (ra *regAllocator) allocated(reg regs.R) bool {
 	return ((ra.avail &^ ra.freed) & mask) != 0
 }
 
-func (ra *regAllocator) postCheck(category string) {
+func (ra *regAllocator) postCheck() {
 	if ra.freed != ra.avail {
-		panic(fmt.Errorf("some %s registers not freed after function", category))
+		panic(fmt.Errorf("some %s registers not freed after function", ra.name))
 	}
 }
