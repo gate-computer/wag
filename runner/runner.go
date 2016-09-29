@@ -14,7 +14,7 @@ import (
 	"github.com/tsavola/wag/traps"
 )
 
-func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resume, arg, slaveFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resumeResult, arg, slaveFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
 
 func importSnapshot() int64
 func importSpectestPrint() int64
@@ -258,9 +258,13 @@ func (r *Runner) Close() (first error) {
 
 func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) (result int32, err error) {
 	stackState := r.prog.getStack()
-	resume := len(stackState) // boolean
 	stackOffset := len(r.stack) - len(stackState)
 	copy(r.stack[stackOffset:], stackState)
+
+	resumeResult := 0 // don't resume
+	if len(stackState) > 0 {
+		resumeResult = -1 // resume; return this value to snapshot function caller
+	}
 
 	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
@@ -284,7 +288,7 @@ func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) 
 
 	memory := r.globalsMemory[r.memoryOffset:]
 
-	result, trap, memorySize, stackPtr := run(r.prog.getText(), r.memorySize, memory, r.stack, stackOffset, resume, arg, fds[1])
+	result, trap, memorySize, stackPtr := run(r.prog.getText(), r.memorySize, memory, r.stack, stackOffset, resumeResult, arg, fds[1])
 
 	r.memorySize = memorySize
 	r.lastTrap = traps.Id(trap)

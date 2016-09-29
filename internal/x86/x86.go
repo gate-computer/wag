@@ -267,9 +267,18 @@ func (mach X86) OpCallIndirect32(code gen.Coder, reg regs.R) {
 }
 
 func (mach X86) OpInit(code gen.Coder, start *links.L) {
+	var notResume links.L
+
 	Add.opImm(code, types.I64, regStackLimit, gen.StackReserve)
 
-	Add.opImm(code, types.I64, regStackPtr, gen.WordSize) // overwrite return address
+	Test.opFromReg(code, types.I64, regResult, regResult)
+	Je.rel8.opStub(code)
+	notResume.AddSite(code.Len())
+	Ret.op(code) // simulate return from snapshot function call
+
+	notResume.SetAddress(code.Len())
+	mach.updateSites8(code, &notResume)
+
 	CallRel.op(code, start.Address)
 	code.AddCallSite(start)
 }

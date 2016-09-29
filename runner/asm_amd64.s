@@ -1,6 +1,6 @@
 #include "textflag.h"
 
-// func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resume, arg, slaveFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
+// func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resumeResult, arg, slaveFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
 TEXT ·run(SB),$0-144
 	PUSHQ	AX
 	PUSHQ	CX
@@ -20,13 +20,14 @@ TEXT ·run(SB),$0-144
 
 	MOVQ	text+0(FP), R12
 	MOVQ	initialMemorySize+24(FP), R15
-	MOVQ	memory+32(FP), R14
+	MOVQ	memory+32(FP), R14	// memory ptr
 	MOVQ	memory_len+40(FP), BX
 	ADDQ	R14, R15		// current memory limit
-	ADDQ	R14, BX
+	ADDQ	R14, BX			// memory growth limit
 	MOVQ	stack+56(FP), R13	// stack limit
 	MOVQ	stackOffset+80(FP), CX
-	MOVQ	resume+88(FP), R10
+	ADDQ	R13, CX			// stack ptr
+	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
 	MOVQ	arg+96(FP), DX
 	MOVQ	slaveFd+104(FP), M6	// slave fd
 	CALL	run<>(SB)
@@ -55,23 +56,19 @@ TEXT ·run(SB),$0-144
 
 TEXT run<>(SB),NOSPLIT,$0
 	MOVQ	SP, M7		// save original stack
-	MOVQ	R13, SP
-	ADDQ	CX, SP		// stack
-	LEAQ	trap<>(SB), AX
-	MOVQ	AX, M0		// trap handler
+	MOVQ	CX, SP		// stack ptr
+	LEAQ	trap<>(SB), R9
+	MOVQ	R9, M0		// trap handler
 	MOVQ	BX, M1		// memory growth limit
 
-	TESTQ	R10, R10	// resume?
-	JNE	resume
+	TESTQ	AX, AX		// resume?
+	JNE	resume		// don't push arg on stack
 
 	SUBQ	$8, SP
 	MOVQ	DX, (SP)	// arg
-	CALL	R12
-	// exits via trap handler
 
-resume:	// simulate return from snapshot function
-	MOVQ	$-1, AX
-	RET
+resume:	JMP	R12
+	// exits via trap handler
 
 TEXT trap<>(SB),NOSPLIT,$0
 	MOVQ	SP, BX		// stack ptr
