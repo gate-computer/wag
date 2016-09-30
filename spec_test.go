@@ -54,7 +54,6 @@ const (
 // func Test_func_result_before_param_fail(t *testing.T) { test(t, "func-result-before-param.fail") }
 // func Test_if_label_scope_fail(t *testing.T)           { test(t, "if_label_scope.fail") }
 // func Test_left_to_right(t *testing.T)                 { test(t, "left-to-right") }
-// func Test_loop(t *testing.T)                          { test(t, "loop") }
 // func Test_memory_redundancy(t *testing.T)             { test(t, "memory_redundancy") }
 // func Test_names(t *testing.T)                         { test(t, "names") }
 // func Test_traps(t *testing.T)                         { test(t, "traps") }
@@ -97,6 +96,7 @@ func Test_imports(t *testing.T)                         { test(t, "imports") }
 func Test_int_exprs(t *testing.T)                       { test(t, "int_exprs") }
 func Test_int_literals(t *testing.T)                    { test(t, "int_literals") }
 func Test_labels(t *testing.T)                          { test(t, "labels") }
+func Test_loop(t *testing.T)                            { test(t, "loop") }
 func Test_memory(t *testing.T)                          { test(t, "memory") }
 func Test_memory_trap(t *testing.T)                     { test(t, "memory_trap") }
 func Test_nop(t *testing.T)                             { test(t, "nop") }

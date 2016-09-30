@@ -125,30 +125,28 @@ var conditionInsns = []struct {
 	setcc insnRexOM
 	cmov  insnPrefix
 }{
-	{Je, Sete, Cmove},    // EQ
-	{Jne, Setne, Cmovne}, // NE
-	{Jge, Setge, Cmovge}, // GESigned
-	{Jg, Setg, Cmovg},    // GTSigned
-	{Jae, Setae, Cmovae}, // GEUnsigned
-	{Ja, Seta, Cmova},    // GTUnsigned
-	{Jle, Setle, Cmovle}, // LESigned
-	{Jl, Setl, Cmovl},    // LTSigned
-	{Jbe, Setbe, Cmovbe}, // LEUnsigned
-	{Jb, Setb, Cmovb},    // LTUnsigned
-
-	{Je, Sete, Cmove},    // OrderedAndEQ
-	{Jne, Setne, Cmovne}, // OrderedAndNE
-	{Jge, Setge, Cmovge}, // OrderedAndGE
-	{Jg, Setg, Cmovg},    // OrderedAndGT
-	{Jle, Setle, Cmovle}, // OrderedAndLE
-	{Jl, Setl, Cmovl},    // OrderedAndLT
-
-	{Je, Sete, Cmove},    // UnorderedOrEQ
-	{Jne, Setne, Cmovne}, // UnorderedOrNE
-	{Jge, Setge, Cmovge}, // UnorderedOrGE
-	{Jg, Setg, Cmovg},    // UnorderedOrGT
-	{Jle, Setle, Cmovle}, // UnorderedOrLE
-	{Jl, Setl, Cmovl},    // UnorderedOrLT
+	values.EQ:            {Je, Sete, Cmove},
+	values.NE:            {Jne, Setne, Cmovne},
+	values.GESigned:      {Jge, Setge, Cmovge},
+	values.GTSigned:      {Jg, Setg, Cmovg},
+	values.GEUnsigned:    {Jae, Setae, Cmovae},
+	values.GTUnsigned:    {Ja, Seta, Cmova},
+	values.LESigned:      {Jle, Setle, Cmovle},
+	values.LTSigned:      {Jl, Setl, Cmovl},
+	values.LEUnsigned:    {Jbe, Setbe, Cmovbe},
+	values.LTUnsigned:    {Jb, Setb, Cmovb},
+	values.OrderedAndEQ:  {Je, Sete, Cmove},
+	values.OrderedAndNE:  {Jne, Setne, Cmovne},
+	values.OrderedAndGE:  {Jae, Setae, Cmovae},
+	values.OrderedAndGT:  {Ja, Seta, Cmova},
+	values.OrderedAndLE:  {Jbe, Setbe, Cmovbe},
+	values.OrderedAndLT:  {Jb, Setb, Cmovb},
+	values.UnorderedOrEQ: {Je, Sete, Cmove},
+	values.UnorderedOrNE: {Jne, Setne, Cmovne},
+	values.UnorderedOrGE: {Jae, Setae, Cmovae},
+	values.UnorderedOrGT: {Ja, Seta, Cmova},
+	values.UnorderedOrLE: {Jbe, Setbe, Cmovbe},
+	values.UnorderedOrLT: {Jb, Setb, Cmovb},
 }
 
 var nopSequences = [][]byte{
@@ -625,27 +623,23 @@ func (mach X86) OpBranchIf(code gen.Coder, x values.Operand, yes bool, addr int)
 		cond = values.InvertedConditions[cond]
 	}
 
-	condInsn := conditionInsns[cond].jcc
+	var end links.L
 
 	switch {
 	case cond >= values.MinUnorderedOrCondition:
 		Jp.op(code, addr)
 		sites = append(sites, code.Len())
 
-		condInsn.op(code, addr)
-
 	case cond >= values.MinOrderedAndCondition:
-		first := Jp.rel8         // 8 bits is enough for sure...
-		second := condInsn.rel32 // predictable size, simpler code
-
-		first.op(code, code.Len()+first.size()+second.size()) // jump after the second jump
-		second.op(code, addr)
-
-	default:
-		condInsn.op(code, addr)
+		Jp.rel8.opStub(code)
+		end.AddSite(code.Len())
 	}
 
-	sites = append(sites, code.Len()) // final jump
+	conditionInsns[cond].jcc.op(code, addr)
+	sites = append(sites, code.Len())
+
+	end.Address = code.Len()
+	mach.updateSites8(code, &end)
 	return
 }
 

@@ -96,28 +96,28 @@ const (
 )
 
 var InvertedConditions = []Condition{
-	NE,            // EQ
-	EQ,            // NE
-	LTSigned,      // GESigned
-	LESigned,      // GTSigned
-	LTUnsigned,    // GEUnsigned
-	LEUnsigned,    // GTUnsigned
-	GTSigned,      // LESigned
-	GESigned,      // LTSigned
-	GTUnsigned,    // LEUnsigned
-	GEUnsigned,    // LTUnsigned
-	UnorderedOrNE, // OrderedAndEQ
-	UnorderedOrEQ, // OrderedAndNE
-	UnorderedOrLT, // OrderedAndGE
-	UnorderedOrLE, // OrderedAndGT
-	UnorderedOrGT, // OrderedAndLE
-	UnorderedOrGE, // OrderedAndLT
-	OrderedAndNE,  // UnorderedOrEQ
-	OrderedAndEQ,  // UnorderedOrNE
-	OrderedAndLT,  // UnorderedOrGE
-	OrderedAndLE,  // UnorderedOrGT
-	OrderedAndGT,  // UnorderedOrLE
-	OrderedAndGE,  // UnorderedOrLT
+	EQ:            NE,
+	NE:            EQ,
+	GESigned:      LTSigned,
+	GTSigned:      LESigned,
+	GEUnsigned:    LTUnsigned,
+	GTUnsigned:    LEUnsigned,
+	LESigned:      GTSigned,
+	LTSigned:      GESigned,
+	LEUnsigned:    GTUnsigned,
+	LTUnsigned:    GEUnsigned,
+	OrderedAndEQ:  UnorderedOrNE,
+	OrderedAndNE:  UnorderedOrEQ,
+	OrderedAndGE:  UnorderedOrLT,
+	OrderedAndGT:  UnorderedOrLE,
+	OrderedAndLE:  UnorderedOrGT,
+	OrderedAndLT:  UnorderedOrGE,
+	UnorderedOrEQ: OrderedAndNE,
+	UnorderedOrNE: OrderedAndEQ,
+	UnorderedOrGE: OrderedAndLT,
+	UnorderedOrGT: OrderedAndLE,
+	UnorderedOrLE: OrderedAndGT,
+	UnorderedOrLT: OrderedAndGE,
 }
 
 const (
