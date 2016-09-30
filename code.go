@@ -1138,7 +1138,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 	code.opSaveTempRegOperands()
 	code.opInitLocals()
 
-	deadend, argsSize := code.opEvaluateCallArgs(exprName, target.Signature, args[1:])
+	deadend, argsSize := code.opPushCallArgs(exprName, target.Signature, args[1:])
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1190,17 +1190,31 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		return
 	}
 
+	var indexOperandStackOffset int
+
+	switch indexOperand.Storage {
+	case values.Imm, values.Var:
+		// will be preserved until we need it
+
+	case values.TempReg, values.ConditionFlags:
+		mach.OpPush(code, types.I32, indexOperand)
+		code.incrementStackOffset()
+		indexOperand = values.StackOperand
+		indexOperandStackOffset = code.stackOffset
+
+	case values.Stack:
+		indexOperandStackOffset = code.stackOffset
+
+	default:
+		panic(indexOperand)
+	}
+
 	code.opSaveTempRegOperands()
 	code.opInitLocals()
 
-	// TODO: check if it's already on stack, or if it's a variable
-	indexOperand = code.effectiveOperand(indexOperand)
-	mach.OpPush(code, types.I32, indexOperand)
-	code.incrementStackOffset()
-
-	deadend, argsSize := code.opEvaluateCallArgs(exprName, sig, args)
+	deadend, argsSize := code.opPushCallArgs(exprName, sig, args)
 	if deadend {
-		code.stackOffset -= gen.WordSize // pop func ptr
+		code.Discard(types.I32, indexOperand)
 		mach.OpAbort(code)
 		return
 	}
@@ -1211,7 +1225,13 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	doCall := new(links.L)
 	defer mach.UpdateBranches(code, doCall)
 
-	mach.OpLoadResult32ZeroExtFromStack(code, argsSize)
+	if indexOperand.Storage == values.Stack {
+		effectiveOffset := code.stackOffset - indexOperandStackOffset
+		mach.OpLoadResult32ZeroExtFromStack(code, effectiveOffset)
+	} else {
+		code.opMove(types.I32, mach.ResultReg(), indexOperand, false)
+	}
+
 	code.opBranchIfOutOfBounds(mach.ResultReg(), len(code.module.Table), outOfBounds)
 	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, mach.ResultReg(), true, 3, roTableAddr)
 
@@ -1233,7 +1253,12 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 
 	doCall.SetAddress(code.Len())
 	mach.OpCallIndirect32(code, mach.ResultReg())
-	code.opAddImmToStackPtr(argsSize + gen.WordSize) // args + index operand
+
+	if indexOperand.Storage == values.Stack {
+		code.opAddImmToStackPtr(argsSize + gen.WordSize) // args + index operand
+	} else {
+		code.opAddImmToStackPtr(argsSize)
+	}
 
 	resultType = sig.Result
 	if resultType != types.Void {
@@ -1242,7 +1267,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	return
 }
 
-func (code *coder) opEvaluateCallArgs(exprName string, sig *Signature, args []interface{}) (deadend bool, argsStackSize int) {
+func (code *coder) opPushCallArgs(exprName string, sig *Signature, args []interface{}) (deadend bool, argsStackSize int) {
 	if len(sig.Args) != len(args) {
 		panic(fmt.Errorf("%s: wrong number of arguments", exprName))
 	}

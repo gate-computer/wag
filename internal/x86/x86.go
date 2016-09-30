@@ -656,7 +656,8 @@ func (mach X86) OpBranchIfEqualImm32(code gen.Coder, reg regs.R, value int, addr
 	return code.Len()
 }
 
-// OpBranchIfOutOfBounds must not allocate registers.
+// OpBranchIfOutOfBounds must not allocate registers.  indexReg will be
+// zero-extended if OpMove zero-extends integer target registers.
 func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBound int, addr int) int {
 	MovImm.opImm(code, types.I32, regScratch, upperBound)
 	Test.opFromReg(code, types.I32, indexReg, indexReg)
