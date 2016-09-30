@@ -557,7 +557,7 @@ func (code *coder) exprUnaryOp(exprName, opName string, opType types.T, args []i
 		}
 	}
 
-	x = code.effectiveOperand(x)
+	x = code.opPreloadOperand(opType, x)
 	result = mach.UnaryOp(code, opName, opType, x)
 	result = code.virtualOperand(result)
 	return
@@ -628,7 +628,7 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 	}
 
 	a = code.opMaterializeOperand(opType, a)
-	b = code.effectiveOperand(b)
+	b = code.opPreloadOperand(opType, b)
 
 	result, deadend = mach.BinaryOp(code, opName, opType, a, b)
 	if deadend {
@@ -686,7 +686,7 @@ func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []in
 		return
 	}
 
-	x = code.effectiveOperand(x)
+	x = code.opPreloadOperand(opType, x)
 
 	result, deadend = mach.LoadOp(code, opName, opType, x, offset)
 	if deadend {
@@ -751,7 +751,7 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 	}
 
 	a = code.opMaterializeOperand(types.I32, a)
-	b = code.effectiveOperand(b)
+	b = code.opPreloadOperand(opType, b)
 
 	// the design doc says that stores don't return a value, but it's needed
 	// for the memory_trap.wast test to work.
@@ -775,7 +775,7 @@ func (code *coder) exprConversionOp(exprName string, resultType, opType types.T,
 		return
 	}
 
-	x = code.effectiveOperand(x)
+	x = code.opPreloadOperand(opType, x)
 	result = mach.ConversionOp(code, exprName, resultType, opType, x)
 	result = code.virtualOperand(result)
 	return
@@ -1138,7 +1138,7 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 	code.opSaveTempRegOperands()
 	code.opInitLocals()
 
-	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, target.Signature, args[1:])
+	deadend, argsSize := code.opEvaluateCallArgs(exprName, target.Signature, args[1:])
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1149,6 +1149,10 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 	mach.OpCall(code, code.functionLinks[target])
 	code.opAddImmToStackPtr(argsSize)
 
+	resultType = target.Signature.Result
+	if resultType != types.Void {
+		result = values.TempRegOperand(mach.ResultReg(), false)
+	}
 	return
 }
 
@@ -1186,16 +1190,15 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		return
 	}
 
-	// TODO: check if it's already on stack
+	code.opSaveTempRegOperands()
+	code.opInitLocals()
+
+	// TODO: check if it's already on stack, or if it's a variable
 	indexOperand = code.effectiveOperand(indexOperand)
 	mach.OpPush(code, types.I32, indexOperand)
 	code.incrementStackOffset()
 
-	code.opSaveTempRegOperands()
-	code.opInitLocals()
-	code.opStoreRegVars(true)
-
-	result, resultType, deadend, argsSize := code.partialCallArgsExpr(exprName, sig, args)
+	deadend, argsSize := code.opEvaluateCallArgs(exprName, sig, args)
 	if deadend {
 		code.stackOffset -= gen.WordSize // pop func ptr
 		mach.OpAbort(code)
@@ -1211,6 +1214,8 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	mach.OpLoadResult32ZeroExtFromStack(code, argsSize)
 	code.opBranchIfOutOfBounds(mach.ResultReg(), len(code.module.Table), outOfBounds)
 	mach.OpLoadROIntIndex32ScaleDisp(code, types.I64, mach.ResultReg(), true, 3, roTableAddr)
+
+	code.opStoreRegVars(true) // indexOperand might stick around in a reg until we need it...
 
 	sigReg, ok := code.TryAllocReg(types.I64)
 	if !ok {
@@ -1229,10 +1234,15 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	doCall.SetAddress(code.Len())
 	mach.OpCallIndirect32(code, mach.ResultReg())
 	code.opAddImmToStackPtr(argsSize + gen.WordSize) // args + index operand
+
+	resultType = sig.Result
+	if resultType != types.Void {
+		result = values.TempRegOperand(mach.ResultReg(), false)
+	}
 	return
 }
 
-func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []interface{}) (result values.Operand, resultType types.T, deadend bool, argsStackSize int) {
+func (code *coder) opEvaluateCallArgs(exprName string, sig *Signature, args []interface{}) (deadend bool, argsStackSize int) {
 	if len(sig.Args) != len(args) {
 		panic(fmt.Errorf("%s: wrong number of arguments", exprName))
 	}
@@ -1266,11 +1276,6 @@ func (code *coder) partialCallArgsExpr(exprName string, sig *Signature, args []i
 	}
 
 	argsStackSize = code.stackOffset - initialStackOffset
-
-	resultType = sig.Result
-	if resultType != types.Void {
-		result = values.TempRegOperand(mach.ResultReg(), false)
-	}
 	return
 }
 
@@ -1310,21 +1315,11 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 	v := &code.vars[index]
 
 	switch v.cache.Storage {
-	case values.Nowhere:
-		if reg, ok := code.opTryAllocVarReg(resultType); ok {
-			offset := code.effectiveVarStackOffset(index)
-			x := values.VarMemOperand(index, offset)
-			zeroExt := code.opMove(resultType, reg, x, false)
-			v.cache = values.VarRegOperand(index, reg, zeroExt)
-			v.dirty = false
-		}
+	case values.Nowhere, values.VarReg:
 		result = values.VarOperand(index)
 
 	case values.Imm:
 		result = v.cache
-
-	case values.VarReg:
-		result = values.VarOperand(index)
 
 	default:
 		panic(v.cache)
@@ -1344,7 +1339,7 @@ func (code *coder) exprGrowMemory(exprName string, args []interface{}) (result v
 		return
 	}
 
-	x = code.effectiveOperand(x)
+	x = code.opPreloadOperand(types.I32, x)
 	result = mach.OpGrowMemory(code, x)
 	return
 }
@@ -1584,7 +1579,7 @@ func (code *coder) exprSelect(exprName string, args []interface{}, expectType ty
 	if expectType != types.Void {
 		b = code.opMaterializeOperand(bType, b)
 		a = code.opMaterializeOperand(aType, a)
-		cond = code.effectiveOperand(cond)
+		cond = code.opPreloadOperand(types.I32, cond)
 		result = mach.OpSelect(code, expectType, a, b, cond)
 	}
 	return
@@ -1904,6 +1899,7 @@ func (code *coder) AddIndirectCallSite() {
 	}
 }
 
+// opMove must not allocate registers.
 func (code *coder) opMove(t types.T, target regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	if t == types.Void && x.Storage != values.Nowhere {
 		panic(x)
@@ -1918,7 +1914,7 @@ func (code *coder) opMove(t types.T, target regs.R, x values.Operand, preserveFl
 }
 
 func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Operand {
-	x = code.effectiveOperand(x)
+	x = code.opPreloadOperand(t, x)
 
 	switch x.Storage {
 	case values.Stack, values.ConditionFlags:
@@ -1930,10 +1926,30 @@ func (code *coder) opMaterializeOperand(t types.T, x values.Operand) values.Oper
 	return x
 }
 
+func (code *coder) opPreloadOperand(t types.T, x values.Operand) values.Operand {
+	x = code.effectiveOperand(x)
+
+	if x.Storage == values.VarMem {
+		i := x.VarOperand().Index()
+		v := &code.vars[i]
+
+		if reg, ok := code.opTryAllocVarReg(t); ok {
+			zeroExt := code.opMove(t, reg, x, false)
+			x = values.VarRegOperand(i, reg, zeroExt)
+			v.cache = x
+			v.dirty = false
+		}
+	}
+
+	return x
+}
+
 func (code *coder) effectiveOperand(x values.Operand) values.Operand {
 	if x.Storage == values.Var {
 		i := x.Index()
-		if v := code.vars[i]; v.cache.Storage == values.Nowhere {
+		v := code.vars[i]
+
+		if v.cache.Storage == values.Nowhere {
 			x = values.VarMemOperand(i, code.effectiveVarStackOffset(i))
 		} else {
 			x = v.cache
@@ -2250,7 +2266,7 @@ func (code *coder) opSaveTempRegOperands() {
 	code.immutableLiveOperands = len(code.liveOperands)
 }
 
-// opStoreRegVars is only safe when there are no live Var operands.
+// opStoreRegVars is only safe when there are no live Var operands.  XXX: there should never be?
 func (code *coder) opStoreRegVars(forget bool) {
 	if verbose {
 		for i := 0; i < debugExprDepth; i++ {
