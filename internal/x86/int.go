@@ -6,6 +6,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/traps"
 )
 
 type rexPrefix byte
@@ -465,11 +466,10 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 				Jne.rel8.opStub(code)
 				do.AddSite(code.Len())
 
-				CallRel.op(code, code.TrapLinks().IntegerOverflow.Address)
-				code.AddCallSite(&code.TrapLinks().IntegerOverflow)
+				code.OpTrapCall(traps.IntegerOverflow)
 			}
 
-			do.SetAddress(code.Len())
+			do.Address = code.Len()
 			mach.updateSites8(code, &do)
 		}
 
@@ -485,7 +485,7 @@ func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, 
 	insn.opReg(code, t, b.Reg())
 	code.Consumed(t, b)
 
-	doNot.SetAddress(code.Len())
+	doNot.Address = code.Len()
 	mach.updateSites8(code, &doNot)
 
 	if insn.remainder {
@@ -503,10 +503,9 @@ func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {
 	Jne.rel8.opStub(code)
 	end.AddSite(code.Len())
 
-	CallRel.op(code, code.TrapLinks().IntegerDivideByZero.Address)
-	code.AddCallSite(&code.TrapLinks().IntegerDivideByZero)
+	code.OpTrapCall(traps.IntegerDivideByZero)
 
-	end.SetAddress(code.Len())
+	end.Address = code.Len()
 	mach.updateSites8(code, &end)
 }
 

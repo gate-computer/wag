@@ -6,6 +6,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/traps"
 )
 
 type memoryAccess struct {
@@ -158,11 +159,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 		size = int(t.Size())
 	}
 
-	var endChecked links.L
-	// var fail links.L
-
-	var runtimeEndCheck bool
-	// var runtimeStartCheck bool
+	var runtimeCheck bool
 
 	if offset < 0 {
 		panic("negative offset")
@@ -182,7 +179,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 
 		if addr >= 0 && end <= 0x80000000 {
 			Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryBase, int(end))
-			runtimeEndCheck = true
+			runtimeCheck = true
 		}
 
 	default:
@@ -199,40 +196,33 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 
 		if end <= 0x80000000 {
 			Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryBase, int(end))
-			runtimeEndCheck = true
-
-			// if offset < 0 {
-			// 	runtimeStartCheck = true
-			// }
+			runtimeCheck = true
 		}
 	}
 
-	if runtimeEndCheck {
+	if runtimeCheck {
 		Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
-		Jle.rel8.opStub(code)
-		endChecked.AddSite(code.Len())
+
+		if addr := code.TrapCallAddress(traps.MemoryOutOfBounds); addr != 0 {
+			Jg.op(code, addr)
+		} else {
+			var checked links.L
+
+			Jle.rel8.opStub(code)
+			checked.AddSite(code.Len())
+
+			code.OpTrapCall(traps.MemoryOutOfBounds)
+
+			checked.Address = code.Len()
+			mach.updateSites8(code, &checked)
+		}
 
 		baseReg = regScratch
 		disp = -size
 	} else {
+		code.OpTrapCall(traps.MemoryOutOfBounds)
 		deadend = true
 	}
-
-	// fail.SetAddress(code.Len())
-
-	CallRel.op(code, code.TrapLinks().MemoryOutOfBounds.Address)
-	code.AddCallSite(&code.TrapLinks().MemoryOutOfBounds)
-
-	endChecked.SetAddress(code.Len())
-	mach.updateSites8(code, &endChecked)
-
-	// if runtimeStartCheck {
-	// 	Sub.opImm(code, types.I64, regScratch, size)
-	// 	Cmp.opFromReg(code, types.I64, regScratch, regMemoryBase)
-	// 	Jl.op(code, fail.FinalAddress())
-
-	// 	disp = 0
-	// }
 
 	return
 }
@@ -272,12 +262,12 @@ func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand
 	JmpRel.rel8.opStub(code)
 	out.AddSite(code.Len())
 
-	fail.SetAddress(code.Len())
+	fail.Address = code.Len()
 	mach.updateSites8(code, &fail)
 
 	MovImm.opImm(code, types.I32, targetReg, -1) // value on failure
 
-	out.SetAddress(code.Len())
+	out.Address = code.Len()
 	mach.updateSites8(code, &out)
 
 	return values.TempRegOperand(targetReg, true)

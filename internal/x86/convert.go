@@ -91,7 +91,7 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, floatType types.T, i
 	JmpRel.rel8.opStub(code)
 	done.AddSite(code.Len())
 
-	huge.SetAddress(code.Len())
+	huge.Address = code.Len()
 	mach.updateSites8(code, &huge)
 
 	// 64-bit value
@@ -102,6 +102,6 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, floatType types.T, i
 	Cvtsi2sSSE.opReg(code, floatType, types.I64, regResult, intReg)
 	AddsSSE.opFromReg(code, floatType, regResult, regResult)
 
-	done.SetAddress(code.Len())
+	done.Address = code.Len()
 	mach.updateSites8(code, &done)
 }

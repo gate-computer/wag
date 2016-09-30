@@ -10,9 +10,10 @@ const (
 	IndirectCallSignature
 	MemoryOutOfBounds
 	Unreachable
-
 	IntegerDivideByZero
 	IntegerOverflow
+
+	NumTraps
 )
 
 func (id Id) String() string {

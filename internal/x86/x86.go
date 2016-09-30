@@ -233,7 +233,7 @@ func (mach X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
 	Add.opFromReg(code, types.I64, regStackPtr, source)
 }
 
-func (mach X86) OpImportTrampoline(code gen.Coder, absoluteAddr int64, signature, varArgsCount int) {
+func (mach X86) OpEnterImportFunction(code gen.Coder, absoluteAddr int64, signature, varArgsCount int) {
 	mach.OpMove(code, types.I32, regImportVarArgs, values.ImmOperand(types.I32, varArgsCount), false)
 	mach.OpMove(code, types.I32, regImportSig, values.ImmOperand(types.I32, signature), false)
 	MovImm64.op(code, types.I64, regResult, absoluteAddr)
@@ -277,7 +277,7 @@ func (mach X86) OpInit(code gen.Coder, start *links.L) {
 	notResume.AddSite(code.Len())
 	Ret.op(code) // simulate return from snapshot function call
 
-	notResume.SetAddress(code.Len())
+	notResume.Address = code.Len()
 	mach.updateSites8(code, &notResume)
 
 	CallRel.op(code, start.Address)
@@ -363,7 +363,7 @@ func (mach X86) OpMove(code gen.Coder, t types.T, targetReg regs.R, x values.Ope
 				Movzx8.opFromReg(code, t, targetReg, targetReg)
 			}
 
-			end.SetAddress(code.Len())
+			end.Address = code.Len()
 			mach.updateSites8(code, &end)
 
 			zeroExt = true
@@ -552,12 +552,12 @@ func (mach X86) OpSelect(code gen.RegCoder, t types.T, a, b, condOperand values.
 			end.AddSite(code.Len())
 		}
 
-		moveIt.SetAddress(code.Len())
+		moveIt.Address = code.Len()
 		mach.updateSites8(code, &moveIt)
 
 		mach.OpMove(code, t, targetReg, a, false)
 
-		end.SetAddress(code.Len())
+		end.Address = code.Len()
 		mach.updateSites8(code, &end)
 
 	default:
@@ -598,7 +598,7 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 	}
 }
 
-func (mach X86) OpTrapImplementation(code gen.Coder, id traps.Id) {
+func (mach X86) OpEnterTrapHandler(code gen.Coder, id traps.Id) {
 	Mov.opImm(code, types.I32, regTrapId, int(id)) // automatic zero-extension
 	MovqMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
 	Jmp.opReg(code, regScratch)
@@ -668,18 +668,13 @@ func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBoun
 }
 
 func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr int) {
-	var trap links.L
-
-	trap.SetAddress(code.Len())
-	CallRel.op(code, code.TrapLinks().CallStackExhausted.Address)
-	code.AddCallSite(&code.TrapLinks().CallStackExhausted)
-
+	code.OpTrapCall(traps.CallStackExhausted)
 	code.Align(functionAlignment, paddingByte)
 	entryAddr = code.Len()
 	Lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.opFromReg(code, types.I64, regScratch, regStackLimit)
-	Jl.op(code, trap.FinalAddress())
+	Jl.op(code, code.TrapCallAddress(traps.CallStackExhausted))
 	return
 }
 

@@ -64,7 +64,7 @@ type coder struct {
 	callMap    bytes.Buffer
 
 	functionLinks map[*Callable]*links.L
-	trapLinks     gen.TrapLinks
+	trapEntries   []links.L
 
 	regsInt   regAllocator
 	regsFloat regAllocator
@@ -76,6 +76,7 @@ type coder struct {
 
 	// these must be reset for each function
 	function       *Function
+	trapCalls      []links.L
 	vars           []varState
 	pushedLocals   int
 	stackOffset    int
@@ -87,6 +88,8 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 		module:        m,
 		roDataAddr:    int(roDataAddr),
 		functionLinks: make(map[*Callable]*links.L),
+		trapEntries:   make([]links.L, traps.NumTraps),
+		trapCalls:     make([]links.L, traps.NumTraps),
 	}
 
 	if len(m.Table) > 0 {
@@ -117,14 +120,10 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 
 	mach.OpInit(code, startLink)
 	// start function will return to init code, and will proceed to execute the exit trap
-	code.genTrap(&code.trapLinks.Exit, traps.Exit)
-	code.genTrap(&code.trapLinks.CallStackExhausted, traps.CallStackExhausted)
-	code.genTrap(&code.trapLinks.IndirectCallIndex, traps.IndirectCallIndex)
-	code.genTrap(&code.trapLinks.IndirectCallSignature, traps.IndirectCallSignature)
-	code.genTrap(&code.trapLinks.MemoryOutOfBounds, traps.MemoryOutOfBounds)
-	code.genTrap(&code.trapLinks.Unreachable, traps.Unreachable)
-	code.genTrap(&code.trapLinks.IntegerDivideByZero, traps.IntegerDivideByZero)
-	code.genTrap(&code.trapLinks.IntegerOverflow, traps.IntegerOverflow)
+
+	for id := traps.Exit; id < traps.NumTraps; id++ {
+		code.genTrapEntry(id)
+	}
 
 	var funcMapBuf bytes.Buffer
 
@@ -136,7 +135,7 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 
 		code.functionLinks[&im.Callable] = new(links.L)
 
-		addr := code.genImportTrampoline(im, impl)
+		addr := code.genImportEntry(im, impl)
 
 		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(addr)); err != nil {
 			panic(err)
@@ -219,16 +218,25 @@ func (code *coder) RODataAddr() int {
 	return code.roDataAddr
 }
 
-func (code *coder) TrapLinks() *gen.TrapLinks {
-	return &code.trapLinks
+func (code *coder) TrapEntryAddress(id traps.Id) int {
+	return code.trapEntries[id].FinalAddress()
 }
 
-func (code *coder) genTrap(l *links.L, id traps.Id) {
-	l.SetAddress(code.Len())
-	mach.OpTrapImplementation(code, id)
+func (code *coder) TrapCallAddress(id traps.Id) int {
+	return code.trapCalls[id].Address
 }
 
-func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) (funcMapAddr int) {
+func (code *coder) OpTrapCall(id traps.Id) {
+	code.trapCalls[id].Address = code.Len()
+	mach.OpCall(code, &code.trapEntries[id])
+}
+
+func (code *coder) genTrapEntry(id traps.Id) {
+	code.trapEntries[id].Address = code.Len()
+	mach.OpEnterTrapHandler(code, id)
+}
+
+func (code *coder) genImportEntry(instance *Import, impl imports.Function) (funcMapAddr int) {
 	if !impl.Implements(instance.Function) {
 		panic(instance)
 	}
@@ -237,8 +245,8 @@ func (code *coder) genImportTrampoline(instance *Import, impl imports.Function) 
 
 	code.Align(mach.FunctionAlignment(), mach.PaddingByte())
 	funcMapAddr = code.Len()
-	code.functionLinks[&instance.Callable].SetAddress(code.Len())
-	mach.OpImportTrampoline(code, impl.Address, instance.Signature.Index, varArgsCount)
+	code.functionLinks[&instance.Callable].Address = code.Len()
+	mach.OpEnterImportFunction(code, impl.Address, instance.Signature.Index, varArgsCount)
 	return
 }
 
@@ -248,6 +256,10 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 	}
 
 	code.function = f
+
+	for i := range code.trapCalls {
+		code.trapCalls[i].Reset()
+	}
 
 	if n := len(f.Params) + len(f.Locals); cap(code.vars) >= n {
 		code.vars = code.vars[:n]
@@ -343,7 +355,7 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 		entryAddr = newAddr
 	}
 
-	code.functionLinks[&f.Callable].SetAddress(entryAddr)
+	code.functionLinks[&f.Callable].Address = entryAddr
 
 	if verbose {
 		fmt.Println("</function>")
@@ -1246,12 +1258,12 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 	code.opBranchIfEqualImm32(sigReg, sig.Index, doCall)
 	code.FreeReg(types.I64, sigReg)
 
-	mach.OpCall(code, &code.trapLinks.IndirectCallSignature)
+	mach.OpCall(code, &code.trapEntries[traps.IndirectCallSignature])
 
-	outOfBounds.SetAddress(code.Len())
-	mach.OpCall(code, &code.trapLinks.IndirectCallIndex)
+	outOfBounds.Address = code.Len()
+	mach.OpCall(code, &code.trapEntries[traps.IndirectCallIndex])
 
-	doCall.SetAddress(code.Len())
+	doCall.Address = code.Len()
 	mach.OpCallIndirect32(code, mach.ResultReg())
 
 	if indexOperand.Storage == values.Stack {
@@ -1778,7 +1790,7 @@ func (code *coder) exprUnreachable(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	mach.OpCall(code, &code.trapLinks.Unreachable)
+	mach.OpCall(code, &code.trapEntries[traps.Unreachable])
 }
 
 func (code *coder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
@@ -2338,7 +2350,7 @@ func (code *coder) opStoreVar(t types.T, index int, x values.Operand) {
 func (code *coder) opLabel(l *links.L) {
 	code.opSaveTempRegOperands()
 	code.opStoreRegVars(true)
-	l.SetAddress(code.Len())
+	l.Address = code.Len()
 
 	if verbose {
 		for i := 0; i < debugExprDepth; i++ {

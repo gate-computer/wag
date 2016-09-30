@@ -7,6 +7,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/traps"
 )
 
 const (
@@ -23,7 +24,9 @@ type Coder interface {
 
 	MinMemorySize() int
 	RODataAddr() int
-	TrapLinks() *TrapLinks
+	TrapEntryAddress(id traps.Id) int
+	TrapCallAddress(id traps.Id) int
+	OpTrapCall(id traps.Id)
 
 	Discard(types.T, values.Operand)
 	Consumed(types.T, values.Operand)
@@ -39,17 +42,4 @@ type RegCoder interface {
 
 	TryAllocReg(t types.T) (reg regs.R, ok bool)
 	AllocSpecificReg(t types.T, reg regs.R)
-}
-
-type TrapLinks struct {
-	Exit links.L
-
-	CallStackExhausted    links.L
-	IndirectCallIndex     links.L
-	IndirectCallSignature links.L
-	MemoryOutOfBounds     links.L
-	Unreachable           links.L
-
-	IntegerDivideByZero links.L
-	IntegerOverflow     links.L
 }
