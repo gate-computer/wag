@@ -250,7 +250,16 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) 
 }
 
 func (mach X86) OpCall(code gen.Coder, l *links.L) {
-	CallRel.op(code, l.Address)
+	if l.Address == 0 {
+		// address slot must not cross cache line boundary
+		if relPos := (code.Len() + CallRel.size()) & 3; relPos > 0 {
+			padSize := 4 - relPos
+			code.Write(nopSequences[padSize-1])
+		}
+		CallRel.opMissingFunction(code)
+	} else {
+		CallRel.op(code, l.Address)
+	}
 	code.AddCallSite(l)
 }
 
@@ -266,9 +275,13 @@ func (mach X86) OpCallIndirect32(code gen.Coder, reg regs.R) {
 }
 
 func (mach X86) OpInit(code gen.Coder, start *links.L) {
-	var notResume links.L
-
+	if code.Len() == 0 || code.Len() > functionAlignment {
+		panic("inconsistency")
+	}
+	code.Align(functionAlignment, paddingByte)
 	Add.opImm(code, types.I64, regStackLimit, gen.StackReserve)
+
+	var notResume links.L
 
 	Test.opFromReg(code, types.I64, regResult, regResult)
 	Je.rel8.opStub(code)
@@ -596,6 +609,7 @@ func (mach X86) OpStoreStack(code gen.Coder, t types.T, offset int, x values.Ope
 	}
 }
 
+// OpEnterTrapHandler must not generate over 16 bytes of code.
 func (mach X86) OpEnterTrapHandler(code gen.Coder, id traps.Id) {
 	Mov.opImm(code, types.I32, regTrapId, int(id)) // automatic zero-extension
 	MovqMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
@@ -661,14 +675,14 @@ func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBoun
 	return code.Len()
 }
 
-func (mach X86) OpFunctionPrologue(code gen.Coder) (entryAddr, stackUsageAddr int) {
+func (mach X86) OpFunctionPrologue(code gen.Coder) (invokeAddr, stackUsageAddr int) {
 	code.OpTrapCall(traps.CallStackExhausted)
 	code.Align(functionAlignment, paddingByte)
-	entryAddr = code.Len()
+	invokeAddr = code.Len()
 	Lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
 	stackUsageAddr = code.Len()
 	Cmp.opFromReg(code, types.I64, regScratch, regStackLimit)
-	Jl.op(code, code.TrapCallAddress(traps.CallStackExhausted))
+	Jl.op(code, code.TrapTrampolineAddress(traps.CallStackExhausted))
 	return
 }
 

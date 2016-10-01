@@ -55,12 +55,18 @@ type branchTarget struct {
 	functionEnd bool
 }
 
+type branchTable struct {
+	roDataAddr      int
+	targets         []*branchTarget
+	codeStackOffset int // -1 indicates common offset
+}
+
 type coder struct {
 	module *Module
 
 	text       bytes.Buffer
-	roData     dataArena
 	roDataAddr int
+	roData     dataArena
 	callMap    bytes.Buffer
 
 	functionLinks map[*Callable]*links.L
@@ -74,46 +80,39 @@ type coder struct {
 
 	targetStack []*branchTarget
 
+	branchTables []branchTable
+
 	// these must be reset for each function
-	function       *Function
-	trapCalls      []links.L
-	vars           []varState
-	pushedLocals   int
-	stackOffset    int
-	maxStackOffset int
+	function        *Function
+	trapTrampolines []links.L
+	vars            []varState
+	pushedLocals    int
+	stackOffset     int
+	maxStackOffset  int
 }
 
 func (m *Module) Code(importImpls map[string]map[string]imports.Function, roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, funcMap, callMap []byte) {
-	code := &coder{
-		module:        m,
-		roDataAddr:    int(roDataAddr),
-		functionLinks: make(map[*Callable]*links.L),
-		trapEntries:   make([]links.L, traps.NumTraps),
-		trapCalls:     make([]links.L, traps.NumTraps),
+	var memory dataArena
+
+	for i := range m.Memory.Segments {
+		allocDataSegment(m, &memory, i)
 	}
 
-	if len(m.Table) > 0 {
-		alloc := code.roData.allocate(len(m.Table)*8, 8, func(data []byte) {
-			for _, f := range m.Table {
-				if f.Signature.Index < 0 {
-					panic("function signature has no index while populating table")
-				}
-
-				addr := uint32(code.functionLinks[f].FinalAddress())
-				sigId := uint32(f.Signature.Index)
-				packed := (uint64(sigId) << 32) | uint64(addr)
-				binary.LittleEndian.PutUint64(data[:8], packed)
-				data = data[8:]
-			}
-		})
-		if alloc.addr != roTableAddr {
-			panic(alloc.addr)
-		}
+	code := &coder{
+		module:          m,
+		roDataAddr:      int(roDataAddr),
+		roData:          dataArena{buf: roDataBuf[:0]},
+		functionLinks:   make(map[*Callable]*links.L),
+		trapEntries:     make([]links.L, traps.NumTraps),
+		trapTrampolines: make([]links.L, traps.NumTraps),
 	}
 
 	for _, f := range m.Functions {
 		code.functionLinks[&f.Callable] = new(links.L)
 	}
+
+	// at zero address
+	code.genTrapEntry(traps.MissingFunction)
 
 	startFunc := m.NamedCallables[m.Start]
 	startLink := code.functionLinks[startFunc]
@@ -122,7 +121,9 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 	// start function will return to init code, and will proceed to execute the exit trap
 
 	for id := traps.Exit; id < traps.NumTraps; id++ {
-		code.genTrapEntry(id)
+		if id != traps.MissingFunction {
+			code.genTrapEntry(id)
+		}
 	}
 
 	var funcMapBuf bytes.Buffer
@@ -133,39 +134,54 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 			panic(im)
 		}
 
-		code.functionLinks[&im.Callable] = new(links.L)
-
 		addr := code.genImportEntry(im, impl)
 
 		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(addr)); err != nil {
 			panic(err)
 		}
+
+		code.functionLinks[&im.Callable] = &links.L{
+			Address: addr,
+		}
+	}
+
+	if addr := code.roData.alloc(len(m.Table)*8, 8); addr != roTableAddr {
+		panic("table could not be allocated at designated read-only memory offset")
+	}
+	buf := code.roData.buf[roTableAddr:]
+	for _, f := range m.Table {
+		if f.Signature.Index < 0 {
+			panic("function signature has no index while populating table")
+		}
+		sigIndex := uint32(f.Signature.Index)
+		addr := uint32(code.functionLinks[f].Address) // imports already available
+		binary.LittleEndian.PutUint64(buf[:8], (uint64(sigIndex)<<32)|uint64(addr))
+		buf = buf[8:]
 	}
 
 	code.regsInt.init(mach.AvailableIntRegs(), "integer")
 	code.regsFloat.init(mach.AvailableFloatRegs(), "float")
 
 	for _, f := range m.Functions {
-		addr := code.genFunction(f)
+		mapAddr, invokeAddr := code.genFunction(f)
 
-		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(addr)); err != nil {
+		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(mapAddr)); err != nil {
 			panic(err)
+		}
+
+		link := code.functionLinks[&f.Callable]
+		link.Address = invokeAddr
+		mach.UpdateCalls(code, link)
+
+		for _, tableIndex := range f.TableIndexes {
+			buf := code.roData.buf[roTableAddr+tableIndex*8:]
+			binary.LittleEndian.PutUint32(buf[:4], uint32(invokeAddr)) // overwrite only function addr
 		}
 	}
 
-	for _, link := range code.functionLinks {
-		mach.UpdateCalls(code, link)
-	}
-
-	roData = code.roData.populate(roDataBuf)
-
-	var memory dataArena
-	for i := range m.Memory.Segments {
-		allocDataSegment(m, &memory, i)
-	}
-	data = memory.populate(nil)
-
 	text = code.text.Bytes()
+	roData = code.roData.buf
+	data = memory.buf
 	funcMap = funcMapBuf.Bytes()
 	callMap = code.callMap.Bytes()
 	return
@@ -174,16 +190,15 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 func allocDataSegment(module *Module, memory *dataArena, index int) {
 	s := module.Memory.Segments[index]
 
-	if s.Offset < memory.size {
+	if s.Offset < len(memory.buf) {
 		// TODO: does this need to be supported?
 		panic("data segment overlaps with previous segment")
 	}
 
-	skip := s.Offset - memory.size
+	skip := s.Offset - len(memory.buf)
 
-	memory.allocate(skip+len(s.Data), 1, func(data []byte) {
-		copy(data[skip:], s.Data)
-	})
+	addr := memory.alloc(skip+len(s.Data), 1)
+	copy(memory.buf[addr+skip:], s.Data)
 }
 
 func (code *coder) Write(buf []byte) (int, error) {
@@ -222,12 +237,12 @@ func (code *coder) TrapEntryAddress(id traps.Id) int {
 	return code.trapEntries[id].FinalAddress()
 }
 
-func (code *coder) TrapCallAddress(id traps.Id) int {
-	return code.trapCalls[id].Address
+func (code *coder) TrapTrampolineAddress(id traps.Id) int {
+	return code.trapTrampolines[id].Address
 }
 
 func (code *coder) OpTrapCall(id traps.Id) {
-	code.trapCalls[id].Address = code.Len()
+	code.trapTrampolines[id].Address = code.Len()
 	mach.OpCall(code, &code.trapEntries[id])
 }
 
@@ -236,7 +251,7 @@ func (code *coder) genTrapEntry(id traps.Id) {
 	mach.OpEnterTrapHandler(code, id)
 }
 
-func (code *coder) genImportEntry(instance *Import, impl imports.Function) (funcMapAddr int) {
+func (code *coder) genImportEntry(instance *Import, impl imports.Function) (addr int) {
 	if !impl.Implements(instance.Function) {
 		panic(instance)
 	}
@@ -244,21 +259,20 @@ func (code *coder) genImportEntry(instance *Import, impl imports.Function) (func
 	varArgsCount := len(instance.Callable.Args) - len(impl.Args)
 
 	code.Align(mach.FunctionAlignment(), mach.PaddingByte())
-	funcMapAddr = code.Len()
-	code.functionLinks[&instance.Callable].Address = code.Len()
+	addr = code.Len()
 	mach.OpEnterImportFunction(code, impl.Address, instance.Signature.Index, varArgsCount)
 	return
 }
 
-func (code *coder) genFunction(f *Function) (funcMapAddr int) {
+func (code *coder) genFunction(f *Function) (mapAddr, invokeAddr int) {
 	if verbose {
 		fmt.Printf("<function names=\"%s\">\n", f.Names)
 	}
 
 	code.function = f
 
-	for i := range code.trapCalls {
-		code.trapCalls[i].Reset()
+	for i := range code.trapTrampolines {
+		code.trapTrampolines[i].Reset()
 	}
 
 	if n := len(f.Params) + len(f.Locals); cap(code.vars) >= n {
@@ -276,8 +290,8 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 	code.stackOffset = 0
 	code.maxStackOffset = 0
 
-	funcMapAddr = code.Len()
-	entryAddr, stackUsageAddr := mach.OpFunctionPrologue(code)
+	mapAddr = code.Len()
+	invokeAddr, stackUsageAddr := mach.OpFunctionPrologue(code)
 	stackCheckEndAddr := code.Len()
 
 	end := new(links.L)
@@ -350,12 +364,28 @@ func (code *coder) genFunction(f *Function) (funcMapAddr int) {
 		mach.UpdateStackDisp(code, stackUsageAddr, code.maxStackOffset)
 	} else {
 		newAddr := stackCheckEndAddr &^ (mach.FunctionAlignment() - 1)
-		mach.DeleteCode(code, entryAddr, newAddr)
+		mach.DeleteCode(code, invokeAddr, newAddr)
 		mach.DisableCode(code, newAddr, stackCheckEndAddr)
-		entryAddr = newAddr
+		invokeAddr = newAddr
 	}
 
-	code.functionLinks[&f.Callable].Address = entryAddr
+	for _, table := range code.branchTables {
+		buf := code.roData.buf[table.roDataAddr:]
+		for _, target := range table.targets {
+			targetAddr := uint32(target.label.FinalAddress())
+			if table.codeStackOffset < 0 {
+				// common offset
+				binary.LittleEndian.PutUint32(buf[:4], targetAddr)
+				buf = buf[4:]
+			} else {
+				delta := table.codeStackOffset - target.stackOffset
+				packed := (uint64(uint32(delta)) << 32) | uint64(targetAddr)
+				binary.LittleEndian.PutUint64(buf[:8], packed)
+				buf = buf[8:]
+			}
+		}
+	}
+	code.branchTables = nil // all done
 
 	if verbose {
 		fmt.Println("</function>")
@@ -1032,7 +1062,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		}
 
 		tableSize := len(tableTargets) << tableScale
-		tableAlloc := code.roData.allocate(tableSize, 1<<tableScale, nil)
+		tableAddr := code.roData.alloc(tableSize, 1<<tableScale)
 
 		code.opSaveTempRegOperands()
 
@@ -1078,7 +1108,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 		mach.OpAddImmToStackPtr(code, defaultDelta)
 		tableStackOffset := code.stackOffset - defaultDelta
 		code.opBranchIfOutOfBounds(reg, len(tableTargets), defaultTarget.label)
-		regZeroExt = mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, regZeroExt, tableScale, tableAlloc.addr)
+		regZeroExt = mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, regZeroExt, tableScale, tableAddr)
 
 		if commonStackOffset >= 0 {
 			mach.OpAddImmToStackPtr(code, tableStackOffset-commonStackOffset)
@@ -1096,21 +1126,16 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 
 		deadend = true
 
-		tableAlloc.populator = func(data []byte) {
-			for _, target := range tableTargets {
-				addr := uint32(target.label.FinalAddress())
-
-				if commonStackOffset >= 0 {
-					binary.LittleEndian.PutUint32(data[:4], addr)
-					data = data[4:]
-				} else {
-					delta := tableStackOffset - target.stackOffset
-					packed := (uint64(uint32(delta)) << 32) | uint64(addr)
-					binary.LittleEndian.PutUint64(data[:8], packed)
-					data = data[8:]
-				}
-			}
+		t := branchTable{
+			roDataAddr:      tableAddr,
+			targets:         tableTargets,
+			codeStackOffset: -1,
 		}
+		if commonStackOffset < 0 {
+			// no common offset
+			t.codeStackOffset = tableStackOffset
+		}
+		code.branchTables = append(code.branchTables, t)
 	}
 
 	return

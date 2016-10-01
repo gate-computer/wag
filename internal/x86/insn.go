@@ -160,7 +160,6 @@ func (opcode insnAddr8) op(code gen.Coder, addr int) (ok bool) {
 		imm8(offset).writeTo(code)
 		ok = true
 	}
-
 	return
 }
 
@@ -175,24 +174,28 @@ func (opcode insnAddr32) size() int {
 	return len(opcode) + 4
 }
 
-func (opcode insnAddr32) op(code gen.Coder, addr int) {
-	insnSize := len(opcode) + 4
+func (i insnAddr32) op(code gen.Coder, addr int) {
 	var offset int
-
 	if addr != 0 {
-		siteAddr := code.Len() + insnSize
+		siteAddr := code.Len() + i.size()
 		offset = addr - siteAddr
 	} else {
-		offset = -insnSize // infinite loop as placeholder
+		offset = -i.size() // infinite loop as placeholder
 	}
+	i.writeTo(code, offset)
+}
 
-	if offset >= -0x80000000 && offset < 0x80000000 {
-		code.Write(opcode)
-		imm32(offset).writeTo(code)
-		return
+func (i insnAddr32) opMissingFunction(code gen.Coder) {
+	siteAddr := code.Len() + i.size()
+	i.writeTo(code, -siteAddr)
+}
+
+func (opcode insnAddr32) writeTo(code gen.Coder, offset int) {
+	if offset < -0x80000000 || offset >= 0x80000000 {
+		panic("address out of bounds")
 	}
-
-	panic("address out of bounds")
+	code.Write(opcode)
+	imm32(offset).writeTo(code)
 }
 
 //

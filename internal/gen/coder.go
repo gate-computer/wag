@@ -25,7 +25,7 @@ type Coder interface {
 	MinMemorySize() int
 	RODataAddr() int
 	TrapEntryAddress(id traps.Id) int
-	TrapCallAddress(id traps.Id) int
+	TrapTrampolineAddress(id traps.Id) int
 	OpTrapCall(id traps.Id)
 
 	Discard(types.T, values.Operand)

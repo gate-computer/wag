@@ -12,6 +12,7 @@ const (
 	Unreachable
 	IntegerDivideByZero
 	IntegerOverflow
+	MissingFunction
 
 	NumTraps
 )
@@ -41,6 +42,9 @@ func (id Id) String() string {
 
 	case IntegerOverflow:
 		return "integer overflow"
+
+	case MissingFunction:
+		return "missing function"
 
 	default:
 		return "unknown trap"

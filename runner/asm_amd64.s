@@ -67,7 +67,10 @@ TEXT run<>(SB),NOSPLIT,$0
 	SUBQ	$8, SP
 	MOVQ	DX, (SP)	// arg
 
-resume:	JMP	R12
+resume:
+	MOVQ	R12, DI
+	ADDQ	$16, DI		// skip trap at start of text
+	JMP	DI
 	// exits via trap handler
 
 TEXT trap<>(SB),NOSPLIT,$0

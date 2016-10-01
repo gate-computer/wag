@@ -203,7 +203,7 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, 
 	if runtimeCheck {
 		Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
 
-		if addr := code.TrapCallAddress(traps.MemoryOutOfBounds); addr != 0 {
+		if addr := code.TrapTrampolineAddress(traps.MemoryOutOfBounds); addr != 0 {
 			Jg.op(code, addr)
 		} else {
 			var checked links.L

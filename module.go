@@ -190,7 +190,13 @@ func loadModule(top []interface{}) (m *Module) {
 				newSig = sigs[i]
 			}
 
-			im := &Import{Callable{newSig}, namespace, name}
+			im := &Import{
+				Callable: Callable{
+					Signature: newSig,
+				},
+				Namespace: namespace,
+				Name:      name,
+			}
 			m.Imports = append(m.Imports, im)
 
 			if importName != "" {
@@ -236,6 +242,7 @@ func loadModule(top []interface{}) (m *Module) {
 			}
 		}
 
+		c.TableIndexes = append(c.TableIndexes, len(m.Table))
 		m.Table = append(m.Table, c)
 	}
 
@@ -373,6 +380,7 @@ type Var struct {
 
 type Callable struct {
 	*Signature
+	TableIndexes []int
 }
 
 func (c *Callable) String() string {
@@ -387,7 +395,7 @@ type Import struct {
 }
 
 func (im *Import) String() string {
-	return fmt.Sprintf("%s %s %s", im.Namespace, im.Name, im.Callable)
+	return fmt.Sprintf("%s %s %s", im.Namespace, im.Name, &im.Callable)
 }
 
 type Function struct {
@@ -406,7 +414,7 @@ func newFunction(m *Module, list []interface{}) (f *Function) {
 
 	f = &Function{
 		Callable: Callable{
-			&Signature{Index: -1},
+			Signature: &Signature{Index: -1},
 		},
 		Vars: make(map[string]Var),
 	}
