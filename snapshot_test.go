@@ -21,25 +21,24 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	m := loadModule(expr)
+	globals, data := m.Data()
 
 	const (
 		maxRODataSize = 4096
 		stackSize     = 4096
 	)
 
-	b, err := runner.NewBuffer(maxRODataSize)
+	b, err := runner.NewBuffer(maxTextSize, maxRODataSize)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	text, _, globals, data, funcMap, callMap := m.Code(b.Imports, b.RODataAddr(), b.ROData)
+	_, _, funcMap, callMap := m.Code(runner.Imports, b.Text, b.RODataAddr(), b.ROData, nil)
 
 	b.Seal()
 
-	p, err := b.NewProgram(text, globals, data, funcMap, callMap, m.FuncTypes(), m.FuncNames())
-	if err != nil {
-		t.Fatal(err)
-	}
+	p := b.NewProgram(globals, data, m.FuncTypes(), m.FuncNames())
+	p.SetMaps(funcMap, callMap)
 
 	r1, err := p.NewRunner(m.Memory.MinSize, m.Memory.MaxSize, stackSize)
 	if err != nil {
@@ -85,6 +84,5 @@ func TestSnapshot(t *testing.T) {
 		t.Fatal(result)
 	}
 
-	p.Close()
 	b.Close()
 }

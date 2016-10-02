@@ -27,7 +27,7 @@ func (p *Program) findCaller(retAddr uint32) (num int, init, ok bool) {
 
 		i++
 		if i == count {
-			funcEndAddr = uint32(len(p.text))
+			funcEndAddr = uint32(len(p.buf.Text))
 		} else {
 			funcEndAddr = byteOrder.Uint32(p.funcMap[i*4 : (i+1)*4])
 		}
@@ -83,7 +83,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 	portable = make([]byte, len(native))
 	copy(portable, native)
 
-	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.text)).Data)
+	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.buf.Text)).Data)
 	callSites := p.CallSites()
 
 	buf := portable[:len(portable)-8] // drop test arg
@@ -129,7 +129,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 }
 
 func (p *Program) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
-	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.text)).Data)
+	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.buf.Text)).Data)
 	callSites := p.CallSites()
 
 	stack = stack[:len(stack)-8] // drop test arg

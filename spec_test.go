@@ -26,6 +26,7 @@ const (
 	dumpFuncMap = false
 	dumpCallMap = false
 
+	maxTextSize   = 0x100000
 	maxRODataSize = 0x100000
 	maxMemorySize = 0x100000
 	stackSize     = 0x1000 // limit stacktrace length
@@ -359,8 +360,9 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 		var timedout bool
 
 		m := loadModule(module)
+		globals, data := m.Data()
 
-		b, err := runner.NewBuffer(maxRODataSize)
+		b, err := runner.NewBuffer(maxTextSize, maxRODataSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -369,8 +371,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 				b.Close()
 			}
 		}()
-
-		text, roData, globals, data, funcMap, callMap := m.Code(b.Imports, b.RODataAddr(), b.ROData)
+		text, roData, funcMap, callMap := m.Code(runner.Imports, b.Text, b.RODataAddr(), b.ROData, nil)
 
 		b.Seal()
 
@@ -499,15 +500,8 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			}
 		}
 
-		p, err := b.NewProgram(text, globals, data, funcMap, callMap, m.FuncTypes(), m.FuncNames())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer func() {
-			if !timedout {
-				p.Close()
-			}
-		}()
+		p := b.NewProgram(globals, data, m.FuncTypes(), m.FuncNames())
+		p.SetMaps(funcMap, callMap)
 
 		memGrowSize := maxMemorySize
 		if m.Memory.MaxSize > 0 && memGrowSize > m.Memory.MaxSize {

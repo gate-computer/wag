@@ -64,7 +64,7 @@ type branchTable struct {
 type coder struct {
 	module *Module
 
-	text       bytes.Buffer
+	text       *bytes.Buffer
 	roDataAddr int
 	roData     dataArena
 	callMap    bytes.Buffer
@@ -91,15 +91,10 @@ type coder struct {
 	maxStackOffset  int
 }
 
-func (m *Module) Code(importImpls map[string]map[string]imports.Function, roDataAddr int32, roDataBuf []byte) (text, roData, globals, data, funcMap, callMap []byte) {
-	var memory dataArena
-
-	for i := range m.Memory.Segments {
-		allocDataSegment(m, &memory, i)
-	}
-
+func (m *Module) Code(importImpls map[string]map[string]imports.Function, textBuf []byte, roDataAddr int32, roDataBuf []byte, startTrigger chan<- struct{}) (text, roData, funcMap, callMap []byte) {
 	code := &coder{
 		module:          m,
+		text:            bytes.NewBuffer(textBuf[:0]),
 		roDataAddr:      int(roDataAddr),
 		roData:          dataArena{buf: roDataBuf[:0]},
 		functionLinks:   make(map[*Callable]*links.L),
@@ -107,19 +102,19 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 		trapTrampolines: make([]links.L, traps.NumTraps),
 	}
 
+	if code.roData.alloc(len(m.Table)*8, 8) != roTableAddr {
+		panic("table could not be allocated at designated read-only memory offset")
+	}
+
 	for _, f := range m.Functions {
 		code.functionLinks[&f.Callable] = new(links.L)
 	}
 
-	// at zero address
-	code.genTrapEntry(traps.MissingFunction)
+	startCallable := m.NamedCallables[m.Start]
 
-	startFunc := m.NamedCallables[m.Start]
-	startLink := code.functionLinks[startFunc]
-
-	mach.OpInit(code, startLink)
+	code.genTrapEntry(traps.MissingFunction) // at zero address
+	mach.OpInit(code, code.functionLinks[startCallable])
 	// start function will return to init code, and will proceed to execute the exit trap
-
 	for id := traps.Exit; id < traps.NumTraps; id++ {
 		if id != traps.MissingFunction {
 			code.genTrapEntry(id)
@@ -145,60 +140,80 @@ func (m *Module) Code(importImpls map[string]map[string]imports.Function, roData
 		}
 	}
 
-	if addr := code.roData.alloc(len(m.Table)*8, 8); addr != roTableAddr {
-		panic("table could not be allocated at designated read-only memory offset")
-	}
-	buf := code.roData.buf[roTableAddr:]
-	for _, f := range m.Table {
-		if f.Signature.Index < 0 {
-			panic("function signature has no index while populating table")
-		}
-		sigIndex := uint32(f.Signature.Index)
-		addr := uint32(code.functionLinks[f].Address) // imports already available
-		binary.LittleEndian.PutUint64(buf[:8], (uint64(sigIndex)<<32)|uint64(addr))
-		buf = buf[8:]
-	}
-
 	code.regsInt.init(mach.AvailableIntRegs(), "integer")
 	code.regsFloat.init(mach.AvailableFloatRegs(), "float")
 
-	for _, f := range m.Functions {
-		mapAddr, invokeAddr := code.genFunction(f)
+	funcIndex := 0
+
+	for funcIndex < len(m.Functions) {
+		f := m.Functions[funcIndex]
+		mapAddr := code.genFunction(f)
 
 		if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(mapAddr)); err != nil {
 			panic(err)
 		}
 
-		link := code.functionLinks[&f.Callable]
-		link.Address = invokeAddr
-		mach.UpdateCalls(code, link)
+		mach.UpdateCalls(code, code.functionLinks[&f.Callable])
 
-		for _, tableIndex := range f.TableIndexes {
-			buf := code.roData.buf[roTableAddr+tableIndex*8:]
-			binary.LittleEndian.PutUint32(buf[:4], uint32(invokeAddr)) // overwrite only function addr
+		funcIndex++
+
+		if &f.Callable == startCallable {
+			break
+		}
+	}
+
+	ptr := code.roData.buf[roTableAddr:]
+
+	for _, f := range m.Table {
+		if f.Signature.Index < 0 {
+			panic("function signature has no index while populating table")
+		}
+
+		sigIndex := uint32(f.Signature.Index)
+		addr := uint32(code.functionLinks[f].Address) // missing if not generated yet
+		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(addr))
+		ptr = ptr[8:]
+	}
+
+	if startTrigger != nil {
+		close(startTrigger)
+	}
+
+	if funcIndex < len(m.Functions) {
+		for _, f := range m.Functions[funcIndex:] {
+			mapAddr := code.genFunction(f)
+
+			if err := binary.Write(&funcMapBuf, binary.LittleEndian, uint32(mapAddr)); err != nil {
+				panic(err)
+			}
+		}
+
+		if startTrigger != nil {
+			mach.ClearInsnCache()
+		}
+
+		for _, f := range m.Functions[funcIndex:] {
+			link := code.functionLinks[&f.Callable]
+			invokeAddr := uint32(link.Address)
+
+			for _, tableIndex := range f.TableIndexes {
+				ptr := code.roData.buf[roTableAddr+tableIndex*8:]
+				binary.LittleEndian.PutUint32(ptr[:4], invokeAddr) // overwrite only function addr
+			}
+
+			mach.UpdateCalls(code, link)
+		}
+
+		if startTrigger != nil {
+			mach.ClearInsnCache()
 		}
 	}
 
 	text = code.text.Bytes()
 	roData = code.roData.buf
-	data = memory.buf
 	funcMap = funcMapBuf.Bytes()
 	callMap = code.callMap.Bytes()
 	return
-}
-
-func allocDataSegment(module *Module, memory *dataArena, index int) {
-	s := module.Memory.Segments[index]
-
-	if s.Offset < len(memory.buf) {
-		// TODO: does this need to be supported?
-		panic("data segment overlaps with previous segment")
-	}
-
-	skip := s.Offset - len(memory.buf)
-
-	addr := memory.alloc(skip+len(s.Data), 1)
-	copy(memory.buf[addr+skip:], s.Data)
 }
 
 func (code *coder) Write(buf []byte) (int, error) {
@@ -264,7 +279,7 @@ func (code *coder) genImportEntry(instance *Import, impl imports.Function) (addr
 	return
 }
 
-func (code *coder) genFunction(f *Function) (mapAddr, invokeAddr int) {
+func (code *coder) genFunction(f *Function) (mapAddr int) {
 	if verbose {
 		fmt.Printf("<function names=\"%s\">\n", f.Names)
 	}
@@ -386,6 +401,8 @@ func (code *coder) genFunction(f *Function) (mapAddr, invokeAddr int) {
 		}
 	}
 	code.branchTables = nil // all done
+
+	code.functionLinks[&f.Callable].Address = invokeAddr
 
 	if verbose {
 		fmt.Println("</function>")

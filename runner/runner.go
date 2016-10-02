@@ -27,34 +27,38 @@ var (
 	systemPageSize = syscall.Getpagesize()
 )
 
-type Buffer struct {
-	Imports map[string]map[string]imports.Function
-	ROData  []byte
-
-	sealed bool
+var Imports = map[string]map[string]imports.Function{
+	"spectest": {
+		"print": imports.Function{
+			Variadic: true,
+			Address:  importSpectestPrint(),
+		},
+	},
+	"wag": {
+		"snapshot": imports.Function{
+			Function: types.Function{
+				Result: types.I32,
+			},
+			Address: importSnapshot(),
+		},
+	},
 }
 
-func NewBuffer(maxRODataSize int) (b *Buffer, err error) {
-	b = &Buffer{
-		Imports: map[string]map[string]imports.Function{
-			"spectest": {
-				"print": imports.Function{
-					Variadic: true,
-					Address:  importSpectestPrint(),
-				},
-			},
-			"wag": {
-				"snapshot": imports.Function{
-					Function: types.Function{
-						Result: types.I32,
-					},
-					Address: importSnapshot(),
-				},
-			},
-		},
+type Buffer struct {
+	Text   []byte
+	ROData []byte
+}
+
+func NewBuffer(maxTextSize, maxRODataSize int) (b *Buffer, err error) {
+	b = &Buffer{}
+
+	b.Text, err = makeMemory(maxTextSize, syscall.PROT_EXEC, syscall.MAP_32BIT)
+	if err != nil {
+		b.Close()
+		return
 	}
 
-	b.ROData, err = makeMemory(maxRODataSize, syscall.MAP_32BIT)
+	b.ROData, err = makeMemory(maxRODataSize, 0, syscall.MAP_32BIT)
 	if err != nil {
 		b.Close()
 		return
@@ -72,6 +76,13 @@ func (b *Buffer) RODataAddr() int32 {
 }
 
 func (b *Buffer) Seal() (err error) {
+	if b.Text != nil {
+		err = syscall.Mprotect(b.Text, syscall.PROT_EXEC|syscall.PROT_READ)
+		if err != nil {
+			return
+		}
+	}
+
 	if b.ROData != nil {
 		err = syscall.Mprotect(b.ROData, syscall.PROT_READ)
 		if err != nil {
@@ -79,11 +90,16 @@ func (b *Buffer) Seal() (err error) {
 		}
 	}
 
-	b.sealed = true
 	return
 }
 
 func (b *Buffer) Close() (first error) {
+	if b.Text != nil {
+		if err := syscall.Munmap(b.Text); err != nil && first == nil {
+			first = err
+		}
+	}
+
 	if b.ROData != nil {
 		if err := syscall.Munmap(b.ROData); err != nil && first == nil {
 			first = err
@@ -105,55 +121,35 @@ type runnable interface {
 type Program struct {
 	buf *Buffer
 
-	text      []byte
 	globals   []byte
 	data      []byte
-	funcMap   []byte
-	callMap   []byte
 	funcTypes []types.Function
 	funcNames []string
+
+	funcMap []byte
+	callMap []byte
 
 	funcAddrs map[int]int
 	callSites map[int]callSite
 }
 
-func (b *Buffer) NewProgram(text, globals, data, funcMap, callMap []byte, funcTypes []types.Function, funcNames []string) (p *Program, err error) {
-	if !b.sealed {
-		err = errors.New("buffer has not been sealed")
-		return
-	}
-
-	p = &Program{
+func (b *Buffer) NewProgram(globals, data []byte, funcTypes []types.Function, funcNames []string) *Program {
+	return &Program{
 		buf:       b,
 		globals:   globals,
 		data:      data,
-		funcMap:   funcMap,
-		callMap:   callMap,
 		funcTypes: funcTypes,
 		funcNames: funcNames,
 	}
-
-	p.text, err = makeMemoryCopy(text, syscall.PROT_EXEC|syscall.PROT_READ, syscall.MAP_32BIT)
-	if err != nil {
-		p.Close()
-		return
-	}
-
-	return
 }
 
-func (p *Program) Close() (first error) {
-	if p.text != nil {
-		if err := syscall.Munmap(p.text); err != nil && first == nil {
-			first = err
-		}
-	}
-
-	return
+func (p *Program) SetMaps(funcMap, callMap []byte) {
+	p.funcMap = funcMap
+	p.callMap = callMap
 }
 
 func (p *Program) getText() []byte {
-	return p.text
+	return p.buf.Text
 }
 
 func (p *Program) getGlobals() []byte {
@@ -224,19 +220,20 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 		memorySize:    initMemorySize,
 	}
 
-	r.globalsMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0)
+	r.globalsMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0, 0)
 	if err != nil {
 		r.Close()
 		return
 	}
 
-	r.stack, err = makeMemory(stackSize, 0)
+	r.stack, err = makeMemory(stackSize, 0, 0)
 	if err != nil {
 		r.Close()
 		return
 	}
 
-	r.initData()
+	copy(r.globalsMemory[r.globalsOffset:], r.prog.getGlobals())
+	copy(r.globalsMemory[r.memoryOffset:], r.prog.getData())
 	return
 }
 
@@ -257,9 +254,71 @@ func (r *Runner) Close() (first error) {
 }
 
 func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) (result int32, err error) {
-	stackState := r.prog.getStack()
-	stackOffset := len(r.stack) - len(stackState)
-	copy(r.stack[stackOffset:], stackState)
+	e := Executor{
+		runner:  r,
+		arg:     arg,
+		sigs:    sigs,
+		printer: printer,
+	}
+	e.run()
+	result = e.result
+	err = e.err
+	return
+}
+
+type Executor struct {
+	runner *Runner
+
+	arg     int
+	sigs    map[int64]types.Function
+	printer io.Writer
+
+	cont chan struct{}
+	done chan struct{}
+
+	result int32
+	err    error
+}
+
+func (r *Runner) NewExecutor(arg int, sigs map[int64]types.Function, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
+	e = &Executor{
+		runner:  r,
+		arg:     arg,
+		sigs:    sigs,
+		printer: printer,
+		cont:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+
+	start := make(chan struct{})
+
+	go func() {
+		<-start
+		fmt.Fprintf(e.printer, "--- execution starting ---\n")
+		defer close(e.done)
+		e.run()
+	}()
+
+	trigger = start
+	return
+}
+
+func (e *Executor) Wait() (result int32, err error) {
+	fmt.Fprintf(e.printer, "--- executable complete ---\n")
+	close(e.cont)
+
+	<-e.done
+	fmt.Fprintf(e.printer, "--- execution finished ---\n")
+
+	result = e.result
+	err = e.err
+	return
+}
+
+func (e *Executor) run() {
+	stackState := e.runner.prog.getStack()
+	stackOffset := len(e.runner.stack) - len(stackState)
+	copy(e.runner.stack[stackOffset:], stackState)
 
 	resumeResult := 0 // don't resume
 	if len(stackState) > 0 {
@@ -271,76 +330,41 @@ func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) 
 		return
 	}
 
-	printed := make(chan struct{})
+	done := make(chan struct{})
 
 	defer func() {
 		syscall.Close(fds[1])
-		<-printed
+		<-done
 	}()
 
 	go func() {
-		defer close(printed)
-		r.slave(fds[0], sigs, printer)
+		defer close(done)
+		e.slave(fds[0], e.sigs, e.printer, e.cont)
 	}()
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	memory := r.globalsMemory[r.memoryOffset:]
+	memory := e.runner.globalsMemory[e.runner.memoryOffset:]
 
-	result, trap, memorySize, stackPtr := run(r.prog.getText(), r.memorySize, memory, r.stack, stackOffset, resumeResult, arg, fds[1])
+	result, trap, memorySize, stackPtr := run(e.runner.prog.getText(), e.runner.memorySize, memory, e.runner.stack, stackOffset, resumeResult, e.arg, fds[1])
 
-	r.memorySize = memorySize
-	r.lastTrap = traps.Id(trap)
-	r.lastStackPtr = stackPtr
+	e.runner.memorySize = memorySize
+	e.runner.lastTrap = traps.Id(trap)
+	e.runner.lastStackPtr = stackPtr
 
-	if trap != 0 {
-		err = r.lastTrap
+	if trap == 0 {
+		e.result = result
+	} else {
+		e.err = e.runner.lastTrap
 	}
 	return
 }
 
-/*
-func (r *Runner) ResetMemory() {
-	r.initData()
-
-	tail := r.globalsMemory[r.memoryOffset+len(r.prog.data):]
-	for i := range tail {
-		tail[i] = 0
-	}
-
-	// TODO: reset memorySize
-}
-*/
-
-func (r *Runner) initData() {
-	copy(r.globalsMemory[r.globalsOffset:], r.prog.getGlobals())
-	copy(r.globalsMemory[r.memoryOffset:], r.prog.getData())
-}
-
-func makeMemory(size int, extraFlags int) (mem []byte, err error) {
+func makeMemory(size int, extraProt, extraFlags int) (mem []byte, err error) {
 	if size == 0 {
 		return
 	}
 
-	return syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
-}
-
-func makeMemoryCopy(buf []byte, prot, flags int) (mem []byte, err error) {
-	mem, err = makeMemory(len(buf), flags)
-	if err != nil {
-		return
-	}
-
-	copy(mem, buf)
-
-	if mem == nil {
-		return
-	}
-
-	err = syscall.Mprotect(mem, prot)
-	if err != nil {
-		syscall.Munmap(mem)
-	}
-	return
+	return syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE|extraProt, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
 }

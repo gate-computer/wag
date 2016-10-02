@@ -8,7 +8,7 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-func (r *Runner) slave(fd int, sigs map[int64]types.Function, printer io.Writer) {
+func (e *Executor) slave(fd int, sigs map[int64]types.Function, printer io.Writer, cont <-chan struct{}) {
 	f := os.NewFile(uintptr(fd), "socket")
 	defer f.Close()
 
@@ -27,7 +27,13 @@ func (r *Runner) slave(fd int, sigs map[int64]types.Function, printer io.Writer)
 			spectestPrint(f, sigs, command, printer)
 
 		case command == -1:
-			r.snapshot(f, printer)
+			e.runner.snapshot(f, printer)
+
+		case command == -2:
+			<-cont
+			if _, err := f.Write([]byte{0}); err != nil {
+				panic(err)
+			}
 
 		default:
 			panic(command)

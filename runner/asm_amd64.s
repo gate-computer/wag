@@ -74,9 +74,35 @@ resume:
 	// exits via trap handler
 
 TEXT trap<>(SB),NOSPLIT,$0
+	CMPQ	DI, $1		// MissingFunction
+	JE	pause
+
 	MOVQ	SP, BX		// stack ptr
 	MOVQ	M7, SP		// restore original stack
 	RET
+
+pause:
+	MOVQ	$1, AX		// sys_write
+	MOVQ	M6, DI 		// slave fd
+	LEAQ	-8(SP), SI	// buffer
+	MOVQ	$-2, (SI)	// write -2 over return address
+	MOVQ	$8, DX		// bufsize
+	SYSCALL
+	SUBQ	DX, AX
+	JNE	fail
+
+	XORQ	AX, AX		// sys_read
+	MOVQ	$1, DX		// bufsize
+	SYSCALL
+	SUBQ	DX, AX
+	JNE	fail
+
+	SUBQ	$5, (SP)	// move return address before the call that got us here
+	RET
+
+fail:
+	MOVQ	$3003, DI
+	JMP	trap<>(SB)
 
 // func importSpectestPrint() int64
 TEXT ·importSpectestPrint(SB),$0-8
@@ -102,7 +128,8 @@ TEXT spectestPrint<>(SB),NOSPLIT,$0
 	MOVQ	R10, (SP)	// restore return address
 	RET
 
-fail:	MOVQ	$3001, DI
+fail:
+	MOVQ	$3001, DI
 	JMP	trap<>(SB)
 
 // func importSnapshot() int64
@@ -142,5 +169,6 @@ TEXT snapshot<>(SB),NOSPLIT,$0
 	MOVQ	(SI), AX	// snapshot id
 	RET
 
-fail:	MOVQ	$3002, DI
+fail:
+	MOVQ	$3002, DI
 	JMP	trap<>(SB)

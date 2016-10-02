@@ -168,21 +168,7 @@ func (mach X86) PaddingByte() byte          { return paddingByte }
 func (mach X86) ResultReg() regs.R          { return regResult }
 func (mach X86) AvailableIntRegs() uint32   { return availableIntRegs }
 func (mach X86) AvailableFloatRegs() uint32 { return availableFloatRegs }
-
-func (mach X86) RegGroupPreference(t types.T) int {
-	switch t {
-	case types.I32, types.F32, types.F64:
-		// 64-bit floats don't use rexW prefix, but latter float regs need rexB
-		return 0
-
-	case types.I64:
-		// instructions will have rexW prefix anyway
-		return 1
-
-	default:
-		panic(t)
-	}
-}
+func (mach X86) ClearInsnCache()            {}
 
 func (mach X86) UnaryOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
 	switch t.Category() {
@@ -251,11 +237,6 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) 
 
 func (mach X86) OpCall(code gen.Coder, l *links.L) {
 	if l.Address == 0 {
-		// address slot must not cross cache line boundary
-		if relPos := (code.Len() + CallRel.size()) & 3; relPos > 0 {
-			padSize := 4 - relPos
-			code.Write(nopSequences[padSize-1])
-		}
 		CallRel.opMissingFunction(code)
 	} else {
 		CallRel.op(code, l.Address)

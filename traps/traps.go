@@ -4,6 +4,7 @@ type Id int
 
 const (
 	Exit = Id(iota)
+	MissingFunction
 
 	CallStackExhausted
 	IndirectCallIndex
@@ -12,7 +13,6 @@ const (
 	Unreachable
 	IntegerDivideByZero
 	IntegerOverflow
-	MissingFunction
 
 	NumTraps
 )
