@@ -77,7 +77,7 @@ func (b *Buffer) RODataAddr() int32 {
 
 func (b *Buffer) Seal() (err error) {
 	if b.Text != nil {
-		err = syscall.Mprotect(b.Text, syscall.PROT_EXEC|syscall.PROT_READ)
+		err = syscall.Mprotect(b.Text, syscall.PROT_EXEC)
 		if err != nil {
 			return
 		}
