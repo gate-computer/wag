@@ -300,7 +300,7 @@ func testModule(t *testing.T, data []byte, filename string) []byte {
 			n := assert[1].(string)
 			name, found := exports[n]
 			if !found {
-				panic(n)
+				name = n
 			}
 
 			spec = []interface{}{

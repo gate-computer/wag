@@ -1,10 +1,10 @@
 (module
   (memory 0)
 
-  (import $print_i32 "spectest" "print" (param i32))
+  (import "spectest" "print" (func $print_i32 (param i32)))
 
   (func $main (param $arg i32) (result i32)
-    (call_import $print_i32 (i32.const 10))
+    (call $print_i32 (i32.const 10))
     (call $get_result))
 
   (func (unreachable)) (func (unreachable)) (func (unreachable))
@@ -109,7 +109,7 @@
   (func (unreachable)) (func (unreachable)) (func (unreachable))
 
   (func $get_result (result i32)
-    (call_import $print_i32 (i32.const 20))
+    (call $print_i32 (i32.const 20))
     (i32.const 12345))
 
   (start $main)
