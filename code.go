@@ -314,28 +314,24 @@ func (code *coder) genFunction(f *Function) (mapAddr int) {
 
 	var deadend bool
 
-	for i, x := range f.body {
+	for i, child := range f.body {
 		final := i == len(f.body)-1
 
-		var expectType types.T
+		var t types.T
 		if final {
-			expectType = f.Signature.Result
+			t = f.Signature.Result
 		}
 
-		var resultType types.T
 		var result values.Operand
 
-		result, resultType, deadend = code.expr(x, expectType, final)
+		result, deadend = code.expr(child, t, final)
 		if deadend {
 			mach.OpAbort(code)
 			break
 		}
 
-		if final && f.Signature.Result != types.Void {
-			code.opMove(f.Signature.Result, mach.ResultReg(), result, false)
-		} else {
-			code.Discard(resultType, result)
-			result = values.NoOperand
+		if t != types.Void {
+			code.opMove(t, mach.ResultReg(), result, false)
 		}
 	}
 
@@ -411,7 +407,7 @@ func (code *coder) genFunction(f *Function) (mapAddr int) {
 	return
 }
 
-func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...liveOperand) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...liveOperand) (result values.Operand, deadend bool) {
 	expr := x.([]interface{})
 	exprName := expr[0].(string)
 	args := expr[1:]
@@ -420,7 +416,7 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
-		fmt.Printf("<%s expect=\"%s\">\n", exprName, expectType)
+		fmt.Printf("<%s type=\"%s\">\n", exprName, expectType)
 	}
 	debugExprDepth++
 
@@ -435,22 +431,24 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		}
 	}
 
+	var voidResult bool
+
 	if strings.Contains(exprName, ".") {
 		tokens := strings.SplitN(exprName, ".", 2)
 		opName := tokens[1]
 
-		opType, found := types.ByString[tokens[0]]
+		outType, found := types.ByString[tokens[0]]
 		if !found {
 			panic(fmt.Errorf("unknown operand type: %s", exprName))
 		}
 
-		resultType = opType
+		inType := outType
 
 		if strings.Contains(exprName, "/") {
 			tokens = strings.SplitN(opName, "/", 2)
 			opName = tokens[0]
 
-			opType, found = types.ByString[tokens[1]]
+			inType, found = types.ByString[tokens[1]]
 			if !found {
 				panic(fmt.Errorf("unknown target type: %s", exprName))
 			}
@@ -458,103 +456,109 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 
 		switch opName {
 		case "eqz":
-			resultType = types.I32
+			outType = types.I32
 			fallthrough
 		case "ceil", "clz", "ctz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
-			result, deadend = code.exprUnaryOp(exprName, opName, opType, args)
+			result, deadend = code.exprUnaryOp(exprName, opName, inType, args)
 
 		case "eq", "ge", "ge_s", "ge_u", "gt", "gt_s", "gt_u", "le", "le_s", "le_u", "lt", "lt_s", "lt_u", "ne":
-			resultType = types.I32
+			outType = types.I32
 			fallthrough
 		case "add", "and", "div", "div_s", "div_u", "max", "min", "mul", "or", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub", "xor":
-			result, deadend = code.exprBinaryOp(exprName, opName, opType, args)
+			result, deadend = code.exprBinaryOp(exprName, opName, inType, args)
 
 		case "const":
-			result = code.exprConst(exprName, opType, args)
+			result = code.exprConst(exprName, inType, args)
 
 		case "load32_s", "load32_u":
-			if opType != types.I64 {
+			if inType != types.I64 {
 				panic(exprName)
 			}
 			fallthrough
 		case "load8_s", "load8_u", "load16_s", "load16_u":
-			if opType.Category() != types.Int {
+			if inType.Category() != types.Int {
 				panic(exprName)
 			}
 			fallthrough
 		case "load":
-			result, deadend = code.exprLoadOp(exprName, opName, opType, args)
+			result, deadend = code.exprLoadOp(exprName, opName, inType, args)
 
 		case "store32":
-			if opType != types.I64 {
+			if inType != types.I64 {
 				panic(exprName)
 			}
 			fallthrough
 		case "store8", "store16":
-			if opType.Category() != types.Int {
+			if inType.Category() != types.Int {
 				panic(exprName)
 			}
 			fallthrough
 		case "store":
-			result, deadend = code.exprStoreOp(exprName, opName, opType, args)
-			// TODO: resultType to values.Void when we no longer return a result
+			deadend = code.exprStoreOp(exprName, opName, inType, args)
+			outType = types.Void
 
 		case "convert_s", "convert_u", "demote", "extend_s", "extend_u", "promote", "reinterpret", "trunc_s", "trunc_u", "wrap":
-			result, deadend = code.exprConversionOp(exprName, resultType, opType, args)
+			result, deadend = code.exprConversionOp(exprName, outType, inType, args)
 
 		default:
 			panic(exprName)
 		}
+
+		if expectType == types.Void {
+			code.Discard(outType, result)
+			result = values.NoOperand
+		} else if outType != expectType {
+			panic(fmt.Errorf("%s: parent expects %s", exprName, expectType))
+		}
 	} else {
 		switch exprName {
 		case "block":
-			result, deadend = code.exprBlock(exprName, args, expectType, nil, final)
-			resultType = expectType
+			result, deadend = code.exprBlock(exprName, args, expectType, final, nil)
 
 		case "br", "br_if", "br_table":
 			deadend = code.exprBr(exprName, args)
+			voidResult = true
 
-		case "call", "call_import":
-			result, resultType, deadend = code.exprCall(exprName, args)
+		case "call":
+			result, deadend = code.exprCall(exprName, args, expectType)
 
 		case "call_indirect":
-			result, resultType, deadend = code.exprCallIndirect(exprName, args)
+			result, deadend = code.exprCallIndirect(exprName, args, expectType)
 
 		case "current_memory":
-			result = code.exprCurrentMemory(exprName, args)
-			resultType = types.I32
+			result = code.exprCurrentMemory(exprName, args, expectType)
 
 		case "drop":
-			code.exprDrop(exprName, args)
+			code.exprDrop(exprName, args, final)
+			voidResult = true
 
 		case "get_local":
-			result, resultType = code.exprGetLocal(exprName, args)
+			result = code.exprGetLocal(exprName, args, expectType)
 
 		case "grow_memory":
-			result, deadend = code.exprGrowMemory(exprName, args)
-			resultType = types.I32
+			result, deadend = code.exprGrowMemory(exprName, args, expectType)
 
 		case "if":
 			result, deadend = code.exprIf(exprName, args, expectType, final)
-			resultType = expectType
 
 		case "loop":
 			result, deadend = code.exprLoop(exprName, args, expectType, final)
-			resultType = expectType
 
 		case "nop":
 			code.exprNop(exprName, args)
+			voidResult = true
 
 		case "return":
 			code.exprReturn(exprName, args)
+			voidResult = true
 			deadend = true
 
 		case "select":
 			result, deadend = code.exprSelect(exprName, args, expectType)
-			resultType = expectType
 
 		case "set_local":
-			result, resultType, deadend = code.exprSetLocal(exprName, args)
+			deadend = code.exprSetLocal(exprName, args)
+			voidResult = true
 
 		case "unreachable":
 			code.exprUnreachable(exprName, args)
@@ -570,72 +574,72 @@ func (code *coder) expr(x interface{}, expectType types.T, final bool, save ...l
 		for i := 0; i < debugExprDepth; i++ {
 			fmt.Print("    ")
 		}
-		fmt.Printf("</%s result=\"%s %s\">\n", exprName, resultType, result)
-	}
-
-	if deadend {
-		mach.OpAbort(code)
-		result = values.NoOperand
-	} else {
-		if expectType != types.Void && resultType != expectType {
-			panic(fmt.Errorf("%s: result type %s does not match expected type %s", exprName, resultType, expectType))
-		}
-
-		if resultType != types.Void && result.Storage == values.Nowhere {
-			panic(fmt.Errorf("%s: result type is %s but result operand is %s", exprName, resultType, result))
-		}
+		fmt.Printf("</%s result=\"%s\">\n", exprName, result)
 	}
 
 	if result.Storage == values.Stack {
 		panic(fmt.Errorf("%s: result operand is %s", exprName, result))
 	}
 
+	if deadend {
+		mach.OpAbort(code)
+		result = values.NoOperand
+	} else {
+		if voidResult && expectType != types.Void {
+			panic(fmt.Errorf("%s: parent expects %s but expression does not yield value", exprName, expectType))
+		}
+
+		if (expectType == types.Void) != (result.Storage == values.Nowhere) {
+			panic(fmt.Errorf("%s: expression type is %s but result is %s", exprName, expectType, result))
+		}
+	}
+
 	return
 }
 
-func (code *coder) exprUnaryOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprUnaryOp(exprName, opName string, t types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	x, _, deadend := code.expr(args[0], opType, false)
+	x, deadend := code.expr(args[0], t, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	if value, ok := x.CheckImmValue(opType); ok {
+	if value, ok := x.CheckImmValue(t); ok {
 		switch opName {
 		case "eqz":
 			if value == 0 {
-				result = values.ImmOperand(opType, 1)
+				result = values.ImmOperand(t, 1)
 			} else {
-				result = values.ImmOperand(opType, 0)
+				result = values.ImmOperand(t, 0)
 			}
 			return
 		}
 	}
 
-	x = code.opPreloadOperand(opType, x)
-	result = mach.UnaryOp(code, opName, opType, x)
+	x = code.opPreloadOperand(t, x)
+	result = mach.UnaryOp(code, opName, t, x)
 	result = code.virtualOperand(result)
 	return
 }
 
-func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprBinaryOp(exprName, opName string, t types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) != 2 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	a, _, deadend := code.expr(args[0], opType, false)
+	a, deadend := code.expr(args[0], t, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	b, _, deadend := code.expr(args[1], opType, false, liveOperand{opType, &a})
+	b, deadend := code.expr(args[1], t, false, liveOperand{t, &a})
 	if deadend {
-		code.Discard(opType, a)
+		code.Discard(t, a)
 		mach.OpAbort(code)
 		return
 	}
@@ -647,7 +651,7 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		}
 	}
 
-	if value, ok := b.CheckImmValue(opType); ok {
+	if value, ok := b.CheckImmValue(t); ok {
 		switch opName {
 		case "add", "or", "sub", "xor":
 			switch value {
@@ -659,8 +663,8 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		case "mul":
 			switch value {
 			case 0:
-				code.Discard(opType, a)
-				result = values.ImmOperand(opType, 0)
+				code.Discard(t, a)
+				result = values.ImmOperand(t, 0)
 				return
 
 			case 1:
@@ -671,25 +675,25 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 		case "div_s":
 			switch value {
 			case -1, 1:
-				code.Discard(opType, a)
-				result = values.ImmOperand(opType, 0)
+				code.Discard(t, a)
+				result = values.ImmOperand(t, 0)
 				return
 			}
 
 		case "div_u":
 			switch value {
 			case 1:
-				code.Discard(opType, a)
-				result = values.ImmOperand(opType, 0)
+				code.Discard(t, a)
+				result = values.ImmOperand(t, 0)
 				return
 			}
 		}
 	}
 
-	a = code.opMaterializeOperand(opType, a)
-	b = code.opPreloadOperand(opType, b)
+	a = code.opMaterializeOperand(t, a)
+	b = code.opPreloadOperand(t, b)
 
-	result, deadend = mach.BinaryOp(code, opName, opType, a, b)
+	result, deadend = mach.BinaryOp(code, opName, t, a, b)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -699,15 +703,15 @@ func (code *coder) exprBinaryOp(exprName, opName string, opType types.T, args []
 	return
 }
 
-func (code *coder) exprConst(exprName string, opType types.T, args []interface{}) values.Operand {
+func (code *coder) exprConst(exprName string, t types.T, args []interface{}) values.Operand {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	return values.ParseImm(opType, args[0])
+	return values.ParseImm(t, args[0])
 }
 
-func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprLoadOp(exprName, opName string, t types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) < 1 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
@@ -739,17 +743,17 @@ func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []in
 		args = args[1:]
 	}
 
-	x, _, deadend := code.expr(indexExpr, types.I32, false)
+	x, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	x = code.opPreloadOperand(opType, x)
+	x = code.opPreloadOperand(t, x)
 
-	result, deadend = mach.LoadOp(code, opName, opType, x, offset)
+	result, deadend = mach.LoadOp(code, opName, t, x, offset)
 	if deadend {
-		code.Discard(opType, result)
+		code.Discard(t, result)
 		mach.OpAbort(code)
 		return
 	}
@@ -758,7 +762,7 @@ func (code *coder) exprLoadOp(exprName, opName string, opType types.T, args []in
 	return
 }
 
-func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprStoreOp(exprName, opName string, t types.T, args []interface{}) (deadend bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
@@ -791,7 +795,7 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 		args = args[1:]
 	}
 
-	a, _, deadend := code.expr(indexExpr, types.I32, false)
+	a, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -802,7 +806,7 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 		args = args[1:]
 	}
 
-	b, _, deadend := code.expr(valueExpr, opType, false, liveOperand{types.I32, &a})
+	b, deadend := code.expr(valueExpr, t, false, liveOperand{types.I32, &a})
 	if deadend {
 		code.Discard(types.I32, a)
 		mach.OpAbort(code)
@@ -810,11 +814,9 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 	}
 
 	a = code.opMaterializeOperand(types.I32, a)
-	b = code.opPreloadOperand(opType, b)
+	b = code.opPreloadOperand(t, b)
 
-	// the design doc says that stores don't return a value, but it's needed
-	// for the memory_trap.wast test to work.
-	result, deadend = mach.StoreOp(code, opName, opType, a, b, offset)
+	deadend = mach.StoreOp(code, opName, t, a, b, offset)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -823,24 +825,39 @@ func (code *coder) exprStoreOp(exprName, opName string, opType types.T, args []i
 	return
 }
 
-func (code *coder) exprConversionOp(exprName string, resultType, opType types.T, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprConversionOp(exprName string, resultType, paramType types.T, args []interface{}) (result values.Operand, deadend bool) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	x, _, deadend := code.expr(args[0], opType, false)
+	x, deadend := code.expr(args[0], paramType, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	x = code.opPreloadOperand(opType, x)
-	result = mach.ConversionOp(code, exprName, resultType, opType, x)
+	x = code.opPreloadOperand(paramType, x)
+	result = mach.ConversionOp(code, exprName, resultType, paramType, x)
 	result = code.virtualOperand(result)
 	return
 }
 
-func (code *coder) exprBlock(exprName string, args []interface{}, blockType types.T, before *links.L, final bool) (result values.Operand, deadend bool) {
+func (code *coder) exprBlock(exprName string, args []interface{}, expectType types.T, finalSibling bool, before *links.L) (result values.Operand, deadend bool) {
+	var valueType types.T
+
+	if len(args) > 0 {
+		if s, ok := args[0].(string); ok {
+			if t, found := types.ByString[s]; found {
+				valueType = t
+				args = args[1:]
+			}
+		}
+	}
+
+	if expectType != types.Void && valueType != expectType {
+		panic(fmt.Errorf("%s: signature is %s but parent expects %s", exprName, valueType, expectType))
+	}
+
 	var afterName string
 	var beforeName string
 
@@ -859,31 +876,24 @@ func (code *coder) exprBlock(exprName string, args []interface{}, blockType type
 	}
 
 	after := new(links.L)
-	code.pushTarget(after, afterName, blockType, final)
+	code.pushTarget(after, afterName, expectType, finalSibling)
 
 	if before != nil {
 		code.pushTarget(before, beforeName, types.Void, false)
 	}
 
-	for i, arg := range args {
-		final := (i == len(args)-1)
+	for i, child := range args {
+		finalChild := (i == len(args)-1)
 
-		var expectType types.T
-		if final {
-			expectType = blockType
+		var t types.T
+		if finalChild {
+			t = expectType
 		}
 
-		var resultType types.T
-
-		result, resultType, deadend = code.expr(arg, expectType, false)
+		result, deadend = code.expr(child, t, finalSibling && finalChild)
 		if deadend {
 			mach.OpAbort(code)
 			break
-		}
-
-		if !final || blockType == types.Void {
-			code.Discard(resultType, result)
-			result = values.NoOperand
 		}
 	}
 
@@ -892,13 +902,13 @@ func (code *coder) exprBlock(exprName string, args []interface{}, blockType type
 	}
 
 	if code.popTarget() {
-		if !deadend && blockType != types.Void {
-			code.opMove(blockType, mach.ResultReg(), result, false)
+		if !deadend && expectType != types.Void {
+			code.opMove(expectType, mach.ResultReg(), result, false)
 		}
 
 		deadend = false
 
-		if blockType != types.Void {
+		if expectType != types.Void {
 			result = values.TempRegOperand(mach.ResultReg(), false)
 		}
 
@@ -989,7 +999,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 				valueType = target.expectType
 
 			case valueType != target.expectType:
-				panic(fmt.Errorf("%s: branch targets have inconsistent types: %s vs. %s", exprName, valueType, target.expectType))
+				panic(fmt.Errorf("%s: branch targets have inconsistent value types: %s vs. %s", exprName, valueType, target.expectType))
 			}
 		}
 
@@ -999,24 +1009,19 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	var valueOperand values.Operand
 
 	if valueExpr != nil {
-		var resultType types.T
-
-		valueOperand, resultType, deadend = code.expr(valueExpr, valueType, false)
+		valueOperand, deadend = code.expr(valueExpr, valueType, false)
 		if deadend {
 			mach.OpAbort(code)
 			return
 		}
-
-		if valueType == types.Void {
-			code.Discard(resultType, valueOperand)
-			valueOperand = values.NoOperand
-		}
+	} else if valueType != types.Void {
+		panic(fmt.Errorf("no value expression while expected value type is %s", valueType))
 	}
 
 	var condOperand values.Operand
 
 	if condExpr != nil {
-		condOperand, _, deadend = code.expr(condExpr, types.I32, false, liveOperand{valueType, &valueOperand})
+		condOperand, deadend = code.expr(condExpr, types.I32, false, liveOperand{valueType, &valueOperand})
 		if deadend {
 			code.Discard(valueType, valueOperand)
 			mach.OpAbort(code)
@@ -1158,7 +1163,7 @@ func (code *coder) exprBr(exprName string, args []interface{}) (deadend bool) {
 	return
 }
 
-func (code *coder) exprCall(exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) exprCall(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
 	if len(args) == 0 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
@@ -1170,23 +1175,17 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 		if num < 0 || num >= uint64(len(code.module.Functions)) {
 			panic(funcName)
 		}
-
-		switch exprName {
-		case "call":
-			target = &code.module.Functions[num].Callable
-
-		case "call_import":
-			target = &code.module.Imports[num].Callable
-
-		default:
-			panic(exprName)
-		}
+		target = &code.module.Functions[num].Callable
 	} else {
 		var found bool
 		target, found = code.module.NamedCallables[funcName]
 		if !found {
 			panic(fmt.Errorf("%s: function not found: %s", exprName, funcName))
 		}
+	}
+
+	if expectType != types.Void && target.Result != expectType {
+		panic(expectType)
 	}
 
 	code.opSaveTempRegOperands()
@@ -1203,14 +1202,13 @@ func (code *coder) exprCall(exprName string, args []interface{}) (result values.
 	mach.OpCall(code, code.functionLinks[target])
 	code.opAddImmToStackPtr(argsSize)
 
-	resultType = target.Signature.Result
-	if resultType != types.Void {
+	if expectType != types.Void {
 		result = values.TempRegOperand(mach.ResultReg(), false)
 	}
 	return
 }
 
-func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) exprCallIndirect(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
 	if len(args) < 2 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
@@ -1235,10 +1233,14 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		panic("call_indirect to function without signature index")
 	}
 
+	if expectType != types.Void && sig.Result != expectType {
+		panic(expectType)
+	}
+
 	indexExpr := args[1]
 	args = args[2:]
 
-	indexOperand, _, deadend := code.expr(indexExpr, types.I32, false)
+	indexOperand, deadend := code.expr(indexExpr, types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1314,8 +1316,7 @@ func (code *coder) exprCallIndirect(exprName string, args []interface{}) (result
 		code.opAddImmToStackPtr(argsSize)
 	}
 
-	resultType = sig.Result
-	if resultType != types.Void {
+	if expectType != types.Void {
 		result = values.TempRegOperand(mach.ResultReg(), false)
 	}
 	return
@@ -1333,7 +1334,7 @@ func (code *coder) opPushCallArgs(exprName string, sig *Signature, args []interf
 
 		var x values.Operand
 
-		x, _, deadend = code.expr(arg, t, false)
+		x, deadend = code.expr(arg, t, false)
 		if deadend {
 			mach.OpAbort(code)
 			break
@@ -1358,37 +1359,43 @@ func (code *coder) opPushCallArgs(exprName string, sig *Signature, args []interf
 	return
 }
 
-func (code *coder) exprCurrentMemory(exprName string, args []interface{}) values.Operand {
+func (code *coder) exprCurrentMemory(exprName string, args []interface{}, expectType types.T) values.Operand {
 	if len(args) != 0 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
+	}
+
+	if expectType != types.I32 {
+		panic(expectType)
 	}
 
 	return mach.OpCurrentMemory(code)
 }
 
-func (code *coder) exprDrop(exprName string, args []interface{}) {
+func (code *coder) exprDrop(exprName string, args []interface{}, final bool) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	x, resultType, deadend := code.expr(args[0], types.Void, false)
+	_, deadend := code.expr(args[0], types.Void, final)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
-
-	code.Discard(resultType, x)
 }
 
-func (code *coder) exprGetLocal(exprName string, args []interface{}) (result values.Operand, resultType types.T) {
+func (code *coder) exprGetLocal(exprName string, args []interface{}, getType types.T) (result values.Operand) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
 	varName := args[0].(string)
-	index, resultType, found := code.lookupFunctionVar(varName)
+	index, varType, found := code.lookupFunctionVar(varName)
 	if !found {
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
+	}
+
+	if varType != getType {
+		panic(getType)
 	}
 
 	v := &code.vars[index]
@@ -1407,12 +1414,16 @@ func (code *coder) exprGetLocal(exprName string, args []interface{}) (result val
 	return
 }
 
-func (code *coder) exprGrowMemory(exprName string, args []interface{}) (result values.Operand, deadend bool) {
+func (code *coder) exprGrowMemory(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
 	if len(args) != 1 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
-	x, _, deadend := code.expr(args[0], types.I32, false)
+	if expectType != types.I32 {
+		panic(expectType)
+	}
+
+	x, deadend := code.expr(args[0], types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1428,13 +1439,30 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
+	var valueType types.T
+
+	if s, ok := args[0].(string); ok {
+		if t, ok := types.ByString[s]; ok {
+			valueType = t
+			args = args[1:]
+
+			if len(args) < 2 {
+				panic(fmt.Errorf("%s: too few operands", exprName))
+			}
+		}
+	}
+
+	if expectType != types.Void && valueType != expectType {
+		panic(fmt.Errorf("%s: signature is %s but parent expects %s", exprName, valueType, expectType))
+	}
+
 	haveElse := len(args) == 3
 
 	if len(args) > 3 {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
-	ifResult, _, deadend := code.expr(args[0], types.I32, false)
+	ifResult, deadend := code.expr(args[0], types.I32, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1495,7 +1523,7 @@ func (code *coder) exprIf(exprName string, args []interface{}, expectType types.
 	return
 }
 
-func (code *coder) ifExprs(x interface{}, name string, end *links.L, ifType types.T, final bool) (deadend, endReached bool) {
+func (code *coder) ifExprs(x interface{}, name string, end *links.L, expectType types.T, finalSibling bool) (deadend, endReached bool) {
 	args := x.([]interface{})
 
 	var endName string
@@ -1514,40 +1542,34 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, ifType type
 	}
 
 	if len(args) > 0 {
-		code.pushTarget(end, endName, ifType, final)
+		code.pushTarget(end, endName, expectType, finalSibling)
 
 		var result values.Operand
-		var resultType types.T
 
 		switch args[0].(type) {
 		case string:
-			result, resultType, deadend = code.expr(args, ifType, false)
+			result, deadend = code.expr(args, expectType, finalSibling)
 
 		case []interface{}:
-			for i, expr := range args {
-				final := (i == len(args)-1)
+			for i, child := range args {
+				finalChild := (i == len(args)-1)
 
-				var expectType types.T
-				if final {
-					expectType = ifType
+				var t types.T
+				if finalChild {
+					t = expectType
 				}
 
-				result, resultType, deadend = code.expr(expr, expectType, false)
+				result, deadend = code.expr(child, t, finalSibling && finalChild)
 				if deadend {
 					break
-				}
-
-				if !final || ifType == types.Void {
-					code.Discard(resultType, result)
-					result = values.NoOperand
 				}
 			}
 		}
 
 		if deadend {
 			mach.OpAbort(code)
-		} else if ifType != types.Void {
-			code.opMove(ifType, mach.ResultReg(), result, false)
+		} else if expectType != types.Void {
+			code.opMove(expectType, mach.ResultReg(), result, false)
 		}
 
 		endReached = code.popTarget()
@@ -1556,12 +1578,12 @@ func (code *coder) ifExprs(x interface{}, name string, end *links.L, ifType type
 	return
 }
 
-func (code *coder) exprLoop(exprName string, args []interface{}, expectType types.T, final bool) (result values.Operand, deadend bool) {
+func (code *coder) exprLoop(exprName string, args []interface{}, t types.T, final bool) (result values.Operand, deadend bool) {
 	before := new(links.L)
 	code.opLabel(before)
 	defer mach.UpdateBranches(code, before)
 
-	return code.exprBlock(exprName, args, expectType, before, final)
+	return code.exprBlock(exprName, args, t, final, before)
 }
 
 func (code *coder) exprNop(exprName string, args []interface{}) {
@@ -1575,25 +1597,21 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 		panic(fmt.Errorf("%s: too many operands", exprName))
 	}
 
-	funcType := code.function.Signature.Result
+	expectType := code.function.Signature.Result
 
-	if funcType != types.Void && len(args) == 0 {
+	if expectType != types.Void && len(args) == 0 {
 		panic(fmt.Errorf("%s: too few operands", exprName))
 	}
 
 	if len(args) > 0 {
-		var resultType types.T
-
-		x, resultType, deadend := code.expr(args[0], funcType, true)
+		result, deadend := code.expr(args[0], expectType, true)
 		if deadend {
 			mach.OpAbort(code)
 			return
 		}
 
-		if funcType == types.Void {
-			code.Discard(resultType, x)
-		} else {
-			code.opMove(funcType, mach.ResultReg(), x, false)
+		if expectType != types.Void {
+			code.opMove(expectType, mach.ResultReg(), result, false)
 		}
 	}
 
@@ -1601,81 +1619,75 @@ func (code *coder) exprReturn(exprName string, args []interface{}) {
 	mach.OpReturn(code)
 }
 
-func (code *coder) exprSelect(exprName string, args []interface{}, expectType types.T) (result values.Operand, deadend bool) {
+func (code *coder) exprSelect(exprName string, args []interface{}, t types.T) (result values.Operand, deadend bool) {
 	if len(args) != 3 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
 	var operands []liveOperand
 
-	a, aType, deadend := code.expr(args[0], expectType, false)
+	a, deadend := code.expr(args[0], t, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
 	}
 
-	if expectType == types.Void {
-		code.Discard(aType, a)
-		a = values.NoOperand
-	} else {
-		operands = append(operands, liveOperand{aType, &a})
+	if t != types.Void {
+		operands = append(operands, liveOperand{t, &a})
 	}
 
-	b, bType, deadend := code.expr(args[1], expectType, false, operands...)
+	b, deadend := code.expr(args[1], t, false, operands...)
 	if deadend {
-		code.Discard(aType, a)
+		code.Discard(t, a)
 		mach.OpAbort(code)
 		return
 	}
 
-	if expectType == types.Void {
-		code.Discard(bType, b)
-		b = values.NoOperand
-	} else {
-		operands = append(operands, liveOperand{bType, &b})
+	if t != types.Void {
+		operands = append(operands, liveOperand{t, &b})
 	}
 
-	cond, _, deadend := code.expr(args[2], types.I32, false, operands...)
+	cond, deadend := code.expr(args[2], types.I32, false, operands...)
 	if deadend {
-		code.Discard(bType, b)
-		code.Discard(aType, a)
+		code.Discard(t, b)
+		code.Discard(t, a)
 		mach.OpAbort(code)
 		return
 	}
 
 	if value, ok := cond.CheckImmValue(types.I32); ok {
 		if value != 0 {
-			code.Discard(bType, b)
+			code.Discard(t, b)
 			result = a
 			return
 		} else {
-			code.Discard(aType, a)
+			code.Discard(t, a)
 			result = b
 			return
 		}
 	}
 
-	if expectType != types.Void {
-		b = code.opMaterializeOperand(bType, b)
-		a = code.opMaterializeOperand(aType, a)
+	if t != types.Void {
+		b = code.opMaterializeOperand(t, b)
+		a = code.opMaterializeOperand(t, a)
 		cond = code.opPreloadOperand(types.I32, cond)
-		result = mach.OpSelect(code, expectType, a, b, cond)
+		result = mach.OpSelect(code, t, a, b, cond)
 	}
 	return
 }
 
-func (code *coder) exprSetLocal(exprName string, args []interface{}) (result values.Operand, resultType types.T, deadend bool) {
+func (code *coder) exprSetLocal(exprName string, args []interface{}) (deadend bool) {
 	if len(args) != 2 {
 		panic(fmt.Errorf("%s: wrong number of operands", exprName))
 	}
 
 	varName := args[0].(string)
-	index, resultType, found := code.lookupFunctionVar(varName)
+	index, varType, found := code.lookupFunctionVar(varName)
 	if !found {
 		panic(fmt.Errorf("%s: variable not found: %s", exprName, varName))
 	}
 
-	result, _, deadend = code.expr(args[1], resultType, false)
+	result, deadend := code.expr(args[1], varType, false)
 	if deadend {
 		mach.OpAbort(code)
 		return
@@ -1701,12 +1713,12 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 			for i := len(code.liveOperands) - 1; i >= code.immutableLiveOperands; i-- {
 				live := code.liveOperands[i]
 				if live.ref.Storage == values.Var && live.ref.Index() == index {
-					reg, ok := code.TryAllocReg(resultType)
+					reg, ok := code.TryAllocReg(varType)
 					if !ok {
 						goto push
 					}
 
-					zeroExt := code.opMove(resultType, reg, *live.ref, true) // TODO: avoid multiple loads
+					zeroExt := code.opMove(varType, reg, *live.ref, true) // TODO: avoid multiple loads
 					*live.ref = values.TempRegOperand(reg, zeroExt)
 
 					v.refCount--
@@ -1726,7 +1738,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 			for _, live := range code.liveOperands[code.immutableLiveOperands:] {
 				if live.ref.Storage == values.Var && live.ref.Index() == index {
 					x := code.effectiveOperand(*live.ref)
-					mach.OpPush(code, resultType, x) // TODO: avoid multiple loads
+					mach.OpPush(code, varType, x) // TODO: avoid multiple loads
 					code.incrementStackOffset()
 					*live.ref = values.StackOperand
 
@@ -1759,15 +1771,15 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 			// reusing cache register, don't free it
 			oldCache = values.NoOperand
 		} else {
-			reg, ok = code.opTryAllocVarReg(resultType)
+			reg, ok = code.opTryAllocVarReg(varType)
 		}
 
 		if ok {
-			zeroExt := code.opMove(resultType, reg, result, false)
+			zeroExt := code.opMove(varType, reg, result, false)
 			v.cache = values.VarRegOperand(index, reg, zeroExt)
 			v.dirty = true
 		} else {
-			code.opStoreVar(resultType, index, result)
+			code.opStoreVar(varType, index, result)
 			v.cache = values.NoOperand
 			v.dirty = false
 		}
@@ -1777,7 +1789,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 		var zeroExt bool
 
 		reg := result.Reg()
-		if code.RegAllocated(resultType, reg) {
+		if code.RegAllocated(varType, reg) {
 			// repurposing the register which already contains the value
 			zeroExt = result.ZeroExt()
 			ok = true
@@ -1789,12 +1801,12 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 				// reusing cache register, don't free it
 				oldCache = values.NoOperand
 			} else {
-				reg, ok = code.opTryAllocVarReg(resultType)
+				reg, ok = code.opTryAllocVarReg(varType)
 			}
 
 			if ok {
 				// we got a register for the value
-				zeroExt = code.opMove(resultType, reg, result, false)
+				zeroExt = code.opMove(varType, reg, result, false)
 			}
 		}
 
@@ -1802,7 +1814,7 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 			v.cache = values.VarRegOperand(index, reg, zeroExt)
 			v.dirty = true
 		} else {
-			code.opStoreVar(resultType, index, result)
+			code.opStoreVar(varType, index, result)
 			v.cache = values.NoOperand
 			v.dirty = false
 		}
@@ -1815,15 +1827,12 @@ func (code *coder) exprSetLocal(exprName string, args []interface{}) (result val
 	case values.Nowhere, values.Imm:
 
 	case values.VarReg:
-		code.FreeReg(resultType, oldCache.Reg())
+		code.FreeReg(varType, oldCache.Reg())
 
 	default:
 		panic(oldCache)
 	}
 
-	// the design doc says that set_local does't return a value, but it's
-	// needed for the labels.wast test to work.
-	result = code.virtualOperand(v.cache)
 	return
 }
 
@@ -2410,7 +2419,7 @@ func (code *coder) branchSites(l *links.L, sites ...int) {
 	}
 }
 
-func (code *coder) pushTarget(l *links.L, name string, expectType types.T, functionEnd bool) {
+func (code *coder) pushTarget(l *links.L, name string, valueType types.T, functionEnd bool) {
 	offset := code.stackOffset
 
 	if code.pushedLocals < len(code.function.Locals) {
@@ -2419,7 +2428,7 @@ func (code *coder) pushTarget(l *links.L, name string, expectType types.T, funct
 		offset = len(code.function.Locals) * gen.WordSize
 	}
 
-	code.targetStack = append(code.targetStack, &branchTarget{l, name, expectType, offset, functionEnd})
+	code.targetStack = append(code.targetStack, &branchTarget{l, name, valueType, offset, functionEnd})
 }
 
 func (code *coder) popTarget() (live bool) {

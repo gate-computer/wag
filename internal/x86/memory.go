@@ -87,7 +87,7 @@ func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Opera
 	return
 }
 
-func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand, offset int) (result values.Operand, deadend bool) {
+func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand, offset int) (deadend bool) {
 	store := memoryStores.lookup(t, name)
 
 	baseReg, disp, deadend := mach.opMemoryAddress(code, t, a, offset, store.truncate)
@@ -127,23 +127,13 @@ func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.O
 
 		if ok {
 			store.insn.opImmToIndirect(code, opType, baseReg, disp, bits)
-
-			result = values.ImmOperand(t, bits)
 			return
 		}
 	}
 
-	// the design doc says that stores don't return a value, but it's needed
-	// for the memory_trap.wast test to work.
-
-	valueReg, _, ok := b.CheckAnyReg()
-	if ok {
-		result = b
-	} else {
-		// TODO: only borrow reg when we no longer return a result
-		var zeroExt bool
-		valueReg, zeroExt = mach.opMaybeResultReg(code, t, b, false)
-		result = values.TempRegOperand(valueReg, zeroExt)
+	valueReg, _, own := mach.opBorrowMaybeResultReg(code, t, b, false)
+	if own {
+		defer code.FreeReg(t, valueReg)
 	}
 
 	store.insn.opToIndirect(code, opType, valueReg, 0, NoIndex, baseReg, disp)
