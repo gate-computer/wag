@@ -9,7 +9,7 @@ import (
 	"unsafe"
 )
 
-func (p *Program) findCaller(retAddr uint32) (num int, init, ok bool) {
+func (p *Program) findCaller(retAddr uint32) (num int, initial, ok bool) {
 	count := len(p.funcMap) / 4
 	if count == 0 {
 		return
@@ -17,7 +17,7 @@ func (p *Program) findCaller(retAddr uint32) (num int, init, ok bool) {
 
 	firstFuncAddr := byteOrder.Uint32(p.funcMap[:4])
 	if retAddr > 0 && retAddr < firstFuncAddr {
-		init = true
+		initial = true
 		ok = true
 		return
 	}
@@ -27,7 +27,7 @@ func (p *Program) findCaller(retAddr uint32) (num int, init, ok bool) {
 
 		i++
 		if i == count {
-			funcEndAddr = uint32(len(p.buf.Text))
+			funcEndAddr = uint32(len(p.Text))
 		} else {
 			funcEndAddr = byteOrder.Uint32(p.funcMap[i*4 : (i+1)*4])
 		}
@@ -83,13 +83,18 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 	portable = make([]byte, len(native))
 	copy(portable, native)
 
-	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.buf.Text)).Data)
+	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
-	buf := portable[:len(portable)-8] // drop test arg
+	buf := portable
+
+	//i := 0
+	//fmt.Printf("tracing stack\n")
 
 	for len(buf) > 0 {
 		absoluteRetAddr := byteOrder.Uint64(buf[:8])
+
+		//fmt.Printf("tracing stack at depth %d: absoluteRetAddr = 0x%x\n", i, absoluteRetAddr)
 
 		retAddr := absoluteRetAddr - textAddr
 		if retAddr > 0x7ffffffe {
@@ -97,80 +102,107 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 			return
 		}
 
+		//fmt.Printf("tracing stack at depth %d: retAddr = 0x%x\n", i, retAddr)
+
 		site, found := callSites[int(retAddr)]
 		if !found {
-			err = errors.New("unknown absolute return address")
+			err = errors.New("unknown return address")
 			return
 		}
-		if site.stackOffset < 8 || (site.stackOffset&7) != 0 {
-			err = errors.New("invalid stack offset")
+
+		_, start, ok := p.findCaller(uint32(retAddr))
+		if !ok {
+			err = errors.New("function not found for return address")
 			return
+		}
+
+		//fmt.Printf("tracing stack at depth %d: start = %v\n", i, start)
+		//fmt.Printf("tracing stack at depth %d: site index = %v\n", i, site.index)
+		//fmt.Printf("tracing stack at depth %d: site stackOffset = %v\n", i, site.stackOffset)
+
+		if start {
+			if site.stackOffset != 0 {
+				err = errors.New("start function call site stack offset is not zero")
+				return
+			}
+			if len(buf) != 8 {
+				err = errors.New("start function return address is not stored at start of stack")
+				return
+			}
+		} else {
+			if site.stackOffset < 8 || (site.stackOffset&7) != 0 {
+				err = errors.New("invalid stack offset")
+				return
+			}
 		}
 
 		byteOrder.PutUint64(buf[:8], site.index) // native address -> portable index
 
+		if start {
+			buf = buf[:0]
+			return
+		}
+
 		buf = buf[site.stackOffset:]
 
-		_, init, ok := p.findCaller(uint32(retAddr))
-		if !ok {
-			err = errors.New("function not found for absolute return address")
-			return
-		}
-		if init {
-			if len(buf) != 0 {
-				err = errors.New("excess data remains at end of stack")
-			}
-			return
-		}
+		//fmt.Printf("tracing stack at depth %d: continuing to next level\n", i)
+		//i++
 	}
 
-	err = errors.New("ran out of stack before reaching initial function")
+	err = errors.New("ran out of stack before reaching start function call")
 	return
 }
 
 func (p *Program) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
-	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.buf.Text)).Data)
+	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
-	stack = stack[:len(stack)-8] // drop test arg
+	depth := 1
 
-	for depth := 1; len(stack) > 0; depth++ {
+	for ; len(stack) > 0; depth++ {
 		absoluteRetAddr := byteOrder.Uint64(stack[:8])
 
 		retAddr := absoluteRetAddr - textAddr
 		if retAddr > 0x7ffffffe {
 			fmt.Fprintf(w, "#%d  <absolute return address 0x%x is not in text section>\n", depth, absoluteRetAddr)
-			fmt.Fprintf(w, "(%d bytes of untraced stack)\n", len(stack)-8)
-			break
+			return
+		}
+
+		funcNum, start, ok := p.findCaller(uint32(retAddr))
+		if !ok {
+			fmt.Fprintf(w, "#%d  <function not found for return address 0x%x>\n", depth, retAddr)
+			return
 		}
 
 		site, found := callSites[int(retAddr)]
 		if !found {
-			fmt.Fprintf(w, "#%d  <unknown absolute return address 0x%x>\n", depth, absoluteRetAddr)
+			fmt.Fprintf(w, "#%d  <unknown return address 0x%x>\n", depth, retAddr)
+			return
 		}
+
+		if start {
+			if site.stackOffset != 0 {
+				fmt.Fprintf(w, "#%d  <start function call site stack offset is not zero>\n", depth)
+			}
+			if len(stack) != 8 {
+				fmt.Fprintf(w, "#%d  <start function return address is not stored at start of stack>\n", depth)
+			}
+			return
+		}
+
 		if site.stackOffset < 8 || (site.stackOffset&7) != 0 {
 			fmt.Fprintf(w, "#%d  <invalid stack offset %d>\n", depth, site.stackOffset)
-			break
+			return
 		}
 
 		stack = stack[site.stackOffset:]
 
-		funcNum, init, ok := p.findCaller(uint32(retAddr))
-		if !ok {
-			fmt.Fprintf(w, "#%d  <function not found for return address 0x%x>\n", depth, retAddr)
-			break
-		}
-		if init {
-			break
-		}
-
-		fmt.Fprintf(w, "#%d  %s %s\n", depth, p.funcNames[funcNum], p.funcTypes[funcNum])
+		fmt.Fprintf(w, "#%d  function %d\n", depth, funcNum)
 	}
 
 	if len(stack) != 0 {
-		fmt.Fprintf(w, "warning: %d bytes of untraced stack remains\n", len(stack))
+		fmt.Fprintf(w, "#%d  <%d bytes of untraced stack>\n", depth, len(stack))
 	}
-
 	return
 }
 

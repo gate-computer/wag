@@ -6,31 +6,17 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 )
 
+func writeInt32To(code gen.OpCoder, value int32) {
+	if err := binary.Write(code, binary.LittleEndian, value); err != nil {
+		panic(err)
+	}
+}
+
 type imm struct {
 	value interface{}
 }
 
-func imm8(x int) imm {
-	return imm{int8(x)}
-}
-
-func uimm8(x int) imm {
-	return imm{uint8(x)}
-}
-
-func imm16(x int) imm {
-	return imm{int16(x)}
-}
-
-func imm32(x int) imm {
-	return imm{int32(x)}
-}
-
-func imm64(x int64) imm {
-	return imm{x}
-}
-
-func (imm imm) writeTo(code gen.Coder) {
+func (imm imm) writeTo(code gen.OpCoder) {
 	if imm.value != nil {
 		if err := binary.Write(code, binary.LittleEndian, imm.value); err != nil {
 			panic(err)
@@ -38,6 +24,6 @@ func (imm imm) writeTo(code gen.Coder) {
 	}
 }
 
-var (
-	Void imm
-)
+// var (
+// 	Void imm
+// )

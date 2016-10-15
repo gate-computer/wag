@@ -9,11 +9,11 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-func spectestPrint(f io.Reader, sigs map[int64]types.Function, sigIndex int64, printer io.Writer) {
-	sig, found := sigs[sigIndex]
-	if !found {
+func spectestPrint(f io.Reader, sigs []types.Function, sigIndex int64, printer io.Writer) {
+	if sigIndex >= int64(len(sigs)) {
 		panic(fmt.Sprintf("0x%x", sigIndex))
 	}
+	sig := sigs[sigIndex]
 
 	args := make([]uint64, len(sig.Args))
 

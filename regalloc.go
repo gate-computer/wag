@@ -1,40 +1,37 @@
 package wag
 
 import (
-	"fmt"
-
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/types"
 )
 
-const (
-	verboseRegAlloc = verbose
-)
-
-type regAllocator struct {
-	avail uint32
-	freed uint32
-	name  string
+func regIndex(cat gen.RegCategory, reg regs.R) uint8 {
+	return uint8(reg<<1) + uint8(cat)
 }
 
-func (ra *regAllocator) init(avail uint32, name string) {
+func regMask(cat gen.RegCategory, reg regs.R) uint64 {
+	return uint64(1) << regIndex(cat, reg)
+}
+
+//
+type regAllocator struct {
+	avail uint64
+	freed uint64
+}
+
+func (ra *regAllocator) init(avail uint64) {
 	ra.avail = avail
 	ra.freed = avail
-	ra.name = name
 }
 
-func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
-	for bits := ra.freed; bits != 0; bits >>= 1 {
+func (ra *regAllocator) alloc(cat gen.RegCategory) (reg regs.R, ok bool) {
+	for bits := ra.freed >> uint8(cat); bits != 0; bits >>= 2 {
 		if (bits & 1) != 0 {
-			ra.freed &^= uint32(1 << reg)
+			ra.freed &^= regMask(cat, reg)
 			ok = true
 
-			if verboseRegAlloc {
-				for i := 0; i < debugExprDepth; i++ {
-					fmt.Print("    ")
-				}
-				fmt.Printf("<!-- reg alloc %s %s -->\n", ra.name, reg)
-			}
-
+			debugf("reg alloc: %s %s", cat, reg)
 			break
 		}
 
@@ -44,15 +41,10 @@ func (ra *regAllocator) alloc() (reg regs.R, ok bool) {
 	return
 }
 
-func (ra *regAllocator) allocSpecific(reg regs.R) {
-	if verboseRegAlloc {
-		for i := 0; i < debugExprDepth; i++ {
-			fmt.Print("    ")
-		}
-		fmt.Printf("<!-- reg alloc %s %s specifically -->\n", ra.name, reg)
-	}
+func (ra *regAllocator) allocSpecific(cat gen.RegCategory, reg regs.R) {
+	debugf("reg alloc: %s %s specifically", cat, reg)
 
-	mask := uint32(1 << reg)
+	mask := regMask(cat, reg)
 
 	if (ra.freed & mask) == 0 {
 		panic(reg)
@@ -61,18 +53,13 @@ func (ra *regAllocator) allocSpecific(reg regs.R) {
 	ra.freed &^= mask
 }
 
-func (ra *regAllocator) free(reg regs.R) {
-	mask := uint32(1 << reg)
+func (ra *regAllocator) free(cat gen.RegCategory, reg regs.R) {
+	mask := regMask(cat, reg)
 
-	if verboseRegAlloc {
-		for i := 0; i < debugExprDepth; i++ {
-			fmt.Print("    ")
-		}
-		if (ra.avail & mask) == 0 {
-			fmt.Printf("<!-- reg free %s %s (nop) -->\n", ra.name, reg)
-		} else {
-			fmt.Printf("<!-- reg free %s %s -->\n", ra.name, reg)
-		}
+	if (ra.avail & mask) == 0 {
+		debugf("reg free (nop): %s %s", cat, reg)
+	} else {
+		debugf("reg free: %s %s", cat, reg)
 	}
 
 	if (ra.freed & mask) != 0 {
@@ -86,21 +73,73 @@ func (ra *regAllocator) free(reg regs.R) {
 	ra.freed |= mask
 }
 
-func (ra *regAllocator) allocated(reg regs.R) bool {
-	if verboseRegAlloc {
-		for i := 0; i < debugExprDepth; i++ {
-			fmt.Print("    ")
-		}
-		fmt.Printf("<!-- reg check %s %s -->\n", ra.name, reg)
-	}
+func (ra *regAllocator) freeAll() {
+	ra.freed = ra.avail
+}
 
-	mask := uint32(1 << reg)
+func (ra *regAllocator) allocated(cat gen.RegCategory, reg regs.R) bool {
+	debugf("reg check allocation: %s %s", cat, reg)
+
+	mask := regMask(cat, reg)
 
 	return ((ra.avail &^ ra.freed) & mask) != 0
 }
 
-func (ra *regAllocator) postCheck() {
+func (ra *regAllocator) assertNoneAllocated() {
 	if ra.freed != ra.avail {
-		panic(fmt.Errorf("some %s registers not freed after function", ra.name))
+		panic("some registers still allocated at end of function")
 	}
+}
+
+//
+type regMap [64]uint8
+
+func (rm *regMap) set(cat gen.RegCategory, reg regs.R, index int) {
+	rm[regIndex(cat, reg)] = uint8(index) + 1
+}
+
+func (rm *regMap) clear(cat gen.RegCategory, reg regs.R) {
+	rm[regIndex(cat, reg)] = 0
+}
+
+func (rm *regMap) get(cat gen.RegCategory, reg regs.R) (index int) {
+	return int(rm[regIndex(cat, reg)]) - 1
+}
+
+//
+type regIterator struct {
+	counts [2]int
+	regs   [2][]regs.R
+}
+
+func (ri *regIterator) init(paramRegs [2][]regs.R, paramTypes []types.T) (stackCount int32) {
+	for i := int32(len(paramTypes)) - 1; i >= 0; i-- {
+		cat := gen.TypeRegCategory(paramTypes[i])
+		if ri.counts[cat] == len(paramRegs[cat]) {
+			stackCount = i + 1
+			break
+		}
+		ri.counts[cat]++
+	}
+	ri.initRegs(paramRegs)
+	return
+}
+
+func (ri *regIterator) initRegs(paramRegs [2][]regs.R) {
+	for cat, n := range ri.counts {
+		ri.regs[cat] = paramRegs[cat][:n]
+	}
+}
+
+func (ri *regIterator) iterForward(cat gen.RegCategory) (reg regs.R) {
+	reg = ri.regs[cat][0]
+	ri.regs[cat] = ri.regs[cat][1:]
+	return
+}
+
+func (ri *regIterator) iterBackward(cat gen.RegCategory) (reg regs.R) {
+	n := len(ri.regs[cat]) - 1
+	reg = ri.regs[cat][n]
+	ri.regs[cat] = ri.regs[cat][:n]
+	return
 }

@@ -1,88 +1,78 @@
 package wag
 
 import (
+	"bufio"
 	"bytes"
 	"io/ioutil"
 	"testing"
 
-	"github.com/tsavola/wag/internal/sexp"
 	"github.com/tsavola/wag/runner"
 )
 
 func TestSnapshot(t *testing.T) {
+	const (
+		maxTextSize   = 65536
+		maxRODataSize = 4096
+		stackSize     = 4096
+	)
+
 	data, err := ioutil.ReadFile("testdata/snapshot.wast")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expr, _ := sexp.ParsePanic(data)
-	if expr == nil {
-		t.Fatal()
-	}
+	wasmReadCloser := wast2wasm(data, false)
+	defer wasmReadCloser.Close()
+	wasm := bufio.NewReader(wasmReadCloser)
 
-	m := loadModule(expr)
-	globals, data := m.Data()
-
-	const (
-		maxRODataSize = 4096
-		stackSize     = 4096
-	)
-
-	b, err := runner.NewBuffer(maxTextSize, maxRODataSize)
+	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer p.Close()
 
-	_, _, funcMap, callMap := m.Code(runner.Imports, b.Text, b.RODataAddr(), b.ROData, nil)
+	var m Module
+	m.load(wasm, runner.Env, p.Text, p.ROData, p.RODataAddr(), nil)
+	p.Seal()
+	p.SetData(m.Data())
+	p.SetFunctionMap(m.FunctionMap())
+	p.SetCallMap(m.CallMap())
+	minMemorySize, maxMemorySize := m.MemoryLimits()
 
-	b.Seal()
-
-	p := b.NewProgram(globals, data, m.FuncTypes(), m.FuncNames())
-	p.SetMaps(funcMap, callMap)
-
-	r1, err := p.NewRunner(m.Memory.MinSize, m.Memory.MaxSize, stackSize)
-	if err != nil {
-		t.Fatal(err)
-	}
+	objdump(m.Text())
 
 	var printBuf bytes.Buffer
 
-	result, err := r1.Run(0, m.ImportTypes(), &printBuf)
-
-	r1.Close()
-
-	t.Logf("snapshots taken: %d", len(r1.Snapshots))
-
-	if printBuf.Len() > 0 {
-		t.Logf("print output:\n%s", string(printBuf.Bytes()))
-	}
-
-	if result < 0 {
-		t.Fatal(result)
-	}
-
-	s := r1.Snapshots[int(result)]
-
-	r2, err := s.NewRunner(m.Memory.MaxSize, stackSize)
+	r1, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	printBuf.Reset()
-
-	result, err = r2.Run(0, m.ImportTypes(), &printBuf)
-
-	r2.Close()
-
-	t.Logf("snapshots taken: %d", len(r2.Snapshots))
+	_, err = r1.Run(0, m.Signatures(), &printBuf)
+	r1.Close()
 
 	if printBuf.Len() > 0 {
 		t.Logf("print output:\n%s", string(printBuf.Bytes()))
 	}
 
-	if result != -1 {
-		t.Fatal(result)
+	if len(r1.Snapshots) != 1 {
+		t.Fatal(r1.Snapshots)
+	}
+	s := r1.Snapshots[0]
+
+	printBuf.Reset()
+
+	r2, err := s.NewRunner(maxMemorySize, stackSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r2.Run(0, m.Signatures(), &printBuf)
+	r2.Close()
+
+	if printBuf.Len() > 0 {
+		t.Logf("print output:\n%s", string(printBuf.Bytes()))
 	}
 
-	b.Close()
+	if len(r2.Snapshots) != 0 {
+		t.Fatal(r2.Snapshots)
+	}
 }

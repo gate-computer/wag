@@ -9,7 +9,7 @@ import (
 type Function struct {
 	types.Function
 	Variadic bool
-	Address  int64
+	AbsAddr  uint64
 }
 
 func (impl Function) Implements(signature types.Function) bool {
@@ -21,7 +21,7 @@ func (impl Function) Implements(signature types.Function) bool {
 }
 
 func (f Function) String() (s string) {
-	s = fmt.Sprintf("0x%x (", f.Address)
+	s = fmt.Sprintf("0x%x (", f.AbsAddr)
 	for i, t := range f.Args {
 		if i > 0 {
 			s += ", "

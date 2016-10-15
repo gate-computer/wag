@@ -3,226 +3,239 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/wasm"
 )
 
 type memoryAccess struct {
-	truncate int
-	zeroExt  bool
-	opType   types.T
 	insn     binaryInsn
+	insnType types.T
+	zeroExt  bool
 }
 
-type memoryAccesses struct {
-	integer map[string]memoryAccess
-	float   map[string]memoryAccess
+var memoryLoads = []memoryAccess{
+	opers.IndexIntLoad:    {Mov, 0, true},
+	opers.IndexIntLoad8S:  {binaryInsn{Movsx8, NoPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad8U:  {binaryInsn{Movzx8, NoPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad16S: {binaryInsn{Movsx16, NoPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad16U: {binaryInsn{Movzx16, NoPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad32S: {binaryInsn{Movsxd, NoPrefixMIInsn}, 0, false}, // type is ignored
+	opers.IndexIntLoad32U: {Mov, types.I32, true},
+	opers.IndexFloatLoad:  {binaryInsn{MovsSSE, NoPrefixMIInsn}, 0, false},
 }
 
-func (as memoryAccesses) lookup(t types.T, name string) (a memoryAccess) {
-	var found bool
+var memoryStores = []memoryAccess{
+	opers.IndexIntStore:   {Mov, 0, false},
+	opers.IndexIntStore8:  {Mov8, types.I32, false},
+	opers.IndexIntStore16: {Mov16, types.I32, false},
+	opers.IndexIntStore32: {Mov, types.I32, false},
+	opers.IndexFloatStore: {binaryInsn{MovsSSE, MovImm}, 0, false}, // integer immediate works
+}
 
-	switch t.Category() {
-	case types.Int:
-		a, found = as.integer[name]
+// LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
+func (mach X86) LoadOp(code gen.RegCoder, oper uint16, index values.Operand, resultType types.T, offset uint32) (result values.Operand) {
+	size := oper >> 8
 
-	case types.Float:
-		a, found = as.float[name]
-
-	default:
-		panic(t)
+	baseReg, indexReg, ownIndexReg, disp := mach.opMemoryAddress(code, size, index, offset)
+	if ownIndexReg {
+		defer code.FreeReg(types.I64, indexReg)
 	}
 
-	if !found {
-		panic(name)
+	load := memoryLoads[uint8(oper)]
+
+	targetReg, ok := code.TryAllocReg(resultType)
+	if !ok {
+		targetReg = regResult
 	}
+
+	result = values.TempRegOperand(resultType, targetReg, load.zeroExt)
+
+	insnType := load.insnType
+	if insnType == 0 {
+		insnType = resultType
+	}
+
+	load.insn.opFromIndirect(code, insnType, targetReg, 0, indexReg, baseReg, disp)
 	return
 }
 
-var memoryLoads = memoryAccesses{
-	integer: map[string]memoryAccess{
-		"load":     {0, true, 0, Mov},
-		"load8_s":  {1, false, 0, binaryInsn{Movsx8, NoPrefixMIInsn}},
-		"load8_u":  {1, false, 0, binaryInsn{Movzx8, NoPrefixMIInsn}},
-		"load16_s": {2, false, 0, binaryInsn{Movsx16, NoPrefixMIInsn}},
-		"load16_u": {2, false, 0, binaryInsn{Movzx16, NoPrefixMIInsn}},
-		"load32_s": {4, false, 0, binaryInsn{Movsxd, NoPrefixMIInsn}}, // type is ignored
-		"load32_u": {4, true, types.I32, Mov},
-	},
-	float: map[string]memoryAccess{
-		"load": {0, false, 0, binaryInsn{MovsSSE, NoPrefixMIInsn}},
-	},
-}
+// StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
+func (mach X86) StoreOp(code gen.RegCoder, oper uint16, index, x values.Operand, offset uint32) {
+	size := oper >> 8
 
-var memoryStores = memoryAccesses{
-	integer: map[string]memoryAccess{
-		"store":   {0, false, 0, Mov},
-		"store8":  {1, false, types.I32, Mov8},
-		"store16": {2, false, types.I32, Mov16},
-		"store32": {4, false, types.I32, Mov},
-	},
-	float: map[string]memoryAccess{
-		"store": {0, false, 0, binaryInsn{MovsSSE, MovImm}}, // integer immediate instruction will do
-	},
-}
-
-func (mach X86) LoadOp(code gen.RegCoder, name string, t types.T, x values.Operand, offset int) (result values.Operand, deadend bool) {
-	load := memoryLoads.lookup(t, name)
-
-	baseReg, disp, deadend := mach.opMemoryAddress(code, t, x, offset, load.truncate)
-	if deadend {
-		result = values.ImmOperand(t, 0)
-		return
+	baseReg, indexReg, ownIndexReg, disp := mach.opMemoryAddress(code, size, index, offset)
+	if ownIndexReg {
+		defer code.FreeReg(types.I64, indexReg)
 	}
 
-	opType := load.opType
-	if opType == 0 {
-		opType = t
+	store := memoryStores[uint8(oper)]
+
+	insnType := store.insnType
+	if insnType == 0 {
+		insnType = x.Type
 	}
 
-	load.insn.opFromIndirect(code, opType, regResult, 0, NoIndex, baseReg, disp)
-	result = values.TempRegOperand(regResult, load.zeroExt)
-	return
-}
-
-func (mach X86) StoreOp(code gen.RegCoder, name string, t types.T, a, b values.Operand, offset int) (deadend bool) {
-	store := memoryStores.lookup(t, name)
-
-	baseReg, disp, deadend := mach.opMemoryAddress(code, t, a, offset, store.truncate)
-	if deadend {
-		code.Discard(t, b)
-		return
-	}
-
-	opType := store.opType
-	if opType == 0 {
-		opType = t
-	}
-
-	if b.Storage == values.Imm {
-		value := b.ImmValue(t)
-
-		var bits int
-		var ok bool
+	if x.Storage == values.Imm {
+		value := x.ImmValue()
+		value32 := int32(value)
 
 		switch {
-		case store.truncate == 1:
-			bits = int(int8(value))
-			ok = true
+		case size == 1:
+			value32 = int32(int8(value32))
 
-		case store.truncate == 2:
-			bits = int(int16(value))
-			ok = true
+		case size == 2:
+			value32 = int32(int16(value32))
 
-		case store.truncate == 4:
-			bits = int(int32(value))
-			ok = true
+		case size == 4 || (value >= -0x80000000 && value < 0x80000000):
 
-		case value >= -0x80000000 && value < 0x80000000:
-			bits = int(value)
-			ok = true
+		default:
+			goto large
 		}
 
-		if ok {
-			store.insn.opImmToIndirect(code, opType, baseReg, disp, bits)
-			return
-		}
+		store.insn.opImmToIndirect(code, insnType, baseReg, disp, value32)
+		return
+
+	large:
 	}
 
-	valueReg, _, own := mach.opBorrowMaybeResultReg(code, t, b, false)
+	valueReg, _, own := mach.opBorrowMaybeResultReg(code, x, false)
 	if own {
-		defer code.FreeReg(t, valueReg)
+		defer code.FreeReg(x.Type, valueReg)
 	}
 
-	store.insn.opToIndirect(code, opType, valueReg, 0, NoIndex, baseReg, disp)
-	return
+	store.insn.opToIndirect(code, insnType, valueReg, 0, indexReg, baseReg, disp)
 }
 
 // opMemoryAddress may return the scratch register as the base.
-func (mach X86) opMemoryAddress(code gen.RegCoder, t types.T, x values.Operand, offset, truncate int) (baseReg regs.R, disp int, deadend bool) {
-	var size int
-	if truncate != 0 {
-		size = truncate
-	} else {
-		size = int(t.Size())
+func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
+	sizeReach := size - 1
+	reachOffset := uint64(offset) + uint64(sizeReach)
+
+	if reachOffset >= 0x80000000 {
+		code.OpTrapCall(traps.MemoryOutOfBounds)
+		return
 	}
 
-	var runtimeCheck bool
+	checkLower := true
+	checkUpper := true
 
-	if offset < 0 {
-		panic("negative offset")
+	if index.Bounds.Defined() {
+		if offset >= uint32(index.Bounds.Lower) {
+			checkLower = false
+		}
+		if reachOffset < uint64(index.Bounds.Upper) {
+			checkUpper = false
+		}
 	}
 
-	switch x.Storage {
+	switch index.Storage {
 	case values.Imm:
-		addr := x.ImmValue(types.I32) + int64(offset)
-		end := addr + int64(size)
+		addr := index.ImmValue() + int64(offset)
+		reachAddr := addr + int64(sizeReach)
 
-		if addr >= 0 && end <= int64(code.MinMemorySize()) {
-			// compile-time check only
-			baseReg = regMemoryBase
-			disp = int(addr)
+		if addr < 0 || reachAddr >= 0x80000000 {
+			code.OpTrapCall(traps.MemoryOutOfBounds)
 			return
 		}
 
-		if addr >= 0 && end <= 0x80000000 {
-			Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryBase, int(end))
-			runtimeCheck = true
+		if reachAddr < int64(code.MinMemorySize()) {
+			checkUpper = false
 		}
 
-	default:
-		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, types.I32, x, true)
-		if own {
-			defer code.FreeReg(types.I32, reg)
+		if !checkUpper {
+			baseReg = regMemoryBase
+			indexReg = NoIndex
+			disp = int32(addr)
+			return
 		}
+
+		Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryBase, int32(reachAddr))
+
+	default:
+		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, index, true)
+
+		// TODO: there's room for optimization here, in exchange for more complexity
 
 		if !zeroExt {
 			Mov.opFromReg(code, types.I32, reg, reg)
 		}
 
-		end := int64(size) + int64(offset)
+		if checkLower {
+			if offset != 0 {
+				Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, reg, int32(offset))
+				if own {
+					code.FreeReg(types.I32, reg)
+				}
+				reg = regScratch
+				own = false
+				offset = 0
+				reachOffset = uint64(sizeReach)
+			}
 
-		if end <= 0x80000000 {
-			Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryBase, int(end))
-			runtimeCheck = true
+			Test.opFromReg(code, types.I32, reg, reg)
+
+			if addr := code.TrapTrampolineAddr(traps.MemoryOutOfBounds); addr != 0 {
+				Js.op(code, addr)
+			} else {
+				var checked links.L
+
+				Jns.rel8.opStub(code)
+				checked.AddSite(code.Len())
+
+				code.OpTrapCall(traps.MemoryOutOfBounds)
+
+				checked.Addr = code.Len()
+				mach.updateBranches8(code, &checked)
+			}
+		}
+
+		if !checkUpper {
+			baseReg = regMemoryBase
+			indexReg = reg
+			ownIndexReg = own
+			disp = int32(offset)
+			return
+		}
+
+		Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryBase, int32(reachOffset))
+
+		if own {
+			code.FreeReg(types.I32, reg)
 		}
 	}
 
-	if runtimeCheck {
-		Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
+	Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
 
-		if addr := code.TrapTrampolineAddress(traps.MemoryOutOfBounds); addr != 0 {
-			Jg.op(code, addr)
-		} else {
-			var checked links.L
-
-			Jle.rel8.opStub(code)
-			checked.AddSite(code.Len())
-
-			code.OpTrapCall(traps.MemoryOutOfBounds)
-
-			checked.Address = code.Len()
-			mach.updateSites8(code, &checked)
-		}
-
-		baseReg = regScratch
-		disp = -size
+	if addr := code.TrapTrampolineAddr(traps.MemoryOutOfBounds); addr != 0 {
+		Jge.op(code, addr)
 	} else {
+		var checked links.L
+
+		Jl.rel8.opStub(code)
+		checked.AddSite(code.Len())
+
 		code.OpTrapCall(traps.MemoryOutOfBounds)
-		deadend = true
+
+		checked.Addr = code.Len()
+		mach.updateBranches8(code, &checked)
 	}
 
+	baseReg = regScratch
+	indexReg = NoIndex
+	disp = -int32(sizeReach)
 	return
 }
 
 func (mach X86) OpCurrentMemory(code gen.RegCoder) values.Operand {
 	Mov.opFromReg(code, types.I64, regResult, regMemoryLimit)
 	Sub.opFromReg(code, types.I64, regResult, regMemoryBase)
-	ShrImm.op(code, types.I64, regResult, 16)
+	ShrImm.op(code, types.I64, regResult, wasm.PageBits)
 
-	return values.TempRegOperand(regResult, true)
+	return values.TempRegOperand(types.I32, regResult, true)
 }
 
 func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand {
@@ -231,12 +244,12 @@ func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand
 
 	MovqMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
 
-	targetReg, zeroExt := mach.opMaybeResultReg(code, types.I32, x, false)
+	targetReg, zeroExt := mach.opMaybeResultReg(code, x, false)
 	if !zeroExt {
 		Mov.opFromReg(code, types.I32, targetReg, targetReg)
 	}
 
-	ShlImm.op(code, types.I64, targetReg, 16)
+	ShlImm.op(code, types.I64, targetReg, wasm.PageBits)
 	Add.opFromReg(code, types.I64, targetReg, regMemoryLimit) // new memory limit
 	Cmp.opFromReg(code, types.I64, targetReg, regScratch)
 
@@ -246,19 +259,19 @@ func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand
 	Mov.opFromReg(code, types.I64, regScratch, regMemoryLimit)
 	Mov.opFromReg(code, types.I64, regMemoryLimit, targetReg)
 	Sub.opFromReg(code, types.I64, regScratch, regMemoryBase)
-	ShrImm.op(code, types.I64, regScratch, 16) // value on success
+	ShrImm.op(code, types.I64, regScratch, wasm.PageBits) // value on success
 	Mov.opFromReg(code, types.I64, targetReg, regScratch)
 
 	JmpRel.rel8.opStub(code)
 	out.AddSite(code.Len())
 
-	fail.Address = code.Len()
-	mach.updateSites8(code, &fail)
+	fail.Addr = code.Len()
+	mach.updateBranches8(code, &fail)
 
 	MovImm.opImm(code, types.I32, targetReg, -1) // value on failure
 
-	out.Address = code.Len()
-	mach.updateSites8(code, &out)
+	out.Addr = code.Len()
+	mach.updateBranches8(code, &out)
 
-	return values.TempRegOperand(targetReg, true)
+	return values.TempRegOperand(types.I32, targetReg, true)
 }

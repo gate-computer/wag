@@ -8,7 +8,7 @@ import (
 	"github.com/tsavola/wag/internal/types"
 )
 
-func (e *Executor) slave(fd int, sigs map[int64]types.Function, printer io.Writer, cont <-chan struct{}) {
+func (e *Executor) slave(fd int, sigs []types.Function, printer io.Writer, cont <-chan struct{}) {
 	f := os.NewFile(uintptr(fd), "socket")
 	defer f.Close()
 

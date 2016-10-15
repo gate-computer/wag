@@ -1,18 +1,18 @@
 package links
 
 type L struct {
-	Sites   []int
-	Address int
+	Sites []int32
+	Addr  int32
 }
 
 func (l *L) Reset() {
 	l.Sites = nil
-	l.Address = 0
+	l.Addr = 0
 }
 
 func (l *L) SetLive() {
 	if l.Sites == nil {
-		l.Sites = []int{}
+		l.Sites = []int32{}
 	}
 }
 
@@ -20,13 +20,22 @@ func (l *L) Live() bool {
 	return l.Sites != nil
 }
 
-func (l *L) AddSite(addr int) {
+func (l *L) AddSite(addr int32) {
 	l.Sites = append(l.Sites, addr)
 }
 
-func (l *L) FinalAddress() int {
-	if l.Address <= 0 {
+func (l *L) FinalAddr() int32 {
+	if l.Addr == 0 {
 		panic("link address is undefined")
 	}
-	return l.Address
+	return l.Addr
+}
+
+type FunctionL struct {
+	L
+	TableIndexes []int
+}
+
+func (fl *FunctionL) AddTableIndex(index int) {
+	fl.TableIndexes = append(fl.TableIndexes, index)
 }

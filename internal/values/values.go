@@ -2,41 +2,44 @@ package values
 
 import (
 	"fmt"
-	"math"
-	"strconv"
-	"strings"
 
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 )
 
-type Storage int
+type Storage uint8
 
 const (
-	Nowhere = Storage(iota)
-	Imm
-	Var    // backed by wag.coder.varOperands array, containing other Operand types
-	VarMem // returned by gen.Coder.Var() for non-cached variables
-	VarReg // used in wag.coder.varState, returned by gen.Coder.Var()
-	TempReg
-	BorrowedReg // may be used by backend implementations
-	Stack
-	ConditionFlags
+	storageReg  = 1 << 0
+	storageVar  = 1 << 1
+	storageVSCf = 1 << 2 // Var || Stack || ConditionFlags
+	storageTrCf = 1 << 3 // TempReg || ConditionFlags
+	storageSCf  = 1 << 4 // Stack || ConditionFlags
+
+	Nowhere        = Storage(0)
+	VarReference   = Storage(storageVSCf | storageVar)
+	VarReg         = Storage(storageVSCf | storageVar | storageReg)
+	TempReg        = Storage(storageTrCf | storageReg)
+	Stack          = Storage(storageSCf | storageVSCf)
+	ConditionFlags = Storage(storageSCf | storageTrCf | storageVSCf)
+	Imm            = Storage((1 << 5))
+	BorrowedReg    = Storage((1 << 5) | storageReg)
+	VarMem         = Storage((1 << 5) | storageVSCf | storageVar)
 )
+
+func (s Storage) IsReg() bool                        { return (s & storageReg) != 0 }
+func (s Storage) IsVar() bool                        { return (s & storageVar) != 0 }
+func (s Storage) IsVarOrStackOrConditionFlags() bool { return (s & storageVSCf) != 0 }
+func (s Storage) IsTempRegOrConditionFlags() bool    { return (s & storageTrCf) != 0 }
+func (s Storage) IsStackOrConditionFlags() bool      { return (s & storageSCf) != 0 }
 
 func (s Storage) String() string {
 	switch s {
 	case Nowhere:
 		return "nowhere"
 
-	case Imm:
-		return "immediate data"
-
-	case Var:
-		return "variable"
-
-	case VarMem:
-		return "memory variable"
+	case VarReference:
+		return "variable reference"
 
 	case VarReg:
 		return "register variable"
@@ -44,422 +47,225 @@ func (s Storage) String() string {
 	case TempReg:
 		return "temporary register"
 
-	case BorrowedReg:
-		return "borrorwed register"
-
 	case Stack:
 		return "stack"
 
 	case ConditionFlags:
 		return "condition flags"
 
+	case Imm:
+		return "immediate data"
+
+	case BorrowedReg:
+		return "borrorwed register"
+
+	case VarMem:
+		return "memory variable"
+
 	default:
-		return "(invalid operand storage type)"
+		return "<invalid operand storage type>"
 	}
 }
-
-var (
-	NoOperand    = Operand{Storage: Nowhere}
-	StackOperand = Operand{Storage: Stack}
-)
 
 type Condition int
 
 const (
-	EQ = Condition(iota)
-	NE
-	GESigned
-	GTSigned
-	GEUnsigned
-	GTUnsigned
-	LESigned
-	LTSigned
-	LEUnsigned
-	LTUnsigned
+	Eq = Condition(iota)
+	Ne
+	GeS
+	GtS
+	GeU
+	GtU
+	LeS
+	LtS
+	LeU
+	LtU
 
-	OrderedAndEQ
-	OrderedAndNE
-	OrderedAndGE
-	OrderedAndGT
-	OrderedAndLE
-	OrderedAndLT
+	OrderedAndEq
+	OrderedAndNe
+	OrderedAndGe
+	OrderedAndGt
+	OrderedAndLe
+	OrderedAndLt
 
-	UnorderedOrEQ
-	UnorderedOrNE
-	UnorderedOrGE
-	UnorderedOrGT
-	UnorderedOrLE
-	UnorderedOrLT
+	UnorderedOrEq
+	UnorderedOrNe
+	UnorderedOrGe
+	UnorderedOrGt
+	UnorderedOrLe
+	UnorderedOrLt
 
-	MinOrderedAndCondition  = OrderedAndEQ
-	MinUnorderedOrCondition = UnorderedOrEQ
+	MinOrderedAndCondition  = OrderedAndEq
+	MinUnorderedOrCondition = UnorderedOrEq
 )
 
 var InvertedConditions = []Condition{
-	EQ:            NE,
-	NE:            EQ,
-	GESigned:      LTSigned,
-	GTSigned:      LESigned,
-	GEUnsigned:    LTUnsigned,
-	GTUnsigned:    LEUnsigned,
-	LESigned:      GTSigned,
-	LTSigned:      GESigned,
-	LEUnsigned:    GTUnsigned,
-	LTUnsigned:    GEUnsigned,
-	OrderedAndEQ:  UnorderedOrNE,
-	OrderedAndNE:  UnorderedOrEQ,
-	OrderedAndGE:  UnorderedOrLT,
-	OrderedAndGT:  UnorderedOrLE,
-	OrderedAndLE:  UnorderedOrGT,
-	OrderedAndLT:  UnorderedOrGE,
-	UnorderedOrEQ: OrderedAndNE,
-	UnorderedOrNE: OrderedAndEQ,
-	UnorderedOrGE: OrderedAndLT,
-	UnorderedOrGT: OrderedAndLE,
-	UnorderedOrLE: OrderedAndGT,
-	UnorderedOrLT: OrderedAndGE,
+	Eq:            Ne,
+	Ne:            Eq,
+	GeS:           LtS,
+	GtS:           LeS,
+	GeU:           LtU,
+	GtU:           LeU,
+	LeS:           GtS,
+	LtS:           GeS,
+	LeU:           GtU,
+	LtU:           GeU,
+	OrderedAndEq:  UnorderedOrNe,
+	OrderedAndNe:  UnorderedOrEq,
+	OrderedAndGe:  UnorderedOrLt,
+	OrderedAndGt:  UnorderedOrLe,
+	OrderedAndLe:  UnorderedOrGt,
+	OrderedAndLt:  UnorderedOrGe,
+	UnorderedOrEq: OrderedAndNe,
+	UnorderedOrNe: OrderedAndEq,
+	UnorderedOrGe: OrderedAndLt,
+	UnorderedOrGt: OrderedAndLe,
+	UnorderedOrLe: OrderedAndGt,
+	UnorderedOrLt: OrderedAndGe,
 }
 
 const (
-	zeroExtFlag = uint64(1 << 16)
+	payloadZeroExt = uint64(1 << 16)
 )
 
+type Bounds struct {
+	Lower uint16
+	Upper uint16
+}
+
+func (b Bounds) Defined() bool {
+	return b.Upper != 0
+}
+
 type Operand struct {
+	payload uint64
+	Bounds  Bounds
+	Type    types.T
 	Storage Storage
-	X       uint64
 }
 
-func ImmOperand(t types.T, value int) Operand {
-	var x uint64
-
-	switch t.Size() {
-	case types.Size32:
-		x = uint64(uint32(int32(value)))
-
-	case types.Size64:
-		x = uint64(int64(value))
-
-	default:
-		panic(t)
-	}
-
-	return Operand{Imm, x}
+func NoOperand(t types.T) Operand {
+	return Operand{0, Bounds{}, t, Nowhere}
 }
 
-func VarOperand(index int) Operand {
-	return Operand{Var, uint64(index)}
+func ImmOperand(t types.T, payload uint64) Operand {
+	return Operand{payload, Bounds{}, t, Imm}
 }
 
-func VarMemOperand(index int, offset int) Operand {
-	return Operand{VarMem, (uint64(index) << 32) | uint64(offset)}
+func VarReferenceOperand(t types.T, index int32) Operand {
+	payload := uint64(index) << 32
+	return Operand{payload, Bounds{}, t, VarReference}
 }
 
-func VarRegOperand(index int, reg regs.R, zeroExt bool) Operand {
-	var flags uint64
+func VarMemOperand(t types.T, index, offset int32) Operand {
+	payload := (uint64(index) << 32) | uint64(uint32(offset))
+	return Operand{payload, Bounds{}, t, VarMem}
+}
+
+func VarRegOperand(t types.T, index int32, reg regs.R, zeroExt bool) Operand {
+	payload := (uint64(index) << 32) | uint64(byte(reg))
 	if zeroExt {
-		flags = zeroExtFlag
+		payload |= payloadZeroExt
 	}
-	return Operand{VarReg, (uint64(index) << 32) | flags | uint64(byte(reg))}
+	return Operand{payload, Bounds{}, t, VarReg}
 }
 
-func TempRegOperand(reg regs.R, zeroExt bool) Operand {
-	var flags uint64
+func TempRegOperand(t types.T, reg regs.R, zeroExt bool) Operand {
+	payload := uint64(byte(reg))
 	if zeroExt {
-		flags = zeroExtFlag
+		payload |= payloadZeroExt
 	}
-	return Operand{TempReg, flags | uint64(byte(reg))}
+	return Operand{payload, Bounds{}, t, TempReg}
 }
 
-func RegOperand(reg regs.R, own bool) Operand {
+func RegOperand(own bool, t types.T, reg regs.R) Operand {
 	var s Storage
 	if own {
 		s = TempReg
 	} else {
 		s = BorrowedReg
 	}
-	return Operand{s, uint64(byte(reg))}
+	payload := uint64(byte(reg))
+	return Operand{payload, Bounds{}, t, s}
+}
+
+func StackOperand(t types.T) Operand {
+	return Operand{0, Bounds{}, t, Stack}
 }
 
 func ConditionFlagsOperand(cond Condition) Operand {
-	return Operand{ConditionFlags, uint64(int(cond))}
+	payload := uint64(int(cond))
+	return Operand{payload, Bounds{}, types.I32, ConditionFlags}
 }
 
-func (o Operand) Imm(t types.T) (imm interface{}) {
-	imm, ok := o.CheckImm(t)
-	if !ok {
-		panic(o)
-	}
-	return
+func (o Operand) WithBounds(b Bounds) Operand {
+	o.Bounds = b
+	return o
 }
 
-func (o Operand) CheckImm(t types.T) (imm interface{}, ok bool) {
-	if o.Storage != Imm {
-		return
+func (o Operand) ImmValue() int64 {
+	if o.Type.Size() == types.Size32 {
+		return int64(int32(uint32(o.payload)))
+	} else {
+		return int64(o.payload)
 	}
-
-	switch t.Size() {
-	case types.Size32:
-		imm = uint32(o.X)
-
-	case types.Size64:
-		imm = o.X
-
-	default:
-		panic(t)
-	}
-
-	ok = true
-	return
 }
 
-func (o Operand) ImmValue(t types.T) (value int64) {
-	value, ok := o.CheckImmValue(t)
-	if !ok {
-		panic(o)
-	}
-	return
+func (o Operand) Reg() regs.R {
+	return regs.R(byte(o.payload))
 }
 
-func (o Operand) CheckImmValue(t types.T) (value int64, ok bool) {
-	if o.Storage != Imm {
-		return
-	}
-
-	switch t.Size() {
-	case types.Size32:
-		value = int64(int32(uint32(o.X)))
-
-	case types.Size64:
-		value = int64(o.X)
-
-	default:
-		panic(t)
-	}
-
-	ok = true
-	return
+func (o Operand) RegZeroExt() bool {
+	return (o.payload & payloadZeroExt) != 0
 }
 
-func (o Operand) Index() (index int) {
-	index, ok := o.CheckVar()
-	if !ok {
-		panic(o)
-	}
-	return
+func (o Operand) VarIndex() int32 {
+	return int32(o.payload >> 32)
 }
 
-func (o Operand) CheckVar() (index int, ok bool) {
-	if o.Storage == Var {
-		index = int(o.X)
-		ok = true
-	}
-	return
+func (o Operand) VarMemOffset() int32 {
+	return int32(o.payload)
 }
 
-func (o Operand) VarOperand() (x Operand) {
-	switch o.Storage {
-	case VarMem, VarReg:
-		x = VarOperand(int(o.X >> 32))
-
-	default:
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) Offset() (offset int) {
-	offset, ok := o.CheckVarMem()
-	if !ok {
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) CheckVarMem() (offset int, ok bool) {
-	if o.Storage == VarMem {
-		offset = int(o.X & 0xffffffff)
-		ok = true
-	}
-	return
-}
-
-func (o Operand) Reg() (reg regs.R) {
-	reg, _, ok := o.CheckAnyReg()
-	if !ok {
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) CheckAnyReg() (reg regs.R, zeroExt bool, ok bool) {
-	switch o.Storage {
-	case VarReg, TempReg, BorrowedReg:
-		reg = regs.R(byte(o.X))
-		zeroExt = (o.X & zeroExtFlag) != 0
-		ok = true
-	}
-	return
-}
-
-func (o Operand) CheckVarReg() (reg regs.R, zeroExt bool, ok bool) {
-	if o.Storage == VarReg {
-		reg = regs.R(byte(o.X))
-		zeroExt = (o.X & zeroExtFlag) != 0
-		ok = true
-	}
-	return
-}
-
-func (o Operand) CheckTempReg() (reg regs.R, zeroExt bool, ok bool) {
-	if o.Storage == TempReg {
-		reg = regs.R(byte(o.X))
-		zeroExt = (o.X & zeroExtFlag) != 0
-		ok = true
-	}
-	return
-}
-
-func (o Operand) ZeroExt() bool {
-	switch o.Storage {
-	case VarReg, TempReg:
-		return (o.X & zeroExtFlag) != 0
-	}
-	panic(o)
-}
-
-func (o Operand) Condition() (cond Condition) {
-	cond, ok := o.CheckConditionFlags()
-	if !ok {
-		panic(o)
-	}
-	return
-}
-
-func (o Operand) CheckConditionFlags() (cond Condition, ok bool) {
-	if o.Storage == ConditionFlags {
-		cond = Condition(int(o.X))
-		ok = true
-	}
-	return
+func (o Operand) Condition() Condition {
+	return Condition(int(o.payload))
 }
 
 func (o Operand) String() string {
 	switch o.Storage {
 	case Nowhere:
-		return o.Storage.String()
+		if o.Type == types.Void {
+			return "nothing"
+		} else {
+			return fmt.Sprintf("placeholder for %s", o.Type)
+		}
 
-	case Imm:
-		return fmt.Sprintf("%s 0x%x", o.Storage, o.X)
-
-	case Var:
-		return fmt.Sprintf("%s #%d", o.Storage, o.Index())
-
-	case VarMem:
-		return fmt.Sprintf("%s #%d at 0x%x", o.Storage, o.VarOperand().Index(), o.Offset())
+	case VarReference:
+		return fmt.Sprintf("reference to %s variable #%d", o.Type, o.VarIndex())
 
 	case VarReg:
-		return fmt.Sprintf("%s #%d in r%d", o.Storage, o.VarOperand().Index(), o.Reg())
+		return fmt.Sprintf("effective variable #%d in %s r%d", o.VarIndex(), o.Type, o.Reg())
 
-	case TempReg, BorrowedReg:
-		return fmt.Sprintf("%s r%d", o.Storage, o.Reg())
+	case TempReg:
+		return fmt.Sprintf("temporary in %s r%d", o.Type, o.Reg())
 
 	case Stack, ConditionFlags:
-		return o.Storage.String()
+		return fmt.Sprintf("%s %s", o.Type, o.Storage)
+
+	case Imm:
+		if o.Type.Category() == types.Int {
+			return fmt.Sprintf("immediate %s 0x%x", o.Type, o.payload)
+		} else {
+			return fmt.Sprintf("immediate %s bits 0x%x", o.Type, o.payload)
+		}
+
+	case BorrowedReg:
+		return fmt.Sprintf("borrowed in %s r%d", o.Type, o.Reg())
+
+	case VarMem:
+		return fmt.Sprintf("effective %s variable #%d at 0x%x", o.Type, o.VarIndex(), o.VarMemOffset())
 
 	default:
-		return "(corrupted operand information)"
+		return "<invalid operand>"
 	}
-}
-
-func ParseImm(t types.T, x interface{}) Operand {
-	var value uint64
-
-	switch t {
-	case types.I32:
-		value = ParseI32(x)
-
-	case types.I64:
-		value = ParseI64(x)
-
-	case types.F32:
-		value = ParseF32(x)
-
-	case types.F64:
-		value = ParseF64(x)
-
-	default:
-		panic(t)
-	}
-
-	return Operand{Imm, value}
-}
-
-func ParseI32(x interface{}) uint64 {
-	s := nonOctalize(x.(string))
-
-	signed64, err := strconv.ParseInt(s, 0, 32)
-	if err == nil {
-		return uint64(signed64)
-	}
-
-	unsigned64, err := strconv.ParseUint(s, 0, 32)
-	if err == nil {
-		return unsigned64
-	}
-
-	panic(err)
-}
-
-func ParseI64(x interface{}) uint64 {
-	s := nonOctalize(x.(string))
-
-	signed64, err := strconv.ParseInt(s, 0, 64)
-	if err == nil {
-		return uint64(signed64)
-	}
-
-	unsigned64, err := strconv.ParseUint(s, 0, 64)
-	if err == nil {
-		return unsigned64
-	}
-
-	panic(err)
-}
-
-func ParseF32(x interface{}) uint64 {
-	s := x.(string)
-
-	if strings.HasPrefix(s, "nan:") {
-		s = "nan" // XXX: bad, bad hack to make tests pass
-	}
-
-	value64, err := strconv.ParseFloat(s, 32)
-	if err == nil {
-		return uint64(math.Float32bits(float32(value64)))
-	}
-
-	panic(err)
-}
-
-func ParseF64(x interface{}) uint64 {
-	s := x.(string)
-
-	if strings.HasPrefix(s, "nan:") {
-		s = "nan" // XXX: bad, bad hack to make tests pass
-	}
-
-	value64, err := strconv.ParseFloat(s, 64)
-	if err == nil {
-		return math.Float64bits(value64)
-	}
-
-	panic(err)
-}
-
-func nonOctalize(s string) string {
-	for len(s) > 1 && strings.HasPrefix(s, "0") && !strings.HasPrefix(s, "0x") {
-		s = s[1:]
-	}
-
-	return s
 }

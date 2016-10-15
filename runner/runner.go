@@ -12,102 +12,77 @@ import (
 	"github.com/tsavola/wag/internal/imports"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/wasm"
 )
 
-func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resumeResult, arg, slaveFd int) (result int32, trap int, currentMemorySize int, stackPtr uintptr)
+func setRunArg(arg int64)
+func getRunResult() int32
 
-func importSnapshot() int64
-func importSpectestPrint() int64
+func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
 
-const (
-	memoryIncrementSize = 65536
-)
+func importGetArg() uint64
+func importSetResult() uint64
+func importSnapshot() uint64
+func importSpectestPrint() uint64
 
 var (
 	systemPageSize = syscall.Getpagesize()
 )
 
-var Imports = map[string]map[string]imports.Function{
+var importFunctions = map[string]map[string]imports.Function{
 	"spectest": {
 		"print": imports.Function{
 			Variadic: true,
-			Address:  importSpectestPrint(),
+			AbsAddr:  importSpectestPrint(),
 		},
 	},
 	"wag": {
+		"get_arg": imports.Function{
+			Function: types.Function{
+				Result: types.I64,
+			},
+			AbsAddr: importGetArg(),
+		},
+		"set_result": imports.Function{
+			Function: types.Function{
+				Args: []types.T{types.I32},
+			},
+			AbsAddr: importSetResult(),
+		},
 		"snapshot": imports.Function{
 			Function: types.Function{
 				Result: types.I32,
 			},
-			Address: importSnapshot(),
+			AbsAddr: importSnapshot(),
 		},
 	},
 }
 
-type Buffer struct {
-	Text   []byte
-	ROData []byte
-}
+type env struct{}
 
-func NewBuffer(maxTextSize, maxRODataSize int) (b *Buffer, err error) {
-	b = &Buffer{}
-
-	b.Text, err = makeMemory(maxTextSize, syscall.PROT_EXEC, syscall.MAP_32BIT)
-	if err != nil {
-		b.Close()
+func (env) ImportFunction(module, field string, sig types.Function) (variadic bool, absAddr uint64, err error) {
+	f, found := importFunctions[module][field]
+	if !found {
+		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
 		return
 	}
 
-	b.ROData, err = makeMemory(maxRODataSize, 0, syscall.MAP_32BIT)
-	if err != nil {
-		b.Close()
+	if !f.Implements(sig) {
+		err = fmt.Errorf("imported function %s %s has incompatible signature: %s", module, field, sig)
 		return
 	}
 
+	variadic = f.Variadic
+	absAddr = f.AbsAddr
 	return
 }
 
-func (b *Buffer) RODataAddr() int32 {
-	addr := (*reflect.SliceHeader)(unsafe.Pointer(&b.ROData)).Data
-	if addr == 0 || addr > 0x7fffffff-uintptr(len(b.ROData)) {
-		panic("sanity check failed")
-	}
-	return int32(addr)
-}
-
-func (b *Buffer) Seal() (err error) {
-	if b.Text != nil {
-		err = syscall.Mprotect(b.Text, syscall.PROT_EXEC)
-		if err != nil {
-			return
-		}
-	}
-
-	if b.ROData != nil {
-		err = syscall.Mprotect(b.ROData, syscall.PROT_READ)
-		if err != nil {
-			return
-		}
-	}
-
+func (env) ImportGlobal(module, field string, t types.T) (valueBits uint64, err error) {
+	err = fmt.Errorf("imported %s global not found: %s %s", t, module, field)
 	return
 }
 
-func (b *Buffer) Close() (first error) {
-	if b.Text != nil {
-		if err := syscall.Munmap(b.Text); err != nil && first == nil {
-			first = err
-		}
-	}
-
-	if b.ROData != nil {
-		if err := syscall.Munmap(b.ROData); err != nil && first == nil {
-			first = err
-		}
-	}
-
-	return
-}
+var Env env
 
 type runnable interface {
 	getText() []byte
@@ -119,12 +94,11 @@ type runnable interface {
 }
 
 type Program struct {
-	buf *Buffer
+	Text   []byte
+	ROData []byte
 
-	globals   []byte
-	data      []byte
-	funcTypes []types.Function
-	funcNames []string
+	globals []byte
+	data    []byte
 
 	funcMap []byte
 	callMap []byte
@@ -133,23 +107,84 @@ type Program struct {
 	callSites map[int]callSite
 }
 
-func (b *Buffer) NewProgram(globals, data []byte, funcTypes []types.Function, funcNames []string) *Program {
-	return &Program{
-		buf:       b,
-		globals:   globals,
-		data:      data,
-		funcTypes: funcTypes,
-		funcNames: funcNames,
+func NewProgram(maxTextSize, maxRODataSize int) (p *Program, err error) {
+	p = &Program{}
+
+	p.Text, err = makeMemory(maxTextSize, syscall.PROT_EXEC, syscall.MAP_32BIT)
+	if err != nil {
+		p.Close()
+		return
 	}
+
+	p.ROData, err = makeMemory(maxRODataSize, 0, syscall.MAP_32BIT)
+	if err != nil {
+		p.Close()
+		return
+	}
+
+	return
 }
 
-func (p *Program) SetMaps(funcMap, callMap []byte) {
+func (p *Program) RODataAddr() int32 {
+	addr := (*reflect.SliceHeader)(unsafe.Pointer(&p.ROData)).Data
+	if addr == 0 || addr > 0x7fffffff-uintptr(len(p.ROData)) {
+		panic("sanity check failed")
+	}
+	return int32(addr)
+}
+
+func (p *Program) SetGlobals(globals []byte) {
+	p.globals = globals
+}
+
+func (p *Program) SetData(data []byte) {
+	p.data = data
+}
+
+func (p *Program) SetFunctionMap(funcMap []byte) {
 	p.funcMap = funcMap
+}
+
+func (p *Program) SetCallMap(callMap []byte) {
 	p.callMap = callMap
 }
 
+func (p *Program) Seal() (err error) {
+	if p.Text != nil {
+		err = syscall.Mprotect(p.Text, syscall.PROT_EXEC)
+		if err != nil {
+			return
+		}
+	}
+
+	if p.ROData != nil {
+		err = syscall.Mprotect(p.ROData, syscall.PROT_READ)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (p *Program) Close() (first error) {
+	if p.Text != nil {
+		if err := syscall.Munmap(p.Text); err != nil && first == nil {
+			first = err
+		}
+	}
+
+	if p.ROData != nil {
+		if err := syscall.Munmap(p.ROData); err != nil && first == nil {
+			first = err
+		}
+	}
+
+	return
+}
+
 func (p *Program) getText() []byte {
-	return p.buf.Text
+	return p.Text
 }
 
 func (p *Program) getGlobals() []byte {
@@ -169,7 +204,7 @@ type Runner struct {
 
 	globalsOffset int
 	memoryOffset  int
-	memorySize    int
+	memorySize    wasm.MemorySize
 	globalsMemory []byte
 	stack         []byte
 
@@ -179,21 +214,21 @@ type Runner struct {
 	Snapshots []*Snapshot
 }
 
-func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+func (p *Program) NewRunner(initMemorySize, growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
 	return newRunner(p, initMemorySize, growMemorySize, stackSize)
 }
 
-func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
-	if (initMemorySize & (memoryIncrementSize - 1)) != 0 {
-		err = fmt.Errorf("initial memory size is not multiple of %d", memoryIncrementSize)
+func newRunner(prog runnable, initMemorySize, growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
+	if (initMemorySize & (wasm.Page - 1)) != 0 {
+		err = fmt.Errorf("initial memory size is not multiple of %d", wasm.Page)
 		return
 	}
-	if (growMemorySize & (memoryIncrementSize - 1)) != 0 {
-		err = fmt.Errorf("memory growth limit is not multiple of %d", memoryIncrementSize)
+	if (growMemorySize & (wasm.Page - 1)) != 0 {
+		err = fmt.Errorf("memory growth limit is not multiple of %d", wasm.Page)
 		return
 	}
 
-	if initMemorySize < len(prog.getData()) {
+	if int(initMemorySize) < len(prog.getData()) {
 		err = errors.New("data does not fit in initial memory")
 		return
 	}
@@ -220,7 +255,7 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 		memorySize:    initMemorySize,
 	}
 
-	r.globalsMemory, err = makeMemory(r.globalsOffset+growMemorySize, 0, 0)
+	r.globalsMemory, err = makeMemory(r.globalsOffset+int(growMemorySize), 0, 0)
 	if err != nil {
 		r.Close()
 		return
@@ -253,7 +288,7 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) (result int32, err error) {
+func (r *Runner) Run(arg int64, sigs []types.Function, printer io.Writer) (result int32, err error) {
 	e := Executor{
 		runner:  r,
 		arg:     arg,
@@ -269,8 +304,8 @@ func (r *Runner) Run(arg int, sigs map[int64]types.Function, printer io.Writer) 
 type Executor struct {
 	runner *Runner
 
-	arg     int
-	sigs    map[int64]types.Function
+	arg     int64
+	sigs    []types.Function
 	printer io.Writer
 
 	cont chan struct{}
@@ -280,10 +315,9 @@ type Executor struct {
 	err    error
 }
 
-func (r *Runner) NewExecutor(arg int, sigs map[int64]types.Function, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
+func (r *Runner) NewExecutor(sigs []types.Function, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
 	e = &Executor{
 		runner:  r,
-		arg:     arg,
 		sigs:    sigs,
 		printer: printer,
 		cont:    make(chan struct{}),
@@ -304,7 +338,7 @@ func (r *Runner) NewExecutor(arg int, sigs map[int64]types.Function, printer io.
 }
 
 func (e *Executor) Wait() (result int32, err error) {
-	fmt.Fprintf(e.printer, "--- executable complete ---\n")
+	fmt.Fprintf(e.printer, "--- code generation complete ---\n")
 	close(e.cont)
 
 	<-e.done
@@ -345,16 +379,18 @@ func (e *Executor) run() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
+	setRunArg(e.arg)
+
 	memory := e.runner.globalsMemory[e.runner.memoryOffset:]
 
-	result, trap, memorySize, stackPtr := run(e.runner.prog.getText(), e.runner.memorySize, memory, e.runner.stack, stackOffset, resumeResult, e.arg, fds[1])
+	trap, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memory, e.runner.stack, stackOffset, resumeResult, fds[1])
 
-	e.runner.memorySize = memorySize
+	e.runner.memorySize = wasm.MemorySize(memorySize)
 	e.runner.lastTrap = traps.Id(trap)
 	e.runner.lastStackPtr = stackPtr
 
 	if trap == 0 {
-		e.result = result
+		e.result = getRunResult()
 	} else {
 		e.err = e.runner.lastTrap
 	}

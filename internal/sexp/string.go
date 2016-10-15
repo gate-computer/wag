@@ -1,6 +1,8 @@
 package sexp
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -38,4 +40,47 @@ func stringify(x interface{}, multiline bool, indent string) (s string) {
 	}
 
 	return
+}
+
+func Unparse(expr []interface{}) []byte {
+	var buf bytes.Buffer
+	unparse(expr, &buf)
+	return buf.Bytes()
+}
+
+func unparse(expr interface{}, buf *bytes.Buffer) {
+	switch x := expr.(type) {
+	case string:
+		if _, err := buf.Write([]byte(x)); err != nil {
+			panic(err)
+		}
+
+	case Quoted:
+		data, err := json.Marshal(x.String())
+		if err != nil {
+			panic(err)
+		}
+		if _, err := buf.Write(data); err != nil {
+			panic(err)
+		}
+
+	case []interface{}:
+		if _, err := buf.Write([]byte("(")); err != nil {
+			panic(err)
+		}
+		for i, child := range x {
+			unparse(child, buf)
+			if i < len(x)-1 {
+				if _, err := buf.Write([]byte(" ")); err != nil {
+					panic(err)
+				}
+			}
+		}
+		if _, err := buf.Write([]byte(") ")); err != nil {
+			panic(err)
+		}
+
+	default:
+		panic(expr)
+	}
 }

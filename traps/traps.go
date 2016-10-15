@@ -22,6 +22,9 @@ func (id Id) String() string {
 	case Exit:
 		return "exit"
 
+	case MissingFunction:
+		return "missing function"
+
 	case CallStackExhausted:
 		return "call stack exhausted"
 
@@ -42,9 +45,6 @@ func (id Id) String() string {
 
 	case IntegerOverflow:
 		return "integer overflow"
-
-	case MissingFunction:
-		return "missing function"
 
 	default:
 		return "unknown trap"

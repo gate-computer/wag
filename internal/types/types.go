@@ -1,8 +1,12 @@
 package types
 
-type T int
-type Category int
-type Size int
+import (
+	"fmt"
+)
+
+type T uint8
+type Category uint8
+type Size uint8
 
 const (
 	maskInt   = 1
@@ -58,6 +62,27 @@ func (t T) Category() Category {
 
 func (t T) Size() Size {
 	return Size(t & maskSize)
+}
+
+var byEncoding = []T{
+	1: I32,
+	2: I64,
+	3: F32,
+	4: F64,
+}
+
+func ByEncoding(i uint8) T {
+	if i > 0 && int(i) < len(byEncoding) {
+		return byEncoding[i]
+	}
+	panic(fmt.Errorf("unknown type %d", i))
+}
+
+func InlineSignatureByEncoding(i uint8) T {
+	if int(i) < len(byEncoding) {
+		return byEncoding[i]
+	}
+	panic(fmt.Errorf("unknown inline signature type %d", i))
 }
 
 var ByString = map[string]T{

@@ -4,7 +4,6 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
-	"github.com/tsavola/wag/internal/values"
 )
 
 type floatSizePrefix struct {
@@ -12,7 +11,7 @@ type floatSizePrefix struct {
 	size64 []byte
 }
 
-func (p *floatSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (p *floatSizePrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
 	switch t.Size() {
 	case types.Size32:
 		code.Write(p.size32)
@@ -62,103 +61,12 @@ const (
 	floatRoundTruncate = 0x3
 )
 
-var unaryFloatInsns = map[string]insnPrefix{
-	"sqrt": SqrtsSSE,
-}
-
-var unaryFloatRoundModes = map[string]int8{
-	"ceil":    floatRoundUp,
-	"floor":   floatRoundDown,
-	"nearest": floatRoundNearest,
-	"trunc":   floatRoundTruncate,
-}
-
-var binaryFloatInsns = map[string]insnPrefix{
-	"add": AddsSSE,
-	"div": DivsSSE,
-	"max": MaxsSSE,
-	"min": MinsSSE,
-	"mul": MulsSSE,
-	"sub": SubsSSE,
-}
-
-var binaryFloatConditions = map[string]values.Condition{
-	"eq": values.OrderedAndEQ,
-	"ge": values.OrderedAndGE,
-	"gt": values.OrderedAndGT,
-	"le": values.OrderedAndLE,
-	"lt": values.OrderedAndLT,
-	"ne": values.UnorderedOrNE,
-}
-
-// TODO: support memory source operands
-
-func (mach X86) unaryFloatOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
-	switch name {
-	case "neg":
-		targetReg, _ := mach.opMaybeResultReg(code, t, x, false)
-
-		signMask := int64(-1) << (uint(t.Size())*8 - 1)
-
-		MovImm64.op(code, t, regScratch, signMask)        // integer scratch register
-		MovSSE.opFromReg(code, t, regScratch, regScratch) // float scratch register
-		XorpSSE.opFromReg(code, t, targetReg, regScratch)
-
-		return values.TempRegOperand(targetReg, false)
-	}
-
-	if mode, found := unaryFloatRoundModes[name]; found {
-		reg, _ := mach.opMaybeResultReg(code, t, x, false)
-		RoundsSSE.opReg(code, t, reg, reg, mode)
-		return values.TempRegOperand(reg, false)
-	}
-
-	if insn, found := unaryFloatInsns[name]; found {
-		reg, _ := mach.opMaybeResultReg(code, t, x, false)
-		insn.opFromReg(code, t, reg, reg)
-		return values.TempRegOperand(reg, false)
-	}
-
-	panic(name)
-}
-
-func (mach X86) binaryFloatOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
-	if insn, found := binaryFloatInsns[name]; found {
-		targetReg, _ := mach.opMaybeResultReg(code, t, a, false)
-
-		sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, t, b, false)
-		if own {
-			defer code.FreeReg(t, sourceReg)
-		}
-
-		insn.opFromReg(code, t, targetReg, sourceReg)
-		return values.TempRegOperand(targetReg, false)
-	}
-
-	if cond, found := binaryFloatConditions[name]; found {
-		aReg, _, own := mach.opBorrowMaybeResultReg(code, t, a, true)
-		if own {
-			defer code.FreeReg(t, aReg)
-		}
-
-		bReg, _, own := mach.opBorrowMaybeScratchReg(code, t, b, false)
-		if own {
-			defer code.FreeReg(t, bReg)
-		}
-
-		UcomisSSE.opFromReg(code, t, aReg, bReg)
-		return values.ConditionFlagsOperand(cond)
-	}
-
-	panic(name)
-}
-
-func pushFloatOp(code gen.Coder, t types.T, source regs.R) {
+func pushFloatOp(code gen.OpCoder, t types.T, source regs.R) {
 	Sub.opImm(code, types.I64, regStackPtr, gen.WordSize)
 	MovsSSE.opToStack(code, t, source, 0)
 }
 
-func popFloatOp(code gen.Coder, t types.T, target regs.R) {
+func popFloatOp(code gen.OpCoder, t types.T, target regs.R) {
 	MovsSSE.opFromStack(code, t, target, 0)
 	Add.opImm(code, types.I64, regStackPtr, gen.WordSize)
 }

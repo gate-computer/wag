@@ -2,28 +2,24 @@ package x86
 
 import (
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
-	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/traps"
 )
 
 type rexPrefix byte
 
-func (rex rexPrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (rex rexPrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
 	writeRexTo(code, byte(rex), ro, index, rmOrBase)
 }
 
 type rexSizePrefix struct{}
 
-func (rexSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (rexSizePrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
 	writeRexSizeTo(code, t, ro, index, rmOrBase)
 }
 
 type data16RexSizePrefix struct{}
 
-func (data16RexSizePrefix) writeTo(code gen.Coder, t types.T, ro, index, rmOrBase byte) {
+func (data16RexSizePrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
 	code.WriteByte(0x66)
 	writeRexSizeTo(code, t, ro, index, rmOrBase)
 }
@@ -53,7 +49,6 @@ var (
 	Sar  = insnRexM{[]byte{0xd3}, 7}
 
 	Test    = insnPrefix{RexSize, []byte{0x85}, nil}
-	Xchg    = insnPrefix{RexSize, []byte{0x87}, []byte{0x87}}
 	Cmovb   = insnPrefix{RexSize, []byte{0x0f, 0x42}, nil}
 	Cmovae  = insnPrefix{RexSize, []byte{0x0f, 0x43}, nil}
 	Cmove   = insnPrefix{RexSize, []byte{0x0f, 0x44}, nil}
@@ -72,6 +67,11 @@ var (
 	Movsx16 = insnPrefix{RexSize, []byte{0x0f, 0xbf}, nil}
 	Movsxd  = insnPrefix{RexW, []byte{0x63}, nil} // variable rexR, rexX and rexB
 	Popcnt  = insnPrefix{ConstF3RexSize, []byte{0x0f, 0xb8}, nil}
+
+	Xchg = xchgInsn{
+		insnRexO{0x90},
+		insnPrefix{RexSize, []byte{0x87}, []byte{0x87}},
+	}
 
 	MovImm = insnPrefixMI{RexSize, 0, 0, 0xc7, 0}
 
@@ -148,420 +148,12 @@ var (
 	}
 )
 
-var unaryIntInsns = map[string]insnPrefix{
-	"clz":    Bsr,
-	"ctz":    Bsf,
-	"popcnt": Popcnt,
-}
-
-var binaryIntInsns = map[string]binaryInsn{
-	"add": Add,
-	"and": And,
-	"or":  Or,
-	"sub": Sub,
-	"xor": Xor,
-}
-
-var binaryIntDivMulInsns = map[string]struct {
-	insnRexM
-	shiftImm  shiftImmInsn
-	division  bool // TODO: use enums for WebAssembly operators, and
-	signed    bool //       incorporate these properties in the enum values?
-	remainder bool //
-}{
-	"mul":   {Mul, ShlImm, false, false, false},
-	"div_s": {Idiv, NoShiftImmInsn, true, true, false},
-	"div_u": {Div, ShrImm, true, false, false},
-	"rem_s": {Idiv, NoShiftImmInsn, true, true, true},
-	"rem_u": {Div, NoShiftImmInsn, true, false, true}, // TODO: use AND for 2^n divisors
-}
-
-var binaryIntShiftInsns = map[string]struct {
-	insnRexM
-	imm shiftImmInsn
-}{
-	"rotl":  {Rol, RolImm},
-	"rotr":  {Ror, RorImm},
-	"shl":   {Shl, ShlImm},
-	"shr_s": {Sar, SarImm},
-	"shr_u": {Shr, ShrImm},
-}
-
-var binaryIntConditions = map[string]values.Condition{
-	"eq":   values.EQ,
-	"ge_s": values.GESigned,
-	"ge_u": values.GEUnsigned,
-	"gt_s": values.GTSigned,
-	"gt_u": values.GTUnsigned,
-	"le_s": values.LESigned,
-	"le_u": values.LEUnsigned,
-	"lt_s": values.LTSigned,
-	"lt_u": values.LTUnsigned,
-	"ne":   values.NE,
-}
-
-func (mach X86) unaryIntOp(code gen.RegCoder, name string, t types.T, x values.Operand) values.Operand {
-	switch name {
-	case "eqz":
-		reg, _, own := mach.opBorrowMaybeScratchReg(code, t, x, false)
-		if own {
-			defer code.FreeReg(t, reg)
-		}
-
-		Test.opFromReg(code, t, reg, reg)
-		return values.ConditionFlagsOperand(values.EQ)
-	}
-
-	if insn, found := unaryIntInsns[name]; found {
-		var targetReg regs.R
-
-		sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, t, x, false)
-		if own {
-			targetReg = sourceReg
-		} else {
-			targetReg, _ = mach.opMaybeResultReg(code, t, values.NoOperand, false)
-		}
-
-		switch name {
-		case "clz":
-			insn.opFromReg(code, t, regScratch, sourceReg)
-			MovImm.opImm(code, t, targetReg, -1)
-			Cmove.opFromReg(code, t, regScratch, targetReg)
-			MovImm.opImm(code, t, targetReg, int(t.Size())*8-1)
-			Sub.opFromReg(code, t, targetReg, regScratch)
-
-		case "ctz":
-			insn.opFromReg(code, t, targetReg, sourceReg)
-			MovImm.opImm(code, t, regScratch, int(t.Size())*8)
-			Cmove.opFromReg(code, t, targetReg, regScratch)
-
-		case "popcnt":
-			insn.opFromReg(code, t, targetReg, sourceReg)
-
-		default:
-			panic(name)
-		}
-
-		return values.TempRegOperand(targetReg, true)
-	}
-
-	panic(name)
-}
-
-func (mach X86) binaryIntOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) (result values.Operand, deadend bool) {
-	switch a.Storage {
-	case values.Stack, values.ConditionFlags:
-		panic(a)
-	}
-
-	switch name {
-	case "div_s", "div_u", "mul", "rem_s", "rem_u":
-		return mach.binaryIntDivMulOp(code, name, t, a, b)
-
-	case "rotl", "rotr", "shl", "shr_s", "shr_u":
-		result = mach.binaryIntShiftOp(code, name, t, a, b)
-		return
-
-	default:
-		result = mach.binaryIntGenericOp(code, name, t, a, b)
-		return
-	}
-}
-
-func (mach X86) binaryIntGenericOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
-	if value, ok := a.CheckImmValue(t); ok {
-		switch {
-		case value == 0 && name == "sub":
-			reg, _ := mach.opMaybeResultReg(code, t, b, false)
-			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(reg, true)
-		}
-	}
-
-	switch b.Storage {
-	case values.Imm:
-		value := b.ImmValue(t)
-
-		switch {
-		case (name == "add" && value == 1) || (name == "sub" && value == -1):
-			reg, _ := mach.opMaybeResultReg(code, t, a, false)
-			Inc.opReg(code, t, reg)
-			return values.TempRegOperand(reg, true)
-
-		case (name == "sub" && value == 1) || (name == "add" && value == -1):
-			reg, _ := mach.opMaybeResultReg(code, t, a, false)
-			Dec.opReg(code, t, reg)
-			return values.TempRegOperand(reg, true)
-
-		case value < -0x80000000 || value >= 0x80000000:
-			reg, _, own := mach.opBorrowMaybeScratchReg(code, t, b, true)
-			b = values.RegOperand(reg, own)
-		}
-
-	case values.Stack, values.ConditionFlags:
-		reg, _, own := mach.opBorrowMaybeScratchReg(code, t, b, true)
-		b = values.RegOperand(reg, own)
-	}
-
-	if insn, found := binaryIntInsns[name]; found {
-		reg, _ := mach.opMaybeResultReg(code, t, a, false)
-		binaryInsnOp(code, insn, t, reg, b)
-		return values.TempRegOperand(reg, true)
-	} else if cond, found := binaryIntConditions[name]; found {
-		reg, _, own := mach.opBorrowMaybeResultReg(code, t, a, false)
-		if own {
-			defer code.FreeReg(t, reg)
-		}
-
-		switch b.Storage {
-		case values.Imm:
-			Cmp.opImm(code, t, reg, int(b.ImmValue(t)))
-
-		case values.VarMem:
-			Cmp.opFromStack(code, t, reg, b.Offset())
-
-		case values.VarReg, values.TempReg, values.BorrowedReg:
-			Cmp.opFromReg(code, t, reg, b.Reg())
-
-		default:
-			panic(b)
-		}
-
-		code.Consumed(t, b)
-
-		return values.ConditionFlagsOperand(cond)
-	}
-
-	panic(name)
-}
-
-func (mach X86) binaryIntDivMulOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) (result values.Operand, deadend bool) {
-	insn := binaryIntDivMulInsns[name]
-
-	if value, ok := b.CheckImmValue(t); ok {
-		switch {
-		case value == -1:
-			reg, _ := mach.opMaybeResultReg(code, t, a, false)
-			Neg.opReg(code, t, reg)
-			result = values.TempRegOperand(reg, true)
-			return
-
-		case insn.shiftImm.defined() && value > 0 && isPowerOfTwo(uint64(value)):
-			reg, _ := mach.opMaybeResultReg(code, t, a, false)
-			insn.shiftImm.op(code, t, reg, log2(uint64(value)))
-			result = values.TempRegOperand(reg, true)
-			return
-		}
-	}
-
-	checkZero := true
-	checkOverflow := true
-
-	if value, ok := a.CheckImmValue(t); ok {
-		switch t.Size() {
-		case types.Size32:
-			if value != -0x80000000 {
-				checkOverflow = false
-			}
-
-		case types.Size64:
-			if value != -0x8000000000000000 {
-				checkOverflow = false
-			}
-		}
-	}
-
-	if reg, _, ok := b.CheckAnyReg(); ok {
-		if reg == regResult {
-			if insn.division {
-				// can't use scratch reg as divisor since it contains the dividend high bits
-
-				if reg, ok := code.TryAllocReg(t); ok {
-					mach.OpMove(code, t, reg, b, true)
-					b = values.RegOperand(reg, true)
-				} else {
-					mach.OpMove(code, t, regScratch, b, true)
-
-					Push.op(code, regTextBase)
-					code.AddStackUsage(gen.WordSize)
-					defer Pop.op(code, regTextBase)
-
-					reg = regTextBase
-
-					Mov.opFromReg(code, t, reg, regScratch)
-					b = values.RegOperand(reg, false)
-				}
-			} else {
-				// scratch reg is the upper target reg, but we can use it as a multiplier
-
-				mach.OpMove(code, t, regScratch, b, true)
-				b = values.RegOperand(regScratch, false)
-			}
-		}
-	} else {
-		if insn.division {
-			if value, ok := b.CheckImmValue(t); ok {
-				switch {
-				case value != 0:
-					checkZero = false
-
-				case value != -1:
-					checkOverflow = false
-				}
-			}
-		}
-
-		if reg, ok := code.TryAllocReg(t); ok {
-			mach.OpMove(code, t, reg, b, true)
-			b = values.RegOperand(reg, true)
-		} else {
-			mach.OpMove(code, t, regScratch, b, true)
-
-			Push.op(code, regTextBase)
-			code.AddStackUsage(gen.WordSize)
-			defer Pop.op(code, regTextBase)
-
-			reg = regTextBase
-
-			Mov.opFromReg(code, t, reg, regScratch)
-			b = values.RegOperand(reg, false)
-		}
-	}
-
-	mach.OpMove(code, t, regResult, a, false)
-
-	var doNot links.L
-
-	if insn.division {
-		if checkZero {
-			mach.opCheckDivideByZero(code, t, b.Reg())
-		}
-
-		if insn.signed && checkOverflow {
-			var do links.L
-
-			if insn.remainder {
-				Xor.opFromReg(code, types.I32, regScratch, regScratch) // moved to result at the end
-
-				Cmp.opImm(code, t, b.Reg(), -1)
-				Je.rel8.opStub(code)
-				doNot.AddSite(code.Len())
-			} else {
-				switch t.Size() {
-				case types.Size32:
-					Cmp.opImm(code, t, regResult, -0x80000000)
-
-				case types.Size64:
-					MovImm64.op(code, t, regScratch, -0x8000000000000000)
-					Cmp.opFromReg(code, t, regResult, regScratch)
-
-				default:
-					panic(t)
-				}
-
-				Jne.rel8.opStub(code)
-				do.AddSite(code.Len())
-
-				Cmp.opImm(code, t, b.Reg(), -1)
-				Jne.rel8.opStub(code)
-				do.AddSite(code.Len())
-
-				code.OpTrapCall(traps.IntegerOverflow)
-			}
-
-			do.Address = code.Len()
-			mach.updateSites8(code, &do)
-		}
-
-		if insn.signed {
-			// sign-extend dividend low bits to high bits
-			CdqCqo.op(code, t)
-		} else {
-			// zero-extend dividend high bits
-			Xor.opFromReg(code, types.I32, regScratch, regScratch) // automatic zero-extension
-		}
-	}
-
-	insn.opReg(code, t, b.Reg())
-	code.Consumed(t, b)
-
-	doNot.Address = code.Len()
-	mach.updateSites8(code, &doNot)
-
-	if insn.remainder {
-		Mov.opFromReg(code, t, regResult, regScratch)
-	}
-
-	result = values.TempRegOperand(regResult, true)
-	return
-}
-
-func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {
-	var end links.L
-
-	Test.opFromReg(code, t, reg, reg)
-	Jne.rel8.opStub(code)
-	end.AddSite(code.Len())
-
-	code.OpTrapCall(traps.IntegerDivideByZero)
-
-	end.Address = code.Len()
-	mach.updateSites8(code, &end)
-}
-
-func (mach X86) binaryIntShiftOp(code gen.RegCoder, name string, t types.T, a, b values.Operand) values.Operand {
-	insn := binaryIntShiftInsns[name]
-
-	var targetReg regs.R
-
-	switch b.Storage {
-	case values.Imm:
-		targetReg, _ = mach.opMaybeResultReg(code, t, a, true)
-		insn.imm.op(code, t, targetReg, int(b.ImmValue(t)))
-
-	default:
-		move := true
-
-		if code.RegAllocated(types.I32, regShiftCount) {
-			targetReg, _ = mach.opMaybeResultReg(code, t, a, true)
-			if targetReg == regShiftCount {
-				Mov.opFromReg(code, t, regResult, regShiftCount)
-				targetReg = regResult
-
-				defer code.FreeReg(types.I32, regShiftCount)
-			} else {
-				if reg, _, ok := b.CheckAnyReg(); ok && reg == regShiftCount {
-					// already there
-					move = false
-				} else {
-					// unknown operand in regShiftCount
-					Mov.opFromReg(code, types.I64, regScratch, regShiftCount)
-					defer Mov.opFromReg(code, types.I64, regShiftCount, regScratch)
-				}
-			}
-
-		} else {
-			code.AllocSpecificReg(types.I32, regShiftCount)
-			defer code.FreeReg(types.I32, regShiftCount)
-
-			targetReg, _ = mach.opMaybeResultReg(code, t, a, true)
-		}
-
-		if move {
-			mach.OpMove(code, types.I32, regShiftCount, b, false) // TODO: 8-bit mov
-		}
-		insn.opReg(code, t, targetReg)
-	}
-
-	return values.TempRegOperand(targetReg, true)
-}
-
 func isPowerOfTwo(value uint64) bool {
 	return (value & (value - 1)) == 0
 }
 
 // log2 assumes that value isPowerOfTwo.
-func log2(value uint64) (count int) {
+func log2(value uint64) (count uint8) {
 	for {
 		value >>= 1
 		if value == 0 {

@@ -10,6 +10,18 @@ import (
 	"unicode"
 )
 
+type Quoted struct {
+	string
+}
+
+func Quote(s string) Quoted {
+	return Quoted{s}
+}
+
+func (t Quoted) String() string {
+	return t.string
+}
+
 type panicReader struct {
 	sr *strings.Reader
 }
@@ -99,14 +111,19 @@ func parse(pr panicReader) (x interface{}, ok, end bool) {
 		skipComment(pr)
 
 	case '(':
-		x = parseList(pr)
-		ok = true
+		if pr.readRune() == ';' {
+			skipListComment(pr)
+		} else {
+			pr.unreadRune()
+			x = parseList(pr)
+			ok = true
+		}
 
 	case ')':
 		end = true
 
 	case '"':
-		x = parseData(pr)
+		x = parseQuoted(pr)
 		ok = true
 
 	default:
@@ -134,7 +151,7 @@ func parseList(pr panicReader) interface{} {
 	return list
 }
 
-func parseData(pr panicReader) string {
+func parseQuoted(pr panicReader) Quoted {
 	var buf []byte
 
 	for {
@@ -171,7 +188,7 @@ func parseData(pr panicReader) string {
 		panic(errors.New("trailing data after string literal"))
 	}
 
-	return string(buf)
+	return Quote(string(buf))
 }
 
 func parseToken(pr panicReader) string {
@@ -204,4 +221,15 @@ func skipComment(pr panicReader) {
 	}
 
 	pr.unreadRune()
+}
+
+func skipListComment(pr panicReader) {
+	for {
+		if pr.readRune() == ';' {
+			if pr.readRune() == ')' {
+				return
+			}
+			pr.unreadRune() // it might be another ';'
+		}
+	}
 }

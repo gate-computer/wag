@@ -6,12 +6,14 @@ import (
 	"io"
 	"reflect"
 	"unsafe"
+
+	"github.com/tsavola/wag/wasm"
 )
 
 type Snapshot struct {
 	prog runnable
 
-	memorySize    int
+	memorySize    wasm.MemorySize
 	globals       []byte
 	data          []byte
 	portableStack []byte
@@ -48,8 +50,8 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 
 	memorySize := globalsMemorySize - uint64(r.memoryOffset)
 
-	if (memorySize & (memoryIncrementSize - 1)) != 0 {
-		panic(fmt.Errorf("snapshot: memory size is not multiple of %d", memoryIncrementSize))
+	if (memorySize & uint64(wasm.Page-1)) != 0 {
+		panic(fmt.Errorf("snapshot: memory size is not multiple of %d", wasm.Page))
 	}
 
 	stackAddr := (*reflect.SliceHeader)(unsafe.Pointer(&r.stack)).Data
@@ -81,7 +83,7 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 
 	s := &Snapshot{
 		prog:          r.prog,
-		memorySize:    int(memorySize),
+		memorySize:    wasm.MemorySize(memorySize),
 		globals:       make([]byte, len(r.globalsMemory[r.globalsOffset:r.memoryOffset])),
 		data:          make([]byte, len(r.globalsMemory[r.memoryOffset:globalsMemorySize])),
 		portableStack: portableStack,
@@ -125,6 +127,6 @@ func (s *Snapshot) exportStack(native []byte) (portable []byte, err error) {
 	return s.prog.exportStack(native)
 }
 
-func (s *Snapshot) NewRunner(growMemorySize, stackSize int) (r *Runner, err error) {
+func (s *Snapshot) NewRunner(growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
 	return newRunner(s, s.memorySize, growMemorySize, stackSize)
 }

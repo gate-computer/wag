@@ -1,75 +1,155 @@
 package wag
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
+	"io"
+	"io/ioutil"
+	"math"
 
-	"github.com/tsavola/wag/internal/sexp"
+	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/types"
-	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/wasm"
+)
+
+type Environment interface {
+	ImportFunction(module, field string, sig types.Function) (variadic bool, absAddr uint64, err error)
+	ImportGlobal(module, field string, t types.T) (valueBits uint64, err error)
+}
+
+const (
+	maxStringLen          = 255 // TODO
+	maxImportParams       = gen.StackReserve/gen.WordSize - 2
+	maxFunctionParams     = 255   // index+1 must fit in uint8
+	maxFunctionVars       = 511   // index must fit in uint16; TODO
+	maxTableLimit         = 32768 // TODO
+	maxInitialMemoryLimit = 256   // TODO
+	maxMaximumMemoryLimit = math.MaxInt32 >> wasm.PageBits
+	maxBranchTableSize    = 32768 // TODO
+)
+
+type externalKind byte
+
+const (
+	externalKindFunction = externalKind(iota)
+	externalKindTable
+	externalKindMemory
+	externalKindGlobal
+)
+
+var externalKindStrings = []string{
+	externalKindFunction: "function",
+	externalKindTable:    "table",
+	externalKindMemory:   "memory",
+	externalKindGlobal:   "global",
+}
+
+func (kind externalKind) String() (s string) {
+	if int(kind) < len(externalKindStrings) {
+		s = externalKindStrings[kind]
+	} else {
+		s = fmt.Sprintf("<unknown external kind 0x%x>", byte(kind))
+	}
+	return
+}
+
+const (
+	resizableLimitsFlagMaximum = 0x1
+)
+
+type resizableLimits struct {
+	initial int
+	maximum int
+	defined bool
+}
+
+func readResizableLimits(r reader, maxInitial, maxMaximum uint32, scale int) resizableLimits {
+	flags := r.readVaruint32()
+
+	initial := r.readVaruint32()
+	if initial > maxInitial {
+		panic(fmt.Errorf("initial memory size is too large: %d", initial))
+	}
+
+	maximum := maxMaximum
+
+	if (flags & resizableLimitsFlagMaximum) != 0 {
+		maximum = r.readVaruint32()
+		if maximum > maxMaximum {
+			maximum = maxMaximum
+		}
+		if maximum < initial {
+			panic(fmt.Errorf("maximum memory size %d is smaller than initial memory size %d", maximum, initial))
+		}
+	}
+
+	return resizableLimits{int(initial) * scale, int(maximum) * scale, true}
+}
+
+const (
+	moduleMagicNumber = uint32(0x6d736100)
+	moduleVersion     = uint32(12)
 )
 
 const (
-	sectionMemory = iota
-	sectionSignatures
-	sectionFunctions
-	sectionGlobals
-	sectionDataSegments
-	sectionFunctionTable
-	sectionEnd
+	sectionUnknown = iota
+	sectionType
+	sectionImport
+	sectionFunction
+	sectionTable
+	sectionMemory
+	sectionGlobal
+	sectionExport
+	sectionStart
+	sectionElement
+	sectionCode
+	sectionData
+
+	numSections
 )
 
-type FunctionFlags int
+type importFunction struct {
+	funcIndex int
+	variadic  bool
+	absAddr   uint64
+}
 
-const (
-	FunctionFlagName   = FunctionFlags(1)
-	FunctionFlagImport = FunctionFlags(2)
-	FunctionFlagLocals = FunctionFlags(4)
-	FunctionFlagExport = FunctionFlags(8)
-
-	functionFlagMask = FunctionFlagName | FunctionFlagImport | FunctionFlagLocals | FunctionFlagExport
-)
-
-func (flags FunctionFlags) String() (s string) {
-	var tokens []string
-
-	if flags&FunctionFlagName != 0 {
-		tokens = append(tokens, "name")
-	}
-	if flags&FunctionFlagImport != 0 {
-		tokens = append(tokens, "import")
-	}
-	if flags&FunctionFlagLocals != 0 {
-		tokens = append(tokens, "locals")
-	}
-	if flags&FunctionFlagExport != 0 {
-		tokens = append(tokens, "export")
-	}
-
-	if extra := flags &^ functionFlagMask; extra != 0 {
-		tokens = append(tokens, fmt.Sprintf("0x%02x", int(extra)))
-	}
-
-	return strings.Join(tokens, "|")
+type global struct {
+	t       types.T
+	mutable bool
+	init    uint64
 }
 
 type Module struct {
-	Memory          Memory
-	Signatures      SignaturesByIndex
-	NamedSignatures map[string]*Signature
-	Functions       []*Function
-	Imports         []*Import
-	NamedCallables  map[string]*Callable
-	Table           []*Callable
-	Start           string
+	sigs             []types.Function
+	funcSigs         []uint32
+	importFuncs      []importFunction
+	tableLimits      resizableLimits
+	memoryLimits     resizableLimits
+	globals          []global
+	numImportGlobals int
+	startIndex       uint32
+	startDefined     bool
+	tableFuncs       []uint32
 
-	code []byte
+	text          *bytes.Buffer
+	roDataAbsAddr int32
+	roData        dataArena
+	trapLinks     [traps.NumTraps]links.L
+	funcLinks     []links.FunctionL
+	funcMap       bytes.Buffer
+	callMap       bytes.Buffer
+	regs          regAllocator
+
+	data []byte
 }
 
-func LoadModule(data []byte) (m *Module, err error) {
+// LoadPreliminarySections, excluding the code and data sections.
+func (m *Module) LoadPreliminarySections(r Reader, env Environment) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			if err, _ = x.(error); err == nil {
@@ -78,471 +158,412 @@ func LoadModule(data []byte) (m *Module, err error) {
 		}
 	}()
 
-	top, _ := sexp.ParsePanic(data)
-	m = loadModule(top)
+	m.loadPreliminarySections(r, env)
 	return
 }
 
-func loadModule(top []interface{}) (m *Module) {
-	if s := top[0].(string); s != "module" {
-		panic(errors.New("not a module"))
+func (m *Module) loadPreliminarySections(r Reader, env Environment) {
+	moduleLoader{m, env, nil}.loadUntil(reader{r}, sectionCode)
+}
+
+// Load all (remaining) sections.
+func (m *Module) Load(r Reader, env Environment, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			if err, _ = x.(error); err == nil {
+				panic(x)
+			}
+		}
+	}()
+
+	m.load(r, env, textBuf, roDataBuf, roDataAbsAddr, startTrigger)
+	return
+}
+
+func (m *Module) load(r Reader, env Environment, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
+	if textBuf != nil {
+		m.text = bytes.NewBuffer(textBuf[:0])
 	}
 
-	m = &Module{
-		NamedSignatures: make(map[string]*Signature),
-		NamedCallables:  make(map[string]*Callable),
+	m.roData.buf = roDataBuf[:0]
+	m.roDataAbsAddr = roDataAbsAddr
+
+	moduleLoader{m, env, startTrigger}.load(reader{r})
+}
+
+type moduleLoader struct {
+	*Module
+	env          Environment
+	startTrigger chan<- struct{}
+}
+
+func (m moduleLoader) load(r reader) {
+	nextId := m.loadUntil(r, numSections)
+	if nextId != 0 {
+		panic(fmt.Errorf("unknown section id: 0x%x", nextId))
+	}
+}
+
+func (m moduleLoader) loadUntil(r reader, untilSection byte) byte {
+	var header struct {
+		MagicNumber uint32
+		Version     uint32
+	}
+	if err := binary.Read(r, binary.LittleEndian, &header); err != nil {
+		panic(err)
+	}
+	if header.MagicNumber != moduleMagicNumber {
+		panic(errors.New("not a WebAssembly module"))
+	}
+	if header.Version != moduleVersion {
+		panic(fmt.Errorf("unsupported module version: %d", header.Version))
 	}
 
-	var sigs []*Signature
-	var tableTokens []interface{}
+	var seenId byte
 
-	startSet := false
+	for {
+		id, err := r.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				return 0
+			}
+			panic(err)
+		}
 
-	for _, x := range top[1:] {
-		expr := x.([]interface{})
-		name := expr[0].(string)
+		if id != sectionUnknown {
+			if id < seenId {
+				panic(fmt.Errorf("section 0x%x follows section 0x%x", id, seenId))
+			}
+			seenId = id
+		}
 
-		var newSig *Signature
+		if id >= untilSection {
+			r.UnreadByte()
+			return id
+		}
 
-		switch name {
-		case "memory":
-			args := expr[1:]
+		payloadLen := r.readVaruint32()
 
-			if len(args) > 0 {
-				m.Memory.MinSize = int(values.ParseI32(args[0])) << 16
-				args = args[1:]
+		if f := sectionLoaders[id]; f != nil {
+			f(m, r)
+		} else {
+			if _, err := io.CopyN(ioutil.Discard, r, int64(payloadLen)); err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+var sectionLoaders = []func(moduleLoader, reader){
+	sectionType: func(m moduleLoader, r reader) {
+		for i := range r.readCount() {
+			if form := r.readVaruint7(); form != 0x40 {
+				panic(fmt.Errorf("unsupported type form: 0x%x", form))
 			}
 
-			if len(args) > 0 {
-				if _, ok := args[0].(string); ok {
-					m.Memory.MaxSize = int(values.ParseI32(args[0])) << 16
-					args = args[1:]
-				}
+			var sig types.Function
+
+			count := r.readVaruint32()
+			if count > maxFunctionParams {
+				panic(fmt.Errorf("function type #%d has too many parameters: %d", i, count))
 			}
 
-			m.Memory.Segments = make([]Segment, len(args))
-
-			for i, arg := range args {
-				segment := arg.([]interface{})
-				if len(segment) != 3 || segment[0].(string) != "segment" {
-					panic(segment)
-				}
-				offset := int(values.ParseI32(segment[1]))
-				data := []byte(segment[2].(string))
-				if offset < 0 || offset+len(data) > m.Memory.MinSize {
-					panic("data segment out of bounds")
-				}
-				m.Memory.Segments[i] = Segment{offset, data}
+			sig.Args = make([]types.T, count)
+			for j := range sig.Args {
+				sig.Args[j] = types.ByEncoding(r.readVaruint7())
 			}
 
-		case "func":
-			f := newFunction(m, expr)
+			if returnCount1 := r.readVaruint1(); returnCount1 {
+				sig.Result = types.ByEncoding(r.readVaruint7())
+			}
 
-			if f.Signature.Index < 0 {
-				i := sort.Search(len(sigs), func(i int) bool {
-					return sigs[i].Compare(f.Signature) >= 0
+			m.sigs = append(m.sigs, sig)
+		}
+	},
+
+	sectionImport: func(m moduleLoader, r reader) {
+		for i := range r.readCount() {
+			moduleLen := r.readVaruint32()
+			if moduleLen > maxStringLen {
+				panic(fmt.Errorf("module string is too long in import #%d", i))
+			}
+
+			moduleStr := string(r.readN(moduleLen))
+
+			fieldLen := r.readVaruint32()
+			if fieldLen > maxStringLen {
+				panic(fmt.Errorf("field string is too long in import #%d", i))
+			}
+
+			fieldStr := string(r.readN(fieldLen))
+
+			kind := externalKind(r.readVaruint7())
+
+			switch kind {
+			case externalKindFunction:
+				sigIndex := r.readVaruint32()
+				if sigIndex >= uint32(len(m.sigs)) {
+					panic(fmt.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
+				}
+
+				sig := m.sigs[sigIndex]
+				if n := len(sig.Args); n > maxImportParams {
+					panic(fmt.Errorf("import function #%d has too many parameters: %d", i, n))
+				}
+
+				funcIndex := len(m.funcSigs)
+				m.funcSigs = append(m.funcSigs, sigIndex)
+
+				variadic, absAddr, err := m.env.ImportFunction(moduleStr, fieldStr, sig)
+				if err != nil {
+					panic(err)
+				}
+
+				m.importFuncs = append(m.importFuncs, importFunction{
+					funcIndex: funcIndex,
+					variadic:  variadic,
+					absAddr:   absAddr,
 				})
-				if i < len(sigs) && sigs[i].Compare(f.Signature) == 0 {
-					f.Signature = sigs[i]
-				} else {
-					newSig = f.Signature
+
+			case externalKindGlobal:
+				t := types.ByEncoding(r.readVaruint7())
+
+				mutable := r.readVaruint1()
+				if mutable {
+					panic(fmt.Errorf("unsupported mutable global in import #%d", i))
 				}
-			}
 
-			m.Functions = append(m.Functions, f)
+				init, err := m.env.ImportGlobal(moduleStr, fieldStr, t)
+				if err != nil {
+					panic(err)
+				}
 
-			for _, name := range f.Names {
-				m.NamedCallables[name] = &f.Callable
-			}
+				m.globals = append(m.globals, global{t, mutable, init})
+				m.numImportGlobals = len(m.globals)
 
-		case "start":
-			m.Start = expr[1].(string)
-			startSet = true
-
-		case "type":
-			var sigName string
-			newSig, sigName = newSignature(m, expr[1:])
-			if sigName != "" {
-				m.NamedSignatures[sigName] = newSig
-			}
-
-		case "table":
-			tableTokens = expr[1:]
-
-		case "import":
-			expr = expr[1:]
-
-			var importName string
-
-			if _, ok := expr[2].(string); ok {
-				importName = expr[0].(string)
-				expr = expr[1:]
-			}
-
-			namespace := expr[0].(string)
-			name := expr[1].(string)
-			newSig = newFunction(m, expr[1:]).Signature
-
-			i := sort.Search(len(sigs), func(i int) bool {
-				return sigs[i].Compare(newSig) >= 0
-			})
-			if i < len(sigs) && sigs[i].Compare(newSig) == 0 {
-				newSig = sigs[i]
-			}
-
-			im := &Import{
-				Callable: Callable{
-					Signature: newSig,
-				},
-				Namespace: namespace,
-				Name:      name,
-			}
-			m.Imports = append(m.Imports, im)
-
-			if importName != "" {
-				m.NamedCallables[importName] = &im.Callable
-			}
-
-		default:
-			panic(fmt.Errorf("unknown module child: %s", name))
-		}
-
-		if newSig != nil {
-			newSig.Index = len(sigs) // in order of appearance
-			m.Signatures = append(m.Signatures, newSig)
-			sort.Sort(m.Signatures)
-
-			i := sort.Search(len(sigs), func(i int) bool {
-				return sigs[i].Compare(newSig) >= 0
-			})
-			sigs = append(sigs, nil)
-			copy(sigs[i+1:], sigs[i:])
-			sigs[i] = newSig
-		}
-	}
-
-	if !startSet {
-		panic(errors.New("start function not defined"))
-	}
-	if _, found := m.NamedCallables[m.Start]; !found {
-		panic(fmt.Errorf("start function not found: %s", m.Start))
-	}
-
-	for _, x := range tableTokens {
-		funcName := x.(string)
-		var c *Callable
-
-		if i, err := strconv.Atoi(funcName); err == nil {
-			c = &m.Functions[i].Callable
-		} else {
-			var found bool
-			c, found = m.NamedCallables[funcName]
-			if !found {
-				panic(funcName)
+			default:
+				panic(fmt.Errorf("import kind not supported: %s", kind))
 			}
 		}
+	},
 
-		c.TableIndexes = append(c.TableIndexes, len(m.Table))
-		m.Table = append(m.Table, c)
-	}
+	sectionFunction: func(m moduleLoader, r reader) {
+		for range r.readCount() {
+			sigIndex := r.readVaruint32()
+			if sigIndex >= uint32(len(m.sigs)) {
+				panic(fmt.Errorf("function type index out of bounds: %d", sigIndex))
+			}
 
+			m.funcSigs = append(m.funcSigs, sigIndex)
+		}
+	},
+
+	sectionTable: func(m moduleLoader, r reader) {
+		for range r.readCount() {
+			if m.tableLimits.defined {
+				panic(errors.New("multiple tables not supported"))
+			}
+
+			if elementType := r.readVaruint7(); elementType != 0x20 {
+				panic(fmt.Errorf("unsupported table element type: 0x%x", elementType))
+			}
+
+			m.tableLimits = readResizableLimits(r, maxTableLimit, maxTableLimit, 1)
+		}
+	},
+
+	sectionMemory: func(m moduleLoader, r reader) {
+		for range r.readCount() {
+			if m.memoryLimits.defined {
+				panic(errors.New("multiple memories not supported"))
+			}
+
+			m.memoryLimits = readResizableLimits(r, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wasm.Page))
+		}
+	},
+
+	sectionGlobal: func(m moduleLoader, r reader) {
+		for range r.readCount() {
+			t := types.ByEncoding(r.readVaruint7())
+			mutable := r.readVaruint1()
+			init, _ := readInitExpr(r, m.Module)
+
+			m.globals = append(m.globals, global{t, mutable, init})
+		}
+	},
+
+	sectionStart: func(m moduleLoader, r reader) {
+		index := r.readVaruint32()
+		if index >= uint32(len(m.funcSigs)) {
+			panic(fmt.Errorf("start function index out of bounds: %d", index))
+		}
+
+		sigIndex := m.funcSigs[index]
+		sig := m.sigs[sigIndex]
+		if len(sig.Args) > 0 || sig.Result != types.Void {
+			panic(errors.New("invalid start function signature"))
+		}
+
+		m.startIndex = index
+		m.startDefined = true
+	},
+
+	sectionElement: func(m moduleLoader, r reader) {
+		for i := range r.readCount() {
+			if index := r.readVaruint32(); index != 0 {
+				panic(fmt.Errorf("unsupported table index: %d", index))
+			}
+
+			offset := readOffsetInitExpr(r, m.Module)
+
+			numElem := r.readVaruint32()
+
+			needSize := offset + uint64(numElem)
+			if needSize > uint64(m.tableLimits.initial) {
+				panic(fmt.Errorf("table segment #%d exceeds initial table size", i))
+			}
+
+			oldSize := uint64(len(m.tableFuncs))
+			if needSize > oldSize {
+				buf := make([]uint32, needSize)
+				copy(buf, m.tableFuncs)
+				for i := oldSize; i < offset; i++ {
+					buf[i] = math.MaxInt32 // invalid function index
+				}
+				m.tableFuncs = buf
+			}
+
+			for j := offset; j < needSize; j++ {
+				elem := r.readVaruint32()
+				if elem >= uint32(len(m.funcSigs)) {
+					panic(fmt.Errorf("table element index out of bounds: %d", elem))
+				}
+
+				m.tableFuncs[j] = elem
+			}
+		}
+	},
+
+	sectionCode: func(m moduleLoader, r reader) {
+		moduleCoder{m.Module}.genCode(r, m.startTrigger)
+	},
+
+	sectionData: func(m moduleLoader, r reader) {
+		m.genData(r)
+	},
+}
+
+// LoadCodeSection, after loading the preliminary sections.
+func (m *Module) LoadCodeSection(r Reader, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			if err, _ = x.(error); err == nil {
+				panic(x)
+			}
+		}
+	}()
+
+	m.loadCodeSection(r, textBuf, roDataBuf, roDataAbsAddr, startTrigger)
 	return
 }
 
-func (m *Module) FuncTypes() (sigs []types.Function) {
-	sigs = make([]types.Function, 0, len(m.Imports)+len(m.Functions))
-
-	for _, im := range m.Imports {
-		sigs = append(sigs, im.Signature.Function)
+func (m *Module) loadCodeSection(R Reader, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
+	if m.funcLinks != nil {
+		panic(errors.New("code section has already been loaded"))
 	}
 
-	for _, f := range m.Functions {
-		sigs = append(sigs, f.Signature.Function)
+	if textBuf != nil {
+		m.text = bytes.NewBuffer(textBuf[:0])
 	}
 
+	m.roData.buf = roDataBuf[:0]
+	m.roDataAbsAddr = roDataAbsAddr
+
+	r := reader{R}
+
+	if readSectionHeader(r, sectionCode, "not a code section") {
+		moduleCoder{m}.genCode(r, startTrigger)
+	}
+}
+
+// LoadDataSection, after loading at least the preliminary sections.
+func (m *Module) LoadDataSection(r Reader) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			if err, _ = x.(error); err == nil {
+				panic(x)
+			}
+		}
+	}()
+
+	m.loadDataSection(r)
 	return
 }
 
-func (m *Module) FuncNames() (names []string) {
-	names = make([]string, 0, len(m.Imports)+len(m.Functions))
-
-	for _, im := range m.Imports {
-		name := fmt.Sprintf("%s %s", im.Namespace, im.Name)
-		names = append(names, name)
+func (m *Module) loadDataSection(R Reader) {
+	if m.data != nil {
+		panic(errors.New("data section has already been loaded"))
 	}
 
-	for i, f := range m.Functions {
-		var name string
-		if len(f.Names) > 0 {
-			name = f.Names[0]
-		} else {
-			name = fmt.Sprintf("unnamed function #%d", i)
+	r := reader{R}
+
+	if readSectionHeader(r, sectionData, "not a data section") {
+		m.genData(r)
+	}
+}
+
+func readSectionHeader(r reader, expectId byte, idError string) (ok bool) {
+	id, err := r.ReadByte()
+	if err != nil {
+		if err == io.EOF {
+			return
 		}
-		names = append(names, name)
+		panic(err)
 	}
 
+	if id != expectId {
+		panic(errors.New(idError))
+	}
+
+	r.readVaruint32() // payload len
+
+	ok = true
 	return
 }
 
-func (m *Module) ImportTypes() (sigs map[int64]types.Function) {
-	sigs = make(map[int64]types.Function)
-	for _, im := range m.Imports {
-		sigs[int64(im.Signature.Index)] = im.Signature.Function
-	}
+// Signatures are available after preliminary sections have been loaded.
+func (m *Module) Signatures() []types.Function {
+	return m.sigs
+}
+
+// MemoryLimits are available after preliminary sections have been loaded.
+func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
+	initial = wasm.MemorySize(m.memoryLimits.initial)
+	maximum = wasm.MemorySize(m.memoryLimits.maximum)
 	return
 }
 
-type Segment struct {
-	Offset int
-	Data   []byte
+// Text is available after code section has been loaded.
+func (m *Module) Text() []byte {
+	return m.text.Bytes()
 }
 
-type Memory struct {
-	MinSize  int
-	MaxSize  int
-	Segments []Segment
+// ROData is available after code section has been loaded.
+func (m *Module) ROData() []byte {
+	return m.roData.buf
 }
 
-type Signature struct {
-	types.Function
-	Index int
+// FunctionMap is available after code section has been loaded.
+func (m *Module) FunctionMap() []byte {
+	return m.funcMap.Bytes()
 }
 
-func newSignature(m *Module, list []interface{}) (sig *Signature, name string) {
-	name, ok := list[0].(string)
-	if ok {
-		list = list[1:]
-	}
-
-	sig = newFunction(m, list[0].([]interface{})).Signature
-	return
+// CallMap is available after code section has been loaded.
+func (m *Module) CallMap() []byte {
+	return m.callMap.Bytes()
 }
 
-func (sig *Signature) String() string {
-	return sig.Function.String()
-}
-
-func (sig1 *Signature) Compare(sig2 *Signature) int {
-	len1 := len(sig1.Args)
-	len2 := len(sig2.Args)
-
-	if len1 < len2 {
-		return -1
-	}
-	if len1 > len2 {
-		return 1
-	}
-
-	for n := range sig1.Args {
-		arg1 := sig1.Args[n]
-		arg2 := sig2.Args[n]
-
-		if arg1 < arg2 {
-			return -1
-		}
-		if arg1 > arg2 {
-			return 1
-		}
-	}
-
-	res1 := sig1.Result
-	res2 := sig2.Result
-
-	if res1 < res2 {
-		return -1
-	}
-	if res1 > res2 {
-		return 1
-	}
-
-	return 0
-}
-
-type SignaturesByIndex []*Signature
-
-func (a SignaturesByIndex) Len() int {
-	return len(a)
-}
-
-func (a SignaturesByIndex) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
-}
-
-func (a SignaturesByIndex) Less(i, j int) bool {
-	return a[i].Index < a[j].Index
-}
-
-type Var struct {
-	Param bool // param or local?
-	Index int
-	Type  types.T
-}
-
-type Callable struct {
-	*Signature
-	TableIndexes []int
-}
-
-func (c *Callable) String() string {
-	return c.Signature.String()
-}
-
-type Import struct {
-	Callable
-
-	Namespace string
-	Name      string
-}
-
-func (im *Import) String() string {
-	return fmt.Sprintf("%s %s %s", im.Namespace, im.Name, &im.Callable)
-}
-
-type Function struct {
-	Callable
-
-	Names  []string
-	Params []types.T
-	Locals []types.T
-	Vars   map[string]Var
-
-	body []interface{}
-}
-
-func newFunction(m *Module, list []interface{}) (f *Function) {
-	list = list[1:] // skip "func" token
-
-	f = &Function{
-		Callable: Callable{
-			Signature: &Signature{Index: -1},
-		},
-		Vars: make(map[string]Var),
-	}
-
-	for len(list) > 0 {
-		name, ok := list[0].(string)
-		if !ok {
-			break
-		}
-
-		f.Names = append(f.Names, name)
-
-		list = list[1:]
-	}
-
-	var typeName *string
-
-loop:
-	for i, x := range list {
-		expr := x.([]interface{})
-		exprName := expr[0].(string)
-		args := expr[1:]
-
-		switch exprName {
-		case "local", "param":
-			var varName string
-
-			if len(args) > 0 {
-				s := args[0].(string)
-				if strings.HasPrefix(s, "$") {
-					varName = s
-					args = args[1:]
-				}
-			}
-
-			var varTypes []types.T
-
-			for len(args) > 0 {
-				s := args[0].(string)
-				t, found := types.ByString[s]
-				if !found {
-					panic(s)
-				}
-				varTypes = append(varTypes, t)
-				args = args[1:]
-			}
-
-			for _, varType := range varTypes {
-				numName := strconv.Itoa(len(f.Locals) + len(f.Params))
-
-				v := Var{
-					Type: varType,
-				}
-
-				switch exprName {
-				case "local":
-					v.Param = false
-					v.Index = len(f.Locals)
-					f.Locals = append(f.Locals, varType)
-
-				case "param":
-					f.Signature.Args = append(f.Signature.Args, varType)
-
-					v.Param = true
-					v.Index = len(f.Params)
-					f.Params = append(f.Params, varType)
-				}
-
-				if varName != "" {
-					f.Vars[varName] = v
-					varName = ""
-				}
-
-				f.Vars[numName] = v
-			}
-
-		case "type":
-			typeName = new(string)
-			*typeName = args[0].(string)
-
-		case "result":
-			f.Signature.Result = types.ByString[args[0].(string)]
-
-		default:
-			f.body = list[i:]
-			break loop
-		}
-	}
-
-	if typeName != nil {
-		var sig *Signature
-
-		if i, err := strconv.Atoi(*typeName); err == nil {
-			sig = m.Signatures[i]
-		} else {
-			var found bool
-			sig, found = m.NamedSignatures[*typeName]
-			if !found {
-				panic(*typeName)
-			}
-		}
-
-		if len(f.Signature.Args) == 0 && f.Signature.Result == types.Void {
-			for i, varType := range sig.Args {
-				numName := strconv.Itoa(len(f.Locals) + i)
-
-				f.Vars[numName] = Var{
-					Param: true,
-					Index: i,
-					Type:  varType,
-				}
-
-				f.Params = append(f.Params, varType)
-			}
-		} else if !f.Signature.Equal(sig.Function) {
-			panic(fmt.Errorf("%s vs. %s", f.Signature, sig))
-		}
-
-		f.Signature = sig
-	}
-
-	return
-}
-
-func (f *Function) String() string {
-	var name string
-	if len(f.Names) > 0 {
-		name = f.Names[0]
-	}
-	return fmt.Sprintf("%s%s", name, f.Signature)
+// Data is available after data section has been loaded.
+func (m *Module) Data() []byte {
+	return m.data
 }

@@ -1,60 +1,66 @@
 package wag
 
 import (
+	"bufio"
 	"bytes"
 	"io/ioutil"
 	"testing"
 
-	"github.com/tsavola/wag/internal/sexp"
 	"github.com/tsavola/wag/runner"
 )
 
 func TestExec(t *testing.T) {
+	const (
+		maxTextSize   = 65536
+		maxRODataSize = 4096
+		stackSize     = 4096
+	)
+
 	data, err := ioutil.ReadFile("testdata/exec.wast")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expr, _ := sexp.ParsePanic(data)
-	if expr == nil {
-		t.Fatal()
-	}
+	wasmReadCloser := wast2wasm(data, false)
+	defer wasmReadCloser.Close()
+	wasm := bufio.NewReader(wasmReadCloser)
 
-	m := loadModule(expr)
-	globals, data := m.Data()
+	var m Module
+	m.loadPreliminarySections(wasm, runner.Env)
 
-	const (
-		maxRODataSize = 4096
-		stackSize     = 4096
-	)
+	var codeBuf bytes.Buffer
+	copyCodeSection(&codeBuf, wasm)
 
-	b, err := runner.NewBuffer(maxTextSize, maxRODataSize)
+	minMemorySize, maxMemorySize := m.MemoryLimits()
+
+	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer b.Close()
+	defer p.Close()
 
-	p := b.NewProgram(globals, data, m.FuncTypes(), m.FuncNames())
-
-	r, err := p.NewRunner(m.Memory.MinSize, m.Memory.MaxSize, stackSize)
+	r, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer r.Close()
 
 	var printBuf bytes.Buffer
+	e, trigger := r.NewExecutor(m.Signatures(), &printBuf)
 
-	e, trigger := r.NewExecutor(0, m.ImportTypes(), &printBuf)
-	_, _, funcMap, callMap := m.Code(runner.Imports, b.Text, b.RODataAddr(), b.ROData, trigger)
-	b.Seal()
-	p.SetMaps(funcMap, callMap)
-	result, err := e.Wait()
+	m.loadDataSection(wasm)
+	p.SetData(m.Data())
+	m.loadCodeSection(&codeBuf, p.Text, p.ROData, p.RODataAddr(), trigger)
+	p.Seal()
+	p.SetFunctionMap(m.FunctionMap())
+	p.SetCallMap(m.CallMap())
+	if _, err := e.Wait(); err != nil {
+		t.Fatal(err)
+	}
 
 	if printBuf.Len() > 0 {
 		t.Logf("print output:\n%s", string(printBuf.Bytes()))
 	}
 
-	if result != 12345 {
-		t.Fatal(result)
-	}
+	objdump(m.Text())
 }

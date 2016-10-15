@@ -1,70 +1,82 @@
 package x86
 
 import (
+	"fmt"
+
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
 )
 
-func (mach X86) ConversionOp(code gen.RegCoder, name string, resultType, sourceType types.T, x values.Operand) values.Operand {
-	switch name {
-	case "i32.wrap/i64":
-		if reg, zeroExt, ok := x.CheckTempReg(); ok && zeroExt {
-			return values.TempRegOperand(reg, false)
+func (mach X86) ConversionOp(code gen.RegCoder, oper uint16, resultType types.T, source values.Operand) (result values.Operand) {
+	if oper == opers.Wrap {
+		source.Type = types.I32 // short mov; useful zeroExt flag
+		reg, zeroExt := mach.opMaybeResultReg(code, source, false)
+		return values.TempRegOperand(resultType, reg, zeroExt)
+	}
+
+	reg, zeroExt := mach.opMaybeResultReg(code, source, false)
+
+	switch oper {
+	case opers.ExtendS:
+		Movsxd.opFromReg(code, 0, reg, reg)
+		result = values.TempRegOperand(resultType, reg, false)
+
+	case opers.ExtendU:
+		if !zeroExt {
+			Mov.opFromReg(code, types.I32, reg, reg)
+		}
+		result = values.TempRegOperand(resultType, reg, false)
+
+	case opers.Mote:
+		Cvts2sSSE.opFromReg(code, source.Type, reg, reg)
+		result = values.TempRegOperand(resultType, reg, false)
+
+	case opers.TruncS:
+		CvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, false)
+
+	case opers.TruncU:
+		if resultType == types.I32 {
+			CvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg) // larger target size
 		} else {
-			return x
+			panic(fmt.Errorf("%s.trunc_u/%s not implemented", resultType, source.Type))
 		}
-	}
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, false)
 
-	sourceReg, sourceZeroExt, own := mach.opBorrowMaybeScratchReg(code, sourceType, x, false)
-	if own {
-		defer code.FreeReg(sourceType, sourceReg)
-	}
+	case opers.ConvertS:
+		Cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, false)
 
-	resultZeroExt := false
-
-	switch name {
-	case "f32.convert_s/i32", "f32.convert_s/i64", "f64.convert_s/i32", "f64.convert_s/i64":
-		Cvtsi2sSSE.opReg(code, resultType, sourceType, regResult, sourceReg)
-
-	case "f32.convert_u/i32", "f64.convert_u/i32":
-		if !sourceZeroExt {
-			Mov.opFromReg(code, types.I32, sourceReg, sourceReg)
+	case opers.ConvertU:
+		if source.Type == types.I32 {
+			if !zeroExt {
+				Mov.opFromReg(code, types.I32, reg, reg)
+			}
+			Cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, reg)
+		} else {
+			mach.opConvertUnsignedI64ToFloat(code, resultType, reg)
 		}
-		Cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, sourceReg)
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, false)
 
-	case "f32.convert_u/i64", "f64.convert_u/i64":
-		mach.opConvertUnsignedI64ToFloat(code, resultType, sourceReg)
-
-	case "i64.extend_s/i32":
-		Movsxd.opFromReg(code, 0, regResult, sourceReg)
-
-	case "i64.extend_u/i32":
-		Mov.opFromReg(code, sourceType, regResult, sourceReg)
-
-	case "f32.demote/f64", "f64.promote/f32":
-		Cvts2sSSE.opFromReg(code, sourceType, regResult, sourceReg)
-
-	case "f32.reinterpret/i32", "f64.reinterpret/i64":
-		MovSSE.opFromReg(code, sourceType, regResult, sourceReg)
-
-	case "i32.reinterpret/f32", "i64.reinterpret/f64":
-		MovSSE.opToReg(code, sourceType, regResult, sourceReg)
-		resultZeroExt = true
-
-	case "i32.trunc_s/f32", "i32.trunc_s/f64", "i64.trunc_s/f32", "i64.trunc_s/f64":
-		CvttsSSE2si.opReg(code, sourceType, resultType, regResult, sourceReg)
-
-	case "i32.trunc_u/f32", "i32.trunc_u/f64":
-		CvttsSSE2si.opReg(code, sourceType, types.I64, regResult, sourceReg) // larger target size
-
-	default:
-		panic(name)
+	case opers.Reinterpret:
+		if source.Type.Category() == types.Int {
+			MovSSE.opFromReg(code, source.Type, regResult, reg)
+		} else {
+			MovSSE.opToReg(code, source.Type, regResult, reg)
+		}
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, true)
 	}
 
-	return values.TempRegOperand(regResult, resultZeroExt)
+	return
 }
 
 func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, floatType types.T, intReg regs.R) {
@@ -91,8 +103,8 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, floatType types.T, i
 	JmpRel.rel8.opStub(code)
 	done.AddSite(code.Len())
 
-	huge.Address = code.Len()
-	mach.updateSites8(code, &huge)
+	huge.Addr = code.Len()
+	mach.updateBranches8(code, &huge)
 
 	// 64-bit value
 	Mov.opFromReg(code, types.I64, intReg2, intReg)
@@ -102,6 +114,6 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, floatType types.T, i
 	Cvtsi2sSSE.opReg(code, floatType, types.I64, regResult, intReg)
 	AddsSSE.opFromReg(code, floatType, regResult, regResult)
 
-	done.Address = code.Len()
-	mach.updateSites8(code, &done)
+	done.Addr = code.Len()
+	mach.updateBranches8(code, &done)
 }
