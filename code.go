@@ -1377,14 +1377,7 @@ func genGetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
 
-	result := code.vars[localIndex].cache
-
-	switch result.Storage {
-	case values.Nowhere, values.VarReg: // TODO: nowhere -> ver reference without index?
-		result = values.VarReferenceOperand(result.Type, int32(localIndex))
-	}
-
-	code.pushOperand(result)
+	code.pushVarOperand(int32(localIndex))
 	return
 }
 
@@ -1556,27 +1549,45 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
 
-	v := &code.vars[localIndex]
+	code.genSetLocal(op, int32(localIndex))
+	return
+}
+
+func genTeeLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+	localIndex := r.readVaruint32()
+	if localIndex >= uint32(len(code.vars)) {
+		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
+	}
+
+	code.genSetLocal(op, int32(localIndex))
+	code.pushVarOperand(int32(localIndex))
+	return
+}
+
+func (code *funcCoder) genSetLocal(op opcode, index int32) {
+	debugf("setting variable #%d", index)
+
+	v := &code.vars[index]
 	t := v.cache.Type
 
 	newValue := code.popOperand()
 	if newValue.Type != t {
-		panic(fmt.Errorf("%s %s variable #%d with wrong operand type: %s", op, t, localIndex, newValue.Type))
+		panic(fmt.Errorf("%s %s variable #%d with wrong operand type: %s", op, t, index, newValue.Type))
 	}
 
 	switch newValue.Storage {
 	case values.Imm:
-		if newValue.ImmValue() == v.cache.ImmValue() {
+		if v.cache.Storage == values.Imm && newValue.ImmValue() == v.cache.ImmValue() {
 			return // nop
 		}
 
 	case values.VarReference:
-		if newValue.VarIndex() == int32(localIndex) {
+		if newValue.VarIndex() == index {
 			return // nop
 		}
 	}
 
-	debugf("%s refcount=%d", op, v.refCount)
+	debugf("variable reference count: %d", v.refCount)
 
 	if v.refCount > 0 {
 		// detach all references by copying to temp regs or spilling to stack
@@ -1587,7 +1598,7 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 
 			for i := len(code.operands) - 1; i >= code.numPersistentOperands; i-- {
 				x := code.operands[i]
-				if x.Storage == values.VarReference && x.VarIndex() == int32(localIndex) {
+				if x.Storage == values.VarReference && x.VarIndex() == index {
 					reg, ok := code.TryAllocReg(t)
 					if !ok {
 						spillUntil = i
@@ -1614,7 +1625,7 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 
 			for i := code.numPersistentOperands; i <= spillUntil; i++ {
 				x := code.operands[i]
-				if x.Storage == values.VarReference && x.VarIndex() == int32(localIndex) {
+				if x.Storage == values.VarReference && x.VarIndex() == index {
 					code.opPush(x) // TODO: avoid multiple loads
 					code.operands[i] = values.StackOperand(t)
 
@@ -1637,6 +1648,8 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 
 	oldCache := v.cache
 
+	debugf("old variable cache: %s", oldCache)
+
 	switch {
 	case newValue.Storage == values.Imm:
 		v.cache = newValue
@@ -1656,11 +1669,11 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 
 		if ok {
 			zeroExt := code.opMove(reg, newValue, false)
-			v.cache = values.VarRegOperand(t, int32(localIndex), reg, zeroExt)
+			v.cache = values.VarRegOperand(t, index, reg, zeroExt)
 			v.dirty = true
 		} else {
 			// spill to stack
-			code.opStoreVar(int32(localIndex), newValue)
+			code.opStoreVar(index, newValue)
 			v.cache = values.NoOperand(t)
 			v.dirty = false
 		}
@@ -1692,10 +1705,10 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 		}
 
 		if ok {
-			v.cache = values.VarRegOperand(t, int32(localIndex), reg, zeroExt)
+			v.cache = values.VarRegOperand(t, index, reg, zeroExt)
 			v.dirty = true
 		} else {
-			code.opStoreVar(int32(localIndex), newValue)
+			code.opStoreVar(index, newValue)
 			v.cache = values.NoOperand(t)
 			v.dirty = false
 		}
@@ -1707,12 +1720,6 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 	if oldCache.Storage == values.VarReg {
 		code.FreeReg(t, oldCache.Reg())
 	}
-
-	return
-}
-
-func genTeeLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	panic("TODO")
 }
 
 func genUnreachable(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
@@ -1928,6 +1935,24 @@ func (code *funcCoder) pushResultRegOperand(t types.T) {
 	code.operands = append(code.operands, x)
 }
 
+func (code *funcCoder) pushVarOperand(index int32) {
+	v := &code.vars[index]
+	x := v.cache
+
+	switch v.cache.Storage {
+	case values.Nowhere, values.VarReg: // TODO: nowhere -> ver reference without index?
+		if v.refCount > len(code.operands) {
+			panic(x)
+		}
+		v.refCount++
+
+		x = values.VarReferenceOperand(x.Type, index)
+	}
+
+	debugf("push operand: %s", x)
+	code.operands = append(code.operands, x)
+}
+
 func (code *funcCoder) pushOperand(x values.Operand) {
 	if x.Storage.IsVar() {
 		index := x.VarIndex()
@@ -1963,12 +1988,12 @@ func (code *funcCoder) opStabilizeOperandStack() {
 			continue
 		}
 
+		debugf("stabilizing operand: %x", x)
+
 		reg := code.opAllocReg(x.Type)
 		zeroExt := code.opMove(reg, x, false)
 		code.operands[i] = values.TempRegOperand(x.Type, reg, zeroExt)
 	}
-
-	debugf("operands stabilized: %d", len(code.operands)-code.numStableOperands)
 
 	code.numStableOperands = len(code.operands)
 }
