@@ -21,7 +21,7 @@ const (
 	specTestDir = "testdata/wabt/third_party/testsuite"
 
 	timeout    = time.Second * 3
-	parallel   = false
+	parallel   = true
 	dumpExps   = false
 	dumpROData = false
 )

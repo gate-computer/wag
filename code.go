@@ -173,8 +173,10 @@ func (m moduleCoder) genTrapEntry(id traps.Id) {
 }
 
 func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
-	debugf("import function")
-	debugDepth++
+	if debug {
+		debugf("import function")
+		debugDepth++
+	}
 
 	m.Align(mach.FunctionAlignment(), mach.PaddingByte())
 	addr = m.Len()
@@ -199,8 +201,10 @@ func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
 
 	mach.OpEnterImportFunction(m, imp.absAddr, imp.variadic, len(sig.Args), int(sigIndex))
 
-	debugDepth--
-	debugf("imported function")
+	if debug {
+		debugDepth--
+		debugf("imported function")
+	}
 
 	return
 }
@@ -477,11 +481,10 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 	sigIndex := code.funcSigs[funcIndex]
 	sig := code.sigs[sigIndex]
 
-	if debugDepth != 0 {
-		panic("OMG")
+	if debug {
+		debugf("function %d %s", funcIndex-len(code.importFuncs), sig)
+		debugDepth++
 	}
-	debugf("function %d %s", funcIndex-len(code.importFuncs), sig)
-	debugDepth++
 
 	r.readVaruint32() // body size
 
@@ -592,14 +595,16 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 
 	code.regs.assertNoneAllocated()
 
-	debugDepth--
-	if debugDepth != 0 {
-		panic("OMG")
-	}
-	if deadend {
-		debugf("functioned to deadend")
-	} else {
-		debugf("functioned")
+	if debug {
+		debugDepth--
+		if debugDepth != 0 {
+			panic("OMG")
+		}
+		if deadend {
+			debugf("functioned to deadend")
+		} else {
+			debugf("functioned")
+		}
 	}
 
 	if code.stackCheckAddr != 0 {
@@ -627,8 +632,10 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 }
 
 func (code *funcCoder) genOps(r reader) (deadend bool) {
-	debugf("{")
-	debugDepth++
+	if debug {
+		debugf("{")
+		debugDepth++
+	}
 
 	for {
 		op := r.readOpcode()
@@ -644,8 +651,10 @@ func (code *funcCoder) genOps(r reader) (deadend bool) {
 		}
 	}
 
-	debugDepth--
-	debugf("}")
+	if debug {
+		debugDepth--
+		debugf("}")
+	}
 	return
 }
 
@@ -662,8 +671,10 @@ func skipOps(r reader) {
 }
 
 func (code *funcCoder) genThenOps(r reader) (deadend, haveElse bool) {
-	debugf("{")
-	debugDepth++
+	if debug {
+		debugf("{")
+		debugDepth++
+	}
 
 loop:
 	for {
@@ -685,8 +696,10 @@ loop:
 		}
 	}
 
-	debugDepth--
-	debugf("}")
+	if debug {
+		debugDepth--
+		debugf("}")
+	}
 	return
 }
 
@@ -708,17 +721,21 @@ func skipThenOps(r reader) (haveElse bool) {
 }
 
 func (code *funcCoder) genOp(r reader, op opcode) (deadend bool) {
-	debugf("%s op", op)
-	debugDepth++
+	if debug {
+		debugf("%s op", op)
+		debugDepth++
+	}
 
 	impl := opcodeImpls[op]
 	deadend = impl.gen(code, r, op, impl.info)
 
-	debugDepth--
-	if deadend {
-		debugf("%s operated to deadend", op)
-	} else {
-		debugf("%s operated", op)
+	if debug {
+		debugDepth--
+		if deadend {
+			debugf("%s operated to deadend", op)
+		} else {
+			debugf("%s operated", op)
+		}
 	}
 
 	return
