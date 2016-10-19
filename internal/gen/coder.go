@@ -13,8 +13,7 @@ import (
 const (
 	ROTableAddr = 0
 
-	WordBits     = 3
-	WordSize     = 1 << WordBits  // stack entry size
+	WordSize     = 8              // stack entry size
 	StackReserve = WordSize + 128 // trap/import call return address + red zone
 )
 

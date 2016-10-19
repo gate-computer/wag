@@ -195,7 +195,7 @@ func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
 		for i := range sig.Args {
 			t := sig.Args[i]
 			reg := paramRegs.iterForward(gen.TypeRegCategory(t))
-			mach.OpStoreStackReg(m, t, -(int32(i)+1)<<gen.WordBits, reg)
+			mach.OpStoreStackReg(m, t, -(int32(i)+1)*gen.WordSize, reg)
 		}
 	}
 
@@ -342,10 +342,10 @@ func (code *funcCoder) effectiveVarStackOffset(index int32) (offset int32) {
 	if index < code.numStackParams {
 		paramPos := code.numStackParams - index - 1
 		// account for the function return address
-		offset = code.stackOffset + gen.WordSize + paramPos<<gen.WordBits
+		offset = code.stackOffset + gen.WordSize + paramPos*gen.WordSize
 	} else {
 		regParamIndex := index - code.numStackParams
-		offset = code.stackOffset - (regParamIndex+1)<<gen.WordBits
+		offset = code.stackOffset - (regParamIndex+1)*gen.WordSize
 	}
 
 	if offset < 0 {
@@ -369,7 +369,7 @@ func (code *funcCoder) pushBranchTarget(valueType types.T, functionEnd bool) {
 		// init still in progress, but any branch expressions will have
 		// initialized all vars before we reach the target
 		numRegParams := int32(len(code.vars)) - code.numStackParams
-		stackOffset = numRegParams << gen.WordBits
+		stackOffset = numRegParams * gen.WordSize
 	}
 
 	code.branchTargets = append(code.branchTargets, &branchTarget{
@@ -1159,7 +1159,7 @@ func genCall(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	numStackParams := code.setupCallOperands(op, sig, values.Operand{})
 
 	code.opCall(&code.funcLinks[funcIndex].L)
-	code.opBackoffStackPtr(numStackParams << gen.WordBits)
+	code.opBackoffStackPtr(numStackParams * gen.WordSize)
 	return
 }
 
@@ -1186,7 +1186,7 @@ func genCallIndirect(code *funcCoder, r reader, op opcode, info opInfo) (deadend
 
 	retAddr := mach.OpCallIndirect(code, int32(len(code.tableFuncs)), int32(sigIndex))
 	code.mapCallAddr(retAddr)
-	code.opBackoffStackPtr(numStackParams << gen.WordBits)
+	code.opBackoffStackPtr(numStackParams * gen.WordSize)
 	return
 }
 
@@ -1256,7 +1256,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	}
 
 	if numMissingStackArgs > 0 {
-		code.opAdvanceStackPtr(numMissingStackArgs << gen.WordBits)
+		code.opAdvanceStackPtr(numMissingStackArgs * gen.WordSize)
 
 		sourceIndex := numMissingStackArgs
 		targetIndex := int32(0)
@@ -1265,7 +1265,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 		for i := int32(len(args)) - 1; i >= numStackParams; i-- {
 			if args[i].Storage == values.Stack {
 				debugf("call param #%d: stack (temporary) <- %s", i, args[i])
-				mach.OpCopyStack(code, targetIndex<<gen.WordBits, sourceIndex<<gen.WordBits)
+				mach.OpCopyStack(code, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
 				sourceIndex++
 				targetIndex++
 			}
@@ -1279,13 +1279,13 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 			switch x.Storage {
 			case values.Stack:
 				debugf("call param #%d: stack <- %s", i, x)
-				mach.OpCopyStack(code, targetIndex<<gen.WordBits, sourceIndex<<gen.WordBits)
+				mach.OpCopyStack(code, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
 				sourceIndex++
 
 			default:
 				x = code.effectiveOperand(x)
 				debugf("call param #%d: stack <- %s", i, x)
-				mach.OpStoreStack(code, targetIndex<<gen.WordBits, x)
+				mach.OpStoreStack(code, targetIndex*gen.WordSize, x)
 			}
 
 			targetIndex++
