@@ -124,6 +124,28 @@ type global struct {
 	init    uint64
 }
 
+func appendGlobalsData(buf []byte, globals []global) []byte {
+	oldSize := len(buf)
+	newSize := oldSize + len(globals)*gen.WordSize
+
+	if cap(buf) >= newSize {
+		buf = buf[:newSize]
+	} else {
+		newBuf := make([]byte, newSize)
+		copy(newBuf, buf)
+		buf = newBuf
+	}
+
+	ptr := buf[oldSize:]
+
+	for _, global := range globals {
+		binary.LittleEndian.PutUint64(ptr, global.init)
+		ptr = ptr[8:]
+	}
+
+	return buf
+}
+
 type Module struct {
 	sigs             []types.Function
 	funcSigs         []uint32
@@ -145,7 +167,7 @@ type Module struct {
 	callMap       bytes.Buffer
 	regs          regAllocator
 
-	data         bytes.Buffer
+	data         []byte
 	memoryOffset int
 }
 
@@ -340,20 +362,16 @@ var sectionLoaders = []func(moduleLoader, reader){
 				}
 
 				m.globals = append(m.globals, global{t, mutable, init})
-				m.numImportGlobals = len(m.globals)
-
-				if t.Size() == types.Size32 {
-					init &= 0xffffffff
-				}
-				if err := binary.Write(&m.data, binary.LittleEndian, init); err != nil {
-					panic(err)
-				}
-				m.memoryOffset = m.data.Len()
 
 			default:
 				panic(fmt.Errorf("import kind not supported: %s", kind))
 			}
 		}
+
+		m.numImportGlobals = len(m.globals)
+
+		m.data = appendGlobalsData(m.data, m.globals)
+		m.memoryOffset = len(m.data)
 	},
 
 	sectionFunction: func(m moduleLoader, r reader) {
@@ -399,15 +417,10 @@ var sectionLoaders = []func(moduleLoader, reader){
 			init, _ := readInitExpr(r, m.Module)
 
 			m.globals = append(m.globals, global{t, mutable, init})
-
-			if t.Size() == types.Size32 {
-				init &= 0xffffffff
-			}
-			if err := binary.Write(&m.data, binary.LittleEndian, init); err != nil {
-				panic(err)
-			}
-			m.memoryOffset = m.data.Len()
 		}
+
+		m.data = appendGlobalsData(m.data, m.globals[m.numImportGlobals:])
+		m.memoryOffset = len(m.data)
 	},
 
 	sectionStart: func(m moduleLoader, r reader) {
@@ -579,7 +592,7 @@ func (m *Module) CallMap() []byte {
 
 // Data is available after data section has been loaded.
 func (m *Module) Data() (data []byte, memoryOffset int) {
-	data = m.data.Bytes()
+	data = m.data
 	memoryOffset = m.memoryOffset
 	return
 }

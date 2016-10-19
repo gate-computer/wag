@@ -30,12 +30,18 @@ func (m *Module) genData(r reader) {
 		}
 
 		needDataSize := int64(m.memoryOffset) + needMemorySize
-		if n := needDataSize - int64(m.data.Len()); n > 0 {
-			m.data.Grow(int(n))
+		if needDataSize > int64(len(m.data)) {
+			if int64(cap(m.data)) >= needDataSize {
+				m.data = m.data[:needDataSize]
+			} else {
+				buf := make([]byte, needDataSize)
+				copy(buf, m.data)
+				m.data = buf
+			}
 		}
 
-		dataOffset := int(m.memoryOffset) + int(offset)
-		r.read(m.data.Bytes()[dataOffset:needDataSize])
+		dataOffset := m.memoryOffset + int(offset)
+		r.read(m.data[dataOffset:needDataSize])
 
 		if debug {
 			debugDepth--

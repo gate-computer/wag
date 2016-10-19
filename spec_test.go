@@ -24,8 +24,8 @@ const (
 	parallel    = false
 	dumpExps    = false
 	dumpROData  = false
-	dumpGlobals = false
-	dumpMemory  = false
+	dumpGlobals = true
+	dumpMemory  = true
 )
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
@@ -471,16 +471,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 
 		if dumpMemory {
 			data, memoryOffset := m.Data()
-			buf := data[memoryOffset:]
-
-			if len(buf) == 0 {
-				t.Log("no initialized memory")
-			}
-
-			for i := 0; len(buf) > 0; i += 8 {
-				t.Logf("memory at 0x%08x: 0x%016x", i, binary.LittleEndian.Uint64(buf))
-				buf = buf[8:]
-			}
+			t.Logf("memory: %#v", data[memoryOffset:])
 		}
 
 		memGrowSize := maxMemorySize
