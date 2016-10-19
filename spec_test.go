@@ -47,8 +47,10 @@ const (
 // func Test_linking(t *testing.T)               { test(t, "linking") }
 // func Test_memory(t *testing.T)                { test(t, "memory") }
 // func Test_names(t *testing.T)                 { test(t, "names") }
+// func Test_set_local(t *testing.T)             { test(t, "set_local") }
 // func Test_skip_stack_guard_page(t *testing.T) { test(t, "skip-stack-guard-page") }
 // func Test_start(t *testing.T)                 { test(t, "start") }
+// func Test_tee_local(t *testing.T)             { test(t, "tee_local") }
 // func Test_traps(t *testing.T)                 { test(t, "traps") }
 
 func Test_address(t *testing.T)                         { test(t, "address") }
@@ -110,11 +112,9 @@ func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_resizing(t *testing.T)                        { test(t, "resizing") }
 func Test_return(t *testing.T)                          { test(t, "return") }
 func Test_select(t *testing.T)                          { test(t, "select") }
-func Test_set_local(t *testing.T)                       { test(t, "set_local") }
 func Test_stack(t *testing.T)                           { test(t, "stack") }
 func Test_store_retval(t *testing.T)                    { test(t, "store_retval") }
 func Test_switch(t *testing.T)                          { test(t, "switch") }
-func Test_tee_local(t *testing.T)                       { test(t, "tee_local") }
 func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
 func Test_unreachable(t *testing.T)                     { test(t, "unreachable") }
 func Test_unwind(t *testing.T)                          { test(t, "unwind") }

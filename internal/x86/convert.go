@@ -37,18 +37,10 @@ func (mach X86) ConversionOp(code gen.RegCoder, oper uint16, resultType types.T,
 		result = values.TempRegOperand(resultType, reg, false)
 
 	case opers.TruncS:
-		CvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
-		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, false)
+		panic(fmt.Errorf("%s.trunc_s/%s not implemented", resultType, source.Type))
 
 	case opers.TruncU:
-		if resultType == types.I32 {
-			CvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg) // larger target size
-		} else {
-			panic(fmt.Errorf("%s.trunc_u/%s not implemented", resultType, source.Type))
-		}
-		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, false)
+		panic(fmt.Errorf("%s.trunc_u/%s not implemented", resultType, source.Type))
 
 	case opers.ConvertS:
 		Cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
