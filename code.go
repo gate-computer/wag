@@ -1237,7 +1237,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	if indirect.Storage.IsReg() {
 		if i := regArgs.get(gen.RegCategoryInt, mach.ResultReg()); i >= 0 {
 			debugf("indirect call index: %s <-> %s", mach.ResultReg(), indirect)
-			mach.OpSwap(code, types.I64, mach.ResultReg(), indirect.Reg())
+			mach.OpSwap(code, gen.RegCategoryInt, mach.ResultReg(), indirect.Reg())
 
 			args[i] = values.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
 			regArgs.clear(gen.RegCategoryInt, mach.ResultReg())
@@ -1311,7 +1311,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 			} else {
 				if otherArgIndex := regArgs.get(cat, posReg); otherArgIndex >= 0 {
 					debugf("call param #%d: %s %s <-> %s", i, cat, posReg, value)
-					mach.OpSwap(code, value.Type, posReg, valueReg)
+					mach.OpSwap(code, cat, posReg, valueReg)
 
 					args[otherArgIndex] = value
 					regArgs.set(cat, valueReg, otherArgIndex)

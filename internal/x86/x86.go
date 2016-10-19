@@ -647,16 +647,13 @@ func (mach X86) OpCopyStack(code gen.OpCoder, targetOffset, sourceOffset int32) 
 }
 
 // OpSwap must not allocate registers, or update CPU's condition flags.
-func (mach X86) OpSwap(code gen.Coder, t types.T, a, b regs.R) {
-	switch t.Category() {
-	case types.Int:
+func (mach X86) OpSwap(code gen.Coder, cat gen.RegCategory, a, b regs.R) {
+	if cat == gen.RegCategoryInt {
 		Xchg.opFromReg(code, types.I64, a, b)
-
-	case types.Float:
-		fallthrough // TODO
-
-	default:
-		panic(t)
+	} else {
+		MovSSE.opFromReg(code, types.F64, regScratch, a)
+		MovSSE.opFromReg(code, types.F64, a, b)
+		MovSSE.opFromReg(code, types.F64, b, regScratch)
 	}
 }
 
