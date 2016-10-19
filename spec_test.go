@@ -21,11 +21,11 @@ const (
 	specTestDir = "testdata/wabt/third_party/testsuite"
 
 	timeout     = time.Second * 3
-	parallel    = false
+	parallel    = true
 	dumpExps    = false
 	dumpROData  = false
-	dumpGlobals = true
-	dumpMemory  = true
+	dumpGlobals = false
+	dumpMemory  = false
 )
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
