@@ -20,10 +20,12 @@ import (
 const (
 	specTestDir = "testdata/wabt/third_party/testsuite"
 
-	timeout    = time.Second * 3
-	parallel   = true
-	dumpExps   = false
-	dumpROData = false
+	timeout     = time.Second * 3
+	parallel    = false
+	dumpExps    = false
+	dumpROData  = false
+	dumpGlobals = false
+	dumpMemory  = false
 )
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
@@ -41,7 +43,6 @@ const (
 // func Test_float_misc(t *testing.T)            { test(t, "float_misc") }
 // func Test_func(t *testing.T)                  { test(t, "func") }
 // func Test_func_ptrs(t *testing.T)             { test(t, "func_ptrs") }
-// func Test_globals(t *testing.T)               { test(t, "globals") }
 // func Test_imports(t *testing.T)               { test(t, "imports") }
 // func Test_left_to_right(t *testing.T)         { test(t, "left-to-right") }
 // func Test_linking(t *testing.T)               { test(t, "linking") }
@@ -81,6 +82,7 @@ func Test_func_param_after_body_fail(t *testing.T)      { test(t, "func-param-af
 func Test_func_result_after_body_fail(t *testing.T)     { test(t, "func-result-after-body.fail") }
 func Test_func_result_before_param_fail(t *testing.T)   { test(t, "func-result-before-param.fail") }
 func Test_get_local(t *testing.T)                       { test(t, "get_local") }
+func Test_globals(t *testing.T)                         { test(t, "globals") }
 func Test_i32(t *testing.T)                             { test(t, "i32") }
 func Test_i32_load32_s_fail(t *testing.T)               { test(t, "i32.load32_s.fail") }
 func Test_i32_load32_u_fail(t *testing.T)               { test(t, "i32.load32_u.fail") }
@@ -452,6 +454,35 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				}
 			}
 		}
+
+		if dumpGlobals {
+			data, memoryOffset := m.Data()
+			buf := data[:memoryOffset]
+
+			if len(buf) == 0 {
+				t.Log("no globals")
+			}
+
+			for i := 0; len(buf) > 0; i++ {
+				t.Logf("global #%d: 0x%016x", i, binary.LittleEndian.Uint64(buf))
+				buf = buf[8:]
+			}
+		}
+
+		if dumpMemory {
+			data, memoryOffset := m.Data()
+			buf := data[memoryOffset:]
+
+			if len(buf) == 0 {
+				t.Log("no initialized memory")
+			}
+
+			for i := 0; len(buf) > 0; i += 8 {
+				t.Logf("memory at 0x%08x: 0x%016x", i, binary.LittleEndian.Uint64(buf))
+				buf = buf[8:]
+			}
+		}
+
 		memGrowSize := maxMemorySize
 		if maxMemorySize > 0 && memGrowSize > maxMemorySize {
 			memGrowSize = maxMemorySize

@@ -18,7 +18,7 @@ import (
 func setRunArg(arg int64)
 func getRunResult() int32
 
-func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
 
 func importGetArg() uint64
 func importSetResult() uint64
@@ -86,8 +86,7 @@ var Env env
 
 type runnable interface {
 	getText() []byte
-	getGlobals() []byte
-	getData() []byte
+	getData() ([]byte, int)
 	getStack() []byte
 	writeStacktraceTo(w io.Writer, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
@@ -97,8 +96,8 @@ type Program struct {
 	Text   []byte
 	ROData []byte
 
-	globals []byte
-	data    []byte
+	data         []byte
+	memoryOffset int
 
 	funcMap []byte
 	callMap []byte
@@ -133,12 +132,9 @@ func (p *Program) RODataAddr() int32 {
 	return int32(addr)
 }
 
-func (p *Program) SetGlobals(globals []byte) {
-	p.globals = globals
-}
-
-func (p *Program) SetData(data []byte) {
+func (p *Program) SetData(data []byte, memoryOffset int) {
 	p.data = data
+	p.memoryOffset = memoryOffset
 }
 
 func (p *Program) SetFunctionMap(funcMap []byte) {
@@ -187,12 +183,10 @@ func (p *Program) getText() []byte {
 	return p.Text
 }
 
-func (p *Program) getGlobals() []byte {
-	return p.globals
-}
-
-func (p *Program) getData() []byte {
-	return p.data
+func (p *Program) getData() (data []byte, memoryOffset int) {
+	data = p.data
+	memoryOffset = p.memoryOffset
+	return
 }
 
 func (p *Program) getStack() []byte {
@@ -202,10 +196,9 @@ func (p *Program) getStack() []byte {
 type Runner struct {
 	prog runnable
 
-	globalsOffset int
+	globalsMemory []byte
 	memoryOffset  int
 	memorySize    wasm.MemorySize
-	globalsMemory []byte
 	stack         []byte
 
 	lastTrap     traps.Id
@@ -228,7 +221,9 @@ func newRunner(prog runnable, initMemorySize, growMemorySize wasm.MemorySize, st
 		return
 	}
 
-	if int(initMemorySize) < len(prog.getData()) {
+	data, memoryOffset := prog.getData()
+
+	if int(initMemorySize) < len(data)-memoryOffset {
 		err = errors.New("data does not fit in initial memory")
 		return
 	}
@@ -246,20 +241,19 @@ func newRunner(prog runnable, initMemorySize, growMemorySize wasm.MemorySize, st
 		return
 	}
 
-	padding := (systemPageSize - len(prog.getGlobals())) & (systemPageSize - 1)
-
 	r = &Runner{
-		prog:          prog,
-		globalsOffset: padding,
-		memoryOffset:  padding + len(prog.getGlobals()),
-		memorySize:    initMemorySize,
+		prog:         prog,
+		memoryOffset: memoryOffset,
+		memorySize:   initMemorySize,
 	}
 
-	r.globalsMemory, err = makeMemory(r.globalsOffset+int(growMemorySize), 0, 0)
+	r.globalsMemory, err = makeMemory(memoryOffset+int(growMemorySize), 0, 0)
 	if err != nil {
 		r.Close()
 		return
 	}
+
+	copy(r.globalsMemory, data)
 
 	r.stack, err = makeMemory(stackSize, 0, 0)
 	if err != nil {
@@ -267,8 +261,6 @@ func newRunner(prog runnable, initMemorySize, growMemorySize wasm.MemorySize, st
 		return
 	}
 
-	copy(r.globalsMemory[r.globalsOffset:], r.prog.getGlobals())
-	copy(r.globalsMemory[r.memoryOffset:], r.prog.getData())
 	return
 }
 
@@ -381,9 +373,11 @@ func (e *Executor) run() {
 
 	setRunArg(e.arg)
 
-	memory := e.runner.globalsMemory[e.runner.memoryOffset:]
+	globalsMemoryAddr := (*reflect.SliceHeader)(unsafe.Pointer(&e.runner.globalsMemory)).Data
+	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
+	growMemorySize := len(e.runner.globalsMemory) - e.runner.memoryOffset
 
-	trap, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memory, e.runner.stack, stackOffset, resumeResult, fds[1])
+	trap, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.stack, stackOffset, resumeResult, fds[1])
 
 	e.runner.memorySize = wasm.MemorySize(memorySize)
 	e.runner.lastTrap = traps.Id(trap)

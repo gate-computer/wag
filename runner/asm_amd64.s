@@ -16,8 +16,8 @@ TEXT ·getRunResult(SB),$0-4
 	POPQ	AX
 	RET
 
-// func run(text []byte, initialMemorySize int, memory, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),$0-128
+// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
+TEXT ·run(SB),$0-120
 	PUSHQ	AX
 	PUSHQ	CX
 	PUSHQ	DX
@@ -36,20 +36,20 @@ TEXT ·run(SB),$0-128
 
 	MOVQ	text+0(FP), R12
 	MOVQ	initialMemorySize+24(FP), R15
-	MOVQ	memory+32(FP), R14	// memory ptr
-	MOVQ	memory_len+40(FP), BX
+	MOVQ	memoryAddr+32(FP), R14	// memory ptr
+	MOVQ	growMemorySize+40(FP), BX
 	ADDQ	R14, R15		// current memory limit
 	ADDQ	R14, BX			// memory growth limit
-	MOVQ	stack+56(FP), R13	// stack limit
-	MOVQ	stackOffset+80(FP), CX
+	MOVQ	stack+48(FP), R13	// stack limit
+	MOVQ	stackOffset+72(FP), CX
 	ADDQ	R13, CX			// stack ptr
-	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
-	MOVQ	slaveFd+96(FP), M6	// slave fd
+	MOVQ	resumeResult+80(FP), AX	// resume result (0 = don't resume)
+	MOVQ	slaveFd+88(FP), M6	// slave fd
 	CALL	run<>(SB)
-	MOVQ	DI, trap+104(FP)
+	MOVQ	DI, trap+96(FP)
 	SUBQ	R14, R15
-	MOVQ	R15, currentMemorySize+112(FP)
-	MOVQ	BX, stackPtr+120(FP)
+	MOVQ	R15, currentMemorySize+104(FP)
+	MOVQ	BX, stackPtr+112(FP)
 
 	POPQ	R15
 	POPQ	R14

@@ -5,12 +5,16 @@ import (
 )
 
 func (m *Module) genData(r reader) {
-	debugf("data section")
-	debugDepth++
+	if debug {
+		debugf("data section")
+		debugDepth++
+	}
 
 	for i := range r.readCount() {
-		debugf("data segment")
-		debugDepth++
+		if debug {
+			debugf("data segment")
+			debugDepth++
+		}
 
 		if index := r.readVaruint32(); index != 0 {
 			panic(fmt.Errorf("unsupported memory index: %d", index))
@@ -20,26 +24,29 @@ func (m *Module) genData(r reader) {
 
 		size := r.readVaruint32()
 
-		needSize := offset + uint64(size)
-		if needSize >= uint64(m.memoryLimits.initial) {
+		needMemorySize := int64(offset) + int64(size)
+		if needMemorySize >= int64(m.memoryLimits.initial) {
 			panic(fmt.Errorf("memory segment #%d exceeds initial memory size", i))
 		}
 
-		oldSize := uint64(len(m.data))
-		if needSize > oldSize {
-			buf := make([]byte, needSize)
-			copy(buf, m.data)
-			m.data = buf
+		needDataSize := int64(m.memoryOffset) + needMemorySize
+		if n := needDataSize - int64(m.data.Len()); n > 0 {
+			m.data.Grow(int(n))
 		}
 
-		r.read(m.data[offset:needSize])
+		dataOffset := int(m.memoryOffset) + int(offset)
+		r.read(m.data.Bytes()[dataOffset:needDataSize])
 
-		debugDepth--
-		debugf("data segmented: offset=0x%x size=0x%x", offset, size)
+		if debug {
+			debugDepth--
+			debugf("data segmented: offset=0x%x size=0x%x", offset, size)
+		}
 	}
 
-	debugDepth--
-	debugf("data sectioned")
+	if debug {
+		debugDepth--
+		debugf("data sectioned")
+	}
 }
 
 type dataArena struct {

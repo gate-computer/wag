@@ -145,7 +145,8 @@ type Module struct {
 	callMap       bytes.Buffer
 	regs          regAllocator
 
-	data []byte
+	data         bytes.Buffer
+	memoryOffset int
 }
 
 // LoadPreliminarySections, excluding the code and data sections.
@@ -341,6 +342,14 @@ var sectionLoaders = []func(moduleLoader, reader){
 				m.globals = append(m.globals, global{t, mutable, init})
 				m.numImportGlobals = len(m.globals)
 
+				if t.Size() == types.Size32 {
+					init &= 0xffffffff
+				}
+				if err := binary.Write(&m.data, binary.LittleEndian, init); err != nil {
+					panic(err)
+				}
+				m.memoryOffset = m.data.Len()
+
 			default:
 				panic(fmt.Errorf("import kind not supported: %s", kind))
 			}
@@ -383,12 +392,21 @@ var sectionLoaders = []func(moduleLoader, reader){
 	},
 
 	sectionGlobal: func(m moduleLoader, r reader) {
+		// TODO: limit number of globals
 		for range r.readCount() {
 			t := types.ByEncoding(r.readVaruint7())
 			mutable := r.readVaruint1()
 			init, _ := readInitExpr(r, m.Module)
 
 			m.globals = append(m.globals, global{t, mutable, init})
+
+			if t.Size() == types.Size32 {
+				init &= 0xffffffff
+			}
+			if err := binary.Write(&m.data, binary.LittleEndian, init); err != nil {
+				panic(err)
+			}
+			m.memoryOffset = m.data.Len()
 		}
 	},
 
@@ -486,7 +504,7 @@ func (m *Module) loadCodeSection(R Reader, textBuf, roDataBuf []byte, roDataAbsA
 	}
 }
 
-// LoadDataSection, after loading at least the preliminary sections.
+// LoadDataSection, after loading the preliminary sections.
 func (m *Module) LoadDataSection(r Reader) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
@@ -501,10 +519,6 @@ func (m *Module) LoadDataSection(r Reader) (err error) {
 }
 
 func (m *Module) loadDataSection(R Reader) {
-	if m.data != nil {
-		panic(errors.New("data section has already been loaded"))
-	}
-
 	r := reader{R}
 
 	if readSectionHeader(r, sectionData, "not a data section") {
@@ -564,6 +578,8 @@ func (m *Module) CallMap() []byte {
 }
 
 // Data is available after data section has been loaded.
-func (m *Module) Data() []byte {
-	return m.data
+func (m *Module) Data() (data []byte, memoryOffset int) {
+	data = m.data.Bytes()
+	memoryOffset = m.memoryOffset
+	return
 }

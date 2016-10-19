@@ -13,9 +13,8 @@ import (
 type Snapshot struct {
 	prog runnable
 
-	memorySize    wasm.MemorySize
-	globals       []byte
 	data          []byte
+	memoryOffset  int
 	portableStack []byte
 	nativeStack   []byte
 }
@@ -83,15 +82,13 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 
 	s := &Snapshot{
 		prog:          r.prog,
-		memorySize:    wasm.MemorySize(memorySize),
-		globals:       make([]byte, len(r.globalsMemory[r.globalsOffset:r.memoryOffset])),
-		data:          make([]byte, len(r.globalsMemory[r.memoryOffset:globalsMemorySize])),
+		data:          make([]byte, globalsMemorySize),
+		memoryOffset:  r.memoryOffset,
 		portableStack: portableStack,
 		nativeStack:   nativeStack,
 	}
 
-	copy(s.globals, r.globalsMemory[r.globalsOffset:r.memoryOffset])
-	copy(s.data, r.globalsMemory[r.memoryOffset:globalsMemorySize])
+	copy(s.data, r.globalsMemory[:globalsMemorySize])
 
 	snapshotId := uint64(len(r.Snapshots))
 	r.Snapshots = append(r.Snapshots, s)
@@ -107,12 +104,10 @@ func (s *Snapshot) getText() []byte {
 	return s.prog.getText()
 }
 
-func (s *Snapshot) getGlobals() []byte {
-	return s.globals
-}
-
-func (s *Snapshot) getData() []byte {
-	return s.data
+func (s *Snapshot) getData() (data []byte, memoryOffset int) {
+	data = s.data
+	memoryOffset = s.memoryOffset
+	return
 }
 
 func (s *Snapshot) getStack() []byte {
@@ -128,5 +123,6 @@ func (s *Snapshot) exportStack(native []byte) (portable []byte, err error) {
 }
 
 func (s *Snapshot) NewRunner(growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
-	return newRunner(s, s.memorySize, growMemorySize, stackSize)
+	memorySize := wasm.MemorySize(len(s.data) - s.memoryOffset)
+	return newRunner(s, memorySize, growMemorySize, stackSize)
 }

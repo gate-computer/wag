@@ -20,6 +20,10 @@ type moduleCoder struct {
 	*Module
 }
 
+func (m moduleCoder) globalOffset(index uint32) int32 {
+	return (int32(index) - int32(len(m.globals))) * gen.WordSize
+}
+
 func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
 	if !m.startDefined {
 		panic(errors.New("start function not defined"))
@@ -1368,7 +1372,18 @@ func genDrop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 }
 
 func genGetGlobal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	panic("TODO")
+	globalIndex := r.readVaruint32()
+	if globalIndex >= uint32(len(code.globals)) {
+		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
+	}
+
+	global := code.globals[globalIndex]
+	offset := code.globalOffset(globalIndex)
+
+	code.opStabilizeOperandStack()
+	result := mach.OpGetGlobal(code, global.t, offset)
+	code.pushOperand(result)
+	return
 }
 
 func genGetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
@@ -1540,7 +1555,25 @@ func genSelect(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool)
 }
 
 func genSetGlobal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	panic("TODO")
+	globalIndex := r.readVaruint32()
+	if globalIndex >= uint32(len(code.globals)) {
+		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
+	}
+
+	global := code.globals[globalIndex]
+	if !global.mutable {
+		panic(fmt.Errorf("%s: global %d is immutable", op, globalIndex))
+	}
+
+	offset := code.globalOffset(globalIndex)
+
+	x := code.opMaterializeOperand(code.popOperand())
+	if x.Type != global.t {
+		panic(fmt.Errorf("%s operand type is %s, but type of global %d is %s", op, x.Type, globalIndex, global.t))
+	}
+
+	mach.OpSetGlobal(code, offset, x)
+	return
 }
 
 func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {

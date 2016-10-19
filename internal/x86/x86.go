@@ -249,6 +249,40 @@ func (mach X86) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 	return code.Len()
 }
 
+// OpGetGlobal must not update CPU's condition flags.
+func (mach X86) OpGetGlobal(code gen.RegCoder, t types.T, offset int32) values.Operand {
+	reg, ok := code.TryAllocReg(t)
+	if !ok {
+		reg = regResult
+	}
+
+	if t.Category() == types.Int {
+		Mov.opFromIndirect(code, t, reg, 0, NoIndex, regMemoryBase, offset)
+	} else {
+		MovSSE.opFromIndirect(code, t, reg, 0, NoIndex, regMemoryBase, offset)
+	}
+
+	return values.TempRegOperand(t, reg, true)
+}
+
+// OpSetGlobal must not update CPU's condition flags.
+func (mach X86) OpSetGlobal(code gen.Coder, offset int32, x values.Operand) {
+	var reg regs.R
+
+	if x.Storage.IsReg() {
+		reg = x.Reg()
+	} else {
+		mach.OpMove(code, regScratch, x, true)
+		reg = regScratch
+	}
+
+	if x.Type.Category() == types.Int {
+		Mov.opToIndirect(code, x.Type, reg, 0, NoIndex, regMemoryBase, offset)
+	} else {
+		MovSSE.opToIndirect(code, x.Type, reg, 0, NoIndex, regMemoryBase, offset)
+	}
+}
+
 func (mach X86) OpInit(code gen.OpCoder, startAddr int32) (retAddr int32) {
 	if code.Len() == 0 || code.Len() > functionAlignment {
 		panic("inconsistency")
