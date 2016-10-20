@@ -823,17 +823,19 @@ func genConversionOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend
 }
 
 func genLoadOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	index := code.opMaterializeOperand(code.popOperand())
-	if index.Type != types.I32 {
-		panic(fmt.Errorf("%s index has wrong type: %s", op, index.Type))
+	virtualIndex := code.popOperand()
+	if virtualIndex.Type != types.I32 {
+		panic(fmt.Errorf("%s index has wrong type: %s", op, virtualIndex.Type))
 	}
+
+	index := code.opMaterializeOperand(virtualIndex)
 
 	r.readVaruint32() // flags
 	offset := r.readVaruint32()
 
 	code.opStabilizeOperandStack()
 	result := mach.LoadOp(code, info.oper(), index, info.primaryType(), offset)
-	code.updateMemoryIndex(index, offset, info.oper())
+	code.updateMemoryIndex(virtualIndex, offset, info.oper())
 	code.pushOperand(result)
 	return
 }
@@ -844,17 +846,19 @@ func genStoreOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 		panic(fmt.Errorf("%s value has wrong type: %s", op, value.Type))
 	}
 
-	index := code.opMaterializeOperand(code.popOperand())
-	if index.Type != types.I32 {
-		panic(fmt.Errorf("%s index has wrong type: %s", op, index.Type))
+	virtualIndex := code.opMaterializeOperand(code.popOperand())
+	if virtualIndex.Type != types.I32 {
+		panic(fmt.Errorf("%s index has wrong type: %s", op, virtualIndex.Type))
 	}
+
+	index := code.opMaterializeOperand(virtualIndex)
 
 	r.readVaruint32() // flags
 	offset := r.readVaruint32()
 
 	code.opStabilizeOperandStack()
 	mach.StoreOp(code, info.oper(), index, value, offset)
-	code.updateMemoryIndex(index, offset, info.oper())
+	code.updateMemoryIndex(virtualIndex, offset, info.oper())
 	return
 }
 
