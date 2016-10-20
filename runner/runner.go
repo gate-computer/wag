@@ -56,6 +56,14 @@ var importFunctions = map[string]map[string]imports.Function{
 			AbsAddr: importSnapshot(),
 		},
 	},
+	"env": {
+		"set_result": imports.Function{
+			Function: types.Function{
+				Args: []types.T{types.I32},
+			},
+			AbsAddr: importSetResult(),
+		},
+	},
 }
 
 type env struct{}
