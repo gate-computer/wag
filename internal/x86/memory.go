@@ -158,25 +158,27 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Ope
 	default:
 		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, index, true)
 
-		// TODO: there's room for optimization here, in exchange for more complexity
-
-		if !zeroExt {
-			Mov.opFromReg(code, types.I32, reg, reg)
-		}
-
 		if checkLower {
-			if offset != 0 {
-				Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, reg, int32(offset))
-				if own {
-					code.FreeReg(types.I32, reg)
+			if offset == 0 {
+				And.opFromReg(code, types.I32, reg, reg) // zero-extend index + set sign flag
+			} else {
+				if !zeroExt {
+					Mov.opFromReg(code, types.I32, reg, reg) // zero-extend index
 				}
-				reg = regScratch
-				own = false
+
+				if !own {
+					Mov.opFromReg(code, types.I32, regScratch, reg)
+					if own {
+						code.FreeReg(types.I32, reg)
+					}
+					reg = regScratch
+					own = false
+				}
+
+				Add.opImm(code, types.I32, reg, int32(offset)) // set sign flag
 				offset = 0
 				reachOffset = uint64(sizeReach)
 			}
-
-			Test.opFromReg(code, types.I32, reg, reg)
 
 			if addr := code.TrapTrampolineAddr(traps.MemoryOutOfBounds); addr != 0 {
 				Js.op(code, addr)
@@ -191,6 +193,8 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Ope
 				checked.Addr = code.Len()
 				mach.updateBranches8(code, &checked)
 			}
+		} else if !zeroExt {
+			Mov.opFromReg(code, types.I32, reg, reg) // zero-extend index
 		}
 
 		if !checkUpper {
