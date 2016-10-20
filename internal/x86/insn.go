@@ -262,15 +262,18 @@ func (i insnRexM) opReg(code gen.OpCoder, t types.T, reg regs.R) {
 }
 
 func (i insnRexM) opIndirect(code gen.OpCoder, t types.T, reg regs.R, disp int32) {
-	if reg == 12 {
-		panic("indirection through r12 not implemented")
-	}
-
 	mod, imm := dispMod(t, reg, disp)
 
 	writeRexSizeTo(code, t, 0, 0, byte(reg))
 	code.Write(i.opcode)
-	writeModTo(code, mod, i.ro, byte(reg))
+
+	if reg != 12 {
+		writeModTo(code, mod, i.ro, byte(reg))
+	} else {
+		writeModTo(code, mod, i.ro, MemSIB)
+		writeSibTo(code, 0, NoIndex, reg)
+	}
+
 	imm.writeTo(code)
 }
 
@@ -353,16 +356,13 @@ func writePrefixIndirectInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []b
 	if opcode == nil {
 		panic("instruction not supported")
 	}
-	if base == 12 {
-		panic("r12 as base register not implemented")
-	}
 
 	mod, imm := dispMod(t, base, disp)
 
 	p.writeTo(code, t, byte(reg), byte(index), byte(base))
 	code.Write(opcode)
 
-	if scale == 0 && index == NoIndex {
+	if scale == 0 && index == NoIndex && base != 12 {
 		writeModTo(code, mod, byte(reg), byte(base))
 	} else {
 		writeModTo(code, mod, byte(reg), MemSIB)
@@ -413,13 +413,20 @@ func (i insnPrefixMI) opImm(code gen.OpCoder, t types.T, reg regs.R, value int32
 	imm.writeTo(code)
 }
 
-func (i insnPrefixMI) opImmToIndirect(code gen.OpCoder, t types.T, reg regs.R, disp, value int32) {
-	mod, immDisp := dispMod(t, reg, disp)
+func (i insnPrefixMI) opImmToIndirect(code gen.OpCoder, t types.T, scale uint8, index, base regs.R, disp, value int32) {
+	mod, immDisp := dispMod(t, base, disp)
 	opcode, immValue := i.immOpcode(value)
 
-	i.prefix.writeTo(code, t, 0, 0, byte(reg))
+	i.prefix.writeTo(code, t, 0, byte(index), byte(base))
 	code.WriteByte(opcode)
-	writeModTo(code, mod, i.ro, byte(reg))
+
+	if scale == 0 && index == NoIndex && base != 12 {
+		writeModTo(code, mod, i.ro, byte(base))
+	} else {
+		writeModTo(code, mod, i.ro, MemSIB)
+		writeSibTo(code, scale, index, base)
+	}
+
 	immDisp.writeTo(code)
 	immValue.writeTo(code)
 }

@@ -96,7 +96,7 @@ func (mach X86) StoreOp(code gen.RegCoder, oper uint16, index, x values.Operand,
 			goto large
 		}
 
-		store.insn.opImmToIndirect(code, insnType, baseReg, disp, value32)
+		store.insn.opImmToIndirect(code, insnType, 0, indexReg, baseReg, disp, value32)
 		return
 
 	large:
