@@ -2,7 +2,7 @@ package gen
 
 import (
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 type RegCategory uint8

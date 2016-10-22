@@ -6,7 +6,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 func spectestPrint(f io.Reader, sigs []types.Function, sigIndex int64, printer io.Writer) {

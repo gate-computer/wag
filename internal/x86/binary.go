@@ -5,9 +5,9 @@ import (
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/types"
 )
 
 func (mach X86) BinaryOp(code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {

@@ -10,8 +10,8 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/internal/imports"
-	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/types"
 	"github.com/tsavola/wag/wasm"
 )
 

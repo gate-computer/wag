@@ -2,7 +2,7 @@ package wag
 
 import (
 	"github.com/tsavola/wag/internal/opers"
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 const (

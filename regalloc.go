@@ -3,7 +3,7 @@ package wag
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 func regIndex(cat gen.RegCategory, reg regs.R) uint8 {

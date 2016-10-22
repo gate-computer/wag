@@ -6,9 +6,9 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/types"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/types"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 func (e *Executor) slave(fd int, sigs []types.Function, printer io.Writer, cont <-chan struct{}) {

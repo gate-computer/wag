@@ -3,7 +3,7 @@ package wag
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 func readInitExpr(r reader, m *Module) (valueBits uint64, t types.T) {

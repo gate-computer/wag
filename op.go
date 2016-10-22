@@ -3,7 +3,7 @@ package wag
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 type opcode byte

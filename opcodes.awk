@@ -25,7 +25,7 @@ END {
 	print "package wag" | out
 	print "import (" | out
 	print "\"github.com/tsavola/wag/internal/opers\"" | out
-	print "\"github.com/tsavola/wag/internal/types\"" | out
+	print "\"github.com/tsavola/wag/types\"" | out
 	print ")" | out
 	print "const (" | out
 	for (key in symbols) {

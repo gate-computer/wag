@@ -3,7 +3,7 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/types"
+	"github.com/tsavola/wag/types"
 )
 
 type prefix interface {
