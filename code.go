@@ -44,7 +44,7 @@ func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
 
 	m.funcLinks = make([]links.FunctionL, len(m.funcSigs))
 
-	if m.roData.alloc(int32(len(m.tableFuncs))<<3, 8) != gen.ROTableAddr {
+	if m.roData.alloc(int32(len(m.tableFuncs))*8, 8) != gen.ROTableAddr {
 		panic("table could not be allocated at designated read-only memory offset")
 	}
 
