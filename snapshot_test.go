@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"io/ioutil"
+	"os"
 	"testing"
 
+	"github.com/tsavola/wag/diswag"
 	"github.com/tsavola/wag/runner"
 )
 
@@ -14,6 +16,8 @@ func TestSnapshot(t *testing.T) {
 		maxTextSize   = 65536
 		maxRODataSize = 4096
 		stackSize     = 4096
+
+		dumpText = false
 	)
 
 	data, err := ioutil.ReadFile("testdata/snapshot.wast")
@@ -39,7 +43,9 @@ func TestSnapshot(t *testing.T) {
 	p.SetCallMap(m.CallMap())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
-	objdump(m.Text())
+	if dumpText && testing.Verbose() {
+		diswag.PrintTo(os.Stdout, m.Text())
+	}
 
 	var printBuf bytes.Buffer
 

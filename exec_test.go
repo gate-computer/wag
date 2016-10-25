@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"io/ioutil"
+	"os"
 	"testing"
 
+	"github.com/tsavola/wag/diswag"
 	"github.com/tsavola/wag/runner"
 )
 
@@ -14,6 +16,8 @@ func TestExec(t *testing.T) {
 		maxTextSize   = 65536
 		maxRODataSize = 4096
 		stackSize     = 4096
+
+		dumpText = true
 	)
 
 	data, err := ioutil.ReadFile("testdata/exec.wast")
@@ -62,5 +66,7 @@ func TestExec(t *testing.T) {
 		t.Logf("print output:\n%s", string(printBuf.Bytes()))
 	}
 
-	objdump(m.Text())
+	if dumpText && testing.Verbose() {
+		diswag.PrintTo(os.Stdout, m.Text())
+	}
 }

@@ -13,7 +13,6 @@ const (
 
 	dumpWAST = false
 	dumpWASM = false
-	dumpText = false
 )
 
 func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
@@ -89,26 +88,4 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 
 	return f2
-}
-
-func objdump(text []byte) {
-	if dumpText {
-		f, err := ioutil.TempFile("", "")
-		if err != nil {
-			panic(err)
-		}
-		_, err = f.Write(text)
-		f.Close()
-		defer os.Remove(f.Name())
-		if err != nil {
-			panic(err)
-		}
-
-		cmd := exec.Command("objdump", "-D", "-bbinary", "-mi386:x86-64", f.Name())
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			panic(err)
-		}
-	}
 }

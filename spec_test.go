@@ -6,12 +6,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tsavola/wag/diswag"
 	"github.com/tsavola/wag/internal/sexp"
 	"github.com/tsavola/wag/runner"
 	"github.com/tsavola/wag/traps"
@@ -19,13 +21,6 @@ import (
 
 const (
 	specTestDir = "testdata/wabt/third_party/testsuite"
-
-	timeout     = time.Second * 3
-	parallel    = true
-	dumpExps    = false
-	dumpROData  = false
-	dumpGlobals = false
-	dumpMemory  = false
 )
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
@@ -122,6 +117,10 @@ func Test_unreachable(t *testing.T)                     { test(t, "unreachable")
 func Test_unwind(t *testing.T)                          { test(t, "unwind") }
 
 func test(t *testing.T, name string) {
+	const (
+		parallel = true
+	)
+
 	if parallel {
 		t.Parallel()
 	}
@@ -159,6 +158,13 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		maxRODataSize = 0x100000
 		maxMemorySize = 0x100000
 		stackSize     = 4096 // limit stacktrace length
+
+		timeout     = time.Second * 3
+		dumpExps    = false
+		dumpText    = false
+		dumpROData  = false
+		dumpGlobals = false
+		dumpMemory  = false
 	)
 
 	module, data := sexp.ParsePanic(data)
@@ -440,7 +446,9 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		p.SetCallMap(m.CallMap())
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
-		objdump(m.Text())
+		if dumpText && testing.Verbose() {
+			diswag.PrintTo(os.Stdout, m.Text())
+		}
 
 		if dumpROData {
 			buf := m.ROData()
