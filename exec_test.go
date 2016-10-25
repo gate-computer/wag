@@ -17,7 +17,7 @@ func TestExec(t *testing.T) {
 		maxRODataSize = 4096
 		stackSize     = 4096
 
-		dumpText = true
+		dumpText = false
 	)
 
 	data, err := ioutil.ReadFile("testdata/exec.wast")

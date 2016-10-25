@@ -24,7 +24,6 @@ const (
 	regImportArgCount = regs.R(2)  // rdx
 	regImportSigIndex = regs.R(3)  // rbx
 	regStackPtr       = regs.R(4)  // rsp
-	regTrapId         = regs.R(7)  // rdi
 	regTextBase       = regs.R(12) // r12
 	regStackLimit     = regs.R(13) // r13
 	regMemoryBase     = regs.R(14) // r14
@@ -659,7 +658,7 @@ func (mach X86) OpSwap(code gen.Coder, cat gen.RegCategory, a, b regs.R) {
 
 // OpEnterTrapHandler must not generate over 16 bytes of code.
 func (mach X86) OpEnterTrapHandler(code gen.OpCoder, id traps.Id) {
-	Mov.opImm(code, types.I32, regTrapId, int32(id)) // automatic zero-extension
+	Mov.opImm(code, types.I32, regResult, int32(id)) // automatic zero-extension
 	MovqMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
 	Jmp.opReg(code, regScratch)
 }

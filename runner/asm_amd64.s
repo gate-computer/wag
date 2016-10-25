@@ -46,7 +46,7 @@ TEXT ·run(SB),$0-120
 	MOVQ	resumeResult+80(FP), AX	// resume result (0 = don't resume)
 	MOVQ	slaveFd+88(FP), M6	// slave fd
 	CALL	run<>(SB)
-	MOVQ	DI, trap+96(FP)
+	MOVQ	AX, trap+96(FP)
 	SUBQ	R14, R15
 	MOVQ	R15, currentMemorySize+104(FP)
 	MOVQ	BX, stackPtr+112(FP)
@@ -80,7 +80,7 @@ TEXT run<>(SB),NOSPLIT,$0
 	// exits via trap handler
 
 TEXT trap<>(SB),NOSPLIT,$0
-	CMPQ	DI, $1		// MissingFunction
+	CMPQ	AX, $1		// MissingFunction
 	JE	pause
 
 	MOVQ	SP, BX		// stack ptr
@@ -88,6 +88,11 @@ TEXT trap<>(SB),NOSPLIT,$0
 	RET
 
 pause:
+	PUSHQ	CX
+	PUSHQ	SI
+	PUSHQ	DI
+	PUSHQ	R11
+
 	MOVL	$1, AX		// sys_write
 	MOVQ	M6, DI 		// fd
 	LEAQ	-8(SP), SI	// buf
@@ -102,6 +107,11 @@ pause:
 	SYSCALL
 	SUBQ	DX, AX
 	JNE	fail
+
+	POPQ	R11
+	POPQ	DI
+	POPQ	SI
+	POPQ	CX
 
 	SUBQ	$5, (SP)	// move return address before the call that got us here
 	RET
