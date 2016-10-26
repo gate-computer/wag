@@ -140,7 +140,7 @@ END {
 		if (match(names[key], "^(block|loop|if)$")) {
 			skip = "nil"
 			comment = " // initialized by init()"
-		} else if (match(names[key], "^(br_table)$")) {
+		} else if (match(names[key], "^(br_table|call_indirect)$")) {
 			skip = "skip" symbols[key]
 		} else if (names[key] == "end") {
 			skip = "nil"
