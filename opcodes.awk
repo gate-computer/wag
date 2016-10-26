@@ -32,13 +32,13 @@ END {
 		print "opcode" symbols[key] " = opcode(" key ")" | out
 	}
 	print ")" | out
-	print | out
+	print "" | out
 	print "var opcodeStrings = [256]string{" | out
 	for (key in symbols) {
 		print "opcode" symbols[key] ": \"" names[key] "\"," | out
 	}
 	print "}" | out
-	print | out
+	print "" | out
 	print "var opcodeImpls = [256]opImpl{" | out
 	for (i = 1; i <= 256; i++) {
 		key = sprintf("0x%02x", i-1)
@@ -130,7 +130,7 @@ END {
 		print key ": {" gen ", " info "}," comment | out
 	}
 	print "}" | out
-	print | out
+	print "" | out
 	print "var opcodeSkips = [256]func(reader, opcode){" | out
 	for (i = 1; i <= 256; i++) {
 		key = sprintf("0x%02x", i-1)
