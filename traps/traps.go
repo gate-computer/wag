@@ -1,5 +1,9 @@
 package traps
 
+import (
+	"fmt"
+)
+
 type Id int
 
 const (
@@ -47,7 +51,7 @@ func (id Id) String() string {
 		return "integer overflow"
 
 	default:
-		return "unknown trap"
+		return fmt.Sprintf("unknown trap %d", id)
 	}
 }
 
