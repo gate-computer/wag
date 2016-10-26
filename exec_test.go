@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/diswag"
+	"github.com/tsavola/wag/dewag"
 	"github.com/tsavola/wag/runner"
 )
 
@@ -67,6 +67,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		diswag.PrintTo(os.Stdout, m.Text())
+		diswag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
 	}
 }

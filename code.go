@@ -492,16 +492,7 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 
 	r.readVaruint32() // body size
 
-	// reserve space for debug tag
-	code.Write([]byte{mach.PaddingByte(), mach.PaddingByte(), mach.PaddingByte(), mach.PaddingByte()})
-
 	code.Align(mach.FunctionAlignment(), mach.PaddingByte())
-
-	// debug tag for counting functions
-	code.Bytes()[code.Len()-4] = 0xc8 // ENTER x86 insn
-	binary.LittleEndian.PutUint16(code.Bytes()[code.Len()-3:code.Len()-1], uint16(funcIndex-len(code.importFuncs)))
-	code.Bytes()[code.Len()-1] = 0x00
-
 	addr := code.Len()
 	code.funcLinks[funcIndex].Addr = addr
 	code.mapFunctionAddr(addr)

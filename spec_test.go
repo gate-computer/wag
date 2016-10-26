@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tsavola/wag/diswag"
+	"github.com/tsavola/wag/dewag"
 	"github.com/tsavola/wag/internal/sexp"
 	"github.com/tsavola/wag/runner"
 	"github.com/tsavola/wag/traps"
@@ -447,7 +447,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
 		if dumpText && testing.Verbose() {
-			diswag.PrintTo(os.Stdout, m.Text())
+			diswag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
 		}
 
 		if dumpROData {

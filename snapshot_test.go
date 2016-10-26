@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/diswag"
+	"github.com/tsavola/wag/dewag"
 	"github.com/tsavola/wag/runner"
 )
 
@@ -44,7 +44,7 @@ func TestSnapshot(t *testing.T) {
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
 	if dumpText && testing.Verbose() {
-		diswag.PrintTo(os.Stdout, m.Text())
+		diswag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
 	}
 
 	var printBuf bytes.Buffer
