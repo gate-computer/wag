@@ -92,7 +92,7 @@ func readResizableLimits(r reader, maxInitial, maxMaximum uint32, scale int) res
 
 const (
 	moduleMagicNumber = uint32(0x6d736100)
-	moduleVersion     = uint32(12)
+	moduleVersion     = uint32(0xd)
 )
 
 const (
