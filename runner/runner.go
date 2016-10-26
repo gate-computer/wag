@@ -24,6 +24,7 @@ func importGetArg() uint64
 func importSetResult() uint64
 func importSnapshot() uint64
 func importSpectestPrint() uint64
+func importPutns() uint64
 
 var (
 	systemPageSize = syscall.Getpagesize()
@@ -62,6 +63,12 @@ var importFunctions = map[string]map[string]imports.Function{
 				Args: []types.T{types.I32},
 			},
 			AbsAddr: importSetResult(),
+		},
+		"putns": imports.Function{
+			Function: types.Function{
+				Args: []types.T{types.I32, types.I32},
+			},
+			AbsAddr: importPutns(),
 		},
 	},
 }

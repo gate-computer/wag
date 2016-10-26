@@ -117,7 +117,7 @@ pause:
 	RET
 
 fail:
-	MOVQ	$3003, DI
+	MOVQ	$3003, AX
 	JMP	trap<>(SB)
 
 // func importSpectestPrint() uint64
@@ -142,7 +142,66 @@ TEXT spectestPrint<>(SB),NOSPLIT,$0
 	RET
 
 fail:
-	MOVQ	$3001, DI
+	MOVQ	$3001, AX
+	JMP	trap<>(SB)
+
+// func importPutns() uint64
+TEXT ·importPutns(SB),$0-8
+	PUSHQ	AX
+	LEAQ	putns<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	POPQ	AX
+	RET
+
+TEXT putns<>(SB),NOSPLIT,$0
+	MOVL	CX, R9		// relative addr
+	MOVL	BX, BX		// size
+
+	ADDQ	R14, R9		// absolute addr
+	CMPQ	R14, R9
+	JG	fail1		// absolute addr out of lower bound
+
+	MOVQ	R9, AX
+	ADDQ	BX, AX		// absolute addr+size
+	CMPQ	R15, AX
+	JLE	fail2		// absolute addr+size out of upper bound
+
+	MOVQ	M6, DI 		// fd
+	LEAQ	-12(SP), SI	// buf
+	MOVL	$12, DX		// bufsize
+
+	MOVQ	$-3, (SI)	// command
+	MOVL	BX, 8(SI)	// size
+
+	MOVL	$1, AX		// sys_write
+	SYSCALL
+	CMPQ	DX, AX
+	JNE	fail3
+
+	MOVQ	R9, SI		// buf <- absolute addr
+	MOVL	BX, DX		// bufsize <- size
+
+	MOVL	$1, AX		// sys_write
+	SYSCALL
+	CMPQ	DX, AX
+	JNE	fail4
+
+	RET
+
+fail1:
+	MOVQ	$3001, AX
+	JMP	trap<>(SB)
+
+fail2:
+	MOVQ	$3002, AX
+	JMP	trap<>(SB)
+
+fail3:
+	MOVQ	$3003, AX
+	JMP	trap<>(SB)
+
+fail4:
+	MOVQ	$3004, AX
 	JMP	trap<>(SB)
 
 // func importGetArg() uint64
@@ -207,5 +266,5 @@ TEXT snapshot<>(SB),NOSPLIT,$0
 	RET
 
 fail:
-	MOVQ	$3002, DI
+	MOVQ	$3002, AX
 	JMP	trap<>(SB)
