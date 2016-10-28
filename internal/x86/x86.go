@@ -513,6 +513,8 @@ func (mach X86) OpReturn(code gen.Coder) {
 }
 
 func (mach X86) OpSelect(code gen.RegCoder, a, b, condOperand values.Operand) values.Operand {
+	defer code.Consumed(condOperand)
+
 	var cond values.Condition
 
 	switch condOperand.Storage {
@@ -533,11 +535,18 @@ func (mach X86) OpSelect(code gen.RegCoder, a, b, condOperand values.Operand) va
 	case values.ConditionFlags:
 		cond = condOperand.Condition()
 
+	case values.Imm:
+		if condOperand.ImmValue() != 0 {
+			code.Consumed(b)
+			return a
+		} else {
+			code.Consumed(a)
+			return b
+		}
+
 	default:
 		panic(condOperand)
 	}
-
-	code.Consumed(condOperand)
 
 	t := a.Type
 	targetReg, _ := mach.opMaybeResultReg(code, b, true)
