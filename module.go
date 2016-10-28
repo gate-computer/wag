@@ -571,8 +571,11 @@ func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
 }
 
 // Text is available after code section has been loaded.
-func (m *Module) Text() []byte {
-	return m.text.Bytes()
+func (m *Module) Text() (b []byte) {
+	if m.text != nil {
+		b = m.text.Bytes()
+	}
+	return
 }
 
 // ROData is available after code section has been loaded.
