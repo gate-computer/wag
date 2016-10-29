@@ -25,6 +25,13 @@ func (m moduleCoder) globalOffset(index uint32) int32 {
 }
 
 func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
+	if debug {
+		if debugDepth != 0 {
+			debugf("")
+		}
+		debugDepth = 0
+	}
+
 	if !m.startDefined {
 		panic(errors.New("start function not defined"))
 	}
