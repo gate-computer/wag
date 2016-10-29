@@ -254,7 +254,7 @@ func (m moduleLoader) loadUntil(r reader, untilSection byte) byte {
 		}
 
 		if id != sectionUnknown {
-			if id < seenId {
+			if id <= seenId {
 				panic(fmt.Errorf("section 0x%x follows section 0x%x", id, seenId))
 			}
 			seenId = id
