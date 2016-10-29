@@ -1229,7 +1229,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	code.regs.freeAll()
 
 	// relocate indirect index to result reg if it already occupies some reg
-	if indirect.Storage.IsReg() {
+	if indirect.Storage.IsReg() && indirect.Reg() != mach.ResultReg() {
 		if i := regArgs.get(gen.RegCategoryInt, mach.ResultReg()); i >= 0 {
 			debugf("indirect call index: %s <-> %s", mach.ResultReg(), indirect)
 			mach.OpSwap(code, gen.RegCategoryInt, mach.ResultReg(), indirect.Reg())
