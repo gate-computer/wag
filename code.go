@@ -1393,6 +1393,10 @@ func genGetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 
 func genGrowMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	x := code.opMaterializeOperand(code.popOperand())
+	if x.Type != types.I32 {
+		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
+	}
+
 	code.opStabilizeOperandStack()
 	result := mach.OpGrowMemory(code, x)
 	code.pushOperand(result)
