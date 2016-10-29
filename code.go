@@ -571,7 +571,7 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 
 	if len(code.operands) != 0 {
 		debugf("operand stack: %v", code.operands)
-		panic("operand stack is not empty at end of function")
+		panic(errors.New("operand stack is not empty at end of function"))
 	}
 
 	if len(code.branchTargets) != 0 {
