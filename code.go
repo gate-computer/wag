@@ -1628,7 +1628,7 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 		case values.Nowhere, values.VarReg:
 			var spillUntil int
 
-			for i := len(code.operands) - 1; i >= code.numPersistentOperands; i-- {
+			for i := len(code.operands) - 1; i >= 0; i-- {
 				x := code.operands[i]
 				if x.Storage == values.VarReference && x.VarIndex() == index {
 					reg, ok := code.TryAllocReg(t)
