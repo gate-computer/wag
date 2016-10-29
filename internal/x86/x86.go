@@ -115,8 +115,8 @@ var (
 	Setle = insnRexOM{[]byte{0x0f, 0x9e}, 0}
 	Setg  = insnRexOM{[]byte{0x0f, 0x9f}, 0}
 
-	Lea     = insnPrefix{RexSize, []byte{0x8d}, nil}
-	MovqMMX = insnPrefix{RexSize, nil, []byte{0x0f, 0x7e}}
+	Lea    = insnPrefix{RexSize, []byte{0x8d}, nil}
+	MovMMX = insnPrefix{RexSize, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
 )
 
 var conditionInsns = []struct {
@@ -668,7 +668,7 @@ func (mach X86) OpSwap(code gen.Coder, cat gen.RegCategory, a, b regs.R) {
 // OpEnterTrapHandler must not generate over 16 bytes of code.
 func (mach X86) OpEnterTrapHandler(code gen.OpCoder, id traps.Id) {
 	Mov.opImm(code, types.I32, regResult, int32(id)) // automatic zero-extension
-	MovqMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
+	MovMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
 	Jmp.opReg(code, regScratch)
 }
 

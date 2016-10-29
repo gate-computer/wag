@@ -181,8 +181,8 @@ func (mach X86) binaryDivmulOp(code gen.RegCoder, index uint8, a, b values.Opera
 				newReg, ok = code.TryAllocReg(t)
 				if !ok {
 					// borrow a register which we don't need in this function
-					MovqMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
-					defer MovqMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
+					MovMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
+					defer MovMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
 
 					newReg = regTextBase
 				}
@@ -205,8 +205,8 @@ func (mach X86) binaryDivmulOp(code gen.RegCoder, index uint8, a, b values.Opera
 		reg, ok := code.TryAllocReg(t)
 		if !ok {
 			// borrow a register which we don't need in this function
-			MovqMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
-			defer MovqMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
+			MovMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
+			defer MovMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
 
 			reg = regTextBase
 		}
