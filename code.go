@@ -2022,9 +2022,14 @@ func (code *funcCoder) opStabilizeOperandStack() {
 
 		debugf("stabilizing operand: %x", x)
 
-		reg := code.opAllocReg(x.Type)
-		zeroExt := code.opMove(reg, x, false)
-		code.operands[i] = values.TempRegOperand(x.Type, reg, zeroExt)
+		if reg, ok := code.TryAllocReg(x.Type); ok {
+			zeroExt := code.opMove(reg, x, false)
+			code.operands[i] = values.TempRegOperand(x.Type, reg, zeroExt)
+		} else {
+			code.opInitVars()
+			code.opPush(x)
+			code.operands[i] = values.StackOperand(x.Type)
+		}
 	}
 
 	code.numStableOperands = len(code.operands)
