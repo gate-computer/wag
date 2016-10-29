@@ -33,13 +33,17 @@ func TestFuzz(t *testing.T) {
 }
 
 func testFuzz(t *testing.T, filename string) {
-	t.Log(filename)
-
 	const (
 		maxTextSize   = 65536
 		maxRODataSize = 4096
 		stackSize     = 4096
 	)
+
+	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -48,17 +52,21 @@ func testFuzz(t *testing.T, filename string) {
 	}
 	defer f.Close()
 
-	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
-	if err != nil {
-		t.Errorf("%s: %v", filename, err)
-		return
-	}
-	defer p.Close()
-
 	var m Module
+	var ok bool
+
+	defer func() {
+		if !ok {
+			t.Logf("%s: panic", filename)
+		}
+	}()
 
 	err = m.Load(bufio.NewReader(f), runner.Env, p.Text, p.ROData, p.RODataAddr(), nil)
-	if err != nil {
-		t.Log(err)
+	if err == nil {
+		t.Logf("%s: no error", filename)
+	} else {
+		t.Logf("%s: %v", filename, err)
 	}
+
+	ok = true
 }
