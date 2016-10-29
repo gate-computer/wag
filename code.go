@@ -2020,7 +2020,7 @@ func (code *funcCoder) opStabilizeOperandStack() {
 			continue
 		}
 
-		debugf("stabilizing operand: %x", x)
+		debugf("stabilizing operand: %v", x)
 
 		if reg, ok := code.TryAllocReg(x.Type); ok {
 			zeroExt := code.opMove(reg, x, false)
