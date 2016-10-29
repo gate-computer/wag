@@ -413,6 +413,13 @@ func (i insnPrefixMI) opImm(code gen.OpCoder, t types.T, reg regs.R, value int32
 	imm.writeTo(code)
 }
 
+func (i insnPrefixMI) opImm8(code gen.OpCoder, t types.T, reg regs.R, value uint8) {
+	i.prefix.writeTo(code, t, 0, 0, byte(reg))
+	code.WriteByte(i.opcode8)
+	writeModTo(code, ModReg, i.ro, byte(reg))
+	code.WriteByte(value)
+}
+
 func (i insnPrefixMI) opImmToIndirect(code gen.OpCoder, t types.T, scale uint8, index, base regs.R, disp, value int32) {
 	mod, immDisp := dispMod(t, base, disp)
 	opcode, immValue := i.immOpcode(value)
@@ -535,7 +542,7 @@ func (i shiftImmInsn) op(code gen.OpCoder, t types.T, reg regs.R, value uint8) {
 	if value == 1 {
 		i.one.opReg(code, t, reg)
 	} else {
-		i.any.opImm(code, t, reg, int32(value))
+		i.any.opImm8(code, t, reg, value)
 	}
 }
 
