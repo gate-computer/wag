@@ -1,6 +1,8 @@
 package wag
 
 import (
+	"fmt"
+
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/types"
@@ -87,7 +89,7 @@ func (ra *regAllocator) allocated(cat gen.RegCategory, reg regs.R) bool {
 
 func (ra *regAllocator) assertNoneAllocated() {
 	if ra.freed != ra.avail {
-		panic("some registers still allocated at end of function")
+		panic(fmt.Sprintf("registers still allocated at end of function: %08x", (^ra.freed)&ra.avail))
 	}
 }
 

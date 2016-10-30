@@ -11,11 +11,7 @@ import (
 // is left untouched (the reader will be backed up before the section id).
 func CopyCodeSection(w io.Writer, r Reader) (ok bool, err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	ok = copyCodeSection(w, r)

@@ -46,10 +46,10 @@ func readInitExpr(r reader, m *Module) (valueBits uint64, t types.T) {
 	return
 }
 
-func readOffsetInitExpr(r reader, m *Module) (offset uint64) {
+func readOffsetInitExpr(r reader, m *Module) uint32 {
 	offset, t := readInitExpr(r, m)
 	if t != types.I32 {
 		panic(fmt.Errorf("offset initializer expression has invalid type: %s", t))
 	}
-	return
+	return uint32(int32(int64(offset)))
 }

@@ -65,6 +65,8 @@ func TestSnapshot(t *testing.T) {
 	}
 	s := r1.Snapshots[0]
 
+	t.Log("resuming")
+
 	printBuf.Reset()
 
 	r2, err := s.NewRunner(maxMemorySize, stackSize)

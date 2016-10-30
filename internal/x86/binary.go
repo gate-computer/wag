@@ -181,8 +181,8 @@ func (mach X86) binaryDivmulOp(code gen.RegCoder, index uint8, a, b values.Opera
 				newReg, ok = code.TryAllocReg(t)
 				if !ok {
 					// borrow a register which we don't need in this function
-					MovqMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
-					defer MovqMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
+					MovMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
+					defer MovMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
 
 					newReg = regTextBase
 				}
@@ -205,8 +205,8 @@ func (mach X86) binaryDivmulOp(code gen.RegCoder, index uint8, a, b values.Opera
 		reg, ok := code.TryAllocReg(t)
 		if !ok {
 			// borrow a register which we don't need in this function
-			MovqMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
-			defer MovqMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
+			MovMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
+			defer MovMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
 
 			reg = regTextBase
 		}
@@ -334,34 +334,29 @@ func (mach X86) binaryShiftOp(code gen.RegCoder, index uint8, a, b values.Operan
 		insn.imm.op(code, b.Type, targetReg, uint8(b.ImmValue()))
 
 	default:
-		move := true
+		if b.Storage.IsReg() && b.Reg() == regShiftCount {
+			targetReg, _ = mach.opMaybeResultReg(code, a, false)
+			defer code.Discard(b)
+		} else {
+			if code.RegAllocated(types.I32, regShiftCount) {
+				targetReg, _ = mach.opMaybeResultReg(code, a, true)
+				if targetReg == regShiftCount {
+					Mov.opFromReg(code, a.Type, regResult, regShiftCount)
+					targetReg = regResult
 
-		if code.RegAllocated(types.I32, regShiftCount) {
-			targetReg, _ = mach.opMaybeResultReg(code, a, true)
-			if targetReg == regShiftCount {
-				Mov.opFromReg(code, a.Type, regResult, regShiftCount)
-				targetReg = regResult
-
-				defer code.FreeReg(types.I32, regShiftCount)
-			} else {
-				if b.Storage.IsReg() && b.Reg() == regShiftCount {
-					// already there
-					move = false
+					defer code.FreeReg(types.I32, regShiftCount)
 				} else {
 					// unknown operand in regShiftCount
 					Mov.opFromReg(code, types.I64, regScratch, regShiftCount)
 					defer Mov.opFromReg(code, types.I64, regShiftCount, regScratch)
 				}
+			} else {
+				code.AllocSpecificReg(types.I32, regShiftCount)
+				defer code.FreeReg(types.I32, regShiftCount)
+
+				targetReg, _ = mach.opMaybeResultReg(code, a, true)
 			}
 
-		} else {
-			code.AllocSpecificReg(types.I32, regShiftCount)
-			defer code.FreeReg(types.I32, regShiftCount)
-
-			targetReg, _ = mach.opMaybeResultReg(code, a, true)
-		}
-
-		if move {
 			b.Type = types.I32 // TODO: 8-bit mov
 			mach.OpMove(code, regShiftCount, b, false)
 		}

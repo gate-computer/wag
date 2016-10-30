@@ -246,7 +246,7 @@ func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand
 	var out links.L
 	var fail links.L
 
-	MovqMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
+	MovMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
 
 	targetReg, zeroExt := mach.opMaybeResultReg(code, x, false)
 	if !zeroExt {

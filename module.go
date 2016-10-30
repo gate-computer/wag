@@ -174,11 +174,7 @@ type Module struct {
 // LoadPreliminarySections, excluding the code and data sections.
 func (m *Module) LoadPreliminarySections(r Reader, env Environment) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.loadPreliminarySections(r, env)
@@ -192,11 +188,7 @@ func (m *Module) loadPreliminarySections(r Reader, env Environment) {
 // Load all (remaining) sections.
 func (m *Module) Load(r Reader, env Environment, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.load(r, env, textBuf, roDataBuf, roDataAbsAddr, startTrigger)
@@ -254,7 +246,7 @@ func (m moduleLoader) loadUntil(r reader, untilSection byte) byte {
 		}
 
 		if id != sectionUnknown {
-			if id < seenId {
+			if id <= seenId {
 				panic(fmt.Errorf("section 0x%x follows section 0x%x", id, seenId))
 			}
 			seenId = id
@@ -449,22 +441,22 @@ var sectionLoaders = []func(moduleLoader, reader){
 
 			numElem := r.readVaruint32()
 
-			needSize := offset + uint64(numElem)
+			needSize := uint64(offset) + uint64(numElem)
 			if needSize > uint64(m.tableLimits.initial) {
 				panic(fmt.Errorf("table segment #%d exceeds initial table size", i))
 			}
 
-			oldSize := uint64(len(m.tableFuncs))
-			if needSize > oldSize {
+			oldSize := len(m.tableFuncs)
+			if needSize > uint64(oldSize) {
 				buf := make([]uint32, needSize)
 				copy(buf, m.tableFuncs)
-				for i := oldSize; i < offset; i++ {
+				for i := oldSize; i < int(offset); i++ {
 					buf[i] = math.MaxInt32 // invalid function index
 				}
 				m.tableFuncs = buf
 			}
 
-			for j := offset; j < needSize; j++ {
+			for j := int(offset); j < int(needSize); j++ {
 				elem := r.readVaruint32()
 				if elem >= uint32(len(m.funcSigs)) {
 					panic(fmt.Errorf("table element index out of bounds: %d", elem))
@@ -487,11 +479,7 @@ var sectionLoaders = []func(moduleLoader, reader){
 // LoadCodeSection, after loading the preliminary sections.
 func (m *Module) LoadCodeSection(r Reader, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.loadCodeSection(r, textBuf, roDataBuf, roDataAbsAddr, startTrigger)
@@ -520,11 +508,7 @@ func (m *Module) loadCodeSection(R Reader, textBuf, roDataBuf []byte, roDataAbsA
 // LoadDataSection, after loading the preliminary sections.
 func (m *Module) LoadDataSection(r Reader) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.loadDataSection(r)
@@ -571,8 +555,11 @@ func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
 }
 
 // Text is available after code section has been loaded.
-func (m *Module) Text() []byte {
-	return m.text.Bytes()
+func (m *Module) Text() (b []byte) {
+	if m.text != nil {
+		b = m.text.Bytes()
+	}
+	return
 }
 
 // ROData is available after code section has been loaded.

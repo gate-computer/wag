@@ -25,6 +25,13 @@ func (m moduleCoder) globalOffset(index uint32) int32 {
 }
 
 func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
+	if debug {
+		if debugDepth != 0 {
+			debugf("")
+		}
+		debugDepth = 0
+	}
+
 	if !m.startDefined {
 		panic(errors.New("start function not defined"))
 	}
@@ -436,7 +443,9 @@ func (code *funcCoder) updateMemoryIndex(index values.Operand, offset uint32, op
 			needSize := level + 1
 
 			if currSize < needSize {
-				if cap(v.boundsStack) < needSize {
+				if cap(v.boundsStack) >= needSize {
+					v.boundsStack = v.boundsStack[:needSize]
+				} else {
 					buf := make([]values.Bounds, needSize)
 					copy(buf, v.boundsStack)
 					v.boundsStack = buf
@@ -571,7 +580,7 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 
 	if len(code.operands) != 0 {
 		debugf("operand stack: %v", code.operands)
-		panic("operand stack is not empty at end of function")
+		panic(errors.New("operand stack is not empty at end of function"))
 	}
 
 	if len(code.branchTargets) != 0 {
@@ -1236,7 +1245,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	code.regs.freeAll()
 
 	// relocate indirect index to result reg if it already occupies some reg
-	if indirect.Storage.IsReg() {
+	if indirect.Storage.IsReg() && indirect.Reg() != mach.ResultReg() {
 		if i := regArgs.get(gen.RegCategoryInt, mach.ResultReg()); i >= 0 {
 			debugf("indirect call index: %s <-> %s", mach.ResultReg(), indirect)
 			mach.OpSwap(code, gen.RegCategoryInt, mach.ResultReg(), indirect.Reg())
@@ -1404,6 +1413,10 @@ func genGrowMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend b
 	r.readVaruint1() // reserved
 
 	x := code.opMaterializeOperand(code.popOperand())
+	if x.Type != types.I32 {
+		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
+	}
+
 	code.opStabilizeOperandStack()
 	result := mach.OpGrowMemory(code, x)
 	code.pushOperand(result)
@@ -1635,7 +1648,7 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 		case values.Nowhere, values.VarReg:
 			var spillUntil int
 
-			for i := len(code.operands) - 1; i >= code.numPersistentOperands; i-- {
+			for i := len(code.operands) - 1; i >= 0; i-- {
 				x := code.operands[i]
 				if x.Storage == values.VarReference && x.VarIndex() == index {
 					reg, ok := code.TryAllocReg(t)
@@ -1662,7 +1675,7 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 		spill:
 			code.opInitVars()
 
-			for i := code.numPersistentOperands; i <= spillUntil; i++ {
+			for i := 0; i <= spillUntil; i++ {
 				x := code.operands[i]
 				if x.Storage == values.VarReference && x.VarIndex() == index {
 					code.opPush(x) // TODO: avoid multiple loads
@@ -1801,7 +1814,6 @@ func badOp(op opcode) {
 func (code *funcCoder) opAllocReg(t types.T) (reg regs.R) {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
-		code.opStabilizeOperandStack()
 		reg = code.opStealReg(t)
 	}
 	return
@@ -2028,7 +2040,7 @@ func (code *funcCoder) opStabilizeOperandStack() {
 			continue
 		}
 
-		debugf("stabilizing operand: %x", x)
+		debugf("stabilizing operand: %v", x)
 
 		reg := code.opAllocReg(x.Type)
 		zeroExt := code.opMove(reg, x, false)
@@ -2080,71 +2092,48 @@ func (code *funcCoder) popOperands(n int) (xs []values.Operand) {
 func (code *funcCoder) opStealReg(needType types.T) (reg regs.R) {
 	debugf("steal %s register", needType)
 
-	// first, try to commit unreferenced variable from register to stack
-
-	reg, ok := code.opTryStealUnusedVarReg(needType)
+	reg, ok := code.opTryStealVarReg(needType)
 	if ok {
 		return
 	}
 
-	// second, push variables and registers to stack until we find the correct type
+	pushed := false
 
 	for i := code.numPersistentOperands; i < len(code.operands); i++ {
 		x := code.operands[i]
 
-		var found bool
-
-		typeMatch := (x.Type.Category() == needType.Category())
-
 		switch x.Storage {
-		case values.Imm:
-
-		case values.VarReference:
-			varIndex := x.VarIndex()
-			v := &code.vars[varIndex]
-
-			found = typeMatch && (v.cache.Storage == values.VarReg) && (v.refCount == 1)
-			if found {
-				if v.dirty {
-					code.opStoreVar(varIndex, values.VarReferenceOperand(x.Type, varIndex)) // XXX: this is ugly
-				}
-				reg = v.cache.Reg()
-				v.resetCache()
-			} else {
-				code.opInitVars()
-				code.opPush(x)
-				code.operands[i] = values.StackOperand(x.Type)
-			}
-
-			v.refCount--
-			if v.refCount < 0 {
-				panic(x)
-			}
+		case values.Imm, values.VarReference:
 
 		case values.TempReg:
-			found = typeMatch
 			reg = x.Reg()
+
 			code.opInitVars()
-			code.opReserveStack(gen.WordSize)
-			mach.OpPushIntReg(code, reg)
+			code.opPush(x)
+			code.AllocSpecificReg(x.Type, reg)
 			code.operands[i] = values.StackOperand(x.Type)
+			pushed = true
+
+			if x.Type.Category() == needType.Category() {
+				if n := i + 1; code.numStableOperands < n {
+					code.numStableOperands = n
+				}
+				return
+			}
 
 		case values.ConditionFlags:
 			code.opInitVars()
 			code.opPush(x)
 			code.operands[i] = values.StackOperand(x.Type)
+			pushed = true
+
+		case values.Stack:
+			if pushed {
+				panic(x)
+			}
 
 		default:
 			panic(x)
-		}
-
-		if found {
-			n := i + 1
-			code.numPersistentOperands = n
-			if code.numStableOperands < n {
-				code.numStableOperands = n
-			}
-			return
 		}
 	}
 
@@ -2153,93 +2142,37 @@ func (code *funcCoder) opStealReg(needType types.T) (reg regs.R) {
 
 // opTryStealVarReg doesn't change the allocation state of the register.
 func (code *funcCoder) opTryStealVarReg(needType types.T) (reg regs.R, ok bool) {
-	debugf("try steal %s register", needType)
+	debugf("try steal %s variable register", needType)
 
-	reg, ok = code.opTryStealUnusedVarReg(needType)
-	if ok {
+	code.opInitVars()
+
+	var bestIndex = -1
+	var bestRefCount int
+
+	for i, v := range code.vars {
+		if v.cache.Storage == values.VarReg && v.cache.Type.Category() == needType.Category() {
+			if bestIndex < 0 || v.refCount < bestRefCount {
+				bestIndex = i
+				bestRefCount = v.refCount
+
+				if bestRefCount == 0 {
+					goto found
+				}
+			}
+		}
+	}
+
+	if bestIndex < 0 {
 		return
 	}
 
-	for i := code.numPersistentOperands; i < len(code.operands); {
-		x := code.operands[i]
-
-		switch {
-		case x.Storage == values.Imm:
-
-		case x.Storage == values.VarReference:
-			if x.Type.Category() != needType.Category() {
-				return // nope
-			}
-
-			varIndex := x.VarIndex()
-			v := &code.vars[varIndex]
-			if v.refCount > 1 {
-				return // nope
-			}
-			if v.cache.Storage != values.VarReg {
-				return // nope
-			}
-
-			if v.dirty {
-				code.opStoreVar(varIndex, values.VarReferenceOperand(x.Type, varIndex)) // XXX: this is ugly
-			}
-			reg = v.cache.Reg()
-			v.resetCache()
-
-			v.refCount--
-			if v.refCount < 0 {
-				panic(x)
-			}
-
-			ok = true
-
-		case x.Storage.IsTempRegOrConditionFlags():
-			return // nope
-
-		default:
-			panic(x)
-		}
-
-		i++
-
-		code.numPersistentOperands = i
-		if code.numStableOperands < i {
-			code.numStableOperands = i
-		}
-
-		if ok {
-			return
-		}
-	}
-
-	return // nope
-}
-
-// opTryStealUnusedVarReg doesn't change the allocation state of the register.
-// Locals must have been pushed already.
-func (code *funcCoder) opTryStealUnusedVarReg(needType types.T) (reg regs.R, ok bool) {
-	debugf("try steal unused %s variable register", needType)
-
-	var i int
-	var v *varState
-
-	for i = range code.vars {
-		v = &code.vars[i]
-		if v.refCount == 0 && v.cache.Storage == values.VarReg {
-			if v.cache.Type.Category() == needType.Category() {
-				goto found
-			}
-		}
-	}
-
-	return
-
 found:
+	v := &code.vars[bestIndex]
+	reg = v.cache.Reg()
 	if v.dirty {
-		index := int32(i)
+		index := int32(bestIndex)
 		code.opStoreVar(index, values.VarReferenceOperand(v.cache.Type, index)) // XXX: this is ugly
 	}
-	reg = v.cache.Reg()
 	v.resetCache()
 	ok = true
 	return
