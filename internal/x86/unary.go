@@ -1,6 +1,8 @@
 package x86
 
 import (
+	"errors"
+
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
@@ -71,7 +73,9 @@ func (mach X86) unaryIntOp(code gen.RegCoder, index uint8, x values.Operand) (re
 }
 
 var unaryFloatInsns = []insnPrefix{
-	opers.IndexFloatSqrt: SqrtsSSE,
+	opers.IndexFloatSqrt:     SqrtsSSE,
+	opers.IndexFloatAbs:      insnPrefix{},
+	opers.IndexFloatCopysign: insnPrefix{},
 }
 
 func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (result values.Operand) {
@@ -93,7 +97,14 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 
 	default:
 		index := uint8(oper)
-		unaryFloatInsns[index].opFromReg(code, x.Type, reg, reg)
+		insn := unaryFloatInsns[index]
+
+		// TODO: remove this check after abs and copysign have been implemented
+		if insn.prefix == nil {
+			panic(errors.New("opcode not implemented"))
+		}
+
+		insn.opFromReg(code, x.Type, reg, reg)
 	}
 
 	return
