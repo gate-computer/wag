@@ -174,11 +174,7 @@ type Module struct {
 // LoadPreliminarySections, excluding the code and data sections.
 func (m *Module) LoadPreliminarySections(r Reader, env Environment) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.loadPreliminarySections(r, env)
@@ -192,11 +188,7 @@ func (m *Module) loadPreliminarySections(r Reader, env Environment) {
 // Load all (remaining) sections.
 func (m *Module) Load(r Reader, env Environment, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.load(r, env, textBuf, roDataBuf, roDataAbsAddr, startTrigger)
@@ -487,11 +479,7 @@ var sectionLoaders = []func(moduleLoader, reader){
 // LoadCodeSection, after loading the preliminary sections.
 func (m *Module) LoadCodeSection(r Reader, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.loadCodeSection(r, textBuf, roDataBuf, roDataAbsAddr, startTrigger)
@@ -520,11 +508,7 @@ func (m *Module) loadCodeSection(R Reader, textBuf, roDataBuf []byte, roDataAbsA
 // LoadDataSection, after loading the preliminary sections.
 func (m *Module) LoadDataSection(r Reader) (err error) {
 	defer func() {
-		if x := recover(); x != nil {
-			if err, _ = x.(error); err == nil {
-				panic(x)
-			}
-		}
+		err = apiError(recover())
 	}()
 
 	m.loadDataSection(r)
