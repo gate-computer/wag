@@ -335,6 +335,7 @@ func (mach X86) binaryShiftOp(code gen.RegCoder, index uint8, a, b values.Operan
 
 	default:
 		if b.Storage.IsReg() && b.Reg() == regShiftCount {
+			targetReg, _ = mach.opMaybeResultReg(code, a, false)
 			defer code.Discard(b)
 		} else {
 			if code.RegAllocated(types.I32, regShiftCount) {
