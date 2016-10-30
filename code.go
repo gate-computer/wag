@@ -1664,7 +1664,7 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 		spill:
 			code.opInitVars()
 
-			for i := code.numPersistentOperands; i <= spillUntil; i++ {
+			for i := 0; i <= spillUntil; i++ {
 				x := code.operands[i]
 				if x.Storage == values.VarReference && x.VarIndex() == index {
 					code.opPush(x) // TODO: avoid multiple loads
