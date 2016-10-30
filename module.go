@@ -441,22 +441,22 @@ var sectionLoaders = []func(moduleLoader, reader){
 
 			numElem := r.readVaruint32()
 
-			needSize := offset + uint64(numElem)
+			needSize := uint64(offset) + uint64(numElem)
 			if needSize > uint64(m.tableLimits.initial) {
 				panic(fmt.Errorf("table segment #%d exceeds initial table size", i))
 			}
 
-			oldSize := uint64(len(m.tableFuncs))
-			if needSize > oldSize {
+			oldSize := len(m.tableFuncs)
+			if needSize > uint64(oldSize) {
 				buf := make([]uint32, needSize)
 				copy(buf, m.tableFuncs)
-				for i := oldSize; i < offset; i++ {
+				for i := oldSize; i < int(offset); i++ {
 					buf[i] = math.MaxInt32 // invalid function index
 				}
 				m.tableFuncs = buf
 			}
 
-			for j := offset; j < needSize; j++ {
+			for j := int(offset); j < int(needSize); j++ {
 				elem := r.readVaruint32()
 				if elem >= uint32(len(m.funcSigs)) {
 					panic(fmt.Errorf("table element index out of bounds: %d", elem))
