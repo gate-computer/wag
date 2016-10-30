@@ -1800,7 +1800,6 @@ func badOp(op opcode) {
 func (code *funcCoder) opAllocReg(t types.T) (reg regs.R) {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
-		code.opStabilizeOperandStack()
 		reg = code.opStealReg(t)
 	}
 	return
@@ -2029,14 +2028,9 @@ func (code *funcCoder) opStabilizeOperandStack() {
 
 		debugf("stabilizing operand: %v", x)
 
-		if reg, ok := code.TryAllocReg(x.Type); ok {
-			zeroExt := code.opMove(reg, x, false)
-			code.operands[i] = values.TempRegOperand(x.Type, reg, zeroExt)
-		} else {
-			code.opInitVars()
-			code.opPush(x)
-			code.operands[i] = values.StackOperand(x.Type)
-		}
+		reg := code.opAllocReg(x.Type)
+		zeroExt := code.opMove(reg, x, false)
+		code.operands[i] = values.TempRegOperand(x.Type, reg, zeroExt)
 	}
 
 	code.numStableOperands = len(code.operands)
