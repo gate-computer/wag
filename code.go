@@ -1179,7 +1179,7 @@ func genCallIndirect(code *funcCoder, r reader, op opcode, info opInfo) (deadend
 
 	sig := code.sigs[sigIndex]
 
-	r.readVaruint1() // reserved
+	r.readByte() // reserved
 
 	funcIndex := code.opMaterializeOperand(code.popOperand())
 	if funcIndex.Type != types.I32 {
@@ -1202,7 +1202,7 @@ func genCallIndirect(code *funcCoder, r reader, op opcode, info opInfo) (deadend
 
 func skipCallIndirect(r reader, op opcode) {
 	r.readVaruint32() // type index
-	r.readVaruint1()  // reserved
+	r.readByte()      // reserved
 }
 
 func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect values.Operand) (numStackParams int32) {
@@ -1371,7 +1371,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 }
 
 func genCurrentMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	r.readVaruint1() // reserved
+	r.readByte() // reserved
 
 	code.opStabilizeOperandStack()
 	result := mach.OpCurrentMemory(code)
@@ -1410,7 +1410,7 @@ func genGetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 }
 
 func genGrowMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	r.readVaruint1() // reserved
+	r.readByte() // reserved
 
 	x := code.opMaterializeOperand(code.popOperand())
 	if x.Type != types.I32 {
