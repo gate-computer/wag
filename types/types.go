@@ -64,25 +64,28 @@ func (t T) Size() Size {
 	return Size(t & maskSize)
 }
 
-var byEncoding = []T{
-	1: I32,
-	2: I64,
-	3: F32,
-	4: F64,
+var valueTypes = []T{
+	I32,
+	I64,
+	F32,
+	F64,
 }
 
-func ByEncoding(i uint8) T {
-	if i > 0 && int(i) < len(byEncoding) {
-		return byEncoding[i]
+func ByEncoding(x int8) T {
+	if i := uint(-1 - x); i < uint(len(valueTypes)) {
+		return valueTypes[i]
 	}
-	panic(fmt.Errorf("unknown type %d", i))
+	panic(fmt.Errorf("unknown value type %d", x))
 }
 
-func InlineSignatureByEncoding(i uint8) T {
-	if int(i) < len(byEncoding) {
-		return byEncoding[i]
+func BlockTypeByEncoding(x int8) (t T) {
+	if x == -0x40 { // empty block type
+		return
 	}
-	panic(fmt.Errorf("unknown inline signature type %d", i))
+	if i := uint(-1 - x); i < uint(len(valueTypes)) {
+		return valueTypes[i]
+	}
+	panic(fmt.Errorf("unknown block type %d", x))
 }
 
 var ByString = map[string]T{

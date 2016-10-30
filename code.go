@@ -535,7 +535,7 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 			panic(errors.New("function with too many variables"))
 		}
 
-		t := types.ByEncoding(r.readVaruint7())
+		t := types.ByEncoding(r.readVarint7())
 
 		for range params {
 			code.vars = append(code.vars, varState{
@@ -880,7 +880,7 @@ func genUnaryOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 }
 
 func genBlock(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	t := types.InlineSignatureByEncoding(r.readVaruint7())
+	t := types.BlockTypeByEncoding(r.readVarint7())
 
 	code.pushBranchTarget(t, false) // end
 
@@ -934,7 +934,7 @@ func genBlock(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) 
 }
 
 func skipBlock(r reader, op opcode) {
-	r.readVaruint7() // inline signature type
+	r.readVarint7() // block type
 	skipOps(r)
 }
 
@@ -1424,7 +1424,7 @@ func genGrowMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend b
 }
 
 func genIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	t := types.InlineSignatureByEncoding(r.readVaruint7())
+	t := types.BlockTypeByEncoding(r.readVarint7())
 
 	code.pushBranchTarget(t, false) // end
 	var afterThen links.L
@@ -1492,14 +1492,14 @@ func genIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 }
 
 func skipIf(r reader, op opcode) {
-	r.readVaruint7() // inline signature type
+	r.readVarint7() // block type
 	if haveElse := skipThenOps(r); haveElse {
 		skipOps(r)
 	}
 }
 
 func genLoop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	inlineSignatureType := r.readVaruint7()
+	encodedBlockType := r.readVarint7()
 
 	code.pushBranchTarget(types.Void, false) // begin
 	code.opLabel(&code.getBranchTarget(0).label)
@@ -1517,7 +1517,7 @@ func genLoop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 		}
 	} else {
 		need := code.minBlockOperand
-		if inlineSignatureType != 0 {
+		if encodedBlockType != 0 {
 			need++ // result remains on stack
 		}
 		if len(code.operands) > need { // let the next guy deal with missing operands
@@ -1533,7 +1533,7 @@ func genLoop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 }
 
 func skipLoop(r reader, op opcode) {
-	r.readVaruint7() // inline signature type
+	r.readVarint7() // block type
 	skipOps(r)
 }
 

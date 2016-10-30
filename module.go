@@ -272,24 +272,24 @@ func (m moduleLoader) loadUntil(r reader, untilSection byte) byte {
 var sectionLoaders = []func(moduleLoader, reader){
 	sectionType: func(m moduleLoader, r reader) {
 		for i := range r.readCount() {
-			if form := r.readVaruint7(); form != 0x40 {
-				panic(fmt.Errorf("unsupported type form: 0x%x", form))
+			if form := r.readVarint7(); form != -0x20 {
+				panic(fmt.Errorf("unsupported function type form: %d", form))
 			}
 
 			var sig types.Function
 
-			count := r.readVaruint32()
-			if count > maxFunctionParams {
-				panic(fmt.Errorf("function type #%d has too many parameters: %d", i, count))
+			paramCount := r.readVaruint32()
+			if paramCount > maxFunctionParams {
+				panic(fmt.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 			}
 
-			sig.Args = make([]types.T, count)
+			sig.Args = make([]types.T, paramCount)
 			for j := range sig.Args {
-				sig.Args[j] = types.ByEncoding(r.readVaruint7())
+				sig.Args[j] = types.ByEncoding(r.readVarint7())
 			}
 
 			if returnCount1 := r.readVaruint1(); returnCount1 {
-				sig.Result = types.ByEncoding(r.readVaruint7())
+				sig.Result = types.ByEncoding(r.readVarint7())
 			}
 
 			m.sigs = append(m.sigs, sig)
@@ -312,7 +312,7 @@ var sectionLoaders = []func(moduleLoader, reader){
 
 			fieldStr := string(r.readN(fieldLen))
 
-			kind := externalKind(r.readVaruint7())
+			kind := externalKind(r.readByte())
 
 			switch kind {
 			case externalKindFunction:
@@ -341,7 +341,7 @@ var sectionLoaders = []func(moduleLoader, reader){
 				})
 
 			case externalKindGlobal:
-				t := types.ByEncoding(r.readVaruint7())
+				t := types.ByEncoding(r.readVarint7())
 
 				mutable := r.readVaruint1()
 				if mutable {
@@ -383,8 +383,8 @@ var sectionLoaders = []func(moduleLoader, reader){
 				panic(errors.New("multiple tables not supported"))
 			}
 
-			if elementType := r.readVaruint7(); elementType != 0x20 {
-				panic(fmt.Errorf("unsupported table element type: 0x%x", elementType))
+			if elementType := r.readVarint7(); elementType != -0x10 {
+				panic(fmt.Errorf("unsupported table element type: %d", elementType))
 			}
 
 			m.tableLimits = readResizableLimits(r, maxTableLimit, maxTableLimit, 1)
@@ -404,7 +404,7 @@ var sectionLoaders = []func(moduleLoader, reader){
 	sectionGlobal: func(m moduleLoader, r reader) {
 		// TODO: limit number of globals
 		for range r.readCount() {
-			t := types.ByEncoding(r.readVaruint7())
+			t := types.ByEncoding(r.readVarint7())
 			mutable := r.readVaruint1()
 			init, _ := readInitExpr(r, m.Module)
 

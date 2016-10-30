@@ -61,6 +61,10 @@ func (r reader) readUint64() (x uint64) {
 	return
 }
 
+func (r reader) readVarint7() int8 {
+	return int8(r.readVarint64())
+}
+
 func (r reader) readVarint32() int32 {
 	return int32(r.readVarint64())
 }
@@ -90,18 +94,6 @@ func (r reader) readVaruint1() bool {
 	}
 	debugReadf("read varuint1: 0x%x", x)
 	return x == 1
-}
-
-func (r reader) readVaruint7() (x uint8) {
-	x, err := r.ReadByte()
-	if err != nil {
-		panic(err)
-	}
-	if x > math.MaxInt8 {
-		panic(fmt.Errorf("varuint7 is too large: 0x%x", x))
-	}
-	debugReadf("read varuint7: 0x%x", x)
-	return
 }
 
 func (r reader) readVaruint32() uint32 {
