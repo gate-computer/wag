@@ -443,7 +443,9 @@ func (code *funcCoder) updateMemoryIndex(index values.Operand, offset uint32, op
 			needSize := level + 1
 
 			if currSize < needSize {
-				if cap(v.boundsStack) < needSize {
+				if cap(v.boundsStack) >= needSize {
+					v.boundsStack = v.boundsStack[:needSize]
+				} else {
 					buf := make([]values.Bounds, needSize)
 					copy(buf, v.boundsStack)
 					v.boundsStack = buf
