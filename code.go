@@ -2110,11 +2110,12 @@ func (code *funcCoder) opStealReg(needType types.T) (reg regs.R) {
 
 			code.opInitVars()
 			code.opPush(x)
-			code.AllocSpecificReg(x.Type, reg)
 			code.operands[i] = values.StackOperand(x.Type)
 			pushed = true
 
 			if x.Type.Category() == needType.Category() {
+				code.AllocSpecificReg(x.Type, reg)
+
 				if n := i + 1; code.numStableOperands < n {
 					code.numStableOperands = n
 				}
