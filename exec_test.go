@@ -67,6 +67,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		diswag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
+		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
 	}
 }

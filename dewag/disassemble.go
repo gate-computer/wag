@@ -1,4 +1,4 @@
-package diswag
+package dewag
 
 import (
 	"encoding/binary"

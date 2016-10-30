@@ -447,7 +447,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
 		if dumpText && testing.Verbose() {
-			diswag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
+			dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
 		}
 
 		if dumpROData {
