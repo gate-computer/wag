@@ -589,9 +589,6 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 
 	for i := range code.vars {
 		v := code.vars[i]
-		if v.refCount != 0 {
-			panic("variable reference count is non-zero at end of function")
-		}
 		if v.cache.Storage == values.VarReg {
 			code.FreeReg(v.cache.Type, v.cache.Reg())
 		}
@@ -1650,6 +1647,7 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 
 			for i := len(code.operands) - 1; i >= 0; i-- {
 				x := code.operands[i]
+
 				if x.Storage == values.VarReference && x.VarIndex() == index {
 					reg, ok := code.TryAllocReg(t)
 					if !ok {
@@ -1664,37 +1662,36 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 					if v.refCount == 0 {
 						goto done
 					}
-					if v.refCount < 0 {
-						panic("inconsistent variable reference count")
-					}
 				}
 			}
 
-			break
+			panic("could not find all variable references")
 
 		spill:
 			code.opInitVars()
 
 			for i := 0; i <= spillUntil; i++ {
 				x := code.operands[i]
-				if x.Storage == values.VarReference && x.VarIndex() == index {
-					code.opPush(x) // TODO: avoid multiple loads
-					code.operands[i] = values.StackOperand(t)
+				var done bool
 
-					v.refCount--
-					if v.refCount == 0 {
-						goto done
-					}
-					if v.refCount < 0 {
-						panic("inconsistent variable reference count")
-					}
+				switch x.Storage {
+				case values.VarReference:
+					code.vars[x.VarIndex()].refCount--
+					done = (x.VarIndex() == index && v.refCount == 0)
+					fallthrough
+				case values.TempReg, values.ConditionFlags:
+					code.opPush(x)
+					code.operands[i] = values.StackOperand(x.Type)
+				}
+
+				if done {
+					goto done
 				}
 			}
-		}
 
-	done:
-		if v.refCount != 0 {
 			panic("could not find all variable references")
+
+		done:
 		}
 	}
 
@@ -1993,11 +1990,7 @@ func (code *funcCoder) pushVarOperand(index int32) {
 
 	switch v.cache.Storage {
 	case values.Nowhere, values.VarReg: // TODO: nowhere -> ver reference without index?
-		if v.refCount > len(code.operands) {
-			panic(x)
-		}
 		v.refCount++
-
 		x = values.VarReferenceOperand(x.Type, index)
 	}
 
@@ -2008,13 +2001,7 @@ func (code *funcCoder) pushVarOperand(index int32) {
 func (code *funcCoder) pushOperand(x values.Operand) {
 	if x.Storage.IsVar() {
 		index := x.VarIndex()
-
-		v := &code.vars[index]
-		if v.refCount > len(code.operands) {
-			panic(x)
-		}
-		v.refCount++
-
+		code.vars[index].refCount++
 		x = values.VarReferenceOperand(x.Type, index)
 	}
 
@@ -2073,11 +2060,7 @@ func (code *funcCoder) popOperands(n int) (xs []values.Operand) {
 
 	for _, x := range xs {
 		if x.Storage == values.VarReference {
-			v := &code.vars[x.VarIndex()]
-			v.refCount--
-			if v.refCount < 0 {
-				panic(x)
-			}
+			code.vars[x.VarIndex()].refCount--
 		}
 	}
 
@@ -2097,44 +2080,40 @@ func (code *funcCoder) opStealReg(needType types.T) (reg regs.R) {
 		return
 	}
 
-	pushed := false
+	code.opInitVars()
 
 	for i := code.numPersistentOperands; i < len(code.operands); i++ {
 		x := code.operands[i]
 
-		switch x.Storage {
-		case values.Imm, values.VarReference:
-
-		case values.TempReg:
-			reg = x.Reg()
-
-			code.opInitVars()
-			code.opPush(x)
-			code.operands[i] = values.StackOperand(x.Type)
-			pushed = true
-
-			if x.Type.Category() == needType.Category() {
-				code.AllocSpecificReg(x.Type, reg)
-
-				if n := i + 1; code.numStableOperands < n {
-					code.numStableOperands = n
+		if x.Type.Category() == needType.Category() {
+			switch x.Storage {
+			case values.VarReference:
+				if v := code.vars[x.VarIndex()]; v.cache.Storage == values.VarReg {
+					reg = v.cache.Reg()
+					ok = true
 				}
-				return
-			}
 
-		case values.ConditionFlags:
-			code.opInitVars()
+			case values.TempReg:
+				reg = x.Reg()
+				defer code.AllocSpecificReg(x.Type, reg)
+				ok = true
+			}
+		}
+
+		switch x.Storage {
+		case values.VarReference:
+			code.vars[x.VarIndex()].refCount--
+			fallthrough
+		case values.TempReg, values.ConditionFlags:
 			code.opPush(x)
 			code.operands[i] = values.StackOperand(x.Type)
-			pushed = true
+		}
 
-		case values.Stack:
-			if pushed {
-				panic(x)
+		if ok {
+			if n := i + 1; code.numStableOperands < n {
+				code.numStableOperands = n
 			}
-
-		default:
-			panic(x)
+			return
 		}
 	}
 
