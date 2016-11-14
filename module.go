@@ -547,6 +547,15 @@ func (m *Module) Signatures() []types.Function {
 	return m.sigs
 }
 
+// FunctionSignatures are available after preliminary sections have been loaded.
+func (m *Module) FunctionSignatures() (funcSigs []types.Function) {
+	funcSigs = make([]types.Function, len(m.funcSigs))
+	for i, sigIndex := range m.funcSigs {
+		funcSigs[i] = m.sigs[sigIndex]
+	}
+	return
+}
+
 // MemoryLimits are available after preliminary sections have been loaded.
 func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
 	initial = wasm.MemorySize(m.memoryLimits.initial)
