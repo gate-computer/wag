@@ -44,7 +44,7 @@ func TestSnapshot(t *testing.T) {
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
 	if dumpText && testing.Verbose() {
-		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
+		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)
 	}
 
 	var printBuf bytes.Buffer

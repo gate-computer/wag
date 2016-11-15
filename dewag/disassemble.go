@@ -9,10 +9,16 @@ import (
 
 	"github.com/bnagy/gapstone"
 
+	"github.com/tsavola/wag/sections"
 	"github.com/tsavola/wag/traps"
 )
 
-func PrintTo(w io.Writer, text, funcMap []byte) (err error) {
+func PrintTo(w io.Writer, text, funcMap []byte, ns *sections.NameSection) (err error) {
+	var names []sections.FunctionName
+	if ns != nil {
+		names = ns.FunctionNames
+	}
+
 	engine, err := gapstone.New(gapstone.CS_ARCH_X86, gapstone.CS_MODE_64)
 	if err != nil {
 		return
@@ -39,7 +45,14 @@ func PrintTo(w io.Writer, text, funcMap []byte) (err error) {
 		addr := binary.LittleEndian.Uint32(funcMap)
 		funcMap = funcMap[4:]
 
-		targets[uint(addr)] = fmt.Sprintf("func_%d", i)
+		var name string
+		if i < len(names) {
+			name = names[i].FunName
+		} else {
+			name = fmt.Sprintf("func_%d", i)
+		}
+
+		targets[uint(addr)] = name
 	}
 
 	sequence := 0

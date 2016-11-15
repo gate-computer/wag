@@ -9,6 +9,7 @@ import (
 
 	"github.com/tsavola/wag/dewag"
 	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/sections"
 )
 
 func TestExec(t *testing.T) {
@@ -33,7 +34,17 @@ func TestExec(t *testing.T) {
 	m.loadPreliminarySections(wasm, runner.Env)
 
 	var codeBuf bytes.Buffer
-	copyCodeSection(&codeBuf, wasm)
+
+	if ok, err := sections.CopyCodeSection(&codeBuf, wasm); err != nil {
+		t.Fatal(err)
+	} else if !ok {
+		t.Fatal(ok)
+	}
+
+	// skip name section
+	if err := sections.DiscardUnknownSections(wasm); err != nil {
+		t.Fatal(err)
+	}
 
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
@@ -67,6 +78,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
+		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)
 	}
 }

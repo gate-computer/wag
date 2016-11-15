@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/internal/imports"
+	"github.com/tsavola/wag/sections"
 	"github.com/tsavola/wag/traps"
 	"github.com/tsavola/wag/types"
 	"github.com/tsavola/wag/wasm"
@@ -103,7 +104,7 @@ type runnable interface {
 	getText() []byte
 	getData() ([]byte, int)
 	getStack() []byte
-	writeStacktraceTo(w io.Writer, stack []byte) error
+	writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *sections.NameSection, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
 }
 

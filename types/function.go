@@ -59,14 +59,24 @@ func (f1 Function) comparePrefix(f2 Function, numArgs int) int {
 	return 0
 }
 
-func (f Function) String() (s string) {
+func (f Function) String() string {
+	return f.StringWithNames(nil)
+}
+
+func (f Function) StringWithNames(localNames []string) (s string) {
 	s = "("
 	for i, t := range f.Args {
 		if i > 0 {
 			s += ", "
 		}
+		if i < len(localNames) {
+			s += localNames[i] + " "
+		}
 		s += t.String()
 	}
-	s += ") " + f.Result.String()
+	s += ")"
+	if f.Result != Void {
+		s += " " + f.Result.String()
+	}
 	return
 }

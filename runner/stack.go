@@ -7,6 +7,9 @@ import (
 	"reflect"
 	"sort"
 	"unsafe"
+
+	"github.com/tsavola/wag/sections"
+	"github.com/tsavola/wag/types"
 )
 
 func (p *Program) findCaller(retAddr uint32) (num int, initial, ok bool) {
@@ -88,13 +91,13 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 
 	buf := portable
 
-	//i := 0
-	//fmt.Printf("tracing stack\n")
+	//depth := 0
+	//Q("tracing stack (begin):", depth)
 
 	for len(buf) > 0 {
 		absoluteRetAddr := byteOrder.Uint64(buf[:8])
 
-		//fmt.Printf("tracing stack at depth %d: absoluteRetAddr = 0x%x\n", i, absoluteRetAddr)
+		//Q("tracing stack:", depth, absoluteRetAddr)
 
 		retAddr := absoluteRetAddr - textAddr
 		if retAddr > 0x7ffffffe {
@@ -102,7 +105,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 			return
 		}
 
-		//fmt.Printf("tracing stack at depth %d: retAddr = 0x%x\n", i, retAddr)
+		//Q("tracing stack:", depth, retAddr)
 
 		site, found := callSites[int(retAddr)]
 		if !found {
@@ -116,9 +119,9 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 			return
 		}
 
-		//fmt.Printf("tracing stack at depth %d: start = %v\n", i, start)
-		//fmt.Printf("tracing stack at depth %d: site index = %v\n", i, site.index)
-		//fmt.Printf("tracing stack at depth %d: site stackOffset = %v\n", i, site.stackOffset)
+		//Q("tracing stack:", depth, start)
+		//Q("tracing stack:", depth, site.index)
+		//Q("tracing stack:", depth, site.stackOffset)
 
 		if start {
 			if site.stackOffset != 0 {
@@ -145,15 +148,15 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 
 		buf = buf[site.stackOffset:]
 
-		//fmt.Printf("tracing stack at depth %d: continuing to next level\n", i)
-		//i++
+		//Q("tracing stack (continuing to next level):", depth)
+		//depth++
 	}
 
 	err = errors.New("ran out of stack before reaching start function call")
 	return
 }
 
-func (p *Program) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
+func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *sections.NameSection, stack []byte) (err error) {
 	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
@@ -197,7 +200,23 @@ func (p *Program) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
 
 		stack = stack[site.stackOffset:]
 
-		fmt.Fprintf(w, "#%d  function %d\n", depth, funcNum)
+		var name string
+		var localNames []string
+
+		if ns != nil && funcNum < len(ns.FunctionNames) {
+			name = ns.FunctionNames[funcNum].FunName
+			localNames = ns.FunctionNames[funcNum].LocalNames
+		} else {
+			name = fmt.Sprintf("func-%d", funcNum)
+		}
+
+		var sigStr string
+
+		if funcNum < len(funcSigs) {
+			sigStr = funcSigs[funcNum].StringWithNames(localNames)
+		}
+
+		fmt.Fprintf(w, "#%d  %s%s\n", depth, name, sigStr)
 	}
 
 	if len(stack) != 0 {
@@ -206,7 +225,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
 	return
 }
 
-func (r *Runner) WriteStacktraceTo(w io.Writer) (err error) {
+func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []types.Function, ns *sections.NameSection) (err error) {
 	if r.lastTrap != 0 {
 		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
 	}
@@ -222,5 +241,5 @@ func (r *Runner) WriteStacktraceTo(w io.Writer) (err error) {
 		return
 	}
 
-	return r.prog.writeStacktraceTo(w, r.stack[unused:])
+	return r.prog.writeStacktraceTo(w, funcSigs, ns, r.stack[unused:])
 }

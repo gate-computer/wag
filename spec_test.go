@@ -16,6 +16,7 @@ import (
 	"github.com/tsavola/wag/dewag"
 	"github.com/tsavola/wag/internal/sexp"
 	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/sections"
 	"github.com/tsavola/wag/traps"
 )
 
@@ -118,7 +119,7 @@ func Test_unwind(t *testing.T)                          { test(t, "unwind") }
 
 func test(t *testing.T, name string) {
 	const (
-		parallel = true
+		parallel = false
 	)
 
 	if parallel {
@@ -438,7 +439,14 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 		}()
 
-		var m Module
+		var nameSection sections.NameSection
+
+		m := Module{
+			UnknownSectionLoader: sections.UnknownLoaders{
+				"name": nameSection.Load,
+			}.Load,
+		}
+
 		m.load(wasm, runner.Env, p.Text, p.ROData, p.RODataAddr(), nil)
 		p.Seal()
 		p.SetData(m.Data())
@@ -447,7 +455,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
 		if dumpText && testing.Verbose() {
-			dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap())
+			dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), &nameSection)
 		}
 
 		if dumpROData {
@@ -552,7 +560,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 
 			var stackBuf bytes.Buffer
-			if err := r.WriteStacktraceTo(&stackBuf); err == nil {
+			if err := r.WriteStacktraceTo(&stackBuf, m.FunctionSignatures(), &nameSection); err == nil {
 				if stackBuf.Len() > 0 {
 					t.Logf("run: module %s: test #%d: stacktrace:\n%s", filename, id, string(stackBuf.Bytes()))
 				}

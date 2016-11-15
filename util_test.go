@@ -69,7 +69,7 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 	os.Remove(f2.Name())
 
-	cmd := exec.Command(path.Join(binDir, "wast2wasm"), "-o", "/dev/stdout", f.Name())
+	cmd := exec.Command(path.Join(binDir, "wast2wasm"), "--debug-names", "-o", "/dev/stdout", f.Name())
 	cmd.Stdout = f2
 	if !quiet {
 		cmd.Stderr = os.Stderr

@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"unsafe"
 
+	"github.com/tsavola/wag/sections"
+	"github.com/tsavola/wag/types"
 	"github.com/tsavola/wag/wasm"
 )
 
@@ -69,7 +71,7 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 	liveStack := r.stack[stackOffset:]
 
 	fmt.Fprintln(printer, "stacktrace:")
-	r.prog.writeStacktraceTo(printer, liveStack)
+	r.prog.writeStacktraceTo(printer, nil, nil, liveStack)
 
 	portableStack, err := r.prog.exportStack(liveStack)
 	if err != nil {
@@ -114,8 +116,8 @@ func (s *Snapshot) getStack() []byte {
 	return s.nativeStack
 }
 
-func (s *Snapshot) writeStacktraceTo(w io.Writer, stack []byte) (err error) {
-	return s.prog.writeStacktraceTo(w, stack)
+func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []types.Function, ns *sections.NameSection, stack []byte) (err error) {
+	return s.prog.writeStacktraceTo(w, sigs, ns, stack)
 }
 
 func (s *Snapshot) exportStack(native []byte) (portable []byte, err error) {
