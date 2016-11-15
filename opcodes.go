@@ -1,6 +1,7 @@
 package wag
 
 import (
+	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/types"
 )
@@ -614,7 +615,7 @@ var opcodeImpls = [256]opImpl{
 	0xff: {badGen, 0},
 }
 
-var opcodeSkips = [256]func(reader, opcode){
+var opcodeSkips = [256]func(loader.L, opcode){
 	opcodeUnreachable:       skipNothing,
 	opcodeNop:               skipNothing,
 	opcodeBlock:             nil, // initialized by init()

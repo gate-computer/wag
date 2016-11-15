@@ -1,10 +1,10 @@
-package wag
+package errutil
 
 import (
 	"runtime"
 )
 
-func apiError(x interface{}) (err error) {
+func ErrorOrPanic(x interface{}) (err error) {
 	if x != nil {
 		err, _ = x.(error)
 		if err == nil {

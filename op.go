@@ -3,6 +3,7 @@ package wag
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/types"
 )
 
@@ -31,7 +32,7 @@ func (info opInfo) oper() uint16 {
 }
 
 type opImpl struct {
-	gen  func(*funcCoder, reader, opcode, opInfo) bool
+	gen  func(*funcCoder, loader.L, opcode, opInfo) bool
 	info opInfo
 }
 

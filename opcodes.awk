@@ -24,6 +24,7 @@ END {
 
 	print "package wag" | out
 	print "import (" | out
+	print "\"github.com/tsavola/wag/internal/loader\"" | out
 	print "\"github.com/tsavola/wag/internal/opers\"" | out
 	print "\"github.com/tsavola/wag/types\"" | out
 	print ")" | out
@@ -131,7 +132,7 @@ END {
 	}
 	print "}" | out
 	print "" | out
-	print "var opcodeSkips = [256]func(reader, opcode){" | out
+	print "var opcodeSkips = [256]func(loader.L, opcode){" | out
 	for (i = 1; i <= 256; i++) {
 		key = sprintf("0x%02x", i-1)
 		sym = "opcode" symbols[key]

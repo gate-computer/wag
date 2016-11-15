@@ -2,27 +2,29 @@ package wag
 
 import (
 	"fmt"
+
+	"github.com/tsavola/wag/internal/loader"
 )
 
-func (m *Module) genData(r reader) {
+func (m *Module) genData(load loader.L) {
 	if debug {
 		debugf("data section")
 		debugDepth++
 	}
 
-	for i := range r.readCount() {
+	for i := range load.Count() {
 		if debug {
 			debugf("data segment")
 			debugDepth++
 		}
 
-		if index := r.readVaruint32(); index != 0 {
+		if index := load.Varuint32(); index != 0 {
 			panic(fmt.Errorf("unsupported memory index: %d", index))
 		}
 
-		offset := readOffsetInitExpr(r, m)
+		offset := readOffsetInitExpr(load, m)
 
-		size := r.readVaruint32()
+		size := load.Varuint32()
 
 		needMemorySize := int64(offset) + int64(size)
 		if needMemorySize >= int64(m.memoryLimits.initial) {
@@ -41,7 +43,7 @@ func (m *Module) genData(r reader) {
 		}
 
 		dataOffset := m.memoryOffset + int(offset)
-		r.read(m.data[dataOffset:needDataSize])
+		load.Into(m.data[dataOffset:needDataSize])
 
 		if debug {
 			debugDepth--

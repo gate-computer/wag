@@ -9,6 +9,7 @@ import (
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/traps"
@@ -24,7 +25,7 @@ func (m moduleCoder) globalOffset(index uint32) int32 {
 	return (int32(index) - int32(len(m.globals))) * gen.WordSize
 }
 
-func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
+func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	if debug {
 		if debugDepth != 0 {
 			debugf("")
@@ -44,7 +45,7 @@ func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
 		m.text = new(bytes.Buffer)
 	}
 
-	funcCodeCount := r.readVaruint32()
+	funcCodeCount := load.Varuint32()
 	if needed := len(m.funcSigs) - len(m.importFuncs); funcCodeCount != uint32(needed) {
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
@@ -86,7 +87,7 @@ func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
 
 	for i := len(m.importFuncs); i < midpoint; i++ {
 		code := funcCoder{moduleCoder: m}
-		code.genFunction(r, i)
+		code.genFunction(load, i)
 
 		mach.UpdateCalls(code, &m.funcLinks[i].L)
 	}
@@ -113,7 +114,7 @@ func (m moduleCoder) genCode(r reader, startTrigger chan<- struct{}) {
 	if midpoint < len(m.funcSigs) {
 		for i := midpoint; i < len(m.funcSigs); i++ {
 			code := funcCoder{moduleCoder: m}
-			code.genFunction(r, i)
+			code.genFunction(load, i)
 		}
 
 		mach.ClearInsnCache()
@@ -490,7 +491,7 @@ func (code *funcCoder) TrapTrampolineAddr(id traps.Id) (addr int32) {
 	return
 }
 
-func (code *funcCoder) genFunction(r reader, funcIndex int) {
+func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 	sigIndex := code.funcSigs[funcIndex]
 	sig := code.sigs[sigIndex]
 
@@ -499,7 +500,7 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 		debugDepth++
 	}
 
-	r.readVaruint32() // body size
+	load.Varuint32() // body size
 
 	code.Align(mach.FunctionAlignment(), mach.PaddingByte())
 	addr := code.Len()
@@ -529,13 +530,13 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 		}
 	}
 
-	for range r.readCount() {
-		params := r.readCount()
+	for range load.Count() {
+		params := load.Count()
 		if uint64(len(code.vars))+uint64(len(params)) >= maxFunctionVars {
 			panic(errors.New("function with too many variables"))
 		}
 
-		t := types.ByEncoding(r.readVarint7())
+		t := types.ByEncoding(load.Varint7())
 
 		for range params {
 			code.vars = append(code.vars, varState{
@@ -547,7 +548,7 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 
 	code.pushBranchTarget(code.resultType, true)
 
-	deadend := code.genOps(r)
+	deadend := code.genOps(load)
 
 	if code.minBlockOperand != 0 {
 		panic("minimum operand index is not zero at end of function")
@@ -632,22 +633,22 @@ func (code *funcCoder) genFunction(r reader, funcIndex int) {
 	return
 }
 
-func (code *funcCoder) genOps(r reader) (deadend bool) {
+func (code *funcCoder) genOps(load loader.L) (deadend bool) {
 	if debug {
 		debugf("{")
 		debugDepth++
 	}
 
 	for {
-		op := r.readOpcode()
+		op := opcode(load.Byte())
 
 		if op == opcodeEnd {
 			break
 		}
 
-		deadend = code.genOp(r, op)
+		deadend = code.genOp(load, op)
 		if deadend {
-			skipOps(r)
+			skipOps(load)
 			break
 		}
 	}
@@ -659,19 +660,19 @@ func (code *funcCoder) genOps(r reader) (deadend bool) {
 	return
 }
 
-func skipOps(r reader) {
+func skipOps(load loader.L) {
 	for {
-		op := r.readOpcode()
+		op := opcode(load.Byte())
 
 		if op == opcodeEnd {
 			return
 		}
 
-		skipOp(r, op)
+		skipOp(load, op)
 	}
 }
 
-func (code *funcCoder) genThenOps(r reader) (deadend, haveElse bool) {
+func (code *funcCoder) genThenOps(load loader.L) (deadend, haveElse bool) {
 	if debug {
 		debugf("{")
 		debugDepth++
@@ -679,7 +680,7 @@ func (code *funcCoder) genThenOps(r reader) (deadend, haveElse bool) {
 
 loop:
 	for {
-		op := r.readOpcode()
+		op := opcode(load.Byte())
 
 		switch op {
 		case opcodeEnd:
@@ -690,9 +691,9 @@ loop:
 			break loop
 		}
 
-		deadend = code.genOp(r, op)
+		deadend = code.genOp(load, op)
 		if deadend {
-			haveElse = skipThenOps(r)
+			haveElse = skipThenOps(load)
 			break loop
 		}
 	}
@@ -704,9 +705,9 @@ loop:
 	return
 }
 
-func skipThenOps(r reader) (haveElse bool) {
+func skipThenOps(load loader.L) (haveElse bool) {
 	for {
-		op := r.readOpcode()
+		op := opcode(load.Byte())
 
 		switch op {
 		case opcodeEnd:
@@ -717,18 +718,18 @@ func skipThenOps(r reader) (haveElse bool) {
 			return
 		}
 
-		skipOp(r, op)
+		skipOp(load, op)
 	}
 }
 
-func (code *funcCoder) genOp(r reader, op opcode) (deadend bool) {
+func (code *funcCoder) genOp(load loader.L, op opcode) (deadend bool) {
 	if debug {
 		debugf("%s op", op)
 		debugDepth++
 	}
 
 	impl := opcodeImpls[op]
-	deadend = impl.gen(code, r, op, impl.info)
+	deadend = impl.gen(code, load, op, impl.info)
 
 	if debug {
 		debugDepth--
@@ -742,17 +743,17 @@ func (code *funcCoder) genOp(r reader, op opcode) (deadend bool) {
 	return
 }
 
-func skipOp(r reader, op opcode) {
+func skipOp(load loader.L, op opcode) {
 	debugf("skipping %s", op)
-	opcodeSkips[op](r, op)
+	opcodeSkips[op](load, op)
 }
 
-func genBinaryConditionOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genBinaryConditionOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	code.opStackCheck() // before we create ConditionFlags operand
-	return genBinaryOp(code, r, op, info)
+	return genBinaryOp(code, load, op, info)
 }
 
-func genBinaryOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genBinaryOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	right := code.opMaterializeOperand(code.popOperand())
 	left := code.opMaterializeOperand(code.popOperand())
 
@@ -760,12 +761,12 @@ func genBinaryOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 	return
 }
 
-func genBinaryConditionCommuteOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genBinaryConditionCommuteOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	code.opStackCheck() // before we create ConditionFlags operand
-	return genBinaryCommuteOp(code, r, op, info)
+	return genBinaryCommuteOp(code, load, op, info)
 }
 
-func genBinaryCommuteOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genBinaryCommuteOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	right := code.opMaterializeOperand(code.popOperand())
 	left := code.opMaterializeOperand(code.popOperand())
 
@@ -787,27 +788,27 @@ func (code *funcCoder) genBinaryOp(op opcode, left, right values.Operand, info o
 	code.pushOperand(result)
 }
 
-func genConstI32(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	code.pushImmOperand(types.I32, uint64(int64(r.readVarint32())))
+func genConstI32(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	code.pushImmOperand(types.I32, uint64(int64(load.Varint32())))
 	return
 }
 
-func genConstI64(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	code.pushImmOperand(types.I64, uint64(r.readVarint64()))
+func genConstI64(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	code.pushImmOperand(types.I64, uint64(load.Varint64()))
 	return
 }
 
-func genConstF32(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	code.pushImmOperand(types.F32, uint64(r.readUint32()))
+func genConstF32(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	code.pushImmOperand(types.F32, uint64(load.Uint32()))
 	return
 }
 
-func genConstF64(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	code.pushImmOperand(types.F64, r.readUint64())
+func genConstF64(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	code.pushImmOperand(types.F64, load.Uint64())
 	return
 }
 
-func genConversionOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genConversionOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	x := code.opMaterializeOperand(code.popOperand())
 	if x.Type != info.secondaryType() {
 		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
@@ -819,7 +820,7 @@ func genConversionOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend
 	return
 }
 
-func genLoadOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genLoadOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	virtualIndex := code.popOperand()
 	if virtualIndex.Type != types.I32 {
 		panic(fmt.Errorf("%s index has wrong type: %s", op, virtualIndex.Type))
@@ -827,8 +828,8 @@ func genLoadOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool)
 
 	index := code.opMaterializeOperand(virtualIndex)
 
-	r.readVaruint32() // flags
-	offset := r.readVaruint32()
+	load.Varuint32() // flags
+	offset := load.Varuint32()
 
 	code.opStabilizeOperandStack()
 	result := mach.LoadOp(code, info.oper(), index, info.primaryType(), offset)
@@ -837,7 +838,7 @@ func genLoadOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool)
 	return
 }
 
-func genStoreOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genStoreOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	value := code.opMaterializeOperand(code.popOperand())
 	if value.Type != info.primaryType() {
 		panic(fmt.Errorf("%s value has wrong type: %s", op, value.Type))
@@ -850,8 +851,8 @@ func genStoreOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 
 	index := code.opMaterializeOperand(virtualIndex)
 
-	r.readVaruint32() // flags
-	offset := r.readVaruint32()
+	load.Varuint32() // flags
+	offset := load.Varuint32()
 
 	code.opStabilizeOperandStack()
 	mach.StoreOp(code, info.oper(), index, value, offset)
@@ -859,12 +860,12 @@ func genStoreOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 	return
 }
 
-func genUnaryConditionOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genUnaryConditionOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	code.opStackCheck() // before we create ConditionFlags operand
-	return genUnaryOp(code, r, op, info)
+	return genUnaryOp(code, load, op, info)
 }
 
-func genUnaryOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genUnaryOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	x := code.opMaterializeOperand(code.popOperand())
 	if x.Type != info.primaryType() {
 		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
@@ -876,15 +877,15 @@ func genUnaryOp(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 	return
 }
 
-func genBlock(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	t := types.BlockTypeByEncoding(r.readVarint7())
+func genBlock(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	t := types.BlockTypeByEncoding(load.Varint7())
 
 	code.pushBranchTarget(t, false) // end
 
 	savedMinBlockOperand := code.minBlockOperand
 	code.minBlockOperand = len(code.operands)
 
-	deadend = code.genOps(r)
+	deadend = code.genOps(load)
 
 	var result values.Operand
 
@@ -930,13 +931,13 @@ func genBlock(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func skipBlock(r reader, op opcode) {
-	r.readVarint7() // block type
-	skipOps(r)
+func skipBlock(load loader.L, op opcode) {
+	load.Varint7() // block type
+	skipOps(load)
 }
 
-func genBr(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	relativeDepth := r.readVaruint32()
+func genBr(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	relativeDepth := load.Varuint32()
 	target := code.getBranchTarget(relativeDepth)
 
 	if target.valueType != types.Void {
@@ -962,8 +963,8 @@ func genBr(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genBrIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	relativeDepth := r.readVaruint32()
+func genBrIf(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	relativeDepth := load.Varuint32()
 	target := code.getBranchTarget(relativeDepth)
 
 	cond := code.opPreloadOperand(code.popOperand())
@@ -1006,8 +1007,8 @@ func genBrIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genBrTable(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	targetCount := r.readVaruint32()
+func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	targetCount := load.Varuint32()
 	if targetCount >= uint32(maxBranchTableSize) {
 		panic(fmt.Errorf("%s has too many targets: %d", op, targetCount))
 	}
@@ -1015,13 +1016,13 @@ func genBrTable(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 	targetTable := make([]*branchTarget, targetCount)
 
 	for i := range targetTable {
-		relativeDepth := r.readVaruint32()
+		relativeDepth := load.Varuint32()
 		target := code.getBranchTarget(relativeDepth)
 		target.label.SetLive()
 		targetTable[i] = target
 	}
 
-	relativeDepth := r.readVaruint32()
+	relativeDepth := load.Varuint32()
 	defaultTarget := code.getBranchTarget(relativeDepth)
 	defaultTarget.label.SetLive()
 
@@ -1145,15 +1146,15 @@ func genBrTable(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool
 	return
 }
 
-func skipBrTable(r reader, op opcode) {
-	for range r.readCount() {
-		r.readVaruint32() // target
+func skipBrTable(load loader.L, op opcode) {
+	for range load.Count() {
+		load.Varuint32() // target
 	}
-	r.readVaruint32() // default target
+	load.Varuint32() // default target
 }
 
-func genCall(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	funcIndex := r.readVaruint32()
+func genCall(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	funcIndex := load.Varuint32()
 	if funcIndex >= uint32(len(code.funcSigs)) {
 		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
@@ -1168,15 +1169,15 @@ func genCall(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genCallIndirect(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	sigIndex := r.readVaruint32()
+func genCallIndirect(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(code.sigs)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
 
 	sig := code.sigs[sigIndex]
 
-	r.readByte() // reserved
+	load.Byte() // reserved
 
 	funcIndex := code.opMaterializeOperand(code.popOperand())
 	if funcIndex.Type != types.I32 {
@@ -1197,9 +1198,9 @@ func genCallIndirect(code *funcCoder, r reader, op opcode, info opInfo) (deadend
 	return
 }
 
-func skipCallIndirect(r reader, op opcode) {
-	r.readVaruint32() // type index
-	r.readByte()      // reserved
+func skipCallIndirect(load loader.L, op opcode) {
+	load.Varuint32() // type index
+	load.Byte()      // reserved
 }
 
 func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect values.Operand) (numStackParams int32) {
@@ -1367,8 +1368,8 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	return
 }
 
-func genCurrentMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	r.readByte() // reserved
+func genCurrentMemory(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	load.Byte() // reserved
 
 	code.opStabilizeOperandStack()
 	result := mach.OpCurrentMemory(code)
@@ -1376,13 +1377,13 @@ func genCurrentMemory(code *funcCoder, r reader, op opcode, info opInfo) (deaden
 	return
 }
 
-func genDrop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genDrop(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	code.Discard(code.popOperand())
 	return
 }
 
-func genGetGlobal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	globalIndex := r.readVaruint32()
+func genGetGlobal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(code.globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
@@ -1396,8 +1397,8 @@ func genGetGlobal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bo
 	return
 }
 
-func genGetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	localIndex := r.readVaruint32()
+func genGetLocal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	localIndex := load.Varuint32()
 	if localIndex >= uint32(len(code.vars)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
@@ -1406,8 +1407,8 @@ func genGetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 	return
 }
 
-func genGrowMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	r.readByte() // reserved
+func genGrowMemory(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	load.Byte() // reserved
 
 	x := code.opMaterializeOperand(code.popOperand())
 	if x.Type != types.I32 {
@@ -1420,8 +1421,8 @@ func genGrowMemory(code *funcCoder, r reader, op opcode, info opInfo) (deadend b
 	return
 }
 
-func genIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	t := types.BlockTypeByEncoding(r.readVarint7())
+func genIf(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	t := types.BlockTypeByEncoding(load.Varint7())
 
 	code.pushBranchTarget(t, false) // end
 	var afterThen links.L
@@ -1436,7 +1437,7 @@ func genIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	code.opStoreVars(false)
 	code.opBranchIf(cond, false, &afterThen)
 
-	thenDeadend, haveElse := code.genThenOps(r)
+	thenDeadend, haveElse := code.genThenOps(load)
 
 	if !haveElse && t != types.Void {
 		panic(errors.New("if without else has a value type"))
@@ -1462,7 +1463,7 @@ func genIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	mach.UpdateBranches(code, &afterThen)
 
 	if haveElse {
-		deadend = code.genOps(r)
+		deadend = code.genOps(load)
 
 		if t != types.Void && !deadend {
 			value := code.popOperand()
@@ -1488,15 +1489,15 @@ func genIf(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func skipIf(r reader, op opcode) {
-	r.readVarint7() // block type
-	if haveElse := skipThenOps(r); haveElse {
-		skipOps(r)
+func skipIf(load loader.L, op opcode) {
+	load.Varint7() // block type
+	if haveElse := skipThenOps(load); haveElse {
+		skipOps(load)
 	}
 }
 
-func genLoop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	encodedBlockType := r.readVarint7()
+func genLoop(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	encodedBlockType := load.Varint7()
 
 	code.pushBranchTarget(types.Void, false) // begin
 	code.opLabel(&code.getBranchTarget(0).label)
@@ -1504,7 +1505,7 @@ func genLoop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	savedMinBlockOperand := code.minBlockOperand
 	code.minBlockOperand = len(code.operands)
 
-	deadend = code.genOps(r)
+	deadend = code.genOps(load)
 
 	if deadend {
 		for len(code.operands) > code.minBlockOperand {
@@ -1529,16 +1530,16 @@ func genLoop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func skipLoop(r reader, op opcode) {
-	r.readVarint7() // block type
-	skipOps(r)
+func skipLoop(load loader.L, op opcode) {
+	load.Varint7() // block type
+	skipOps(load)
 }
 
-func genNop(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genNop(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genReturn(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genReturn(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	if code.resultType != types.Void {
 		result := code.popOperand()
 		if result.Type != code.resultType {
@@ -1553,7 +1554,7 @@ func genReturn(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool)
 	return
 }
 
-func genSelect(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genSelect(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	cond := code.opPreloadOperand(code.popOperand())
 	if cond.Type != types.I32 {
 		panic(fmt.Errorf("%s: condition operand has wrong type: %s", op, cond.Type))
@@ -1570,8 +1571,8 @@ func genSelect(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool)
 	return
 }
 
-func genSetGlobal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	globalIndex := r.readVaruint32()
+func genSetGlobal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(code.globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
@@ -1592,8 +1593,8 @@ func genSetGlobal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bo
 	return
 }
 
-func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	localIndex := r.readVaruint32()
+func genSetLocal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	localIndex := load.Varuint32()
 	if localIndex >= uint32(len(code.vars)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
@@ -1602,8 +1603,8 @@ func genSetLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend boo
 	return
 }
 
-func genTeeLocal(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
-	localIndex := r.readVaruint32()
+func genTeeLocal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
+	localIndex := load.Varuint32()
 	if localIndex >= uint32(len(code.vars)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
@@ -1771,32 +1772,32 @@ func (code *funcCoder) genSetLocal(op opcode, index int32) {
 	}
 }
 
-func genUnreachable(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func genUnreachable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	code.OpTrapCall(traps.Unreachable)
 	deadend = true
 	return
 }
 
-func skipMemoryImmediate(r reader, op opcode) {
-	r.readVaruint32() // flags
-	r.readVaruint32() // offset
+func skipMemoryImmediate(load loader.L, op opcode) {
+	load.Varuint32() // flags
+	load.Varuint32() // offset
 }
 
-func skipUint32(r reader, op opcode)    { r.readUint32() }
-func skipUint64(r reader, op opcode)    { r.readUint64() }
-func skipVarint32(r reader, op opcode)  { r.readVarint32() }
-func skipVarint64(r reader, op opcode)  { r.readVarint64() }
-func skipVaruint1(r reader, op opcode)  { r.readVaruint1() }
-func skipVaruint32(r reader, op opcode) { r.readVaruint32() }
-func skipVaruint64(r reader, op opcode) { r.readVaruint64() }
-func skipNothing(r reader, op opcode)   {}
+func skipUint32(load loader.L, op opcode)    { load.Uint32() }
+func skipUint64(load loader.L, op opcode)    { load.Uint64() }
+func skipVarint32(load loader.L, op opcode)  { load.Varint32() }
+func skipVarint64(load loader.L, op opcode)  { load.Varint64() }
+func skipVaruint1(load loader.L, op opcode)  { load.Varuint1() }
+func skipVaruint32(load loader.L, op opcode) { load.Varuint32() }
+func skipVaruint64(load loader.L, op opcode) { load.Varuint64() }
+func skipNothing(load loader.L, op opcode)   {}
 
-func badGen(code *funcCoder, r reader, op opcode, info opInfo) (deadend bool) {
+func badGen(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	badOp(op)
 	return
 }
 
-func badSkip(r reader, op opcode) {
+func badSkip(load loader.L, op opcode) {
 	badOp(op)
 }
 
