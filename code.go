@@ -2104,8 +2104,10 @@ func (code *funcCoder) opStealReg(needType types.T) (reg regs.R) {
 
 			case values.TempReg:
 				reg = x.Reg()
-				defer code.AllocSpecificReg(x.Type, reg)
-				ok = true
+				if code.RegAllocated(x.Type, reg) {
+					defer code.AllocSpecificReg(x.Type, reg)
+					ok = true
+				}
 			}
 		}
 
