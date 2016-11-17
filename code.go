@@ -880,6 +880,10 @@ func genUnaryOp(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 func genBlock(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	t := types.BlockTypeByEncoding(load.Varint7())
 
+	code.opSaveTemporaryOperands()
+	code.opInitVars()
+	code.opStoreVars(false)
+
 	code.pushBranchTarget(t, false) // end
 
 	savedMinBlockOperand := code.minBlockOperand
@@ -1498,6 +1502,10 @@ func skipIf(load loader.L, op opcode) {
 
 func genLoop(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	encodedBlockType := load.Varint7()
+
+	code.opSaveTemporaryOperands()
+	code.opInitVars()
+	code.opStoreVars(false)
 
 	code.pushBranchTarget(types.Void, false) // begin
 	code.opLabel(&code.getBranchTarget(0).label)
@@ -2163,7 +2171,13 @@ func (code *funcCoder) opSaveTemporaryOperands() {
 	debugf("save temporary register operands")
 
 	for i := code.numPersistentOperands; i < len(code.operands); i++ {
-		if x := code.operands[i]; x.Storage.IsTempRegOrConditionFlags() {
+		x := code.operands[i]
+
+		switch {
+		case x.Storage == values.VarReference:
+			code.vars[x.VarIndex()].refCount--
+			fallthrough
+		case x.Storage.IsTempRegOrConditionFlags():
 			code.opInitVars()
 			code.opPush(x)
 			code.operands[i] = values.StackOperand(x.Type)
