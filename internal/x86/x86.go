@@ -18,6 +18,11 @@ const (
 )
 
 const (
+	// Don't use regResult for effective addresses etc. to avoid information
+	// leaks.  Void functions may leave information in the result register, and
+	// call graph could be rewritten during snapshot/restore to cause void
+	// function to return to a non-void call site.
+
 	regResult         = regs.R(0)  // rax or xmm0
 	regShiftCount     = regs.R(1)  // rcx
 	regScratch        = regs.R(2)  // rdx or xmm2
@@ -188,6 +193,9 @@ func (mach X86) OpEnterImportFunction(code gen.OpCoder, absAddr uint64, variadic
 	}
 	mach.opMoveIntImm(code, regResult, int64(absAddr))
 	Jmp.opReg(code, regResult)
+	// Void import functions must make sure that they don't return anything
+	// damaging information in result register (including the absolute jump
+	// target).
 }
 
 // OpBranchIndirect32 must not allocate registers.  The supplied register is

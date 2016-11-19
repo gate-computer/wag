@@ -226,6 +226,7 @@ TEXT ·importSetResult(SB),$0-8
 
 TEXT setResult<>(SB),NOSPLIT,$0
 	MOVL	CX, M5
+	XORL	AX, AX
 	RET
 
 // func importSnapshot() uint64
