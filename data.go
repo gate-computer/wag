@@ -12,6 +12,14 @@ func (m *Module) genData(load loader.L) {
 		debugDepth++
 	}
 
+	if m.memoryOffset&15 != 0 {
+		// not 16-byte aligned?  (assume at least 8-byte alignment.)
+		n := len(m.globals)
+		m.globals = append(m.globals, global{})
+		m.data = appendGlobalsData(m.data, m.globals[n:])
+		m.memoryOffset = len(m.data)
+	}
+
 	for i := range load.Count() {
 		if debug {
 			debugf("data segment")
