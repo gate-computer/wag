@@ -129,12 +129,7 @@ const (
 )
 
 type Bounds struct {
-	Lower uint16
-	Upper uint16
-}
-
-func (b Bounds) Defined() bool {
-	return b.Upper != 0
+	Upper uint32
 }
 
 type Operand struct {

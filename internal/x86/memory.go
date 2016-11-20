@@ -112,41 +112,34 @@ func (mach X86) StoreOp(code gen.RegCoder, oper uint16, index, x values.Operand,
 
 // opMemoryAddress may return the scratch register as the base.
 func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
-	sizeReach := size - 1
-	reachOffset := uint64(offset) + uint64(sizeReach)
+	sizeReach := uint64(size - 1)
+	reachOffset := uint64(offset) + sizeReach
 
 	if reachOffset >= 0x80000000 {
 		code.OpTrapCall(traps.MemoryOutOfBounds)
 		return
 	}
 
-	checkLower := true
-	checkUpper := true
-
-	if index.Bounds.Defined() {
-		if offset >= uint32(index.Bounds.Lower) {
-			checkLower = false
-		}
-		if reachOffset < uint64(index.Bounds.Upper) {
-			checkUpper = false
-		}
-	}
+	alreadyChecked := reachOffset < uint64(index.Bounds.Upper)
 
 	switch index.Storage {
 	case values.Imm:
-		addr := index.ImmValue() + int64(offset)
-		reachAddr := addr + int64(sizeReach)
+		value := uint64(index.ImmValue())
 
-		if addr < 0 || reachAddr >= 0x80000000 {
+		if value >= 0x80000000 {
 			code.OpTrapCall(traps.MemoryOutOfBounds)
 			return
 		}
 
-		if reachAddr < int64(code.MinMemorySize()) {
-			checkUpper = false
+		addr := value + uint64(offset)
+		reachAddr := addr + sizeReach
+
+		if reachAddr >= 0x80000000 {
+			code.OpTrapCall(traps.MemoryOutOfBounds)
+			return
 		}
 
-		if !checkUpper {
+		if reachAddr < uint64(code.MinMemorySize()) || alreadyChecked {
 			baseReg = regMemoryBase
 			indexReg = NoIndex
 			disp = int32(addr)
@@ -158,46 +151,11 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Ope
 	default:
 		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, index, true)
 
-		if checkLower {
-			if offset == 0 {
-				And.opFromReg(code, types.I32, reg, reg) // zero-extend index + set sign flag
-			} else {
-				if !zeroExt {
-					Mov.opFromReg(code, types.I32, reg, reg) // zero-extend index
-				}
-
-				if !own {
-					Mov.opFromReg(code, types.I32, regScratch, reg)
-					if own {
-						code.FreeReg(types.I32, reg)
-					}
-					reg = regScratch
-					own = false
-				}
-
-				Add.opImm(code, types.I32, reg, int32(offset)) // set sign flag
-				offset = 0
-				reachOffset = uint64(sizeReach)
-			}
-
-			if addr := code.TrapTrampolineAddr(traps.MemoryOutOfBounds); addr != 0 {
-				Js.op(code, addr)
-			} else {
-				var checked links.L
-
-				Jns.rel8.opStub(code)
-				checked.AddSite(code.Len())
-
-				code.OpTrapCall(traps.MemoryOutOfBounds)
-
-				checked.Addr = code.Len()
-				mach.updateBranches8(code, &checked)
-			}
-		} else if !zeroExt {
+		if !zeroExt {
 			Mov.opFromReg(code, types.I32, reg, reg) // zero-extend index
 		}
 
-		if !checkUpper {
+		if alreadyChecked {
 			baseReg = regMemoryBase
 			indexReg = reg
 			ownIndexReg = own

@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
@@ -427,15 +426,10 @@ func (code *funcCoder) updateMemoryIndex(index values.Operand, offset uint32, op
 			v.cache = values.VarRegOperand(v.cache.Type, v.cache.VarIndex(), v.cache.Reg(), true)
 		}
 
-		if offset < math.MaxUint16 { // ignore accesses at large offsets
-			size := oper >> 8
+		size := oper >> 8
+		upper := uint64(offset) + uint64(size)
 
-			begin := uint16(offset)
-			end := begin + size
-			if end < begin {
-				end = math.MaxUint16
-			}
-
+		if upper <= 0x80000000 {
 			// enlarge the stack
 
 			level := code.boundsStackLevel()
@@ -466,19 +460,11 @@ func (code *funcCoder) updateMemoryIndex(index values.Operand, offset uint32, op
 
 			bounds := &v.boundsStack[level]
 
-			if !bounds.Defined() {
-				bounds.Lower = begin
-				bounds.Upper = end
-			} else {
-				if begin < bounds.Lower {
-					bounds.Lower = begin
-				}
-				if end > bounds.Upper {
-					bounds.Upper = end
-				}
+			if uint32(upper) > bounds.Upper {
+				bounds.Upper = uint32(upper)
 			}
 
-			debugf("variable #%d bounds set to [%d,%d)", index.VarIndex(), bounds.Lower, bounds.Upper)
+			debugf("variable #%d upper bound set to %d", index.VarIndex(), bounds.Upper)
 		}
 	}
 }
