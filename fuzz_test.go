@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	fuzzInputDir = "testdata/fuzz/crashers"
+	fuzzInputDir = "testdata/fuzz/corpus"
 )
 
 func TestFuzz(t *testing.T) {
