@@ -110,6 +110,7 @@ func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-ove
 func Test_resizing(t *testing.T)                        { test(t, "resizing") }
 func Test_return(t *testing.T)                          { test(t, "return") }
 func Test_select(t *testing.T)                          { test(t, "select") }
+func Test_soft_fail(t *testing.T)                       { test(t, "soft-fail") }
 func Test_stack(t *testing.T)                           { test(t, "stack") }
 func Test_store_retval(t *testing.T)                    { test(t, "store_retval") }
 func Test_switch(t *testing.T)                          { test(t, "switch") }
