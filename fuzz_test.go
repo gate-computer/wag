@@ -27,12 +27,12 @@ func TestFuzz(t *testing.T) {
 
 	for _, info := range infos {
 		if !strings.Contains(info.Name(), ".") {
-			testFuzz(t, path.Join(fuzzInputDir, info.Name()))
+			fuzz(t, path.Join(fuzzInputDir, info.Name()))
 		}
 	}
 }
 
-func testFuzz(t *testing.T, filename string) {
+func fuzz(t *testing.T, filename string) {
 	const (
 		maxTextSize   = 65536
 		maxRODataSize = 4096

@@ -55,6 +55,14 @@ func (ra *regAllocator) allocSpecific(cat gen.RegCategory, reg regs.R) {
 	ra.freed &^= mask
 }
 
+func (ra *regAllocator) setAllocated(cat gen.RegCategory, reg regs.R) {
+	debugf("reg alloc: %s %s set", cat, reg)
+
+	mask := regMask(cat, reg)
+
+	ra.freed &^= mask
+}
+
 func (ra *regAllocator) free(cat gen.RegCategory, reg regs.R) {
 	mask := regMask(cat, reg)
 

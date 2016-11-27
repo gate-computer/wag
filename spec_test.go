@@ -24,101 +24,101 @@ const (
 	specTestDir = "testdata/wabt/third_party/testsuite"
 )
 
-// for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { test(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
+// for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { spec(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
 
-// func Test_binary(t *testing.T)                { test(t, "binary") }
-// func Test_call_indirect(t *testing.T)         { test(t, "call_indirect") }
-// func Test_comments(t *testing.T)              { test(t, "comments") }
-// func Test_conversions(t *testing.T)           { test(t, "conversions") }
-// func Test_exports(t *testing.T)               { test(t, "exports") }
-// func Test_f32(t *testing.T)                   { test(t, "f32") }
-// func Test_f64(t *testing.T)                   { test(t, "f64") }
-// func Test_fac(t *testing.T)                   { test(t, "fac") }
-// func Test_float_exprs(t *testing.T)           { test(t, "float_exprs") }
-// func Test_float_memory(t *testing.T)          { test(t, "float_memory") }
-// func Test_float_misc(t *testing.T)            { test(t, "float_misc") }
-// func Test_func(t *testing.T)                  { test(t, "func") }
-// func Test_func_ptrs(t *testing.T)             { test(t, "func_ptrs") }
-// func Test_imports(t *testing.T)               { test(t, "imports") }
-// func Test_left_to_right(t *testing.T)         { test(t, "left-to-right") }
-// func Test_linking(t *testing.T)               { test(t, "linking") }
-// func Test_memory(t *testing.T)                { test(t, "memory") }
-// func Test_names(t *testing.T)                 { test(t, "names") }
-// func Test_set_local(t *testing.T)             { test(t, "set_local") }
-// func Test_skip_stack_guard_page(t *testing.T) { test(t, "skip-stack-guard-page") }
-// func Test_start(t *testing.T)                 { test(t, "start") }
-// func Test_tee_local(t *testing.T)             { test(t, "tee_local") }
-// func Test_traps(t *testing.T)                 { test(t, "traps") }
+// func Test_binary(t *testing.T)                { spec(t, "binary") }
+// func Test_call_indirect(t *testing.T)         { spec(t, "call_indirect") }
+// func Test_comments(t *testing.T)              { spec(t, "comments") }
+// func Test_conversions(t *testing.T)           { spec(t, "conversions") }
+// func Test_exports(t *testing.T)               { spec(t, "exports") }
+// func Test_f32(t *testing.T)                   { spec(t, "f32") }
+// func Test_f64(t *testing.T)                   { spec(t, "f64") }
+// func Test_fac(t *testing.T)                   { spec(t, "fac") }
+// func Test_float_exprs(t *testing.T)           { spec(t, "float_exprs") }
+// func Test_float_memory(t *testing.T)          { spec(t, "float_memory") }
+// func Test_float_misc(t *testing.T)            { spec(t, "float_misc") }
+// func Test_func(t *testing.T)                  { spec(t, "func") }
+// func Test_func_ptrs(t *testing.T)             { spec(t, "func_ptrs") }
+// func Test_imports(t *testing.T)               { spec(t, "imports") }
+// func Test_left_to_right(t *testing.T)         { spec(t, "left-to-right") }
+// func Test_linking(t *testing.T)               { spec(t, "linking") }
+// func Test_memory(t *testing.T)                { spec(t, "memory") }
+// func Test_names(t *testing.T)                 { spec(t, "names") }
+// func Test_set_local(t *testing.T)             { spec(t, "set_local") }
+// func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
+// func Test_start(t *testing.T)                 { spec(t, "start") }
+// func Test_tee_local(t *testing.T)             { spec(t, "tee_local") }
+// func Test_traps(t *testing.T)                 { spec(t, "traps") }
 
-func Test_address(t *testing.T)                         { test(t, "address") }
-func Test_address_offset_range_fail(t *testing.T)       { test(t, "address-offset-range.fail") }
-func Test_block(t *testing.T)                           { test(t, "block") }
-func Test_br(t *testing.T)                              { test(t, "br") }
-func Test_br_if(t *testing.T)                           { test(t, "br_if") }
-func Test_br_table(t *testing.T)                        { test(t, "br_table") }
-func Test_break_drop(t *testing.T)                      { test(t, "break-drop") }
-func Test_call(t *testing.T)                            { test(t, "call") }
-func Test_endianness(t *testing.T)                      { test(t, "endianness") }
-func Test_f32_cmp(t *testing.T)                         { test(t, "f32_cmp") }
-func Test_f32_load32_fail(t *testing.T)                 { test(t, "f32.load32.fail") }
-func Test_f32_load64_fail(t *testing.T)                 { test(t, "f32.load64.fail") }
-func Test_f32_store32_fail(t *testing.T)                { test(t, "f32.store32.fail") }
-func Test_f32_store64_fail(t *testing.T)                { test(t, "f32.store64.fail") }
-func Test_f64_cmp(t *testing.T)                         { test(t, "f64_cmp") }
-func Test_f64_load32_fail(t *testing.T)                 { test(t, "f64.load32.fail") }
-func Test_f64_load64_fail(t *testing.T)                 { test(t, "f64.load64.fail") }
-func Test_f64_store32_fail(t *testing.T)                { test(t, "f64.store32.fail") }
-func Test_f64_store64_fail(t *testing.T)                { test(t, "f64.store64.fail") }
-func Test_float_literals(t *testing.T)                  { test(t, "float_literals") }
-func Test_forward(t *testing.T)                         { test(t, "forward") }
-func Test_func_local_after_body_fail(t *testing.T)      { test(t, "func-local-after-body.fail") }
-func Test_func_local_before_param_fail(t *testing.T)    { test(t, "func-local-before-param.fail") }
-func Test_func_local_before_result_fail(t *testing.T)   { test(t, "func-local-before-result.fail") }
-func Test_func_param_after_body_fail(t *testing.T)      { test(t, "func-param-after-body.fail") }
-func Test_func_result_after_body_fail(t *testing.T)     { test(t, "func-result-after-body.fail") }
-func Test_func_result_before_param_fail(t *testing.T)   { test(t, "func-result-before-param.fail") }
-func Test_get_local(t *testing.T)                       { test(t, "get_local") }
-func Test_globals(t *testing.T)                         { test(t, "globals") }
-func Test_i32(t *testing.T)                             { test(t, "i32") }
-func Test_i32_load32_s_fail(t *testing.T)               { test(t, "i32.load32_s.fail") }
-func Test_i32_load32_u_fail(t *testing.T)               { test(t, "i32.load32_u.fail") }
-func Test_i32_load64_s_fail(t *testing.T)               { test(t, "i32.load64_s.fail") }
-func Test_i32_load64_u_fail(t *testing.T)               { test(t, "i32.load64_u.fail") }
-func Test_i32_store32_fail(t *testing.T)                { test(t, "i32.store32.fail") }
-func Test_i32_store64_fail(t *testing.T)                { test(t, "i32.store64.fail") }
-func Test_i64(t *testing.T)                             { test(t, "i64") }
-func Test_i64_load64_s_fail(t *testing.T)               { test(t, "i64.load64_s.fail") }
-func Test_i64_load64_u_fail(t *testing.T)               { test(t, "i64.load64_u.fail") }
-func Test_i64_store64_fail(t *testing.T)                { test(t, "i64.store64.fail") }
-func Test_import_after_func_fail(t *testing.T)          { test(t, "import-after-func.fail") }
-func Test_import_after_global_fail(t *testing.T)        { test(t, "import-after-global.fail") }
-func Test_import_after_memory_fail(t *testing.T)        { test(t, "import-after-memory.fail") }
-func Test_import_after_table_fail(t *testing.T)         { test(t, "import-after-table.fail") }
-func Test_int_exprs(t *testing.T)                       { test(t, "int_exprs") }
-func Test_int_literals(t *testing.T)                    { test(t, "int_literals") }
-func Test_labels(t *testing.T)                          { test(t, "labels") }
-func Test_loop(t *testing.T)                            { test(t, "loop") }
-func Test_memory_redundancy(t *testing.T)               { test(t, "memory_redundancy") }
-func Test_memory_trap(t *testing.T)                     { test(t, "memory_trap") }
-func Test_nop(t *testing.T)                             { test(t, "nop") }
-func Test_of_string_overflow_hex_u32_fail(t *testing.T) { test(t, "of_string-overflow-hex-u32.fail") }
-func Test_of_string_overflow_hex_u64_fail(t *testing.T) { test(t, "of_string-overflow-hex-u64.fail") }
-func Test_of_string_overflow_s32_fail(t *testing.T)     { test(t, "of_string-overflow-s32.fail") }
-func Test_of_string_overflow_s64_fail(t *testing.T)     { test(t, "of_string-overflow-s64.fail") }
-func Test_of_string_overflow_u32_fail(t *testing.T)     { test(t, "of_string-overflow-u32.fail") }
-func Test_of_string_overflow_u64_fail(t *testing.T)     { test(t, "of_string-overflow-u64.fail") }
-func Test_resizing(t *testing.T)                        { test(t, "resizing") }
-func Test_return(t *testing.T)                          { test(t, "return") }
-func Test_select(t *testing.T)                          { test(t, "select") }
-func Test_soft_fail(t *testing.T)                       { test(t, "soft-fail") }
-func Test_stack(t *testing.T)                           { test(t, "stack") }
-func Test_store_retval(t *testing.T)                    { test(t, "store_retval") }
-func Test_switch(t *testing.T)                          { test(t, "switch") }
-func Test_typecheck(t *testing.T)                       { test(t, "typecheck") }
-func Test_unreachable(t *testing.T)                     { test(t, "unreachable") }
-func Test_unwind(t *testing.T)                          { test(t, "unwind") }
+func Test_address(t *testing.T)                         { spec(t, "address") }
+func Test_address_offset_range_fail(t *testing.T)       { spec(t, "address-offset-range.fail") }
+func Test_block(t *testing.T)                           { spec(t, "block") }
+func Test_br(t *testing.T)                              { spec(t, "br") }
+func Test_br_if(t *testing.T)                           { spec(t, "br_if") }
+func Test_br_table(t *testing.T)                        { spec(t, "br_table") }
+func Test_break_drop(t *testing.T)                      { spec(t, "break-drop") }
+func Test_call(t *testing.T)                            { spec(t, "call") }
+func Test_endianness(t *testing.T)                      { spec(t, "endianness") }
+func Test_f32_cmp(t *testing.T)                         { spec(t, "f32_cmp") }
+func Test_f32_load32_fail(t *testing.T)                 { spec(t, "f32.load32.fail") }
+func Test_f32_load64_fail(t *testing.T)                 { spec(t, "f32.load64.fail") }
+func Test_f32_store32_fail(t *testing.T)                { spec(t, "f32.store32.fail") }
+func Test_f32_store64_fail(t *testing.T)                { spec(t, "f32.store64.fail") }
+func Test_f64_cmp(t *testing.T)                         { spec(t, "f64_cmp") }
+func Test_f64_load32_fail(t *testing.T)                 { spec(t, "f64.load32.fail") }
+func Test_f64_load64_fail(t *testing.T)                 { spec(t, "f64.load64.fail") }
+func Test_f64_store32_fail(t *testing.T)                { spec(t, "f64.store32.fail") }
+func Test_f64_store64_fail(t *testing.T)                { spec(t, "f64.store64.fail") }
+func Test_float_literals(t *testing.T)                  { spec(t, "float_literals") }
+func Test_forward(t *testing.T)                         { spec(t, "forward") }
+func Test_func_local_after_body_fail(t *testing.T)      { spec(t, "func-local-after-body.fail") }
+func Test_func_local_before_param_fail(t *testing.T)    { spec(t, "func-local-before-param.fail") }
+func Test_func_local_before_result_fail(t *testing.T)   { spec(t, "func-local-before-result.fail") }
+func Test_func_param_after_body_fail(t *testing.T)      { spec(t, "func-param-after-body.fail") }
+func Test_func_result_after_body_fail(t *testing.T)     { spec(t, "func-result-after-body.fail") }
+func Test_func_result_before_param_fail(t *testing.T)   { spec(t, "func-result-before-param.fail") }
+func Test_get_local(t *testing.T)                       { spec(t, "get_local") }
+func Test_globals(t *testing.T)                         { spec(t, "globals") }
+func Test_i32(t *testing.T)                             { spec(t, "i32") }
+func Test_i32_load32_s_fail(t *testing.T)               { spec(t, "i32.load32_s.fail") }
+func Test_i32_load32_u_fail(t *testing.T)               { spec(t, "i32.load32_u.fail") }
+func Test_i32_load64_s_fail(t *testing.T)               { spec(t, "i32.load64_s.fail") }
+func Test_i32_load64_u_fail(t *testing.T)               { spec(t, "i32.load64_u.fail") }
+func Test_i32_store32_fail(t *testing.T)                { spec(t, "i32.store32.fail") }
+func Test_i32_store64_fail(t *testing.T)                { spec(t, "i32.store64.fail") }
+func Test_i64(t *testing.T)                             { spec(t, "i64") }
+func Test_i64_load64_s_fail(t *testing.T)               { spec(t, "i64.load64_s.fail") }
+func Test_i64_load64_u_fail(t *testing.T)               { spec(t, "i64.load64_u.fail") }
+func Test_i64_store64_fail(t *testing.T)                { spec(t, "i64.store64.fail") }
+func Test_import_after_func_fail(t *testing.T)          { spec(t, "import-after-func.fail") }
+func Test_import_after_global_fail(t *testing.T)        { spec(t, "import-after-global.fail") }
+func Test_import_after_memory_fail(t *testing.T)        { spec(t, "import-after-memory.fail") }
+func Test_import_after_table_fail(t *testing.T)         { spec(t, "import-after-table.fail") }
+func Test_int_exprs(t *testing.T)                       { spec(t, "int_exprs") }
+func Test_int_literals(t *testing.T)                    { spec(t, "int_literals") }
+func Test_labels(t *testing.T)                          { spec(t, "labels") }
+func Test_loop(t *testing.T)                            { spec(t, "loop") }
+func Test_memory_redundancy(t *testing.T)               { spec(t, "memory_redundancy") }
+func Test_memory_trap(t *testing.T)                     { spec(t, "memory_trap") }
+func Test_nop(t *testing.T)                             { spec(t, "nop") }
+func Test_of_string_overflow_hex_u32_fail(t *testing.T) { spec(t, "of_string-overflow-hex-u32.fail") }
+func Test_of_string_overflow_hex_u64_fail(t *testing.T) { spec(t, "of_string-overflow-hex-u64.fail") }
+func Test_of_string_overflow_s32_fail(t *testing.T)     { spec(t, "of_string-overflow-s32.fail") }
+func Test_of_string_overflow_s64_fail(t *testing.T)     { spec(t, "of_string-overflow-s64.fail") }
+func Test_of_string_overflow_u32_fail(t *testing.T)     { spec(t, "of_string-overflow-u32.fail") }
+func Test_of_string_overflow_u64_fail(t *testing.T)     { spec(t, "of_string-overflow-u64.fail") }
+func Test_resizing(t *testing.T)                        { spec(t, "resizing") }
+func Test_return(t *testing.T)                          { spec(t, "return") }
+func Test_select(t *testing.T)                          { spec(t, "select") }
+func Test_soft_fail(t *testing.T)                       { spec(t, "soft-fail") }
+func Test_stack(t *testing.T)                           { spec(t, "stack") }
+func Test_store_retval(t *testing.T)                    { spec(t, "store_retval") }
+func Test_switch(t *testing.T)                          { spec(t, "switch") }
+func Test_typecheck(t *testing.T)                       { spec(t, "typecheck") }
+func Test_unreachable(t *testing.T)                     { spec(t, "unreachable") }
+func Test_unwind(t *testing.T)                          { spec(t, "unwind") }
 
-func test(t *testing.T, name string) {
+func spec(t *testing.T, name string) {
 	const (
 		parallel = false
 	)

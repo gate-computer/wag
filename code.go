@@ -1202,6 +1202,8 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	code.opSaveTemporaryOperands()
 	code.opStoreRegVars()
 
+	code.regs.freeAll()
+
 	var regArgs regMap
 
 	for i, value := range args {
@@ -1226,11 +1228,12 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 		}
 
 		if ok {
-			regArgs.set(gen.TypeRegCategory(value.Type), reg, i)
+			cat := gen.TypeRegCategory(value.Type)
+
+			code.regs.setAllocated(cat, reg)
+			regArgs.set(cat, reg, i)
 		}
 	}
-
-	code.regs.freeAll()
 
 	// relocate indirect index to result reg if it already occupies some reg
 	if indirect.Storage.IsReg() && indirect.Reg() != mach.ResultReg() {
@@ -1295,6 +1298,28 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 		}
 	}
 
+	// uniquify register operands
+	for i, value := range args {
+		if value.Storage == values.VarReg {
+			cat := gen.TypeRegCategory(value.Type)
+
+			if regArgs.get(cat, value.Reg()) != i {
+				reg, ok := code.TryAllocReg(value.Type)
+				if !ok {
+					panic("not enough registers for all register args")
+				}
+
+				debugf("call param #%d: %s %s <- %s", i, cat, reg, value.Reg())
+				mach.OpMoveReg(code, value.Type, reg, value.Reg())
+
+				args[i] = values.RegOperand(false, value.Type, reg)
+				regArgs.set(cat, reg, i)
+			}
+		}
+	}
+
+	code.regs.freeAll()
+
 	var preserveFlags bool
 
 	for i := numStackParams; i < int32(len(args)); i++ {
@@ -1304,19 +1329,18 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 
 		switch {
 		case value.Storage.IsReg(): // Vars backed by RegVars were replaced by earlier loop
-			valueReg := value.Reg()
-			if valueReg == posReg {
+			if value.Reg() == posReg {
 				debugf("call param #%d: %s %s already in place", i, cat, posReg)
 			} else {
 				if otherArgIndex := regArgs.get(cat, posReg); otherArgIndex >= 0 {
-					debugf("call param #%d: %s %s <-> %s", i, cat, posReg, value)
-					mach.OpSwap(code, cat, posReg, valueReg)
+					debugf("call param #%d: %s %s <-> %s", i, cat, posReg, value.Reg())
+					mach.OpSwap(code, cat, posReg, value.Reg())
 
 					args[otherArgIndex] = value
-					regArgs.set(cat, valueReg, otherArgIndex)
+					regArgs.set(cat, value.Reg(), otherArgIndex)
 				} else {
-					debugf("call param #%d: %s %s <- %s", i, cat, posReg, value)
-					mach.OpMoveReg(code, value.Type, posReg, valueReg)
+					debugf("call param #%d: %s %s <- %s", i, cat, posReg, value.Reg())
+					mach.OpMoveReg(code, value.Type, posReg, value.Reg())
 				}
 			}
 
