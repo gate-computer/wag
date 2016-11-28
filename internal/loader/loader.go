@@ -14,6 +14,9 @@ type L struct {
 }
 
 func (load L) Into(buf []byte) {
+	if len(buf) == 0 {
+		return
+	}
 	if _, err := load.Read(buf); err != nil {
 		panic(err)
 	}
