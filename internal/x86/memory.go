@@ -222,7 +222,7 @@ func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand
 	Mov.opFromReg(code, types.I64, regMemoryLimit, targetReg)
 	Sub.opFromReg(code, types.I64, regScratch, regMemoryBase)
 	ShrImm.op(code, types.I64, regScratch, wasm.PageBits) // value on success
-	Mov.opFromReg(code, types.I64, targetReg, regScratch)
+	Mov.opFromReg(code, types.I32, targetReg, regScratch)
 
 	JmpRel.rel8.opStub(code)
 	out.AddSite(code.Len())
