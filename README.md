@@ -22,8 +22,7 @@ Features
   strict [seccomp](https://en.wikipedia.org/wiki/Seccomp) sandbox.
   Note: calling standard library ABIs is not supported.
 
-- Supports voluntary snapshot-and-restore across compiler versions and CPU
-  architectures.  Support for involuntary snapshotting is planned.
+- Supports snapshot-and-restore across compiler versions and CPU architectures.
 
 
 Status
