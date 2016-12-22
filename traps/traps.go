@@ -9,6 +9,7 @@ type Id int
 const (
 	Exit = Id(iota)
 	MissingFunction
+	Suspended
 
 	CallStackExhausted
 	IndirectCallIndex
@@ -28,6 +29,9 @@ func (id Id) String() string {
 
 	case MissingFunction:
 		return "missing function"
+
+	case Suspended:
+		return "suspended"
 
 	case CallStackExhausted:
 		return "call stack exhausted"

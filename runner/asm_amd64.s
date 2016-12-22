@@ -71,9 +71,10 @@ TEXT ·run(SB),$0-120
 TEXT run<>(SB),NOSPLIT,$0
 	MOVQ	SP, M7		// save original stack
 	MOVQ	CX, SP		// stack ptr
-	LEAQ	trap<>(SB), R9
-	MOVQ	R9, M0		// trap handler
+	LEAQ	trap<>(SB), R8
+	MOVQ	R8, M0		// trap handler
 	MOVQ	BX, M1		// memory growth limit
+	XORL	R9, R9		// clear suspend flag
 	MOVQ	R12, DI
 	ADDQ	$16, DI		// skip trap at start of text
 	JMP	DI
@@ -154,14 +155,14 @@ TEXT ·importPutns(SB),$0-8
 	RET
 
 TEXT putns<>(SB),NOSPLIT,$0
-	MOVL	CX, R9		// relative addr
+	MOVL	CX, R8		// relative addr
 	MOVL	BX, BX		// size
 
-	ADDQ	R14, R9		// absolute addr
-	CMPQ	R14, R9
+	ADDQ	R14, R8		// absolute addr
+	CMPQ	R14, R8
 	JG	fail1		// absolute addr out of lower bound
 
-	MOVQ	R9, AX
+	MOVQ	R8, AX
 	ADDQ	BX, AX		// absolute addr+size
 	CMPQ	R15, AX
 	JLE	fail2		// absolute addr+size out of upper bound
@@ -178,7 +179,7 @@ TEXT putns<>(SB),NOSPLIT,$0
 	CMPQ	DX, AX
 	JNE	fail3
 
-	MOVQ	R9, SI		// buf <- absolute addr
+	MOVQ	R8, SI		// buf <- absolute addr
 	MOVL	BX, DX		// bufsize <- size
 
 	MOVL	$1, AX		// sys_write

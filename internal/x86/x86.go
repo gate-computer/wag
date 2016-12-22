@@ -29,6 +29,7 @@ const (
 	regImportArgCount = regs.R(2)  // rdx
 	regImportSigIndex = regs.R(3)  // rbx
 	regStackPtr       = regs.R(4)  // rsp
+	regSuspendFlag    = regs.R(9)  // r9
 	regTextBase       = regs.R(12) // r12
 	regStackLimit     = regs.R(13) // r13
 	regMemoryBase     = regs.R(14) // r14
@@ -51,7 +52,7 @@ var availRegs = gen.RegMask(
 		true,  // rsi
 		true,  // rdi
 		true,  // r8
-		true,  // r9
+		false, // r9
 		true,  // r10
 		true,  // r11
 		false, // r12
@@ -184,6 +185,19 @@ func (mach X86) OpAddImmToStackPtr(code gen.Coder, offset int32) {
 // OpAddToStackPtr must not allocate registers.
 func (mach X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
 	Add.opFromReg(code, types.I64, regStackPtr, source)
+}
+
+func (mach X86) OpEnterFunction(code gen.Coder) {
+	var skip links.L
+
+	Test.opFromReg(code, types.I64, regSuspendFlag, regSuspendFlag)
+	Je.rel8.opStub(code)
+	skip.AddSite(code.Len())
+
+	code.OpTrapCall(traps.Suspended)
+
+	skip.Addr = code.Len()
+	mach.updateBranches8(code, &skip)
 }
 
 func (mach X86) OpEnterImportFunction(code gen.OpCoder, absAddr uint64, variadic bool, argCount, sigIndex int) {

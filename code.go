@@ -492,6 +492,7 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 	addr := code.Len()
 	code.funcLinks[funcIndex].Addr = addr
 	code.mapFunctionAddr(addr)
+	mach.OpEnterFunction(code)
 
 	code.resultType = sig.Result
 
