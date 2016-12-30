@@ -7,9 +7,7 @@ import (
 )
 
 func writeInt32To(code gen.OpCoder, value int32) {
-	if err := binary.Write(code, binary.LittleEndian, value); err != nil {
-		panic(err)
-	}
+	binary.Write(code, binary.LittleEndian, value)
 }
 
 type imm struct {
@@ -18,9 +16,7 @@ type imm struct {
 
 func (imm imm) writeTo(code gen.OpCoder) {
 	if imm.value != nil {
-		if err := binary.Write(code, binary.LittleEndian, imm.value); err != nil {
-			panic(err)
-		}
+		binary.Write(code, binary.LittleEndian, imm.value)
 	}
 }
 

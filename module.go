@@ -25,6 +25,15 @@ type Environment interface {
 	ImportGlobal(module, field string, t types.T) (valueBits uint64, err error)
 }
 
+type Buffer interface {
+	io.Writer
+	io.ByteWriter
+
+	Bytes() []byte
+	Grow(n int)
+	Len() int
+}
+
 const (
 	maxStringLen          = 255 // TODO
 	maxImportParams       = gen.StackReserve/gen.WordSize - 2
@@ -147,7 +156,7 @@ type Module struct {
 	startDefined     bool
 	tableFuncs       []uint32
 
-	text          *bytes.Buffer
+	text          Buffer
 	roDataAbsAddr int32
 	roData        dataArena
 	trapLinks     [traps.NumTraps]links.L
@@ -175,7 +184,7 @@ func (m *Module) loadPreliminarySections(r reader.Reader, env Environment) {
 }
 
 // Load all (remaining) sections.
-func (m *Module) Load(r reader.Reader, env Environment, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
+func (m *Module) Load(r reader.Reader, env Environment, textBuf Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
@@ -184,11 +193,8 @@ func (m *Module) Load(r reader.Reader, env Environment, textBuf, roDataBuf []byt
 	return
 }
 
-func (m *Module) load(r reader.Reader, env Environment, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
-	if textBuf != nil {
-		m.text = bytes.NewBuffer(textBuf[:0])
-	}
-
+func (m *Module) load(r reader.Reader, env Environment, textBuf Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
+	m.text = textBuf
 	m.roData.buf = roDataBuf[:0]
 	m.roDataAbsAddr = roDataAbsAddr
 
@@ -482,7 +488,7 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 }
 
 // LoadCodeSection, after loading the preliminary sections.
-func (m *Module) LoadCodeSection(r reader.Reader, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
+func (m *Module) LoadCodeSection(r reader.Reader, textBuf Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
@@ -491,15 +497,12 @@ func (m *Module) LoadCodeSection(r reader.Reader, textBuf, roDataBuf []byte, roD
 	return
 }
 
-func (m *Module) loadCodeSection(r reader.Reader, textBuf, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
+func (m *Module) loadCodeSection(r reader.Reader, textBuf Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
 	if m.funcLinks != nil {
 		panic(errors.New("code section has already been loaded"))
 	}
 
-	if textBuf != nil {
-		m.text = bytes.NewBuffer(textBuf[:0])
-	}
-
+	m.text = textBuf
 	m.roData.buf = roDataBuf[:0]
 	m.roDataAbsAddr = roDataAbsAddr
 

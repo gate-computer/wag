@@ -65,7 +65,7 @@ func TestExec(t *testing.T) {
 
 	m.loadDataSection(wasm)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, p.Text, p.ROData, p.RODataAddr(), trigger)
+	m.loadCodeSection(&codeBuf, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), trigger)
 	p.Seal()
 	p.SetFunctionMap(m.FunctionMap())
 	p.SetCallMap(m.CallMap())

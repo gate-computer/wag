@@ -19,8 +19,8 @@ const (
 
 type OpCoder interface {
 	io.Writer
+	io.ByteWriter
 
-	WriteByte(byte) error
 	Bytes() []byte
 	Len() int32
 

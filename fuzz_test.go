@@ -2,6 +2,7 @@ package wag
 
 import (
 	"bufio"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path"
@@ -61,7 +62,7 @@ func fuzz(t *testing.T, filename string) {
 		}
 	}()
 
-	err = m.Load(bufio.NewReader(f), runner.Env, p.Text, p.ROData, p.RODataAddr(), nil)
+	err = m.Load(bufio.NewReader(f), runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
 	if err == nil {
 		t.Logf("%s: no error", filename)
 	} else {

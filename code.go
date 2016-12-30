@@ -1,7 +1,6 @@
 package wag
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -38,10 +37,6 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 
 	if m.roDataAbsAddr <= 0 {
 		panic(fmt.Errorf("invalid read-only memory address: %d", m.roDataAbsAddr))
-	}
-
-	if m.text == nil {
-		m.text = new(bytes.Buffer)
 	}
 
 	funcCodeCount := load.Varuint32()
@@ -134,12 +129,20 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	}
 }
 
-func (m moduleCoder) Write(buf []byte) (int, error) {
-	return m.text.Write(buf)
+func (m moduleCoder) Write(buf []byte) (n int, err error) {
+	n, err = m.text.Write(buf)
+	if err != nil {
+		panic(err)
+	}
+	return
 }
 
-func (m moduleCoder) WriteByte(b byte) error {
-	return m.text.WriteByte(b)
+func (m moduleCoder) WriteByte(b byte) (err error) {
+	err = m.text.WriteByte(b)
+	if err != nil {
+		panic(err)
+	}
+	return
 }
 
 func (m moduleCoder) Align(alignment int, padding byte) {
