@@ -84,7 +84,7 @@ func dispMod(t types.T, baseReg regs.R, offset int32) (mod mod, disp imm) {
 
 	default:
 		mod = ModMemDisp32
-		disp.value = int32(offset)
+		disp.value = offset
 	}
 
 	return
@@ -189,7 +189,7 @@ func (i insnAddr32) opMissingFunction(code gen.OpCoder) {
 
 func (opcode insnAddr32) writeTo(code gen.OpCoder, offset int32) {
 	code.Write(opcode)
-	writeInt32To(code, int32(offset))
+	writeInt32To(code, offset)
 }
 
 //
@@ -464,7 +464,7 @@ func (i insnPrefixMI) immOpcode(value int32) (opcode byte, imm imm) {
 
 	case i.opcode32 != 0:
 		opcode = i.opcode32
-		imm.value = int32(value)
+		imm.value = value
 		return
 
 	default:

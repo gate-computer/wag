@@ -19,7 +19,3 @@ func (imm imm) writeTo(code gen.OpCoder) {
 		binary.Write(code, binary.LittleEndian, imm.value)
 	}
 }
-
-// var (
-// 	Void imm
-// )

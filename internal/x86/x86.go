@@ -20,7 +20,7 @@ const (
 const (
 	// Don't use regResult for effective addresses etc. to avoid information
 	// leaks.  Void functions may leave information in the result register, and
-	// call graph could be rewritten during snapshot/restore to cause void
+	// call stack could be rewritten during snapshot/restore to cause void
 	// function to return to a non-void call site.
 
 	regResult         = regs.R(0)  // rax or xmm0
@@ -207,9 +207,8 @@ func (mach X86) OpEnterImportFunction(code gen.OpCoder, absAddr uint64, variadic
 	}
 	mach.opMoveIntImm(code, regResult, int64(absAddr))
 	Jmp.opReg(code, regResult)
-	// Void import functions must make sure that they don't return anything
-	// damaging information in result register (including the absolute jump
-	// target).
+	// Void import functions must make sure that they don't return any damaging
+	// information in result register (including the absolute jump target).
 }
 
 // OpBranchIndirect32 must not allocate registers.  The supplied register is
@@ -245,7 +244,7 @@ func (mach X86) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 	var checksOut links.L
 
 	mach.opCompareBounds(code, regResult, tableLen)
-	Jle.rel8.opStub(code) // TODO: is this the correct comparison?
+	Jle.rel8.opStub(code)
 	outOfBounds.AddSite(code.Len())
 
 	Mov.opFromAddr(code, types.I64, regResult, 3, regResult, code.RODataAddr()+gen.ROTableAddr)
