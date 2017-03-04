@@ -36,7 +36,7 @@ type opImpl struct {
 	info opInfo
 }
 
-//go:generate gawk -f opcodes.awk internal/design/BinaryEncoding.md
+//go:generate go run internal/cmd/opcodes/generate.go internal/design/BinaryEncoding.md opcodes.go
 
 // init references which would cause "initialization loop" compilation errors.
 func init() {
