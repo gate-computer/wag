@@ -17,56 +17,50 @@ func (mach X86) UnaryOp(code gen.RegCoder, oper uint16, x values.Operand) values
 	}
 }
 
-var unaryIntInsns = []insnPrefix{
-	opers.IndexIntClz:    Bsr,
-	opers.IndexIntCtz:    Bsf,
-	opers.IndexIntPopcnt: Popcnt,
-}
-
 func (mach X86) unaryIntOp(code gen.RegCoder, index uint8, x values.Operand) (result values.Operand) {
-	if index == opers.IndexIntEqz {
+	switch index {
+	case opers.IndexIntEqz:
 		reg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
 		if own {
 			defer code.FreeReg(x.Type, reg)
 		}
 
 		Test.opFromReg(code, x.Type, reg, reg)
-		return values.ConditionFlagsOperand(values.Eq)
-	}
+		result = values.ConditionFlagsOperand(values.Eq)
 
-	var targetReg regs.R
+	default:
+		var targetReg regs.R
 
-	sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
-	if own {
-		targetReg = sourceReg
-	} else {
-		var ok bool
+		sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
+		if own {
+			targetReg = sourceReg
+		} else {
+			var ok bool
 
-		targetReg, ok = code.TryAllocReg(x.Type)
-		if !ok {
-			targetReg = regResult
+			targetReg, ok = code.TryAllocReg(x.Type)
+			if !ok {
+				targetReg = regResult
+			}
 		}
-	}
 
-	result = values.TempRegOperand(x.Type, targetReg, true)
+		result = values.TempRegOperand(x.Type, targetReg, true)
 
-	insn := unaryIntInsns[index]
+		switch index {
+		case opers.IndexIntClz:
+			Bsr.opFromReg(code, x.Type, regScratch, sourceReg)
+			MovImm.opImm(code, x.Type, targetReg, -1)
+			Cmove.opFromReg(code, x.Type, regScratch, targetReg)
+			MovImm.opImm(code, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
+			Sub.opFromReg(code, x.Type, targetReg, regScratch)
 
-	switch index {
-	case opers.IndexIntClz:
-		insn.opFromReg(code, x.Type, regScratch, sourceReg)
-		MovImm.opImm(code, x.Type, targetReg, -1)
-		Cmove.opFromReg(code, x.Type, regScratch, targetReg)
-		MovImm.opImm(code, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
-		Sub.opFromReg(code, x.Type, targetReg, regScratch)
+		case opers.IndexIntCtz:
+			Bsf.opFromReg(code, x.Type, targetReg, sourceReg)
+			MovImm.opImm(code, x.Type, regScratch, int32(x.Type.Size())<<3)
+			Cmove.opFromReg(code, x.Type, targetReg, regScratch)
 
-	case opers.IndexIntCtz:
-		insn.opFromReg(code, x.Type, targetReg, sourceReg)
-		MovImm.opImm(code, x.Type, regScratch, int32(x.Type.Size())<<3)
-		Cmove.opFromReg(code, x.Type, targetReg, regScratch)
-
-	case opers.IndexIntPopcnt:
-		insn.opFromReg(code, x.Type, targetReg, sourceReg)
+		case opers.IndexIntPopcnt:
+			Popcnt.opFromReg(code, x.Type, targetReg, sourceReg)
+		}
 	}
 
 	return
