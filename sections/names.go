@@ -15,6 +15,7 @@ type NameSection struct {
 	FunctionNames []FunctionName
 }
 
+// Load old "name" section encoding, as encoded by wabt.
 func (ns *NameSection) Load(_ string, r reader.Reader) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())

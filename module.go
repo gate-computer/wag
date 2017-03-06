@@ -70,10 +70,6 @@ func (kind externalKind) String() (s string) {
 	return
 }
 
-const (
-	resizableLimitsFlagMaximum = 0x1
-)
-
 type resizableLimits struct {
 	initial int
 	maximum int
@@ -81,7 +77,7 @@ type resizableLimits struct {
 }
 
 func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int) resizableLimits {
-	flags := load.Varuint32()
+	maximumFieldIsPresent := load.Varuint1()
 
 	initial := load.Varuint32()
 	if initial > maxInitial {
@@ -90,7 +86,7 @@ func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int
 
 	maximum := maxMaximum
 
-	if (flags & resizableLimitsFlagMaximum) != 0 {
+	if maximumFieldIsPresent {
 		maximum = load.Varuint32()
 		if maximum > maxMaximum {
 			maximum = maxMaximum
@@ -105,7 +101,7 @@ func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int
 
 const (
 	moduleMagicNumber = uint32(0x6d736100)
-	moduleVersion     = uint32(0xd)
+	moduleVersion     = uint32(1)
 )
 
 type importFunction struct {

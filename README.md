@@ -28,9 +28,7 @@ Features
 Status
 ------
 
-- The WebAssembly prototype format is a moving target.  The supported binary
-  encoding version can be found out by reading `module.go`.  See also the
-  [wag-toolchain](https://github.com/tsavola/wag-toolchain) repository.
+- WebAssembly binary encoding version 1.
 
 - Some floating-point instructions haven't been implemented yet.
 

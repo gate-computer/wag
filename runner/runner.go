@@ -94,6 +94,14 @@ func (env) ImportFunction(module, field string, sig types.Function) (variadic bo
 }
 
 func (env) ImportGlobal(module, field string, t types.T) (valueBits uint64, err error) {
+	switch module {
+	case "spectest":
+		switch field {
+		case "global":
+			return
+		}
+	}
+
 	err = fmt.Errorf("imported %s global not found: %s %s", t, module, field)
 	return
 }

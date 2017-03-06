@@ -30,6 +30,7 @@ const (
 // func Test_call_indirect(t *testing.T)         { spec(t, "call_indirect") }
 // func Test_comments(t *testing.T)              { spec(t, "comments") }
 // func Test_conversions(t *testing.T)           { spec(t, "conversions") }
+// func Test_custom_section(t *testing.T)        { spec(t, "custom_section") }
 // func Test_exports(t *testing.T)               { spec(t, "exports") }
 // func Test_f32(t *testing.T)                   { spec(t, "f32") }
 // func Test_f64(t *testing.T)                   { spec(t, "f64") }
@@ -53,6 +54,8 @@ const (
 func Test_address(t *testing.T)                         { spec(t, "address") }
 func Test_address_offset_range_fail(t *testing.T)       { spec(t, "address-offset-range.fail") }
 func Test_block(t *testing.T)                           { spec(t, "block") }
+func Test_block_end_label_mismatch_fail(t *testing.T)   { spec(t, "block-end-label-mismatch.fail") }
+func Test_block_end_label_superfluous_fai(t *testing.T) { spec(t, "block-end-label-superfluous.fail") }
 func Test_br(t *testing.T)                              { spec(t, "br") }
 func Test_br_if(t *testing.T)                           { spec(t, "br_if") }
 func Test_br_table(t *testing.T)                        { spec(t, "br_table") }
@@ -90,6 +93,13 @@ func Test_i64(t *testing.T)                             { spec(t, "i64") }
 func Test_i64_load64_s_fail(t *testing.T)               { spec(t, "i64.load64_s.fail") }
 func Test_i64_load64_u_fail(t *testing.T)               { spec(t, "i64.load64_u.fail") }
 func Test_i64_store64_fail(t *testing.T)                { spec(t, "i64.store64.fail") }
+func Test_if(t *testing.T)                              { spec(t, "if") }
+func Test_if_else_end_label_mismatch_fail(t *testing.T) { spec(t, "if-else-end-label-mismatch.fail") }
+func Test_if_else_end_label_superfluous_f(t *testing.T) { spec(t, "if-else-end-label-superfluous.fail") }
+func Test_if_else_label_mismatch_fail(t *testing.T)     { spec(t, "if-else-label-mismatch.fail") }
+func Test_if_else_label_superfluous_fail(t *testing.T)  { spec(t, "if-else-label-superfluous.fail") }
+func Test_if_end_label_mismatch_fail(t *testing.T)      { spec(t, "if-end-label-mismatch.fail") }
+func Test_if_end_label_superfluous_fail(t *testing.T)   { spec(t, "if-end-label-superfluous.fail") }
 func Test_import_after_func_fail(t *testing.T)          { spec(t, "import-after-func.fail") }
 func Test_import_after_global_fail(t *testing.T)        { spec(t, "import-after-global.fail") }
 func Test_import_after_memory_fail(t *testing.T)        { spec(t, "import-after-memory.fail") }
@@ -97,7 +107,11 @@ func Test_import_after_table_fail(t *testing.T)         { spec(t, "import-after-
 func Test_int_exprs(t *testing.T)                       { spec(t, "int_exprs") }
 func Test_int_literals(t *testing.T)                    { spec(t, "int_literals") }
 func Test_labels(t *testing.T)                          { spec(t, "labels") }
+func Test_load_align_0_fail(t *testing.T)               { spec(t, "load-align-0.fail") }
+func Test_load_align_odd_fail(t *testing.T)             { spec(t, "load-align-odd.fail") }
 func Test_loop(t *testing.T)                            { spec(t, "loop") }
+func Test_loop_end_label_mismatch_fail(t *testing.T)    { spec(t, "loop-end-label-mismatch.fail") }
+func Test_loop_end_label_superfluous_fail(t *testing.T) { spec(t, "loop-end-label-superfluous.fail") }
 func Test_memory_redundancy(t *testing.T)               { spec(t, "memory_redundancy") }
 func Test_memory_trap(t *testing.T)                     { spec(t, "memory_trap") }
 func Test_nop(t *testing.T)                             { spec(t, "nop") }
@@ -110,12 +124,14 @@ func Test_of_string_overflow_u64_fail(t *testing.T)     { spec(t, "of_string-ove
 func Test_resizing(t *testing.T)                        { spec(t, "resizing") }
 func Test_return(t *testing.T)                          { spec(t, "return") }
 func Test_select(t *testing.T)                          { spec(t, "select") }
-func Test_soft_fail(t *testing.T)                       { spec(t, "soft-fail") }
 func Test_stack(t *testing.T)                           { spec(t, "stack") }
+func Test_store_align_0_fail(t *testing.T)              { spec(t, "store-align-0.fail") }
+func Test_store_align_odd_fail(t *testing.T)            { spec(t, "store-align-odd.fail") }
 func Test_store_retval(t *testing.T)                    { spec(t, "store_retval") }
 func Test_switch(t *testing.T)                          { spec(t, "switch") }
 func Test_typecheck(t *testing.T)                       { spec(t, "typecheck") }
 func Test_unreachable(t *testing.T)                     { spec(t, "unreachable") }
+func Test_unreached_invalid(t *testing.T)               { spec(t, "unreached-invalid") }
 func Test_unwind(t *testing.T)                          { spec(t, "unwind") }
 
 func spec(t *testing.T, name string) {
