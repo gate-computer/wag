@@ -2,7 +2,13 @@
   (import "spectest" "print" (func $print_i32 (param i32)))
   (import "spectest" "print" (func $print_f32_f64 (param f32 f64)))
 
+  (export "main" (func $main))
+
   (memory 0)
+
+  (func $start)
+
+  (start $start)
 
   (func $main
     (local i32)
@@ -185,6 +191,4 @@
     (call $print_i32 (get_local 2))
     (call $print_i32 (get_local 1))
     (call $print_i32 (get_local 0)))
-
-  (start $main)
 )

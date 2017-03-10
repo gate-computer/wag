@@ -31,8 +31,8 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		debugDepth = 0
 	}
 
-	if !m.startDefined {
-		panic(errors.New("start function not defined"))
+	if m.MainSymbol != "" && !m.mainDefined {
+		panic(fmt.Errorf("%s function not found in export section", m.MainSymbol))
 	}
 
 	if m.roDataAbsAddr <= 0 {
@@ -52,11 +52,26 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 
 	m.genTrapEntry(traps.MissingFunction) // at zero address
 
-	link := &m.funcLinks[m.startIndex]
-	retAddr := mach.OpInit(m, link.Addr)
-	m.mapCallAddr(retAddr, 0)
-	link.AddSite(retAddr)
-	// start function returns here, and proceeds to execute the exit trap
+	mach.OpInit(m)
+	// after init, execution proceeds to start func, main func, or exit trap
+
+	maxInitIndex := -1
+
+	if m.startDefined {
+		maxInitIndex = int(m.startIndex)
+
+		m.opInitCall(&m.funcLinks[m.startIndex])
+		// start func returns here; execution proceeds to main func or exit trap
+	}
+
+	if m.mainDefined {
+		if index := int(m.mainIndex); index > maxInitIndex {
+			maxInitIndex = index
+		}
+
+		m.opInitCall(&m.funcLinks[m.mainIndex])
+		// main func returns here; execution proceeds to exit trap
+	}
 
 	for id := traps.Exit; id < traps.NumTraps; id++ {
 		if id != traps.MissingFunction {
@@ -74,7 +89,7 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	var midpoint int
 
 	if machNative && startTrigger != nil {
-		midpoint = int(m.startIndex) + 1
+		midpoint = maxInitIndex + 1
 	} else {
 		midpoint = len(m.funcSigs)
 	}
@@ -171,6 +186,12 @@ func (m moduleCoder) RODataAddr() int32 {
 
 func (m moduleCoder) TrapEntryAddr(id traps.Id) int32 {
 	return m.trapLinks[id].FinalAddr()
+}
+
+func (m moduleCoder) opInitCall(l *links.FunctionL) {
+	retAddr := mach.OpInitCall(m)
+	m.mapCallAddr(retAddr, 0) // initial stack frame
+	l.AddSite(retAddr)
 }
 
 func (m moduleCoder) mapCallAddr(retAddr, stackOffset int32) {

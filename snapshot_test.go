@@ -35,7 +35,7 @@ func TestSnapshot(t *testing.T) {
 	}
 	defer p.Close()
 
-	var m Module
+	m := Module{MainSymbol: "main"}
 	m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())

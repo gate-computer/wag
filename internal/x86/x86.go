@@ -303,7 +303,7 @@ func (mach X86) OpSetGlobal(code gen.Coder, offset int32, x values.Operand) {
 	}
 }
 
-func (mach X86) OpInit(code gen.OpCoder, startAddr int32) (retAddr int32) {
+func (mach X86) OpInit(code gen.OpCoder) {
 	if code.Len() == 0 || code.Len() > functionAlignment {
 		panic("inconsistency")
 	}
@@ -319,8 +319,11 @@ func (mach X86) OpInit(code gen.OpCoder, startAddr int32) (retAddr int32) {
 
 	notResume.Addr = code.Len()
 	mach.updateBranches8(code, &notResume)
+}
 
-	CallRel.op(code, startAddr)
+func (mach X86) OpInitCall(code gen.OpCoder) (retAddr int32) {
+	// no alignment since initial calls are always generated before execution
+	CallRel.opMissingFunction(code)
 	return code.Len()
 }
 

@@ -2,6 +2,8 @@
   (import "spectest" "print" (func $print_i32 (param i32)))
   (import "wag" "snapshot" (func $snapshot (result i32)))
 
+  (export "main" (func $main))
+
   (memory 0 16)
 
   (func $main
@@ -32,6 +34,4 @@
              (call $print_i32 (get_local $y))
              (call $print_i32 (i32.load (i32.const 504)))))
     (get_local $ret))
-
-  (start $main)
 )
