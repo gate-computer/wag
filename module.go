@@ -179,7 +179,7 @@ func (m *Module) LoadPreliminarySections(r reader.Reader, env Environment) (err 
 }
 
 func (m *Module) loadPreliminarySections(r reader.Reader, env Environment) {
-	moduleLoader{m, env, nil}.loadUntil(loader.L{r}, sectionids.Code)
+	moduleLoader{m, env, nil}.loadUntil(loader.L{Reader: r}, sectionids.Code)
 }
 
 // Load all (remaining) sections.
@@ -197,7 +197,7 @@ func (m *Module) load(r reader.Reader, env Environment, textBuf Buffer, roDataBu
 	m.roData.buf = roDataBuf[:0]
 	m.roDataAbsAddr = roDataAbsAddr
 
-	moduleLoader{m, env, startTrigger}.load(loader.L{r})
+	moduleLoader{m, env, startTrigger}.load(loader.L{Reader: r})
 }
 
 type moduleLoader struct {
@@ -533,7 +533,7 @@ func (m *Module) loadCodeSection(r reader.Reader, textBuf Buffer, roDataBuf []by
 	m.roData.buf = roDataBuf[:0]
 	m.roDataAbsAddr = roDataAbsAddr
 
-	load := loader.L{r}
+	load := loader.L{Reader: r}
 
 	if readSectionHeader(load, sectionids.Code, "not a code section") {
 		moduleCoder{m}.genCode(load, startTrigger)
@@ -551,7 +551,7 @@ func (m *Module) LoadDataSection(r reader.Reader) (err error) {
 }
 
 func (m *Module) loadDataSection(r reader.Reader) {
-	load := loader.L{r}
+	load := loader.L{Reader: r}
 
 	if readSectionHeader(load, sectionids.Data, "not a data section") {
 		m.genData(load)
