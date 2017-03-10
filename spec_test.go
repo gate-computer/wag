@@ -207,16 +207,6 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				[]interface{}{"result", "i64"},
 			},
 		},
-		[]interface{}{
-			"import",
-			sexp.Quote("wag"),
-			sexp.Quote("set_result"),
-			[]interface{}{
-				"func",
-				"$set_result",
-				[]interface{}{"param", "i32"},
-			},
-		},
 	}, module[1:]...)
 
 	var realStartName string
@@ -271,11 +261,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 	testFunc := []interface{}{
 		"func",
 		"$test",
-		[]interface{}{
-			"call",
-			"$set_result",
-			[]interface{}{"i32.const", "0xbadc0de"},
-		},
+		[]interface{}{"result", "i32"},
 	}
 
 	if realStartName != "" {
@@ -290,11 +276,9 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				"block",
 				[]interface{}{"call", realStartName},
 				[]interface{}{
-					"set_global",
-					"$test_result",
+					"return",
 					[]interface{}{"i64.const", "777"},
 				},
-				[]interface{}{"return"},
 			},
 		})
 	}
@@ -367,24 +351,14 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				}
 
 				test = []interface{}{
-					"block",
-					[]interface{}{
-						"call",
-						"$set_result",
-						check,
-					},
-					[]interface{}{"return"},
+					"return",
+					check,
 				}
 			} else {
 				test = append([]interface{}{"block"}, assert[1:]...)
 				test = append(test, []interface{}{
-					"block",
-					[]interface{}{
-						"call",
-						"$set_result",
-						[]interface{}{"i32.const", "1"},
-					},
-					[]interface{}{"return"},
+					"return",
+					[]interface{}{"i32.const", "1"},
 				})
 			}
 
@@ -392,7 +366,10 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			test = []interface{}{
 				"block",
 				assert[1],
-				[]interface{}{"return"},
+				[]interface{}{
+					"return",
+					[]interface{}{"i32.const", "0xbadc0de"},
+				},
 			}
 
 		case "invoke":
@@ -406,11 +383,9 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				"block",
 				append([]interface{}{"call", "$" + name}, assert[2:]...),
 				[]interface{}{
-					"call",
-					"$set_result",
+					"return",
 					[]interface{}{"i32.const", "-1"},
 				},
-				[]interface{}{"return"},
 			}
 
 		default:
@@ -432,8 +407,20 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 	}
 
+	testFunc = append(testFunc, []interface{}{
+		"return",
+		[]interface{}{"i32.const", "0xbadc0de"},
+	})
+
 	module = append(module, testFunc)
-	module = append(module, []interface{}{"start", "$test"})
+	module = append(module, []interface{}{
+		"export",
+		"\"test\"",
+		[]interface{}{
+			"func",
+			"$test",
+		},
+	})
 
 	if dumpExps {
 		fmt.Println(sexp.Stringify(module, true))
@@ -459,6 +446,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		var nameSection sections.NameSection
 
 		m := Module{
+			MainSymbol: "test",
 			UnknownSectionLoader: sections.UnknownLoaders{
 				"name": nameSection.Load,
 			}.Load,
@@ -586,11 +574,11 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 
 			if err != nil {
-				if _, ok := err.(traps.Id); ok {
+				if trapId, ok := err.(traps.Id); ok {
 					if testType == "assert_trap" {
 						t.Logf("run: module %s: test #%d: pass", filename, id)
 					} else {
-						t.Errorf("run: module %s: test #%d: FAIL due to unexpected trap", filename, id)
+						t.Errorf("run: module %s: test #%d: FAIL due to unexpected trap %d", filename, id, trapId)
 					}
 				} else {
 					t.Fatal(err)

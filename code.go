@@ -50,12 +50,13 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		panic("table could not be allocated at designated read-only memory offset")
 	}
 
-	m.genTrapEntry(traps.MissingFunction) // at zero address
+	mach.OpEnterTrapHandler(m, traps.MissingFunction) // at zero address
 
 	mach.OpInit(m)
 	// after init, execution proceeds to start func, main func, or exit trap
 
 	maxInitIndex := -1
+	mainResultType := types.Void
 
 	if m.startDefined {
 		maxInitIndex = int(m.startIndex)
@@ -69,14 +70,22 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 			maxInitIndex = index
 		}
 
+		sigIndex := m.funcSigs[m.mainIndex]
+		mainResultType = m.sigs[sigIndex].Result
+
 		m.opInitCall(&m.funcLinks[m.mainIndex])
 		// main func returns here; execution proceeds to exit trap
 	}
 
-	for id := traps.Exit; id < traps.NumTraps; id++ {
-		if id != traps.MissingFunction {
-			m.genTrapEntry(id)
-		}
+	if mainResultType != types.I32 {
+		mach.OpClearIntResultReg(m)
+	}
+
+	mach.OpEnterExitTrapHandler(m)
+
+	for id := traps.MissingFunction + 1; id < traps.NumTraps; id++ {
+		m.trapLinks[id].Addr = m.Len()
+		mach.OpEnterTrapHandler(m, id)
 	}
 
 	for i, imp := range m.importFuncs {
@@ -200,11 +209,6 @@ func (m moduleCoder) mapCallAddr(retAddr, stackOffset int32) {
 	if err := binary.Write(&m.callMap, binary.LittleEndian, uint64(entry)); err != nil {
 		panic(err)
 	}
-}
-
-func (m moduleCoder) genTrapEntry(id traps.Id) {
-	m.trapLinks[id].Addr = m.Len()
-	mach.OpEnterTrapHandler(m, id)
 }
 
 func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {

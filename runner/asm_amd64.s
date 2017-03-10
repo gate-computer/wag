@@ -8,15 +8,7 @@ TEXT ·setRunArg(SB),$0-8
 	POPQ	AX
 	RET
 
-// func getRunResult() int32
-TEXT ·getRunResult(SB),$0-4
-	PUSHQ	AX
-	MOVL	M5, AX
-	MOVL	AX, ret+0(FP)
-	POPQ	AX
-	RET
-
-// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
+// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap uint64, currentMemorySize int, stackPtr uintptr)
 TEXT ·run(SB),$0-120
 	PUSHQ	AX
 	PUSHQ	CX
@@ -215,14 +207,6 @@ TEXT ·importGetArg(SB),$0-8
 
 TEXT getArg<>(SB),NOSPLIT,$0
 	MOVQ	M4, AX
-	RET
-
-// func importSetResult() uint64
-TEXT ·importSetResult(SB),$0-8
-	PUSHQ	AX
-	LEAQ	setResult<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT setResult<>(SB),NOSPLIT,$0

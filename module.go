@@ -443,7 +443,7 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 
 				sigIndex := m.funcSigs[index]
 				sig := m.sigs[sigIndex]
-				if len(sig.Args) > 0 || sig.Result != types.Void {
+				if len(sig.Args) > 0 || !(sig.Result == types.Void || sig.Result == types.I32) {
 					panic(fmt.Errorf("invalid main function signature: %s %s", m.MainSymbol, sig))
 				}
 

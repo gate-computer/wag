@@ -482,6 +482,11 @@ func (mach X86) opMoveIntImm(code gen.OpCoder, reg regs.R, value int64) {
 	}
 }
 
+// OpClearIntResultReg may update CPU's condition flags.
+func (mach X86) OpClearIntResultReg(code gen.OpCoder) {
+	Xor.opFromReg(code, types.I32, regResult, regResult)
+}
+
 // OpPush must not allocate registers, and must not update CPU's condition
 // flags unless the operand is the condition flags.
 func (mach X86) OpPush(code gen.Coder, x values.Operand) {
@@ -687,6 +692,12 @@ func (mach X86) OpSwap(code gen.Coder, cat gen.RegCategory, a, b regs.R) {
 		MovSSE.opFromReg(code, types.F64, a, b)
 		MovSSE.opFromReg(code, types.F64, b, regScratch)
 	}
+}
+
+func (mach X86) OpEnterExitTrapHandler(code gen.OpCoder) {
+	ShlImm.op(code, types.I64, regResult, 32) // exit code at top, trap id (0) at bottom
+	MovMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
+	Jmp.opReg(code, regScratch)
 }
 
 // OpEnterTrapHandler must not generate over 16 bytes of code.

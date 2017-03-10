@@ -17,12 +17,10 @@ import (
 )
 
 func setRunArg(arg int64)
-func getRunResult() int32
 
-func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap int, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap uint64, currentMemorySize int, stackPtr uintptr)
 
 func importGetArg() uint64
-func importSetResult() uint64
 func importSnapshot() uint64
 func importSpectestPrint() uint64
 func importPutns() uint64
@@ -45,12 +43,6 @@ var importFunctions = map[string]map[string]imports.Function{
 			},
 			AbsAddr: importGetArg(),
 		},
-		"set_result": imports.Function{
-			Function: types.Function{
-				Args: []types.T{types.I32},
-			},
-			AbsAddr: importSetResult(),
-		},
 		"snapshot": imports.Function{
 			Function: types.Function{
 				Result: types.I32,
@@ -59,12 +51,6 @@ var importFunctions = map[string]map[string]imports.Function{
 		},
 	},
 	"env": {
-		"set_result": imports.Function{
-			Function: types.Function{
-				Args: []types.T{types.I32},
-			},
-			AbsAddr: importSetResult(),
-		},
 		"putns": imports.Function{
 			Function: types.Function{
 				Args: []types.T{types.I32, types.I32},
@@ -404,11 +390,11 @@ func (e *Executor) run() {
 	trap, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.stack, stackOffset, resumeResult, fds[1])
 
 	e.runner.memorySize = wasm.MemorySize(memorySize)
-	e.runner.lastTrap = traps.Id(trap)
+	e.runner.lastTrap = traps.Id(uint32(trap))
 	e.runner.lastStackPtr = stackPtr
 
-	if trap == 0 {
-		e.result = getRunResult()
+	if e.runner.lastTrap == traps.Exit {
+		e.result = int32(uint32(trap >> 32))
 	} else {
 		e.err = e.runner.lastTrap
 	}
