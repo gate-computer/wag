@@ -68,8 +68,8 @@ func (mach X86) unaryIntOp(code gen.RegCoder, index uint8, x values.Operand) (re
 
 var unaryFloatInsns = []insnPrefix{
 	opers.IndexFloatSqrt:     SqrtsSSE,
-	opers.IndexFloatAbs:      insnPrefix{},
-	opers.IndexFloatCopysign: insnPrefix{},
+	opers.IndexFloatAbs:      {},
+	opers.IndexFloatCopysign: {},
 }
 
 func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (result values.Operand) {
