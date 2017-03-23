@@ -436,19 +436,27 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 			kind := externalKind(load.Byte())
 			index := load.Varuint32()
 
-			if kind == externalKindFunction && fieldLen > 0 && string(fieldStr) == m.MainSymbol {
-				if index >= uint32(len(m.funcSigs)) {
-					panic(fmt.Errorf("export function index out of bounds: %d", index))
+			switch kind {
+			case externalKindFunction:
+				if fieldLen > 0 && string(fieldStr) == m.MainSymbol {
+					if index >= uint32(len(m.funcSigs)) {
+						panic(fmt.Errorf("export function index out of bounds: %d", index))
+					}
+
+					sigIndex := m.funcSigs[index]
+					sig := m.sigs[sigIndex]
+					if len(sig.Args) > 0 || !(sig.Result == types.Void || sig.Result == types.I32) {
+						panic(fmt.Errorf("invalid main function signature: %s %s", m.MainSymbol, sig))
+					}
+
+					m.mainIndex = index
+					m.mainDefined = true
 				}
 
-				sigIndex := m.funcSigs[index]
-				sig := m.sigs[sigIndex]
-				if len(sig.Args) > 0 || !(sig.Result == types.Void || sig.Result == types.I32) {
-					panic(fmt.Errorf("invalid main function signature: %s %s", m.MainSymbol, sig))
-				}
+			case externalKindTable, externalKindMemory, externalKindGlobal:
 
-				m.mainIndex = index
-				m.mainDefined = true
+			default:
+				panic(fmt.Errorf("unknown export kind: %s", kind))
 			}
 		}
 	},
