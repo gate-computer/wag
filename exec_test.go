@@ -14,14 +14,17 @@ import (
 
 func TestExec(t *testing.T) {
 	const (
+		filename = "testdata/exec.wast"
+
 		maxTextSize   = 65536
 		maxRODataSize = 4096
 		stackSize     = 4096
 
+		dumpBin  = false
 		dumpText = false
 	)
 
-	data, err := ioutil.ReadFile("testdata/exec.wast")
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +78,12 @@ func TestExec(t *testing.T) {
 
 	if printBuf.Len() > 0 {
 		t.Logf("print output:\n%s", string(printBuf.Bytes()))
+	}
+
+	if dumpBin {
+		if err := writeBin(&m, filename); err != nil {
+			t.Error(err)
+		}
 	}
 
 	if dumpText && testing.Verbose() {

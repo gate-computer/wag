@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 )
 
 const (
@@ -88,4 +89,20 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 
 	return f2
+}
+
+func writeBin(m *Module, sourceFilename string) error {
+	roDataSize := (len(m.ROData()) + 4095) &^ 4095
+
+	buf := make([]byte, roDataSize+len(m.Text()))
+	copy(buf, m.ROData())
+	copy(buf[roDataSize:], m.Text())
+
+	filename := sourceFilename
+	if i := strings.LastIndex(filename, "."); i > 0 {
+		filename = filename[:i]
+	}
+	filename += ".bin"
+
+	return ioutil.WriteFile(filename, buf, 0644)
 }

@@ -21,6 +21,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 		maxRODataSize = 4096
 		stackSize     = 4096
 
+		dumpBin  = false
 		dumpText = false
 	)
 
@@ -46,6 +47,12 @@ func misc(t *testing.T, filename, expectOutput string) {
 	p.SetFunctionMap(m.FunctionMap())
 	p.SetCallMap(m.CallMap())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
+
+	if dumpBin {
+		if err := writeBin(&m, filename); err != nil {
+			t.Error(err)
+		}
+	}
 
 	if dumpText && testing.Verbose() {
 		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)

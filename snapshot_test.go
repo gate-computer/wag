@@ -13,14 +13,17 @@ import (
 
 func TestSnapshot(t *testing.T) {
 	const (
+		filename = "testdata/snapshot.wast"
+
 		maxTextSize   = 65536
 		maxRODataSize = 4096
 		stackSize     = 4096
 
+		dumpBin  = false
 		dumpText = false
 	)
 
-	data, err := ioutil.ReadFile("testdata/snapshot.wast")
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +45,12 @@ func TestSnapshot(t *testing.T) {
 	p.SetFunctionMap(m.FunctionMap())
 	p.SetCallMap(m.CallMap())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
+
+	if dumpBin {
+		if err := writeBin(&m, filename); err != nil {
+			t.Error(err)
+		}
+	}
 
 	if dumpText && testing.Verbose() {
 		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)

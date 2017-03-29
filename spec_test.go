@@ -179,6 +179,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 
 		timeout     = time.Second * 3
 		dumpExps    = false
+		dumpBin     = false
 		dumpText    = false
 		dumpROData  = false
 		dumpGlobals = false
@@ -458,6 +459,12 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		p.SetFunctionMap(m.FunctionMap())
 		p.SetCallMap(m.CallMap())
 		minMemorySize, maxMemorySize := m.MemoryLimits()
+
+		if dumpBin {
+			if err := writeBin(&m, path.Join("testdata", filename)); err != nil {
+				t.Error(err)
+			}
+		}
 
 		if dumpText && testing.Verbose() {
 			dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), &nameSection)
