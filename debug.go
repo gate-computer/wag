@@ -5,8 +5,7 @@ import (
 )
 
 const (
-	debug     = false
-	debugRead = false
+	debug = false
 )
 
 var (
@@ -24,11 +23,5 @@ func debugf(format string, args ...interface{}) {
 		}
 
 		fmt.Printf(format+"\n", args...)
-	}
-}
-
-func debugReadf(format string, args ...interface{}) {
-	if debugRead {
-		debugf(format, args...)
 	}
 }
