@@ -12,12 +12,6 @@ import (
 )
 
 const (
-	functionAlignment = 16
-
-	paddingByte = 0xcc // int3 instruction
-)
-
-const (
 	// Don't use regResult for effective addresses etc. to avoid information
 	// leaks.  Void functions may leave information in the result register, and
 	// call stack could be rewritten during snapshot/restore to cause void
@@ -38,6 +32,12 @@ const (
 	regTrapHandlerMMX     = regs.R(0) // mm0
 	regMemoryGrowLimitMMX = regs.R(1) // mm1
 	regScratchMMX         = regs.R(2) // mm2
+)
+
+const (
+	FunctionAlignment = 16
+	PaddingByte       = 0xcc // int3 instruction
+	ResultReg         = regResult
 )
 
 var paramRegs [2][]regs.R
@@ -168,9 +168,6 @@ var nopSequences = [][]byte{
 
 type X86 struct{}
 
-func (mach X86) FunctionAlignment() int { return functionAlignment }
-func (mach X86) PaddingByte() byte      { return paddingByte }
-func (mach X86) ResultReg() regs.R      { return regResult }
 func (mach X86) AvailRegs() uint64      { return availRegs }
 func (mach X86) ParamRegs() [2][]regs.R { return paramRegs }
 func (mach X86) ClearInsnCache()        {}
@@ -304,10 +301,10 @@ func (mach X86) OpSetGlobal(code gen.Coder, offset int32, x values.Operand) {
 }
 
 func (mach X86) OpInit(code gen.OpCoder) {
-	if code.Len() == 0 || code.Len() > functionAlignment {
+	if code.Len() == 0 || code.Len() > FunctionAlignment {
 		panic("inconsistency")
 	}
-	code.Align(functionAlignment, paddingByte)
+	code.Align(FunctionAlignment, PaddingByte)
 	Add.opImm(code, types.I64, regStackLimit, gen.StackReserve)
 
 	var notResume links.L
@@ -530,11 +527,6 @@ func (mach X86) OpPush(code gen.Coder, x values.Operand) {
 	if x.Storage == values.TempReg {
 		code.FreeReg(x.Type, reg)
 	}
-}
-
-// OpPushIntReg must not allocate registers.
-func (mach X86) OpPushIntReg(code gen.Coder, sourceReg regs.R) {
-	Push.op(code, sourceReg)
 }
 
 func (mach X86) OpReturn(code gen.Coder) {

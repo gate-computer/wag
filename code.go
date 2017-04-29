@@ -217,7 +217,9 @@ func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
 		debugDepth++
 	}
 
-	m.Align(mach.FunctionAlignment(), mach.PaddingByte())
+	if machFunctionAlignment != 0 {
+		m.Align(machFunctionAlignment, machPaddingByte)
+	}
 	addr = m.Len()
 	m.mapFunctionAddr(addr)
 
@@ -516,7 +518,9 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 
 	load.Varuint32() // body size
 
-	code.Align(mach.FunctionAlignment(), mach.PaddingByte())
+	if machFunctionAlignment != 0 {
+		code.Align(machFunctionAlignment, machPaddingByte)
+	}
 	addr := code.Len()
 	code.funcLinks[funcIndex].Addr = addr
 	code.mapFunctionAddr(addr)
@@ -580,7 +584,7 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 		if result.Type != code.resultType {
 			panic(fmt.Errorf("function result operand type is %s, but function result type is %s", result.Type, code.resultType))
 		}
-		code.opMove(mach.ResultReg(), result, false)
+		code.opMove(machResultReg, result, false)
 	}
 
 	if end := code.popBranchTarget(); end.Live() {
@@ -931,11 +935,11 @@ func genBlock(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend b
 
 	if end := code.popBranchTarget(); end.Live() {
 		if result.Storage != values.Nowhere {
-			code.opMove(mach.ResultReg(), result, false)
+			code.opMove(machResultReg, result, false)
 		}
 
 		if t != types.Void {
-			result = values.TempRegOperand(t, mach.ResultReg(), false)
+			result = values.TempRegOperand(t, machResultReg, false)
 		}
 
 		code.opLabel(end)
@@ -964,7 +968,7 @@ func genBr(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool
 		if value.Type != target.valueType {
 			panic(fmt.Errorf("%s value operand type is %s, but target expects %s", op, value.Type, target.valueType))
 		}
-		code.opMove(mach.ResultReg(), value, false)
+		code.opMove(machResultReg, value, false)
 	}
 
 	if target.functionEnd {
@@ -1005,13 +1009,13 @@ func genBrIf(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bo
 	code.opStoreVars(false)
 
 	if value.Type != types.Void {
-		if cond.Storage == values.TempReg && cond.Reg() == mach.ResultReg() {
+		if cond.Storage == values.TempReg && cond.Reg() == machResultReg {
 			reg := code.opAllocReg(types.I32)
 			zeroExt := code.opMove(reg, cond, true)
 			cond = values.TempRegOperand(cond.Type, reg, zeroExt)
 		}
 
-		code.opMove(mach.ResultReg(), value, true)
+		code.opMove(machResultReg, value, true)
 	}
 
 	stackDelta := code.stackOffset - target.stackOffset
@@ -1097,13 +1101,13 @@ func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 	}
 
 	if value.Type != types.Void {
-		if index.Storage == values.TempReg && index.Reg() == mach.ResultReg() {
+		if index.Storage == values.TempReg && index.Reg() == machResultReg {
 			reg := code.opAllocReg(types.I32)
 			zeroExt := code.opMove(reg, index, true)
 			index = values.TempRegOperand(index.Type, reg, zeroExt)
 		}
 
-		code.opMove(mach.ResultReg(), value, true)
+		code.opMove(machResultReg, value, true)
 	}
 
 	var reg regs.R
@@ -1208,7 +1212,7 @@ func genCallIndirect(code *funcCoder, load loader.L, op opcode, info opInfo) (de
 	// if funcIndex is a reg, it was already relocated to result reg.
 	// otherwise it wasn't touched.
 	if !funcIndex.Storage.IsReg() {
-		code.opMove(mach.ResultReg(), funcIndex, false)
+		code.opMove(machResultReg, funcIndex, false)
 	}
 
 	retAddr := mach.OpCallIndirect(code, int32(len(code.tableFuncs)), int32(sigIndex))
@@ -1265,17 +1269,17 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	}
 
 	// relocate indirect index to result reg if it already occupies some reg
-	if indirect.Storage.IsReg() && indirect.Reg() != mach.ResultReg() {
-		if i := regArgs.get(gen.RegCategoryInt, mach.ResultReg()); i >= 0 {
-			debugf("indirect call index: %s <-> %s", mach.ResultReg(), indirect)
-			mach.OpSwap(code, gen.RegCategoryInt, mach.ResultReg(), indirect.Reg())
+	if indirect.Storage.IsReg() && indirect.Reg() != machResultReg {
+		if i := regArgs.get(gen.RegCategoryInt, machResultReg); i >= 0 {
+			debugf("indirect call index: %s <-> %s", machResultReg, indirect)
+			mach.OpSwap(code, gen.RegCategoryInt, machResultReg, indirect.Reg())
 
 			args[i] = values.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
-			regArgs.clear(gen.RegCategoryInt, mach.ResultReg())
+			regArgs.clear(gen.RegCategoryInt, machResultReg)
 			regArgs.set(gen.RegCategoryInt, indirect.Reg(), i)
 		} else {
-			debugf("indirect call index: %s <- %s", mach.ResultReg(), indirect)
-			mach.OpMoveReg(code, types.I32, mach.ResultReg(), indirect.Reg())
+			debugf("indirect call index: %s <- %s", machResultReg, indirect)
+			mach.OpMoveReg(code, types.I32, machResultReg, indirect.Reg())
 		}
 	}
 
@@ -1492,7 +1496,7 @@ func genIf(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool
 			if value.Type != t {
 				panic(fmt.Errorf("%s value operand has type %s, but target expects %s", op, value.Type, t))
 			}
-			code.opMove(mach.ResultReg(), value, false)
+			code.opMove(machResultReg, value, false)
 		}
 
 		if haveElse {
@@ -1513,7 +1517,7 @@ func genIf(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool
 			if value.Type != t {
 				panic(fmt.Errorf("%s value operand has type %s, but target expects %s", op, value.Type, t))
 			}
-			code.opMove(mach.ResultReg(), value, false)
+			code.opMove(machResultReg, value, false)
 		}
 	}
 
@@ -1592,7 +1596,7 @@ func genReturn(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend 
 		if result.Type != code.resultType {
 			panic(fmt.Errorf("%s value operand type is %s, but function result type is %s", op, result.Type, code.resultType))
 		}
-		code.opMove(mach.ResultReg(), result, false)
+		code.opMove(machResultReg, result, false)
 	}
 
 	mach.OpAddImmToStackPtr(code, code.stackOffset)
@@ -2027,7 +2031,7 @@ func (code *funcCoder) pushImmOperand(t types.T, bits uint64) {
 }
 
 func (code *funcCoder) pushResultRegOperand(t types.T) {
-	x := values.TempRegOperand(t, mach.ResultReg(), false)
+	x := values.TempRegOperand(t, machResultReg, false)
 	debugf("push operand: %s", x)
 	code.operands = append(code.operands, x)
 }
