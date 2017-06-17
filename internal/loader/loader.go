@@ -3,6 +3,7 @@ package loader
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 
 	"github.com/tsavola/wag/internal/reader"
@@ -14,10 +15,7 @@ type L struct {
 }
 
 func (load L) Into(buf []byte) {
-	if len(buf) == 0 {
-		return
-	}
-	if _, err := load.Read(buf); err != nil {
+	if _, err := io.ReadFull(load, buf); err != nil {
 		panic(err)
 	}
 }
