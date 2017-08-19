@@ -1,7 +1,7 @@
 **wag** is a [WebAssembly](http://webassembly.org) compiler implemented as a
 [Go](https://golang.org) package.
 
-- License: 2-clause BSD
+- License: [3-clause BSD](LICENSE)
 - Author: Timo Savola <timo.savola@iki.fi>
 
 
