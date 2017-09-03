@@ -11,7 +11,7 @@ import (
 
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/reader"
+	"github.com/tsavola/wag/reader"
 )
 
 const (

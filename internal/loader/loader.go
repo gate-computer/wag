@@ -10,7 +10,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/internal/reader"
+	"github.com/tsavola/wag/reader"
 )
 
 // L provides panicking alternatives for reader.Reader methods, and then some.
