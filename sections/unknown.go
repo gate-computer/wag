@@ -5,6 +5,7 @@
 package sections
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -27,7 +28,12 @@ func (uls UnknownLoaders) Load(r reader.Reader, payloadLen uint32) (err error) {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	load := loader.L{r}
+	// io.LimitedReader doesn't implement reader.Reader, so do this instead
+	payload := make([]byte, payloadLen)
+	if _, err := io.ReadFull(r, payload); err != nil {
+		panic(err)
+	}
+	load := loader.L{bytes.NewReader(payload)}
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {
@@ -37,11 +43,11 @@ func (uls UnknownLoaders) Load(r reader.Reader, payloadLen uint32) (err error) {
 	name := string(load.Bytes(nameLen))
 
 	if f := uls[name]; f != nil {
-		if err := f(name, load); err != nil {
+		if err := f(name, load.Reader); err != nil { // avoid nested loaders
 			panic(err)
 		}
 	} else {
-		if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
+		if _, err := io.Copy(ioutil.Discard, load.Reader); err != nil {
 			panic(err)
 		}
 	}
