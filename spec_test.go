@@ -31,8 +31,6 @@ const (
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { spec(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
 
 // func Test_binary(t *testing.T)                { spec(t, "binary") }
-// func Test_br(t *testing.T)                    { spec(t, "br") }
-// func Test_br_table(t *testing.T)              { spec(t, "br_table") }
 // func Test_call_indirect(t *testing.T)         { spec(t, "call_indirect") }
 // func Test_comments(t *testing.T)              { spec(t, "comments") }
 // func Test_conversions(t *testing.T)           { spec(t, "conversions") }
@@ -57,19 +55,19 @@ const (
 // func Test_memory(t *testing.T)                { spec(t, "memory") }
 // func Test_memory_trap(t *testing.T)           { spec(t, "memory_trap") }
 // func Test_names(t *testing.T)                 { spec(t, "names") }
-// func Test_return(t *testing.T)                { spec(t, "return") }
 // func Test_set_local(t *testing.T)             { spec(t, "set_local") }
 // func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
 // func Test_start(t *testing.T)                 { spec(t, "start") }
 // func Test_tee_local(t *testing.T)             { spec(t, "tee_local") }
 // func Test_traps(t *testing.T)                 { spec(t, "traps") }
-// func Test_unreachable(t *testing.T)           { spec(t, "unreachable") }
 // func Test_utf8_invalid_encoding(t *testing.T) { spec(t, "utf8-invalid-encoding") }
 
 func Test_address(t *testing.T)                { spec(t, "address") }
 func Test_align(t *testing.T)                  { spec(t, "align") }
 func Test_block(t *testing.T)                  { spec(t, "block") }
+func Test_br(t *testing.T)                     { spec(t, "br") }
 func Test_br_if(t *testing.T)                  { spec(t, "br_if") }
+func Test_br_table(t *testing.T)               { spec(t, "br_table") }
 func Test_break_drop(t *testing.T)             { spec(t, "break-drop") }
 func Test_call(t *testing.T)                   { spec(t, "call") }
 func Test_const(t *testing.T)                  { spec(t, "const") }
@@ -89,6 +87,7 @@ func Test_loop(t *testing.T)                   { spec(t, "loop") }
 func Test_memory_redundancy(t *testing.T)      { spec(t, "memory_redundancy") }
 func Test_nop(t *testing.T)                    { spec(t, "nop") }
 func Test_resizing(t *testing.T)               { spec(t, "resizing") }
+func Test_return(t *testing.T)                 { spec(t, "return") }
 func Test_select(t *testing.T)                 { spec(t, "select") }
 func Test_stack(t *testing.T)                  { spec(t, "stack") }
 func Test_store_retval(t *testing.T)           { spec(t, "store_retval") }
@@ -96,6 +95,7 @@ func Test_switch(t *testing.T)                 { spec(t, "switch") }
 func Test_token(t *testing.T)                  { spec(t, "token") }
 func Test_type(t *testing.T)                   { spec(t, "type") }
 func Test_typecheck(t *testing.T)              { spec(t, "typecheck") }
+func Test_unreachable(t *testing.T)            { spec(t, "unreachable") }
 func Test_unreached_invalid(t *testing.T)      { spec(t, "unreached-invalid") }
 func Test_unwind(t *testing.T)                 { spec(t, "unwind") }
 func Test_utf8_custom_section_id(t *testing.T) { spec(t, "utf8-custom-section-id") }

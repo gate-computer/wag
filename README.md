@@ -44,8 +44,8 @@ Status
 Testing
 -------
 
-Requires Linux, Go, make, clang and libcapstone.  50% of the WebAssembly spec
-testsuite is run, by first converting the tests to binary format:
+Requires Linux, Go, make, clang and libcapstone.  About half of the WebAssembly
+spec testsuite is run, by first converting the tests to binary format:
 
 1. `go get -t github.com/tsavola/wag`
 2. `make -C $GOPATH/src/github.com/tsavola/wag/testdata/wabt`
