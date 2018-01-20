@@ -44,7 +44,7 @@ Status
 Testing
 -------
 
-Requires Linux, Go, make, clang and libcapstone.  75% of the WebAssembly spec
+Requires Linux, Go, make, clang and libcapstone.  50% of the WebAssembly spec
 testsuite is run, by first converting the tests to binary format:
 
 1. `go get -t github.com/tsavola/wag`
@@ -61,7 +61,7 @@ Screenshot
 ```
 === RUN   TestSnapshot
 --- PASS: TestSnapshot (0.00s)
-	snapshot_test.go:60: print output:
+	snapshot_test.go:73: print output:
 		10
 		--- snapshotting ---
 		current memory limit: 0x6a96051ca000
@@ -72,12 +72,12 @@ Screenshot
 		memory size:          65536
 		stack offset:         4032
 		stacktrace:
-		#1  function 3
-		#2  function 2
+		#1  func-3
+		#2  func-2
 		--- shot snapped ---
 		20
-	snapshot_test.go:68: resuming
-	snapshot_test.go:80: print output:
+	snapshot_test.go:81: resuming
+	snapshot_test.go:93: print output:
 		20
 		30
 		330
