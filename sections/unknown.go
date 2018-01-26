@@ -33,7 +33,7 @@ func (uls UnknownLoaders) Load(r reader.Reader, payloadLen uint32) (err error) {
 	if _, err := io.ReadFull(r, payload); err != nil {
 		panic(err)
 	}
-	load := loader.L{bytes.NewReader(payload)}
+	load := loader.L{Reader: bytes.NewReader(payload)}
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {

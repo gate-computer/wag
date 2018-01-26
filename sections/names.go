@@ -37,7 +37,7 @@ func (ns *NameSection) Load(_ string, r reader.Reader) (err error) {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	load := loader.L{r}
+	load := loader.L{Reader: r}
 
 	for {
 		idByte, err := load.ReadByte()
@@ -57,7 +57,7 @@ func (ns *NameSection) Load(_ string, r reader.Reader) (err error) {
 			ns.ModuleName = string(content)
 
 		case subsectionFunctionNames, subsectionLocalNames:
-			loadContent := loader.L{bytes.NewReader(content)}
+			loadContent := loader.L{Reader: bytes.NewReader(content)}
 
 			for range loadContent.Count() {
 				funIndex := loadContent.Varuint32()
