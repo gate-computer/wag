@@ -39,6 +39,8 @@ var (
 
 var (
 	UcomisSSE = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
+	AndpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x54}, nil}
+	OrpSSE    = insnPrefix{OperandSize, []byte{0x0f, 0x56}, nil}
 	XorpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
 	MovSSE    = insnPrefix{Const66RexSize, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
 	PxorSSE   = insnPrefix{Const66RexSize, []byte{0x0f, 0xef}, nil}

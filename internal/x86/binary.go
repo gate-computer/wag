@@ -28,6 +28,9 @@ func (mach X86) BinaryOp(code gen.RegCoder, oper uint16, a, b values.Operand) va
 	case (oper & opers.BinaryFloat) == 0:
 		return mach.binaryIntOp(code, uint8(oper), a, b)
 
+	case (oper & opers.BinaryMinmax) != 0:
+		return mach.binaryFloatMinmaxOp(code, uint8(oper), a, b)
+
 	case (oper & opers.BinaryCompare) != 0:
 		return mach.binaryFloatCompareOp(code, uint8(oper), a, b)
 
@@ -374,8 +377,6 @@ func (mach X86) binaryShiftOp(code gen.RegCoder, index uint8, a, b values.Operan
 var binaryFloatInsns = []insnPrefix{
 	opers.IndexFloatAdd: AddsSSE,
 	opers.IndexFloatSub: SubsSSE,
-	opers.IndexFloatMin: MinsSSE,
-	opers.IndexFloatMax: MaxsSSE,
 	opers.IndexFloatDiv: DivsSSE,
 	opers.IndexFloatMul: MulsSSE,
 }
@@ -391,6 +392,46 @@ func (mach X86) binaryFloatOp(code gen.RegCoder, index uint8, a, b values.Operan
 	}
 
 	binaryFloatInsns[index].opFromReg(code, a.Type, targetReg, sourceReg)
+	return values.TempRegOperand(a.Type, targetReg, false)
+}
+
+type binaryFloatMinmax struct {
+	commonInsn insnPrefix
+	zeroInsn   insnPrefix
+}
+
+var binaryFloatMinmaxInsns = []binaryFloatMinmax{
+	opers.IndexMinmaxMin: {MinsSSE, OrpSSE},
+	opers.IndexMinmaxMax: {MaxsSSE, AndpSSE},
+}
+
+func (mach X86) binaryFloatMinmaxOp(code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+	targetReg, _ := mach.opMaybeResultReg(code, a, false)
+
+	sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, b, false)
+	if own {
+		defer code.FreeReg(b.Type, sourceReg)
+	}
+
+	var common links.L
+	var end links.L
+
+	UcomisSSE.opFromReg(code, a.Type, targetReg, sourceReg)
+	Jne.rel8.opStub(code)
+	common.AddSite(code.Len())
+
+	binaryFloatMinmaxInsns[index].zeroInsn.opFromReg(code, a.Type, targetReg, sourceReg)
+	JmpRel.rel8.opStub(code)
+	end.AddSite(code.Len())
+
+	common.Addr = code.Len()
+	mach.updateBranches8(code, &common)
+
+	binaryFloatMinmaxInsns[index].commonInsn.opFromReg(code, a.Type, targetReg, sourceReg)
+
+	end.Addr = code.Len()
+	mach.updateBranches8(code, &end)
+
 	return values.TempRegOperand(a.Type, targetReg, false)
 }
 

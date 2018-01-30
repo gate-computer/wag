@@ -55,8 +55,9 @@ const (
 const (
 	BinaryShift   = 1 << 8
 	BinaryDivmul  = 1 << 9
-	BinaryCompare = 1 << 10
-	BinaryFloat   = 1 << 11
+	BinaryFloat   = 1 << 10
+	BinaryMinmax  = 1 << 11
+	BinaryCompare = 1 << 12
 
 	DivmulSign = 1 << 0
 	DivmulRem  = 1 << 1
@@ -86,8 +87,9 @@ const (
 	IndexFloatSub
 	IndexFloatMul
 	IndexFloatDiv
-	IndexFloatMin
-	IndexFloatMax
+
+	IndexMinmaxMin = iota
+	IndexMinmaxMax
 )
 
 const (
@@ -124,8 +126,9 @@ const (
 	FloatSub = BinaryFloat | IndexFloatSub
 	FloatMul = BinaryFloat | IndexFloatMul
 	FloatDiv = BinaryFloat | IndexFloatDiv
-	FloatMin = BinaryFloat | IndexFloatMin
-	FloatMax = BinaryFloat | IndexFloatMax
+
+	FloatMin = BinaryFloat | BinaryMinmax | IndexMinmaxMin
+	FloatMax = BinaryFloat | BinaryMinmax | IndexMinmaxMax
 
 	FloatEq = BinaryFloat | BinaryCompare | values.OrderedAndEq
 	FloatNe = BinaryFloat | BinaryCompare | values.UnorderedOrNe
