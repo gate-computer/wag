@@ -48,7 +48,7 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 			panic(err)
 		}
 
-		cmd2 := exec.Command(path.Join(binDir, "wasm2wast"), "-o", "/dev/stdout", f3.Name())
+		cmd2 := exec.Command(path.Join(binDir, "wasm2wat"), "-o", "/dev/stdout", f3.Name())
 		cmd2.Stdout = os.Stdout
 		cmd2.Stderr = os.Stderr
 		if err := cmd2.Run(); err != nil {
