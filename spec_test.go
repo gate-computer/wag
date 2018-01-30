@@ -553,7 +553,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 					if testType == "assert_trap" {
 						t.Logf("run: module %s: test #%d: pass", filename, id)
 					} else {
-						t.Errorf("run: module %s: test #%d: FAIL due to unexpected trap %d", filename, id, trapId)
+						t.Errorf("run: module %s: test #%d: FAIL due to unexpected %s", filename, id, trapId)
 					}
 				} else {
 					t.Fatal(err)
