@@ -35,7 +35,6 @@ const (
 // func Test_comments(t *testing.T)              { spec(t, "comments") }
 // func Test_conversions(t *testing.T)           { spec(t, "conversions") }
 // func Test_custom_section(t *testing.T)        { spec(t, "custom_section") }
-// func Test_elem(t *testing.T)                  { spec(t, "elem") }
 // func Test_exports(t *testing.T)               { spec(t, "exports") }
 // func Test_f32_bitwise(t *testing.T)           { spec(t, "f32_bitwise") }
 // func Test_f64_bitwise(t *testing.T)           { spec(t, "f64_bitwise") }
@@ -69,6 +68,7 @@ func Test_br_table(t *testing.T)               { spec(t, "br_table") }
 func Test_break_drop(t *testing.T)             { spec(t, "break-drop") }
 func Test_call(t *testing.T)                   { spec(t, "call") }
 func Test_const(t *testing.T)                  { spec(t, "const") }
+func Test_elem(t *testing.T)                   { spec(t, "elem") }
 func Test_endianness(t *testing.T)             { spec(t, "endianness") }
 func Test_f32(t *testing.T)                    { spec(t, "f32") }
 func Test_f32_cmp(t *testing.T)                { spec(t, "f32_cmp") }
@@ -179,6 +179,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 	}, module[1:]...)
 
 	var realStartName string
+	var unsupported bool
 	exports := make(map[string]string)
 
 	for i := 1; i < len(module); {
@@ -201,6 +202,13 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		case "start":
 			realStartName = item[1].(string)
 			module = append(module[:i], module[i+1:]...)
+
+		case "import":
+			if item[3].([]interface{})[0] == "table" {
+				t.Logf("run: module %s: table imports not supported", filename)
+				unsupported = true
+			}
+			i++
 
 		case "export":
 			exports[item[1].(string)] = item[2].(string)
@@ -270,6 +278,16 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 
 		idCount++
 		data = tail
+
+		if testType == "register" {
+			t.Logf("run: module %s: register expressions not supported", filename)
+			unsupported = true
+			break
+		}
+
+		if unsupported {
+			continue
+		}
 
 		var argCount int
 		var exprType string
@@ -374,6 +392,10 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				test,
 			})
 		}
+	}
+
+	if unsupported {
+		return data
 	}
 
 	testFunc = append(testFunc, []interface{}{

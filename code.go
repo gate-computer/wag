@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
@@ -117,18 +118,26 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	ptr := m.roData.buf[gen.ROTableAddr:]
 
 	for i, funcIndex := range m.tableFuncs {
-		link := &m.funcLinks[funcIndex]
+		var funcAddr uint32 // missing function trap by default
 
-		sigIndex := m.funcSigs[funcIndex]
-		funcAddr := uint32(link.Addr) // missing if not generated yet
+		if funcIndex < uint32(len(m.funcLinks)) {
+			link := &m.funcLinks[funcIndex]
+			funcAddr = uint32(link.Addr) // missing if not generated yet
+			if funcAddr == 0 {
+				link.AddTableIndex(i)
+			}
+		}
+
+		sigIndex := uint32(math.MaxInt32) // invalid signature index by default
+
+		if funcIndex < uint32(len(m.funcSigs)) {
+			sigIndex = m.funcSigs[funcIndex]
+		}
+
 		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(funcAddr))
 		ptr = ptr[8:]
 
-		if funcAddr == 0 {
-			link.AddTableIndex(i)
-		}
-
-		debugf("element %d: function %d with signature %d", i, funcIndex, sigIndex)
+		debugf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
 	}
 
 	if startTrigger != nil {
