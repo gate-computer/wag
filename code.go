@@ -127,6 +127,8 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		if funcAddr == 0 {
 			link.AddTableIndex(i)
 		}
+
+		debugf("element %d: function %d with signature %d", i, funcIndex, sigIndex)
 	}
 
 	if startTrigger != nil {
