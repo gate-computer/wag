@@ -161,11 +161,6 @@ func (mach X86) binaryDivmulOp(code gen.RegCoder, index uint8, a, b values.Opera
 		value := b.ImmValue()
 
 		switch {
-		case value == -1:
-			reg, _ := mach.opMaybeResultReg(code, a, false)
-			Neg.opReg(code, t, reg)
-			return values.TempRegOperand(t, reg, true)
-
 		case insn.shiftImm.defined() && value > 0 && isPowerOfTwo(uint64(value)):
 			reg, _ := mach.opMaybeResultReg(code, a, false)
 			insn.shiftImm.op(code, t, reg, log2(uint64(value)))
