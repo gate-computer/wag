@@ -50,7 +50,6 @@ const (
 // func Test_left_to_right(t *testing.T)         { spec(t, "left-to-right") }
 // func Test_linking(t *testing.T)               { spec(t, "linking") }
 // func Test_memory(t *testing.T)                { spec(t, "memory") }
-// func Test_memory_trap(t *testing.T)           { spec(t, "memory_trap") }
 // func Test_names(t *testing.T)                 { spec(t, "names") }
 // func Test_set_local(t *testing.T)             { spec(t, "set_local") }
 // func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
@@ -85,6 +84,7 @@ func Test_int_literals(t *testing.T)           { spec(t, "int_literals") }
 func Test_labels(t *testing.T)                 { spec(t, "labels") }
 func Test_loop(t *testing.T)                   { spec(t, "loop") }
 func Test_memory_redundancy(t *testing.T)      { spec(t, "memory_redundancy") }
+func Test_memory_trap(t *testing.T)            { spec(t, "memory_trap") }
 func Test_nop(t *testing.T)                    { spec(t, "nop") }
 func Test_resizing(t *testing.T)               { spec(t, "resizing") }
 func Test_return(t *testing.T)                 { spec(t, "return") }

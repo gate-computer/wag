@@ -39,7 +39,7 @@ func (m *Module) genData(load loader.L) {
 		size := load.Varuint32()
 
 		needMemorySize := int64(offset) + int64(size)
-		if needMemorySize >= int64(m.memoryLimits.initial) {
+		if needMemorySize > int64(m.memoryLimits.initial) {
 			panic(fmt.Errorf("memory segment #%d exceeds initial memory size", i))
 		}
 
