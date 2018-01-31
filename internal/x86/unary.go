@@ -9,6 +9,7 @@ import (
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/types"
 )
 
 func (mach X86) UnaryOp(code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
@@ -91,17 +92,11 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 	} else {
 		switch index := uint8(oper); index {
 		case opers.IndexFloatAbs:
-			absMask := ^(uint64(1) << (uint(x.Type.Size())*8 - 1)) // only high bit cleared
-			movImm64.op(code, x.Type, regScratch, int64(absMask))  // integer scratch register
-			movSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
-			andpSSE.opFromReg(code, x.Type, reg, regScratch)
+			mach.opAbsFloatReg(code, x.Type, reg)
 			return
 
 		case opers.IndexFloatNeg:
-			signMask := int64(-1) << (uint(x.Type.Size())*8 - 1)   // only high bit set
-			movImm64.op(code, x.Type, regScratch, signMask)        // integer scratch register
-			movSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
-			xorpSSE.opFromReg(code, x.Type, reg, regScratch)
+			mach.opNegFloatReg(code, x.Type, reg)
 			return
 
 		case opers.IndexFloatSqrt:
@@ -111,4 +106,20 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 	}
 
 	panic("unknown unary float op")
+}
+
+// opAbsFloatReg in-place.
+func (mach X86) opAbsFloatReg(code gen.RegCoder, t types.T, reg regs.R) {
+	absMask := ^(uint64(1) << (uint(t.Size())*8 - 1)) // only high bit cleared
+	movImm64.op(code, t, regScratch, int64(absMask))  // integer scratch register
+	movSSE.opFromReg(code, t, regScratch, regScratch) // float scratch register
+	andpSSE.opFromReg(code, t, reg, regScratch)
+}
+
+// opNegFloatReg in-place.
+func (mach X86) opNegFloatReg(code gen.RegCoder, t types.T, reg regs.R) {
+	signMask := int64(-1) << (uint(t.Size())*8 - 1)   // only high bit set
+	movImm64.op(code, t, regScratch, signMask)        // integer scratch register
+	movSSE.opFromReg(code, t, regScratch, regScratch) // float scratch register
+	xorpSSE.opFromReg(code, t, reg, regScratch)
 }

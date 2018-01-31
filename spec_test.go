@@ -46,7 +46,6 @@ const (
 // func Test_func(t *testing.T)                  { spec(t, "func") }
 // func Test_func_ptrs(t *testing.T)             { spec(t, "func_ptrs") }
 // func Test_imports(t *testing.T)               { spec(t, "imports") }
-// func Test_left_to_right(t *testing.T)         { spec(t, "left-to-right") }
 // func Test_linking(t *testing.T)               { spec(t, "linking") }
 // func Test_memory(t *testing.T)                { spec(t, "memory") }
 // func Test_names(t *testing.T)                 { spec(t, "names") }
@@ -80,6 +79,7 @@ func Test_inline_module(t *testing.T)          { spec(t, "inline-module") }
 func Test_int_exprs(t *testing.T)              { spec(t, "int_exprs") }
 func Test_int_literals(t *testing.T)           { spec(t, "int_literals") }
 func Test_labels(t *testing.T)                 { spec(t, "labels") }
+func Test_left_to_right(t *testing.T)          { spec(t, "left-to-right") }
 func Test_loop(t *testing.T)                   { spec(t, "loop") }
 func Test_memory_redundancy(t *testing.T)      { spec(t, "memory_redundancy") }
 func Test_memory_trap(t *testing.T)            { spec(t, "memory_trap") }
