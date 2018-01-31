@@ -50,10 +50,8 @@ const (
 // func Test_linking(t *testing.T)               { spec(t, "linking") }
 // func Test_memory(t *testing.T)                { spec(t, "memory") }
 // func Test_names(t *testing.T)                 { spec(t, "names") }
-// func Test_set_local(t *testing.T)             { spec(t, "set_local") }
 // func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
 // func Test_start(t *testing.T)                 { spec(t, "start") }
-// func Test_tee_local(t *testing.T)             { spec(t, "tee_local") }
 // func Test_traps(t *testing.T)                 { spec(t, "traps") }
 // func Test_utf8_invalid_encoding(t *testing.T) { spec(t, "utf8-invalid-encoding") }
 
@@ -89,9 +87,11 @@ func Test_nop(t *testing.T)                    { spec(t, "nop") }
 func Test_resizing(t *testing.T)               { spec(t, "resizing") }
 func Test_return(t *testing.T)                 { spec(t, "return") }
 func Test_select(t *testing.T)                 { spec(t, "select") }
+func Test_set_local(t *testing.T)              { spec(t, "set_local") }
 func Test_stack(t *testing.T)                  { spec(t, "stack") }
 func Test_store_retval(t *testing.T)           { spec(t, "store_retval") }
 func Test_switch(t *testing.T)                 { spec(t, "switch") }
+func Test_tee_local(t *testing.T)              { spec(t, "tee_local") }
 func Test_token(t *testing.T)                  { spec(t, "token") }
 func Test_type(t *testing.T)                   { spec(t, "type") }
 func Test_typecheck(t *testing.T)              { spec(t, "typecheck") }

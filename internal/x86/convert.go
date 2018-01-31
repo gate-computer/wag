@@ -5,8 +5,6 @@
 package x86
 
 import (
-	"fmt"
-
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/opers"
@@ -41,10 +39,16 @@ func (mach X86) ConversionOp(code gen.RegCoder, oper uint16, resultType types.T,
 		result = values.TempRegOperand(resultType, reg, false)
 
 	case opers.TruncS:
-		panic(fmt.Errorf("%s.trunc_s/%s not implemented", resultType, source.Type))
+		// TODO: handle more cases
+		CvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, true)
 
 	case opers.TruncU:
-		panic(fmt.Errorf("%s.trunc_u/%s not implemented", resultType, source.Type))
+		// TODO: handle more cases
+		CvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg)
+		code.FreeReg(source.Type, reg)
+		result = values.TempRegOperand(resultType, regResult, false)
 
 	case opers.ConvertS:
 		Cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
