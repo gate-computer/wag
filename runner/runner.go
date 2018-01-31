@@ -29,10 +29,6 @@ func importSnapshot() uint64
 func importSpectestPrint() uint64
 func importPutns() uint64
 
-var (
-	systemPageSize = syscall.Getpagesize()
-)
-
 var importFunctions = map[string]map[string]imports.Function{
 	"spectest": {
 		"print": imports.Function{
