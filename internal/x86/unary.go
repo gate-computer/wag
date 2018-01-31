@@ -35,7 +35,7 @@ func (mach X86) opIntEqz(code gen.RegCoder, x values.Operand) values.Operand {
 		defer code.FreeReg(x.Type, reg)
 	}
 
-	Test.opFromReg(code, x.Type, reg, reg)
+	test.opFromReg(code, x.Type, reg, reg)
 	return values.ConditionFlagsOperand(values.Eq)
 }
 
@@ -57,21 +57,21 @@ func (mach X86) commonUnaryIntOp(code gen.RegCoder, index uint8, x values.Operan
 
 	switch index {
 	case opers.IndexIntClz:
-		Bsr.opFromReg(code, x.Type, regScratch, sourceReg)
-		MovImm.opImm(code, x.Type, targetReg, -1)
-		Cmove.opFromReg(code, x.Type, regScratch, targetReg)
-		MovImm.opImm(code, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
-		Sub.opFromReg(code, x.Type, targetReg, regScratch)
+		bsr.opFromReg(code, x.Type, regScratch, sourceReg)
+		movImm.opImm(code, x.Type, targetReg, -1)
+		cmove.opFromReg(code, x.Type, regScratch, targetReg)
+		movImm.opImm(code, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
+		sub.opFromReg(code, x.Type, targetReg, regScratch)
 		return
 
 	case opers.IndexIntCtz:
-		Bsf.opFromReg(code, x.Type, targetReg, sourceReg)
-		MovImm.opImm(code, x.Type, regScratch, int32(x.Type.Size())<<3)
-		Cmove.opFromReg(code, x.Type, targetReg, regScratch)
+		bsf.opFromReg(code, x.Type, targetReg, sourceReg)
+		movImm.opImm(code, x.Type, regScratch, int32(x.Type.Size())<<3)
+		cmove.opFromReg(code, x.Type, targetReg, regScratch)
 		return
 
 	case opers.IndexIntPopcnt:
-		Popcnt.opFromReg(code, x.Type, targetReg, sourceReg)
+		popcnt.opFromReg(code, x.Type, targetReg, sourceReg)
 		return
 	}
 
@@ -86,26 +86,26 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 
 	if (oper & opers.UnaryRound) != 0 {
 		roundMode := uint8(oper)
-		RoundsSSE.opReg(code, x.Type, reg, reg, int8(roundMode))
+		roundsSSE.opReg(code, x.Type, reg, reg, int8(roundMode))
 		return
 	} else {
 		switch index := uint8(oper); index {
 		case opers.IndexFloatAbs:
 			absMask := ^(uint64(1) << (uint(x.Type.Size())*8 - 1)) // only high bit cleared
-			MovImm64.op(code, x.Type, regScratch, int64(absMask))  // integer scratch register
-			MovSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
-			AndpSSE.opFromReg(code, x.Type, reg, regScratch)
+			movImm64.op(code, x.Type, regScratch, int64(absMask))  // integer scratch register
+			movSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
+			andpSSE.opFromReg(code, x.Type, reg, regScratch)
 			return
 
 		case opers.IndexFloatNeg:
 			signMask := int64(-1) << (uint(x.Type.Size())*8 - 1)   // only high bit set
-			MovImm64.op(code, x.Type, regScratch, signMask)        // integer scratch register
-			MovSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
-			XorpSSE.opFromReg(code, x.Type, reg, regScratch)
+			movImm64.op(code, x.Type, regScratch, signMask)        // integer scratch register
+			movSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
+			xorpSSE.opFromReg(code, x.Type, reg, regScratch)
 			return
 
 		case opers.IndexFloatSqrt:
-			SqrtsSSE.opFromReg(code, x.Type, reg, reg)
+			sqrtsSSE.opFromReg(code, x.Type, reg, reg)
 			return
 		}
 	}

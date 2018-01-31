@@ -31,41 +31,41 @@ func (p *floatSizePrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBa
 }
 
 var (
-	Const66RexSize = multiPrefix{constPrefix{0x66}, RexSize}
-	OperandSize    = &floatSizePrefix{nil, []byte{0x66}}
-	ScalarSize     = &floatSizePrefix{[]byte{0xf3}, []byte{0xf2}}
-	RoundSize      = &floatSizePrefix{[]byte{0x0a}, []byte{0x0b}}
+	const66RexSize = multiPrefix{constPrefix{0x66}, rexSize}
+	operandSize    = &floatSizePrefix{nil, []byte{0x66}}
+	scalarSize     = &floatSizePrefix{[]byte{0xf3}, []byte{0xf2}}
+	roundSize      = &floatSizePrefix{[]byte{0x0a}, []byte{0x0b}}
 )
 
 var (
-	UcomisSSE = insnPrefix{OperandSize, []byte{0x0f, 0x2e}, nil}
-	AndpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x54}, nil}
-	OrpSSE    = insnPrefix{OperandSize, []byte{0x0f, 0x56}, nil}
-	XorpSSE   = insnPrefix{OperandSize, []byte{0x0f, 0x57}, nil}
-	MovSSE    = insnPrefix{Const66RexSize, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
-	PxorSSE   = insnPrefix{Const66RexSize, []byte{0x0f, 0xef}, nil}
-	MovsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
-	SqrtsSSE  = insnPrefix{ScalarSize, []byte{0x0f, 0x51}, nil}
-	AddsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x58}, nil}
-	MulsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x59}, nil}
-	Cvts2sSSE = insnPrefix{ScalarSize, []byte{0x0f, 0x5a}, nil} // convert float to float
-	SubsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5c}, nil}
-	MinsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5d}, nil}
-	DivsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5e}, nil}
-	MaxsSSE   = insnPrefix{ScalarSize, []byte{0x0f, 0x5f}, nil}
+	ucomisSSE = insnPrefix{operandSize, []byte{0x0f, 0x2e}, nil}
+	andpSSE   = insnPrefix{operandSize, []byte{0x0f, 0x54}, nil}
+	orpSSE    = insnPrefix{operandSize, []byte{0x0f, 0x56}, nil}
+	xorpSSE   = insnPrefix{operandSize, []byte{0x0f, 0x57}, nil}
+	movSSE    = insnPrefix{const66RexSize, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
+	pxorSSE   = insnPrefix{const66RexSize, []byte{0x0f, 0xef}, nil}
+	movsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x10}, []byte{0x0f, 0x11}}
+	sqrtsSSE  = insnPrefix{scalarSize, []byte{0x0f, 0x51}, nil}
+	addsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x58}, nil}
+	mulsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x59}, nil}
+	cvts2sSSE = insnPrefix{scalarSize, []byte{0x0f, 0x5a}, nil} // convert float to float
+	subsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x5c}, nil}
+	minsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x5d}, nil}
+	divsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x5e}, nil}
+	maxsSSE   = insnPrefix{scalarSize, []byte{0x0f, 0x5f}, nil}
 
-	Cvtsi2sSSE  = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2a}}
-	CvttsSSE2si = insnPrefixRexRM{ScalarSize, []byte{0x0f, 0x2c}}
+	cvtsi2sSSE  = insnPrefixRexRM{scalarSize, []byte{0x0f, 0x2a}}
+	cvttsSSE2si = insnPrefixRexRM{scalarSize, []byte{0x0f, 0x2c}}
 
-	RoundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, RoundSize}
+	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
 func pushFloatOp(code gen.OpCoder, t types.T, source regs.R) {
-	Sub.opImm(code, types.I64, regStackPtr, gen.WordSize)
-	MovsSSE.opToStack(code, t, source, 0)
+	sub.opImm(code, types.I64, regStackPtr, gen.WordSize)
+	movsSSE.opToStack(code, t, source, 0)
 }
 
 func popFloatOp(code gen.OpCoder, t types.T, target regs.R) {
-	MovsSSE.opFromStack(code, t, target, 0)
-	Add.opImm(code, types.I64, regStackPtr, gen.WordSize)
+	movsSSE.opFromStack(code, t, target, 0)
+	add.opImm(code, types.I64, regStackPtr, gen.WordSize)
 }

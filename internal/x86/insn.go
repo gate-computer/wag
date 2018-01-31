@@ -29,22 +29,22 @@ func (array multiPrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBas
 }
 
 const (
-	rex  = (1 << 6)
-	rexW = rex | (1 << 3)
-	rexR = rex | (1 << 2)
-	rexX = rex | (1 << 1)
-	rexB = rex | (1 << 0)
+	Rex  = (1 << 6)
+	RexW = Rex | (1 << 3)
+	RexR = Rex | (1 << 2)
+	RexX = Rex | (1 << 1)
+	RexB = Rex | (1 << 0)
 )
 
 func writeRexTo(code gen.OpCoder, rex, ro, index, rmOrBase byte) {
 	if ro >= 8 {
-		rex |= rexR
+		rex |= RexR
 	}
 	if index >= 8 {
-		rex |= rexX
+		rex |= RexX
 	}
 	if rmOrBase >= 8 {
-		rex |= rexB
+		rex |= RexB
 	}
 
 	if rex != 0 {
@@ -59,7 +59,7 @@ func writeRexSizeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
 	case types.Size32:
 
 	case types.Size64:
-		rex |= rexW
+		rex |= RexW
 
 	default:
 		panic(t)
@@ -292,7 +292,7 @@ func (i insnRexM) opStack(code gen.OpCoder, t types.T, disp int32) {
 }
 
 var (
-	NoRexMInsn = insnRexM{nil, 0}
+	noRexMInsn = insnRexM{nil, 0}
 )
 
 //
@@ -477,7 +477,7 @@ func (i insnPrefixMI) immOpcode(value int32) (opcode byte, imm imm) {
 }
 
 var (
-	NoPrefixMIInsn = insnPrefixMI{nil, 0, 0, 0, 0}
+	noPrefixMIInsn = insnPrefixMI{nil, 0, 0, 0, 0}
 )
 
 //
@@ -551,7 +551,7 @@ func (i shiftImmInsn) op(code gen.OpCoder, t types.T, reg regs.R, value uint8) {
 }
 
 var (
-	NoShiftImmInsn = shiftImmInsn{NoRexMInsn, NoPrefixMIInsn}
+	noShiftImmInsn = shiftImmInsn{noRexMInsn, noPrefixMIInsn}
 )
 
 //

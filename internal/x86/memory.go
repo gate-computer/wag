@@ -22,22 +22,22 @@ type memoryAccess struct {
 }
 
 var memoryLoads = []memoryAccess{
-	opers.IndexIntLoad:    {Mov, 0, true},
-	opers.IndexIntLoad8S:  {binaryInsn{Movsx8, NoPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad8U:  {binaryInsn{Movzx8, NoPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad16S: {binaryInsn{Movsx16, NoPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad16U: {binaryInsn{Movzx16, NoPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad32S: {binaryInsn{Movsxd, NoPrefixMIInsn}, 0, false}, // type is ignored
-	opers.IndexIntLoad32U: {Mov, types.I32, true},
-	opers.IndexFloatLoad:  {binaryInsn{MovsSSE, NoPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad:    {mov, 0, true},
+	opers.IndexIntLoad8S:  {binaryInsn{movsx8, noPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad8U:  {binaryInsn{movzx8, noPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad16S: {binaryInsn{movsx16, noPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad16U: {binaryInsn{movzx16, noPrefixMIInsn}, 0, false},
+	opers.IndexIntLoad32S: {binaryInsn{movsxd, noPrefixMIInsn}, 0, false}, // type is ignored
+	opers.IndexIntLoad32U: {mov, types.I32, true},
+	opers.IndexFloatLoad:  {binaryInsn{movsSSE, noPrefixMIInsn}, 0, false},
 }
 
 var memoryStores = []memoryAccess{
-	opers.IndexIntStore:   {Mov, 0, false},
-	opers.IndexIntStore8:  {Mov8, types.I32, false},
-	opers.IndexIntStore16: {Mov16, types.I32, false},
-	opers.IndexIntStore32: {Mov, types.I32, false},
-	opers.IndexFloatStore: {binaryInsn{MovsSSE, MovImm}, 0, false}, // integer immediate works
+	opers.IndexIntStore:   {mov, 0, false},
+	opers.IndexIntStore8:  {mov8, types.I32, false},
+	opers.IndexIntStore16: {mov16, types.I32, false},
+	opers.IndexIntStore32: {mov, types.I32, false},
+	opers.IndexFloatStore: {binaryInsn{movsSSE, movImm}, 0, false}, // integer immediate works
 }
 
 // LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
@@ -150,13 +150,13 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Ope
 			return
 		}
 
-		Lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryBase, int32(reachAddr))
+		lea.opFromIndirect(code, types.I64, regScratch, 0, NoIndex, regMemoryBase, int32(reachAddr))
 
 	default:
 		reg, zeroExt, own := mach.opBorrowMaybeScratchReg(code, index, true)
 
 		if !zeroExt {
-			Mov.opFromReg(code, types.I32, reg, reg) // zero-extend index
+			mov.opFromReg(code, types.I32, reg, reg) // zero-extend index
 		}
 
 		if alreadyChecked {
@@ -167,21 +167,21 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Ope
 			return
 		}
 
-		Lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryBase, int32(reachOffset))
+		lea.opFromIndirect(code, types.I64, regScratch, 0, reg, regMemoryBase, int32(reachOffset))
 
 		if own {
 			code.FreeReg(types.I32, reg)
 		}
 	}
 
-	Cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
+	cmp.opFromReg(code, types.I64, regScratch, regMemoryLimit)
 
 	if addr := code.TrapTrampolineAddr(traps.MemoryOutOfBounds); addr != 0 {
-		Jge.op(code, addr)
+		jge.op(code, addr)
 	} else {
 		var checked links.L
 
-		Jl.rel8.opStub(code)
+		jl.rel8.opStub(code)
 		checked.AddSite(code.Len())
 
 		code.OpTrapCall(traps.MemoryOutOfBounds)
@@ -197,9 +197,9 @@ func (mach X86) opMemoryAddress(code gen.RegCoder, size uint16, index values.Ope
 }
 
 func (mach X86) OpCurrentMemory(code gen.RegCoder) values.Operand {
-	Mov.opFromReg(code, types.I64, regResult, regMemoryLimit)
-	Sub.opFromReg(code, types.I64, regResult, regMemoryBase)
-	ShrImm.op(code, types.I64, regResult, wasm.PageBits)
+	mov.opFromReg(code, types.I64, regResult, regMemoryLimit)
+	sub.opFromReg(code, types.I64, regResult, regMemoryBase)
+	shrImm.op(code, types.I64, regResult, wasm.PageBits)
 
 	return values.TempRegOperand(types.I32, regResult, true)
 }
@@ -208,33 +208,33 @@ func (mach X86) OpGrowMemory(code gen.RegCoder, x values.Operand) values.Operand
 	var out links.L
 	var fail links.L
 
-	MovMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
+	movMMX.opToReg(code, types.I64, regScratch, regMemoryGrowLimitMMX)
 
 	targetReg, zeroExt := mach.opMaybeResultReg(code, x, false)
 	if !zeroExt {
-		Mov.opFromReg(code, types.I32, targetReg, targetReg)
+		mov.opFromReg(code, types.I32, targetReg, targetReg)
 	}
 
-	ShlImm.op(code, types.I64, targetReg, wasm.PageBits)
-	Add.opFromReg(code, types.I64, targetReg, regMemoryLimit) // new memory limit
-	Cmp.opFromReg(code, types.I64, targetReg, regScratch)
+	shlImm.op(code, types.I64, targetReg, wasm.PageBits)
+	add.opFromReg(code, types.I64, targetReg, regMemoryLimit) // new memory limit
+	cmp.opFromReg(code, types.I64, targetReg, regScratch)
 
-	Jg.rel8.opStub(code)
+	jg.rel8.opStub(code)
 	fail.AddSite(code.Len())
 
-	Mov.opFromReg(code, types.I64, regScratch, regMemoryLimit)
-	Mov.opFromReg(code, types.I64, regMemoryLimit, targetReg)
-	Sub.opFromReg(code, types.I64, regScratch, regMemoryBase)
-	ShrImm.op(code, types.I64, regScratch, wasm.PageBits) // value on success
-	Mov.opFromReg(code, types.I32, targetReg, regScratch)
+	mov.opFromReg(code, types.I64, regScratch, regMemoryLimit)
+	mov.opFromReg(code, types.I64, regMemoryLimit, targetReg)
+	sub.opFromReg(code, types.I64, regScratch, regMemoryBase)
+	shrImm.op(code, types.I64, regScratch, wasm.PageBits) // value on success
+	mov.opFromReg(code, types.I32, targetReg, regScratch)
 
-	JmpRel.rel8.opStub(code)
+	jmpRel.rel8.opStub(code)
 	out.AddSite(code.Len())
 
 	fail.Addr = code.Len()
 	mach.updateBranches8(code, &fail)
 
-	MovImm.opImm(code, types.I32, targetReg, -1) // value on failure
+	movImm.opImm(code, types.I32, targetReg, -1) // value on failure
 
 	out.Addr = code.Len()
 	mach.updateBranches8(code, &out)

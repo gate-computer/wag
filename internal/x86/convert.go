@@ -35,42 +35,42 @@ func (mach X86) commonConversionOp(code gen.RegCoder, oper uint16, resultType ty
 
 	switch oper {
 	case opers.ExtendS:
-		Movsxd.opFromReg(code, 0, reg, reg)
+		movsxd.opFromReg(code, 0, reg, reg)
 		return values.TempRegOperand(resultType, reg, false)
 
 	case opers.ExtendU:
 		if !zeroExt {
-			Mov.opFromReg(code, types.I32, reg, reg)
+			mov.opFromReg(code, types.I32, reg, reg)
 		}
 		return values.TempRegOperand(resultType, reg, false)
 
 	case opers.Mote:
-		Cvts2sSSE.opFromReg(code, source.Type, reg, reg)
+		cvts2sSSE.opFromReg(code, source.Type, reg, reg)
 		return values.TempRegOperand(resultType, reg, false)
 
 	case opers.TruncS:
 		// TODO: handle more cases
-		CvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
+		cvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
 		code.FreeReg(source.Type, reg)
 		return values.TempRegOperand(resultType, regResult, true)
 
 	case opers.TruncU:
 		// TODO: handle more cases
-		CvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg)
+		cvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg)
 		code.FreeReg(source.Type, reg)
 		return values.TempRegOperand(resultType, regResult, false)
 
 	case opers.ConvertS:
-		Cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
+		cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
 		code.FreeReg(source.Type, reg)
 		return values.TempRegOperand(resultType, regResult, false)
 
 	case opers.ConvertU:
 		if source.Type == types.I32 {
 			if !zeroExt {
-				Mov.opFromReg(code, types.I32, reg, reg)
+				mov.opFromReg(code, types.I32, reg, reg)
 			}
-			Cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, reg)
+			cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, reg)
 		} else {
 			mach.opConvertUnsignedI64ToFloat(code, resultType, reg)
 		}
@@ -79,9 +79,9 @@ func (mach X86) commonConversionOp(code gen.RegCoder, oper uint16, resultType ty
 
 	case opers.Reinterpret:
 		if source.Type.Category() == types.Int {
-			MovSSE.opFromReg(code, source.Type, regResult, reg)
+			movSSE.opFromReg(code, source.Type, regResult, reg)
 		} else {
-			MovSSE.opToReg(code, source.Type, regResult, reg)
+			movSSE.opToReg(code, source.Type, regResult, reg)
 		}
 		code.FreeReg(source.Type, reg)
 		return values.TempRegOperand(resultType, regResult, true)
@@ -98,26 +98,26 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, resultType types.T, 
 
 	// TODO: allocate target reg
 
-	Test.opFromReg(code, types.I64, inputReg, inputReg)
-	Js.rel8.opStub(code)
+	test.opFromReg(code, types.I64, inputReg, inputReg)
+	js.rel8.opStub(code)
 	huge.AddSite(code.Len())
 
 	// max. 63-bit value
-	Cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, inputReg)
+	cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, inputReg)
 
-	JmpRel.rel8.opStub(code)
+	jmpRel.rel8.opStub(code)
 	done.AddSite(code.Len())
 
 	huge.Addr = code.Len()
 	mach.updateBranches8(code, &huge)
 
 	// 64-bit value
-	Mov.opFromReg(code, types.I64, regScratch, inputReg)
-	And.opImm(code, types.I64, regScratch, 1)
-	ShrImm.op(code, types.I64, inputReg, 1)
-	Or.opFromReg(code, types.I64, inputReg, regScratch)
-	Cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, inputReg)
-	AddsSSE.opFromReg(code, resultType, regResult, regResult)
+	mov.opFromReg(code, types.I64, regScratch, inputReg)
+	and.opImm(code, types.I64, regScratch, 1)
+	shrImm.op(code, types.I64, inputReg, 1)
+	or.opFromReg(code, types.I64, inputReg, regScratch)
+	cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, inputReg)
+	addsSSE.opFromReg(code, resultType, regResult, regResult)
 
 	done.Addr = code.Len()
 	mach.updateBranches8(code, &done)
