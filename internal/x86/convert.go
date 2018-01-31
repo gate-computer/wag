@@ -14,46 +14,56 @@ import (
 )
 
 func (mach X86) ConversionOp(code gen.RegCoder, oper uint16, resultType types.T, source values.Operand) (result values.Operand) {
-	if oper == opers.Wrap {
-		source.Type = types.I32 // short mov; useful zeroExt flag
-		reg, zeroExt := mach.opMaybeResultReg(code, source, false)
-		return values.TempRegOperand(resultType, reg, zeroExt)
-	}
+	switch oper {
+	case opers.Wrap:
+		return mach.opWrap(code, resultType, source)
 
+	default:
+		return mach.commonConversionOp(code, oper, resultType, source)
+	}
+}
+
+func (mach X86) opWrap(code gen.RegCoder, resultType types.T, source values.Operand) values.Operand {
+	source.Type = types.I32 // short mov; useful zeroExt flag
+	reg, zeroExt := mach.opMaybeResultReg(code, source, false)
+	return values.TempRegOperand(resultType, reg, zeroExt)
+}
+
+func (mach X86) commonConversionOp(code gen.RegCoder, oper uint16, resultType types.T, source values.Operand) values.Operand {
 	reg, zeroExt := mach.opMaybeResultReg(code, source, false)
 	// TODO: for int<->float ops: borrow source reg, allocate target reg
 
 	switch oper {
 	case opers.ExtendS:
 		Movsxd.opFromReg(code, 0, reg, reg)
-		result = values.TempRegOperand(resultType, reg, false)
+		return values.TempRegOperand(resultType, reg, false)
 
 	case opers.ExtendU:
 		if !zeroExt {
 			Mov.opFromReg(code, types.I32, reg, reg)
 		}
-		result = values.TempRegOperand(resultType, reg, false)
+		return values.TempRegOperand(resultType, reg, false)
 
 	case opers.Mote:
 		Cvts2sSSE.opFromReg(code, source.Type, reg, reg)
-		result = values.TempRegOperand(resultType, reg, false)
+		return values.TempRegOperand(resultType, reg, false)
 
 	case opers.TruncS:
 		// TODO: handle more cases
 		CvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
 		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, true)
+		return values.TempRegOperand(resultType, regResult, true)
 
 	case opers.TruncU:
 		// TODO: handle more cases
 		CvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg)
 		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, false)
+		return values.TempRegOperand(resultType, regResult, false)
 
 	case opers.ConvertS:
 		Cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
 		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, false)
+		return values.TempRegOperand(resultType, regResult, false)
 
 	case opers.ConvertU:
 		if source.Type == types.I32 {
@@ -65,7 +75,7 @@ func (mach X86) ConversionOp(code gen.RegCoder, oper uint16, resultType types.T,
 			mach.opConvertUnsignedI64ToFloat(code, resultType, reg)
 		}
 		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, false)
+		return values.TempRegOperand(resultType, regResult, false)
 
 	case opers.Reinterpret:
 		if source.Type.Category() == types.Int {
@@ -74,10 +84,10 @@ func (mach X86) ConversionOp(code gen.RegCoder, oper uint16, resultType types.T,
 			MovSSE.opToReg(code, source.Type, regResult, reg)
 		}
 		code.FreeReg(source.Type, reg)
-		result = values.TempRegOperand(resultType, regResult, true)
+		return values.TempRegOperand(resultType, regResult, true)
 	}
 
-	return
+	panic("unknown conversion op")
 }
 
 func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, resultType types.T, inputReg regs.R) {

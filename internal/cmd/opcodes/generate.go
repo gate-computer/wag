@@ -236,7 +236,7 @@ func typeCategory(letter string) string {
 
 func operGen(oper string) string {
 	switch oper {
-	case "abs", "ceil", "clz", "copysign", "ctz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
+	case "abs", "ceil", "clz", "ctz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
 		return "genUnaryOp"
 
 	case "eqz":
@@ -245,7 +245,7 @@ func operGen(oper string) string {
 	case "add", "and", "max", "min", "mul", "or", "xor":
 		return "genBinaryCommuteOp"
 
-	case "div", "div_s", "div_u", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub":
+	case "copysign", "div", "div_s", "div_u", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub":
 		return "genBinaryOp"
 
 	case "eq", "ne":

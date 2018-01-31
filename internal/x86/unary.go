@@ -5,8 +5,6 @@
 package x86
 
 import (
-	"errors"
-
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
@@ -15,65 +13,69 @@ import (
 
 func (mach X86) UnaryOp(code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
 	if (oper & opers.UnaryFloat) == 0 {
-		return mach.unaryIntOp(code, uint8(oper), x)
+		return mach.unaryIntOp(code, oper, x)
 	} else {
 		return mach.unaryFloatOp(code, oper, x)
 	}
 }
 
-func (mach X86) unaryIntOp(code gen.RegCoder, index uint8, x values.Operand) (result values.Operand) {
-	switch index {
+func (mach X86) unaryIntOp(code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
+	switch index := uint8(oper); index {
 	case opers.IndexIntEqz:
-		reg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
-		if own {
-			defer code.FreeReg(x.Type, reg)
-		}
-
-		Test.opFromReg(code, x.Type, reg, reg)
-		result = values.ConditionFlagsOperand(values.Eq)
+		return mach.opIntEqz(code, x)
 
 	default:
-		var targetReg regs.R
+		return mach.commonUnaryIntOp(code, index, x)
+	}
+}
 
-		sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
-		if own {
-			targetReg = sourceReg
-		} else {
-			var ok bool
+func (mach X86) opIntEqz(code gen.RegCoder, x values.Operand) values.Operand {
+	reg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
+	if own {
+		defer code.FreeReg(x.Type, reg)
+	}
 
-			targetReg, ok = code.TryAllocReg(x.Type)
-			if !ok {
-				targetReg = regResult
-			}
-		}
+	Test.opFromReg(code, x.Type, reg, reg)
+	return values.ConditionFlagsOperand(values.Eq)
+}
 
-		result = values.TempRegOperand(x.Type, targetReg, true)
+func (mach X86) commonUnaryIntOp(code gen.RegCoder, index uint8, x values.Operand) (result values.Operand) {
+	var ok bool
+	var targetReg regs.R
 
-		switch index {
-		case opers.IndexIntClz:
-			Bsr.opFromReg(code, x.Type, regScratch, sourceReg)
-			MovImm.opImm(code, x.Type, targetReg, -1)
-			Cmove.opFromReg(code, x.Type, regScratch, targetReg)
-			MovImm.opImm(code, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
-			Sub.opFromReg(code, x.Type, targetReg, regScratch)
-
-		case opers.IndexIntCtz:
-			Bsf.opFromReg(code, x.Type, targetReg, sourceReg)
-			MovImm.opImm(code, x.Type, regScratch, int32(x.Type.Size())<<3)
-			Cmove.opFromReg(code, x.Type, targetReg, regScratch)
-
-		case opers.IndexIntPopcnt:
-			Popcnt.opFromReg(code, x.Type, targetReg, sourceReg)
+	sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, x, false)
+	if own {
+		targetReg = sourceReg
+	} else {
+		targetReg, ok = code.TryAllocReg(x.Type)
+		if !ok {
+			targetReg = regResult
 		}
 	}
 
-	return
-}
+	result = values.TempRegOperand(x.Type, targetReg, true)
 
-var unaryFloatInsns = []insnPrefix{
-	opers.IndexFloatSqrt:     SqrtsSSE,
-	opers.IndexFloatAbs:      {},
-	opers.IndexFloatCopysign: {},
+	switch index {
+	case opers.IndexIntClz:
+		Bsr.opFromReg(code, x.Type, regScratch, sourceReg)
+		MovImm.opImm(code, x.Type, targetReg, -1)
+		Cmove.opFromReg(code, x.Type, regScratch, targetReg)
+		MovImm.opImm(code, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
+		Sub.opFromReg(code, x.Type, targetReg, regScratch)
+		return
+
+	case opers.IndexIntCtz:
+		Bsf.opFromReg(code, x.Type, targetReg, sourceReg)
+		MovImm.opImm(code, x.Type, regScratch, int32(x.Type.Size())<<3)
+		Cmove.opFromReg(code, x.Type, targetReg, regScratch)
+		return
+
+	case opers.IndexIntPopcnt:
+		Popcnt.opFromReg(code, x.Type, targetReg, sourceReg)
+		return
+	}
+
+	panic("unknown unary int op")
 }
 
 func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (result values.Operand) {
@@ -82,28 +84,31 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 	reg, _ := mach.opMaybeResultReg(code, x, false)
 	result = values.TempRegOperand(x.Type, reg, false)
 
-	switch {
-	case (oper & opers.UnaryRound) != 0:
-		mode := uint8(oper)
-		RoundsSSE.opReg(code, x.Type, reg, reg, int8(mode))
+	if (oper & opers.UnaryRound) != 0 {
+		roundMode := uint8(oper)
+		RoundsSSE.opReg(code, x.Type, reg, reg, int8(roundMode))
+		return
+	} else {
+		switch index := uint8(oper); index {
+		case opers.IndexFloatAbs:
+			absMask := ^(uint64(1) << (uint(x.Type.Size())*8 - 1)) // only high bit cleared
+			MovImm64.op(code, x.Type, regScratch, int64(absMask))  // integer scratch register
+			MovSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
+			AndpSSE.opFromReg(code, x.Type, reg, regScratch)
+			return
 
-	case oper == opers.FloatNeg:
-		signMask := int64(-1) << (uint(x.Type.Size())*8 - 1)
-		MovImm64.op(code, x.Type, regScratch, signMask)        // integer scratch register
-		MovSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
-		XorpSSE.opFromReg(code, x.Type, reg, regScratch)
+		case opers.IndexFloatNeg:
+			signMask := int64(-1) << (uint(x.Type.Size())*8 - 1)   // only high bit set
+			MovImm64.op(code, x.Type, regScratch, signMask)        // integer scratch register
+			MovSSE.opFromReg(code, x.Type, regScratch, regScratch) // float scratch register
+			XorpSSE.opFromReg(code, x.Type, reg, regScratch)
+			return
 
-	default:
-		index := uint8(oper)
-		insn := unaryFloatInsns[index]
-
-		// TODO: remove this check after abs and copysign have been implemented
-		if insn.prefix == nil {
-			panic(errors.New("opcode not implemented"))
+		case opers.IndexFloatSqrt:
+			SqrtsSSE.opFromReg(code, x.Type, reg, reg)
+			return
 		}
-
-		insn.opFromReg(code, x.Type, reg, reg)
 	}
 
-	return
+	panic("unknown unary float op")
 }

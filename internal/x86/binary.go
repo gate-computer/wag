@@ -15,31 +15,38 @@ import (
 )
 
 func (mach X86) BinaryOp(code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
-	switch {
-	case (oper & opers.BinaryShift) != 0:
-		return mach.binaryShiftOp(code, uint8(oper), a, b)
+	if (oper & opers.BinaryFloat) == 0 {
+		switch {
+		case (oper & opers.BinaryCompare) != 0:
+			return mach.binaryIntCompareOp(code, uint8(oper), a, b)
 
-	case (oper & opers.BinaryDivmul) != 0:
-		return mach.binaryDivmulOp(code, uint8(oper), a, b)
+		case (oper & opers.BinaryIntShift) != 0:
+			return mach.binaryIntShiftOp(code, uint8(oper), a, b)
 
-	case (oper & (opers.BinaryCompare | opers.BinaryFloat)) == opers.BinaryCompare:
-		return mach.binaryIntCompareOp(code, uint8(oper), a, b)
+		case (oper & opers.BinaryIntDivmul) != 0:
+			return mach.binaryIntDivmulOp(code, uint8(oper), a, b)
 
-	case (oper & opers.BinaryFloat) == 0:
-		return mach.binaryIntOp(code, uint8(oper), a, b)
+		default:
+			return mach.commonBinaryIntOp(code, uint8(oper), a, b)
+		}
+	} else {
+		switch {
+		case (oper & opers.BinaryCompare) != 0:
+			return mach.binaryFloatCompareOp(code, uint8(oper), a, b)
 
-	case (oper & opers.BinaryMinmax) != 0:
-		return mach.binaryFloatMinmaxOp(code, uint8(oper), a, b)
+		case (oper & opers.BinaryFloatMinmax) != 0:
+			return mach.binaryFloatMinmaxOp(code, uint8(oper), a, b)
 
-	case (oper & opers.BinaryCompare) != 0:
-		return mach.binaryFloatCompareOp(code, uint8(oper), a, b)
+		case (oper & opers.BinaryFloatCopysign) != 0:
+			return mach.binaryFloatCopysignOp(code, a, b)
 
-	default:
-		return mach.binaryFloatOp(code, uint8(oper), a, b)
+		default:
+			return mach.commonBinaryFloatOp(code, uint8(oper), a, b)
+		}
 	}
 }
 
-var binaryIntInsns = []binaryInsn{
+var commonBinaryIntInsns = []binaryInsn{
 	opers.IndexIntAdd: Add,
 	opers.IndexIntSub: Sub,
 	opers.IndexIntAnd: And,
@@ -47,99 +54,82 @@ var binaryIntInsns = []binaryInsn{
 	opers.IndexIntXor: Xor,
 }
 
-func (mach X86) binaryIntOp(code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
-	if a.Storage == values.Imm && a.ImmValue() == 0 && index == opers.IndexIntSub {
-		targetReg, _ := mach.opMaybeResultReg(code, b, false)
-		Neg.opReg(code, a.Type, targetReg)
-		return values.TempRegOperand(a.Type, targetReg, true)
+func (mach X86) commonBinaryIntOp(code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+	if index == opers.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
+		return mach.inplaceIntOp(code, Neg, b)
 	}
 
 	switch b.Storage {
 	case values.Imm:
-		value := b.ImmValue()
-
 		switch {
-		case index == opers.IndexIntAdd && value == 1: // assume that we won't see sub -1
-			reg, _ := mach.opMaybeResultReg(code, a, false)
-			Inc.opReg(code, a.Type, reg)
-			return values.TempRegOperand(a.Type, reg, true)
+		case b.ImmValue() == 1:
+			switch index {
+			case opers.IndexIntAdd:
+				return mach.inplaceIntOp(code, Inc, a)
 
-		case index == opers.IndexIntSub && value == 1: // assume that we won't see add -1
-			reg, _ := mach.opMaybeResultReg(code, a, false)
-			Dec.opReg(code, a.Type, reg)
-			return values.TempRegOperand(a.Type, reg, true)
+			case opers.IndexIntSub:
+				return mach.inplaceIntOp(code, Dec, a)
+			}
 
-		case value < -0x80000000 || value >= 0x80000000:
-			// TODO: merge this with the next outer case
-			sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, b, true)
-			b = values.RegOperand(own, a.Type, sourceReg)
+		case b.ImmValue() < -0x80000000 || b.ImmValue() >= 0x80000000:
+			b = mach.opBorrowMaybeScratchRegOperand(code, b, true)
 		}
 
-	case values.Stack, values.ConditionFlags:
-		sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, b, true)
-		b = values.RegOperand(own, a.Type, sourceReg)
+	case values.VarReference, values.Stack, values.ConditionFlags:
+		b = mach.opBorrowMaybeScratchRegOperand(code, b, true)
 	}
 
-	insn := binaryIntInsns[index]
+	insn := commonBinaryIntInsns[index]
+
 	targetReg, _ := mach.opMaybeResultReg(code, a, false)
 	result = values.TempRegOperand(a.Type, targetReg, true)
 
-	if b.Storage == values.VarMem {
+	switch {
+	case b.Storage.IsReg():
+		insn.opFromReg(code, a.Type, targetReg, b.Reg())
+		code.Consumed(b)
+		return
+
+	case b.Storage == values.VarMem:
 		insn.opFromStack(code, a.Type, targetReg, b.VarMemOffset())
 		return
+
+	case b.Storage == values.Imm: // large values moved to registers earlier
+		insn.opImm(code, a.Type, targetReg, int32(b.ImmValue()))
+		return
+
+	default:
+		panic("unexpected storage type of second operand of common binary int op")
 	}
-
-	var sourceReg regs.R
-
-	if b.Storage.IsReg() {
-		sourceReg = b.Reg()
-	} else {
-		if b.Storage == values.Imm {
-			if value := b.ImmValue(); value >= -0x80000000 && value < 0x80000000 {
-				insn.opImm(code, a.Type, targetReg, int32(b.ImmValue()))
-				return
-			}
-		}
-		sourceReg = regScratch
-		mach.OpMove(code, sourceReg, b, false)
-	}
-
-	insn.opFromReg(code, a.Type, targetReg, sourceReg)
-	code.Consumed(b)
-	return
 }
 
 func (mach X86) binaryIntCompareOp(code gen.RegCoder, cond uint8, a, b values.Operand) (result values.Operand) {
-	result = values.ConditionFlagsOperand(values.Condition(cond))
-
 	targetReg, _, own := mach.opBorrowMaybeResultReg(code, a, false)
 	if own {
 		defer code.FreeReg(a.Type, targetReg)
 	}
 
-	if b.Storage == values.VarMem {
+	result = values.ConditionFlagsOperand(values.Condition(cond))
+
+	switch {
+	case b.Storage.IsReg():
+		Cmp.opFromReg(code, a.Type, targetReg, b.Reg())
+		code.Consumed(b)
+		return
+
+	case b.Storage == values.VarMem:
 		Cmp.opFromStack(code, a.Type, targetReg, b.VarMemOffset())
 		return
+
+	case b.Storage == values.Imm && b.ImmValue() >= -0x80000000 && b.ImmValue() < 0x80000000:
+		Cmp.opImm(code, a.Type, targetReg, int32(b.ImmValue()))
+		return
+
+	default:
+		mach.OpMove(code, regScratch, b, false)
+		Cmp.opFromReg(code, a.Type, targetReg, regScratch)
+		return
 	}
-
-	var sourceReg regs.R
-
-	if b.Storage.IsReg() {
-		sourceReg = b.Reg()
-	} else {
-		if b.Storage == values.Imm {
-			if value := b.ImmValue(); value >= -0x80000000 && value < 0x80000000 {
-				Cmp.opImm(code, a.Type, targetReg, int32(value))
-				return
-			}
-		}
-		sourceReg = regScratch
-		mach.OpMove(code, sourceReg, b, false)
-	}
-
-	Cmp.opFromReg(code, a.Type, targetReg, sourceReg)
-	code.Consumed(b)
-	return
 }
 
 var binaryDivmulInsns = []struct {
@@ -153,7 +143,7 @@ var binaryDivmulInsns = []struct {
 	opers.IndexDivmulMul:  {Mul, ShlImm},
 }
 
-func (mach X86) binaryDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
 	insn := binaryDivmulInsns[index]
 	t := a.Type
 
@@ -315,7 +305,7 @@ func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {
 }
 
 var binaryShiftInsns = []struct {
-	insnRexM
+	reg insnRexM
 	imm shiftImmInsn
 }{
 	opers.IndexShiftRotl: {Rol, RolImm},
@@ -325,51 +315,53 @@ var binaryShiftInsns = []struct {
 	opers.IndexShiftShrU: {Shr, ShrImm},
 }
 
-func (mach X86) binaryShiftOp(code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func (mach X86) binaryIntShiftOp(code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
 	insn := binaryShiftInsns[index]
 
-	var targetReg regs.R
+	switch {
+	case b.Storage == values.Imm:
+		reg, _ := mach.opMaybeResultReg(code, a, true)
+		insn.imm.op(code, b.Type, reg, uint8(b.ImmValue()))
+		result = values.TempRegOperand(a.Type, reg, true)
 
-	switch b.Storage {
-	case values.Imm:
-		targetReg, _ = mach.opMaybeResultReg(code, a, true)
-		insn.imm.op(code, b.Type, targetReg, uint8(b.ImmValue()))
+	case b.Storage.IsReg() && b.Reg() == regShiftCount:
+		reg, _ := mach.opMaybeResultReg(code, a, false)
+		insn.reg.opReg(code, a.Type, reg)
+		code.Discard(b)
+		result = values.TempRegOperand(a.Type, reg, true)
 
-	default:
-		if b.Storage.IsReg() && b.Reg() == regShiftCount {
-			targetReg, _ = mach.opMaybeResultReg(code, a, false)
-			defer code.Discard(b)
+	case code.RegAllocated(types.I32, regShiftCount):
+		reg, _ := mach.opMaybeResultReg(code, a, true)
+		if reg == regShiftCount {
+			Mov.opFromReg(code, a.Type, regResult, regShiftCount)
+			result = mach.subtleShiftOp(code, insn.reg, a.Type, regResult, b)
+			code.FreeReg(types.I32, regShiftCount)
 		} else {
-			if code.RegAllocated(types.I32, regShiftCount) {
-				targetReg, _ = mach.opMaybeResultReg(code, a, true)
-				if targetReg == regShiftCount {
-					Mov.opFromReg(code, a.Type, regResult, regShiftCount)
-					targetReg = regResult
-
-					defer code.FreeReg(types.I32, regShiftCount)
-				} else {
-					// unknown operand in regShiftCount
-					Mov.opFromReg(code, types.I64, regScratch, regShiftCount)
-					defer Mov.opFromReg(code, types.I64, regShiftCount, regScratch)
-				}
-			} else {
-				code.AllocSpecificReg(types.I32, regShiftCount)
-				defer code.FreeReg(types.I32, regShiftCount)
-
-				targetReg, _ = mach.opMaybeResultReg(code, a, true)
-			}
-
-			b.Type = types.I32 // TODO: 8-bit mov
-			mach.OpMove(code, regShiftCount, b, false)
+			// unknown operand in regShiftCount
+			Mov.opFromReg(code, types.I64, regScratch, regShiftCount) // save
+			result = mach.subtleShiftOp(code, insn.reg, a.Type, reg, b)
+			Mov.opFromReg(code, types.I64, regShiftCount, regScratch) // restore
 		}
 
-		insn.opReg(code, a.Type, targetReg)
+	default:
+		code.AllocSpecificReg(types.I32, regShiftCount)
+		reg, _ := mach.opMaybeResultReg(code, a, true)
+		result = mach.subtleShiftOp(code, insn.reg, a.Type, reg, b)
+		code.FreeReg(types.I32, regShiftCount)
 	}
 
-	return values.TempRegOperand(a.Type, targetReg, true)
+	return
 }
 
-var binaryFloatInsns = []insnPrefix{
+// subtleShiftOp trashes regShiftCount.
+func (mach X86) subtleShiftOp(code gen.RegCoder, insn insnRexM, t types.T, reg regs.R, count values.Operand) values.Operand {
+	count.Type = types.I32                         // TODO: 8-bit mov
+	mach.OpMove(code, regShiftCount, count, false) //
+	insn.opReg(code, t, reg)
+	return values.TempRegOperand(t, reg, true)
+}
+
+var commonBinaryFloatInsns = []insnPrefix{
 	opers.IndexFloatAdd: AddsSSE,
 	opers.IndexFloatSub: SubsSSE,
 	opers.IndexFloatDiv: DivsSSE,
@@ -378,7 +370,7 @@ var binaryFloatInsns = []insnPrefix{
 
 // TODO: support memory source operands
 
-func (mach X86) binaryFloatOp(code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func (mach X86) commonBinaryFloatOp(code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
 	targetReg, _ := mach.opMaybeResultReg(code, a, false)
 
 	sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, b, false)
@@ -386,16 +378,14 @@ func (mach X86) binaryFloatOp(code gen.RegCoder, index uint8, a, b values.Operan
 		defer code.FreeReg(b.Type, sourceReg)
 	}
 
-	binaryFloatInsns[index].opFromReg(code, a.Type, targetReg, sourceReg)
+	commonBinaryFloatInsns[index].opFromReg(code, a.Type, targetReg, sourceReg)
 	return values.TempRegOperand(a.Type, targetReg, false)
 }
 
-type binaryFloatMinmax struct {
+var binaryFloatMinmaxInsns = []struct {
 	commonInsn insnPrefix
 	zeroInsn   insnPrefix
-}
-
-var binaryFloatMinmaxInsns = []binaryFloatMinmax{
+}{
 	opers.IndexMinmaxMin: {MinsSSE, OrpSSE},
 	opers.IndexMinmaxMax: {MaxsSSE, AndpSSE},
 }
@@ -443,4 +433,17 @@ func (mach X86) binaryFloatCompareOp(code gen.RegCoder, cond uint8, a, b values.
 
 	UcomisSSE.opFromReg(code, a.Type, aReg, bReg)
 	return values.ConditionFlagsOperand(values.Condition(cond))
+}
+
+func (mach X86) binaryFloatCopysignOp(code gen.RegCoder, a, b values.Operand) values.Operand {
+	targetReg, _ := mach.opMaybeResultReg(code, a, false)
+
+	sourceReg, _, own := mach.opBorrowMaybeScratchReg(code, b, false)
+	if own {
+		defer code.FreeReg(b.Type, sourceReg)
+	}
+
+	panic("TODO")
+
+	return values.TempRegOperand(a.Type, targetReg, false)
 }

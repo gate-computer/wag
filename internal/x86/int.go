@@ -6,6 +6,7 @@ package x86
 
 import (
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/types"
 )
 
@@ -165,4 +166,10 @@ func log2(value uint64) (count uint8) {
 		}
 		count++
 	}
+}
+
+func (mach X86) inplaceIntOp(code gen.RegCoder, insn insnRexM, x values.Operand) values.Operand {
+	reg, _ := mach.opMaybeResultReg(code, x, false)
+	insn.opReg(code, x.Type, reg)
+	return values.TempRegOperand(x.Type, reg, true)
 }

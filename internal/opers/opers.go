@@ -16,16 +16,19 @@ const (
 )
 
 const (
-	IndexIntClz = iota
+	IndexIntEqz = iota
+	IndexIntClz
 	IndexIntCtz
 	IndexIntPopcnt
-	IndexIntEqz
+)
 
-	IndexFloatSqrt = iota
-	IndexFloatAbs
-	IndexFloatCopysign
+const (
+	IndexFloatAbs = iota
 	IndexFloatNeg
+	IndexFloatSqrt
+)
 
+const (
 	// x86-64 ROUNDSS/ROUNDSD instruction operands
 	RoundModeNearest = 0x0
 	RoundModeFloor   = 0x1
@@ -34,31 +37,31 @@ const (
 )
 
 const (
-	IntClz    = IndexIntClz
-	IntCtz    = IndexIntCtz
-	IntPopcnt = IndexIntPopcnt
-	IntEqz    = IndexIntEqz
-
-	FloatAbs      = UnaryFloat | IndexFloatAbs
-	FloatNeg      = UnaryFloat | IndexFloatNeg
-	FloatCopysign = UnaryFloat | IndexFloatCopysign
-	FloatSqrt     = UnaryFloat | IndexFloatSqrt
-
-	FloatCeil    = UnaryRound | UnaryFloat | RoundModeCeil
-	FloatFloor   = UnaryRound | UnaryFloat | RoundModeFloor
-	FloatTrunc   = UnaryRound | UnaryFloat | RoundModeTrunc
-	FloatNearest = UnaryRound | UnaryFloat | RoundModeNearest
+	IntEqz       = IndexIntEqz
+	IntClz       = IndexIntClz
+	IntCtz       = IndexIntCtz
+	IntPopcnt    = IndexIntPopcnt
+	FloatAbs     = UnaryFloat | IndexFloatAbs
+	FloatNeg     = UnaryFloat | IndexFloatNeg
+	FloatCeil    = UnaryFloat | UnaryRound | RoundModeCeil
+	FloatFloor   = UnaryFloat | UnaryRound | RoundModeFloor
+	FloatTrunc   = UnaryFloat | UnaryRound | RoundModeTrunc
+	FloatNearest = UnaryFloat | UnaryRound | RoundModeNearest
+	FloatSqrt    = UnaryFloat | IndexFloatSqrt
 )
 
 // Binary
 
 const (
-	BinaryShift   = 1 << 8
-	BinaryDivmul  = 1 << 9
-	BinaryFloat   = 1 << 10
-	BinaryMinmax  = 1 << 11
-	BinaryCompare = 1 << 12
+	BinaryFloat         = 1 << 10
+	BinaryCompare       = 1 << 11 // int or float
+	BinaryIntShift      = 1 << 12
+	BinaryIntDivmul     = 1 << 13
+	BinaryFloatMinmax   = 1 << 12
+	BinaryFloatCopysign = 1 << 13
+)
 
+const (
 	DivmulSign = 1 << 0
 	DivmulRem  = 1 << 1
 	DivmulMul  = 1 << 2
@@ -70,72 +73,75 @@ const (
 	IndexIntAnd
 	IndexIntOr
 	IndexIntXor
+)
 
+const (
 	IndexShiftShl = iota
 	IndexShiftShrU
 	IndexShiftShrS
 	IndexShiftRotr
 	IndexShiftRotl
+)
 
+const (
 	IndexDivmulDivU = 0
 	IndexDivmulDivS = DivmulSign
 	IndexDivmulRemU = DivmulRem
 	IndexDivmulRemS = DivmulRem | DivmulSign
 	IndexDivmulMul  = DivmulMul
+)
 
+const (
 	IndexFloatAdd = iota
 	IndexFloatSub
 	IndexFloatMul
 	IndexFloatDiv
+)
 
+const (
 	IndexMinmaxMin = iota
 	IndexMinmaxMax
 )
 
 const (
-	IntAdd = IndexIntAdd
-	IntSub = IndexIntSub
-	IntAnd = IndexIntAnd
-	IntOr  = IndexIntOr
-	IntXor = IndexIntXor
-
-	IntShl  = BinaryShift | IndexShiftShl
-	IntShrU = BinaryShift | IndexShiftShrU
-	IntShrS = BinaryShift | IndexShiftShrS
-	IntRotr = BinaryShift | IndexShiftRotr
-	IntRotl = BinaryShift | IndexShiftRotl
-
-	IntDivU = BinaryDivmul | IndexDivmulDivU
-	IntDivS = BinaryDivmul | IndexDivmulDivS
-	IntRemU = BinaryDivmul | IndexDivmulRemU
-	IntRemS = BinaryDivmul | IndexDivmulRemS
-	IntMul  = BinaryDivmul | IndexDivmulMul
-
-	IntEq  = BinaryCompare | values.Eq
-	IntNe  = BinaryCompare | values.Ne
-	IntGeS = BinaryCompare | values.GeS
-	IntGeU = BinaryCompare | values.GeU
-	IntGtS = BinaryCompare | values.GtS
-	IntGtU = BinaryCompare | values.GtU
-	IntLeS = BinaryCompare | values.LeS
-	IntLeU = BinaryCompare | values.LeU
-	IntLtS = BinaryCompare | values.LtS
-	IntLtU = BinaryCompare | values.LtU
-
-	FloatAdd = BinaryFloat | IndexFloatAdd
-	FloatSub = BinaryFloat | IndexFloatSub
-	FloatMul = BinaryFloat | IndexFloatMul
-	FloatDiv = BinaryFloat | IndexFloatDiv
-
-	FloatMin = BinaryFloat | BinaryMinmax | IndexMinmaxMin
-	FloatMax = BinaryFloat | BinaryMinmax | IndexMinmaxMax
-
-	FloatEq = BinaryFloat | BinaryCompare | values.OrderedAndEq
-	FloatNe = BinaryFloat | BinaryCompare | values.UnorderedOrNe
-	FloatGe = BinaryFloat | BinaryCompare | values.OrderedAndGe
-	FloatGt = BinaryFloat | BinaryCompare | values.OrderedAndGt
-	FloatLe = BinaryFloat | BinaryCompare | values.OrderedAndLe
-	FloatLt = BinaryFloat | BinaryCompare | values.OrderedAndLt
+	IntEq         = BinaryCompare | values.Eq
+	IntNe         = BinaryCompare | values.Ne
+	IntLtS        = BinaryCompare | values.LtS
+	IntLtU        = BinaryCompare | values.LtU
+	IntGtS        = BinaryCompare | values.GtS
+	IntGtU        = BinaryCompare | values.GtU
+	IntLeS        = BinaryCompare | values.LeS
+	IntLeU        = BinaryCompare | values.LeU
+	IntGeS        = BinaryCompare | values.GeS
+	IntGeU        = BinaryCompare | values.GeU
+	FloatEq       = BinaryFloat | BinaryCompare | values.OrderedAndEq
+	FloatNe       = BinaryFloat | BinaryCompare | values.UnorderedOrNe
+	FloatLt       = BinaryFloat | BinaryCompare | values.OrderedAndLt
+	FloatGt       = BinaryFloat | BinaryCompare | values.OrderedAndGt
+	FloatLe       = BinaryFloat | BinaryCompare | values.OrderedAndLe
+	FloatGe       = BinaryFloat | BinaryCompare | values.OrderedAndGe
+	IntAdd        = IndexIntAdd
+	IntSub        = IndexIntSub
+	IntMul        = BinaryIntDivmul | IndexDivmulMul
+	IntDivS       = BinaryIntDivmul | IndexDivmulDivS
+	IntDivU       = BinaryIntDivmul | IndexDivmulDivU
+	IntRemS       = BinaryIntDivmul | IndexDivmulRemS
+	IntRemU       = BinaryIntDivmul | IndexDivmulRemU
+	IntAnd        = IndexIntAnd
+	IntOr         = IndexIntOr
+	IntXor        = IndexIntXor
+	IntShl        = BinaryIntShift | IndexShiftShl
+	IntShrS       = BinaryIntShift | IndexShiftShrS
+	IntShrU       = BinaryIntShift | IndexShiftShrU
+	IntRotl       = BinaryIntShift | IndexShiftRotl
+	IntRotr       = BinaryIntShift | IndexShiftRotr
+	FloatAdd      = BinaryFloat | IndexFloatAdd
+	FloatSub      = BinaryFloat | IndexFloatSub
+	FloatMul      = BinaryFloat | IndexFloatMul
+	FloatDiv      = BinaryFloat | IndexFloatDiv
+	FloatMin      = BinaryFloat | BinaryFloatMinmax | IndexMinmaxMin
+	FloatMax      = BinaryFloat | BinaryFloatMinmax | IndexMinmaxMax
+	FloatCopysign = BinaryFloat | BinaryFloatCopysign
 )
 
 // Load
@@ -196,7 +202,9 @@ const (
 	ConvertS
 	ConvertU
 	Reinterpret
+)
 
+const (
 	Demote  = Mote
 	Promote = Mote
 )

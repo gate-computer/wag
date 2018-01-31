@@ -835,6 +835,11 @@ func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, x values.Operand, preser
 	return
 }
 
+func (mach X86) opBorrowMaybeScratchRegOperand(code gen.RegCoder, x values.Operand, preserveFlags bool) values.Operand {
+	reg, _, own := mach.opBorrowMaybeScratchReg(code, x, preserveFlags)
+	return values.RegOperand(own, x.Type, reg)
+}
+
 // opBorrowMaybeResultReg returns either the register of the given operand, or
 // the reserved result register with the value of the operand.
 func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {

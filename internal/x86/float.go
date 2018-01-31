@@ -60,13 +60,6 @@ var (
 	RoundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, RoundSize}
 )
 
-const (
-	floatRoundNearest  = 0x0
-	floatRoundDown     = 0x1
-	floatRoundUp       = 0x2
-	floatRoundTruncate = 0x3
-)
-
 func pushFloatOp(code gen.OpCoder, t types.T, source regs.R) {
 	Sub.opImm(code, types.I64, regStackPtr, gen.WordSize)
 	MovsSSE.opToStack(code, t, source, 0)
