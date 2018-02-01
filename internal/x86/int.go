@@ -70,7 +70,7 @@ var (
 	bsr     = insnPrefix{rexSize, []byte{0x0f, 0xbd}, nil}
 	movsx8  = insnPrefix{rexSize, []byte{0x0f, 0xbe}, nil}
 	movsx16 = insnPrefix{rexSize, []byte{0x0f, 0xbf}, nil}
-	movsxd  = insnPrefix{rexW, []byte{0x63}, nil} // variable rexR, rexX and rexB
+	movsxd  = insnPrefix{rexW, []byte{0x63}, nil} // variable RexR, RexX and RexB
 	popcnt  = insnPrefix{constF3RexSize, []byte{0x0f, 0xb8}, nil}
 
 	xchg = xchgInsn{
