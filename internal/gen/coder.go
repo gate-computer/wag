@@ -15,8 +15,21 @@ import (
 )
 
 const (
-	ROTableAddr = 0
+	// Mask layout in read-only memory:
+	//
+	//         +-------- I64 --------+
+	//         |                     |
+	//         |           +-- I32 --+
+	//         |           |         |
+	// Offset: 0           4
+	// Bytes:  ff ff ff ff ff ff ff 7f  ROMask7fAddr
+	//         00 00 00 00 00 00 00 80  ROMask80Addr
+	ROMask7fAddr = 0
+	ROMask80Addr = 8
+	ROTableAddr  = 16
+)
 
+const (
 	WordSize     = 8              // stack entry size
 	StackReserve = WordSize + 128 // trap/import call return address + red zone
 )
@@ -51,4 +64,11 @@ type RegCoder interface {
 
 	TryAllocReg(t types.T) (reg regs.R, ok bool)
 	AllocSpecificReg(t types.T, reg regs.R)
+}
+
+// TypeMaskAddr calculates the absolute read-only data address for reading a
+// mask for the given type size.  baseMaskAddr should be one of the ROMask*Addr
+// constants.
+func TypeMaskAddr(code Coder, baseMaskAddr int32, t types.T) int32 {
+	return code.RODataAddr() + baseMaskAddr + int32(8-t.Size())
 }

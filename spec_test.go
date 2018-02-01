@@ -36,13 +36,10 @@ const (
 // func Test_conversions(t *testing.T)           { spec(t, "conversions") }
 // func Test_custom_section(t *testing.T)        { spec(t, "custom_section") }
 // func Test_exports(t *testing.T)               { spec(t, "exports") }
-// func Test_f32_bitwise(t *testing.T)           { spec(t, "f32_bitwise") }
-// func Test_f64_bitwise(t *testing.T)           { spec(t, "f64_bitwise") }
 // func Test_fac(t *testing.T)                   { spec(t, "fac") }
 // func Test_float_exprs(t *testing.T)           { spec(t, "float_exprs") }
 // func Test_float_literals(t *testing.T)        { spec(t, "float_literals") }
 // func Test_float_memory(t *testing.T)          { spec(t, "float_memory") }
-// func Test_float_misc(t *testing.T)            { spec(t, "float_misc") }
 // func Test_func(t *testing.T)                  { spec(t, "func") }
 // func Test_func_ptrs(t *testing.T)             { spec(t, "func_ptrs") }
 // func Test_imports(t *testing.T)               { spec(t, "imports") }
@@ -66,9 +63,12 @@ func Test_const(t *testing.T)                  { spec(t, "const") }
 func Test_elem(t *testing.T)                   { spec(t, "elem") }
 func Test_endianness(t *testing.T)             { spec(t, "endianness") }
 func Test_f32(t *testing.T)                    { spec(t, "f32") }
+func Test_f32_bitwise(t *testing.T)            { spec(t, "f32_bitwise") }
 func Test_f32_cmp(t *testing.T)                { spec(t, "f32_cmp") }
 func Test_f64(t *testing.T)                    { spec(t, "f64") }
+func Test_f64_bitwise(t *testing.T)            { spec(t, "f64_bitwise") }
 func Test_f64_cmp(t *testing.T)                { spec(t, "f64_cmp") }
+func Test_float_misc(t *testing.T)             { spec(t, "float_misc") }
 func Test_forward(t *testing.T)                { spec(t, "forward") }
 func Test_get_local(t *testing.T)              { spec(t, "get_local") }
 func Test_globals(t *testing.T)                { spec(t, "globals") }
