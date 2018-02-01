@@ -110,9 +110,10 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 
 // opAbsFloatReg in-place.
 func (mach X86) opAbsFloatReg(code gen.RegCoder, t types.T, reg regs.R) {
-	absMask := ^(uint64(1) << (uint(t.Size())*8 - 1)) // only high bit cleared
-	movImm64.op(code, t, regScratch, int64(absMask))  // integer scratch register
-	movSSE.opFromReg(code, t, regScratch, regScratch) // float scratch register
+	mask := (uint64(1) << (uint(t.Size()) * 8)) - 1          // all bits set
+	absMask := ^(uint64(1) << (uint(t.Size())*8 - 1)) & mask // only high bit cleared
+	movImm64.op(code, t, regScratch, int64(absMask))         // integer scratch register
+	movSSE.opFromReg(code, t, regScratch, regScratch)        // float scratch register
 	andpSSE.opFromReg(code, t, reg, regScratch)
 }
 
