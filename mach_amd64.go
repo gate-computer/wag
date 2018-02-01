@@ -12,7 +12,7 @@ const (
 	machNative            = x86.Native
 	machFunctionAlignment = x86.FunctionAlignment
 	machPaddingByte       = x86.PaddingByte
-	machResultReg         = x86.ResultReg
+	machResultReg         = x86.RegResult
 )
 
 var mach x86.X86

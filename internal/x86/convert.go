@@ -50,41 +50,41 @@ func (mach X86) commonConversionOp(code gen.RegCoder, oper uint16, resultType ty
 
 	case opers.TruncS:
 		// TODO: handle more cases
-		cvttsSSE2si.opReg(code, source.Type, resultType, regResult, reg)
+		cvttsSSE2si.opReg(code, source.Type, resultType, RegResult, reg)
 		code.FreeReg(source.Type, reg)
-		return values.TempRegOperand(resultType, regResult, true)
+		return values.TempRegOperand(resultType, RegResult, true)
 
 	case opers.TruncU:
 		// TODO: handle more cases
-		cvttsSSE2si.opReg(code, source.Type, types.I64, regResult, reg)
+		cvttsSSE2si.opReg(code, source.Type, types.I64, RegResult, reg)
 		code.FreeReg(source.Type, reg)
-		return values.TempRegOperand(resultType, regResult, false)
+		return values.TempRegOperand(resultType, RegResult, false)
 
 	case opers.ConvertS:
-		cvtsi2sSSE.opReg(code, resultType, source.Type, regResult, reg)
+		cvtsi2sSSE.opReg(code, resultType, source.Type, RegResult, reg)
 		code.FreeReg(source.Type, reg)
-		return values.TempRegOperand(resultType, regResult, false)
+		return values.TempRegOperand(resultType, RegResult, false)
 
 	case opers.ConvertU:
 		if source.Type == types.I32 {
 			if !zeroExt {
 				mov.opFromReg(code, types.I32, reg, reg)
 			}
-			cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, reg)
+			cvtsi2sSSE.opReg(code, resultType, types.I64, RegResult, reg)
 		} else {
 			mach.opConvertUnsignedI64ToFloat(code, resultType, reg)
 		}
 		code.FreeReg(source.Type, reg)
-		return values.TempRegOperand(resultType, regResult, false)
+		return values.TempRegOperand(resultType, RegResult, false)
 
 	case opers.Reinterpret:
 		if source.Type.Category() == types.Int {
-			movSSE.opFromReg(code, source.Type, regResult, reg)
+			movSSE.opFromReg(code, source.Type, RegResult, reg)
 		} else {
-			movSSE.opToReg(code, source.Type, regResult, reg)
+			movSSE.opToReg(code, source.Type, RegResult, reg)
 		}
 		code.FreeReg(source.Type, reg)
-		return values.TempRegOperand(resultType, regResult, true)
+		return values.TempRegOperand(resultType, RegResult, true)
 	}
 
 	panic("unknown conversion op")
@@ -103,7 +103,7 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, resultType types.T, 
 	huge.AddSite(code.Len())
 
 	// max. 63-bit value
-	cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, inputReg)
+	cvtsi2sSSE.opReg(code, resultType, types.I64, RegResult, inputReg)
 
 	jmpRel.rel8.opStub(code)
 	done.AddSite(code.Len())
@@ -112,12 +112,12 @@ func (mach X86) opConvertUnsignedI64ToFloat(code gen.Coder, resultType types.T, 
 	mach.updateBranches8(code, &huge)
 
 	// 64-bit value
-	mov.opFromReg(code, types.I64, regScratch, inputReg)
-	and.opImm(code, types.I64, regScratch, 1)
+	mov.opFromReg(code, types.I64, RegScratch, inputReg)
+	and.opImm(code, types.I64, RegScratch, 1)
 	shrImm.op(code, types.I64, inputReg, 1)
-	or.opFromReg(code, types.I64, inputReg, regScratch)
-	cvtsi2sSSE.opReg(code, resultType, types.I64, regResult, inputReg)
-	addsSSE.opFromReg(code, resultType, regResult, regResult)
+	or.opFromReg(code, types.I64, inputReg, RegScratch)
+	cvtsi2sSSE.opReg(code, resultType, types.I64, RegResult, inputReg)
+	addsSSE.opFromReg(code, resultType, RegResult, RegResult)
 
 	done.Addr = code.Len()
 	mach.updateBranches8(code, &done)

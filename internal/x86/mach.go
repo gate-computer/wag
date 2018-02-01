@@ -21,27 +21,26 @@ const (
 	// call stack could be rewritten during snapshot/restore to cause void
 	// function to return to a non-void call site.
 
-	regResult         = regs.R(0)  // rax or xmm0
-	regShiftCount     = regs.R(1)  // rcx
-	regScratch        = regs.R(2)  // rdx or xmm2
-	regImportArgCount = regs.R(2)  // rdx
-	regImportSigIndex = regs.R(3)  // rbx
-	regStackPtr       = regs.R(4)  // rsp
-	regSuspendFlag    = regs.R(9)  // r9
-	regTextBase       = regs.R(12) // r12
-	regStackLimit     = regs.R(13) // r13
-	regMemoryBase     = regs.R(14) // r14
-	regMemoryLimit    = regs.R(15) // r15
+	RegResult         = regs.R(0)  // rax or xmm0
+	RegShiftCount     = regs.R(1)  // rcx
+	RegScratch        = regs.R(2)  // rdx or xmm2
+	RegImportArgCount = regs.R(2)  // rdx
+	RegImportSigIndex = regs.R(3)  // rbx
+	RegStackPtr       = regs.R(4)  // rsp
+	RegSuspendFlag    = regs.R(9)  // r9
+	RegTextBase       = regs.R(12) // r12
+	RegStackLimit     = regs.R(13) // r13
+	RegMemoryBase     = regs.R(14) // r14
+	RegMemoryLimit    = regs.R(15) // r15
 
-	regTrapHandlerMMX     = regs.R(0) // mm0
-	regMemoryGrowLimitMMX = regs.R(1) // mm1
-	regScratchMMX         = regs.R(2) // mm2
+	RegTrapHandlerMMX     = regs.R(0) // mm0
+	RegMemoryGrowLimitMMX = regs.R(1) // mm1
+	RegScratchMMX         = regs.R(2) // mm2
 )
 
 const (
 	FunctionAlignment = 16
 	PaddingByte       = 0xcc // int3 instruction
-	ResultReg         = regResult
 )
 
 var paramRegs [2][]regs.R
@@ -174,19 +173,19 @@ func (mach X86) ClearInsnCache()        {}
 // OpAddImmToStackPtr must not allocate registers.
 func (mach X86) OpAddImmToStackPtr(code gen.Coder, offset int32) {
 	if offset != 0 {
-		add.opImm(code, types.I64, regStackPtr, offset)
+		add.opImm(code, types.I64, RegStackPtr, offset)
 	}
 }
 
 // OpAddToStackPtr must not allocate registers.
 func (mach X86) OpAddToStackPtr(code gen.Coder, source regs.R) {
-	add.opFromReg(code, types.I64, regStackPtr, source)
+	add.opFromReg(code, types.I64, RegStackPtr, source)
 }
 
 func (mach X86) OpEnterFunction(code gen.Coder) {
 	var skip links.L
 
-	test.opFromReg(code, types.I64, regSuspendFlag, regSuspendFlag)
+	test.opFromReg(code, types.I64, RegSuspendFlag, RegSuspendFlag)
 	je.rel8.opStub(code)
 	skip.AddSite(code.Len())
 
@@ -198,11 +197,11 @@ func (mach X86) OpEnterFunction(code gen.Coder) {
 
 func (mach X86) OpEnterImportFunction(code gen.OpCoder, absAddr uint64, variadic bool, argCount, sigIndex int) {
 	if variadic {
-		mach.opMoveIntImm(code, regImportArgCount, int64(argCount))
-		mach.opMoveIntImm(code, regImportSigIndex, int64(sigIndex))
+		mach.opMoveIntImm(code, RegImportArgCount, int64(argCount))
+		mach.opMoveIntImm(code, RegImportSigIndex, int64(sigIndex))
 	}
-	mach.opMoveIntImm(code, regResult, int64(absAddr))
-	jmp.opReg(code, regResult)
+	mach.opMoveIntImm(code, RegResult, int64(absAddr))
+	jmp.opReg(code, RegResult)
 	// Void import functions must make sure that they don't return any damaging
 	// information in result register (including the absolute jump target).
 }
@@ -214,7 +213,7 @@ func (mach X86) OpBranchIndirect32(code gen.Coder, reg regs.R, regZeroExt bool) 
 		mov.opFromReg(code, types.I32, reg, reg)
 	}
 
-	add.opFromReg(code, types.I64, reg, regTextBase)
+	add.opFromReg(code, types.I64, reg, RegTextBase)
 	jmp.opReg(code, reg)
 }
 
@@ -239,14 +238,14 @@ func (mach X86) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 	var outOfBounds links.L
 	var checksOut links.L
 
-	mach.opCompareBounds(code, regResult, tableLen)
+	mach.opCompareBounds(code, RegResult, tableLen)
 	jle.rel8.opStub(code)
 	outOfBounds.AddSite(code.Len())
 
-	mov.opFromAddr(code, types.I64, regResult, 3, regResult, code.RODataAddr()+gen.ROTableAddr)
-	mov.opFromReg(code, types.I32, regScratch, regResult) // zero-extended function address
-	shrImm.op(code, types.I64, regResult, 32)             // signature index
-	cmp.opImm(code, types.I32, regResult, sigIndex)
+	mov.opFromAddr(code, types.I64, RegResult, 3, RegResult, code.RODataAddr()+gen.ROTableAddr)
+	mov.opFromReg(code, types.I32, RegScratch, RegResult) // zero-extended function address
+	shrImm.op(code, types.I64, RegResult, 32)             // signature index
+	cmp.opImm(code, types.I32, RegResult, sigIndex)
 	je.rel8.opStub(code)
 	checksOut.AddSite(code.Len())
 
@@ -260,8 +259,8 @@ func (mach X86) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 	checksOut.Addr = code.Len()
 	mach.updateBranches8(code, &checksOut)
 
-	add.opFromReg(code, types.I64, regScratch, regTextBase)
-	call.opReg(code, regScratch)
+	add.opFromReg(code, types.I64, RegScratch, RegTextBase)
+	call.opReg(code, RegScratch)
 	return code.Len()
 }
 
@@ -269,13 +268,13 @@ func (mach X86) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 func (mach X86) OpGetGlobal(code gen.RegCoder, t types.T, offset int32) values.Operand {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
-		reg = regResult
+		reg = RegResult
 	}
 
 	if t.Category() == types.Int {
-		mov.opFromIndirect(code, t, reg, 0, NoIndex, regMemoryBase, offset)
+		mov.opFromIndirect(code, t, reg, 0, NoIndex, RegMemoryBase, offset)
 	} else {
-		movSSE.opFromIndirect(code, t, reg, 0, NoIndex, regMemoryBase, offset)
+		movSSE.opFromIndirect(code, t, reg, 0, NoIndex, RegMemoryBase, offset)
 	}
 
 	return values.TempRegOperand(t, reg, true)
@@ -288,14 +287,14 @@ func (mach X86) OpSetGlobal(code gen.Coder, offset int32, x values.Operand) {
 	if x.Storage.IsReg() {
 		reg = x.Reg()
 	} else {
-		mach.OpMove(code, regScratch, x, true)
-		reg = regScratch
+		mach.OpMove(code, RegScratch, x, true)
+		reg = RegScratch
 	}
 
 	if x.Type.Category() == types.Int {
-		mov.opToIndirect(code, x.Type, reg, 0, NoIndex, regMemoryBase, offset)
+		mov.opToIndirect(code, x.Type, reg, 0, NoIndex, RegMemoryBase, offset)
 	} else {
-		movSSE.opToIndirect(code, x.Type, reg, 0, NoIndex, regMemoryBase, offset)
+		movSSE.opToIndirect(code, x.Type, reg, 0, NoIndex, RegMemoryBase, offset)
 	}
 }
 
@@ -304,11 +303,11 @@ func (mach X86) OpInit(code gen.OpCoder) {
 		panic("inconsistency")
 	}
 	code.Align(FunctionAlignment, PaddingByte)
-	add.opImm(code, types.I64, regStackLimit, gen.StackReserve)
+	add.opImm(code, types.I64, RegStackLimit, gen.StackReserve)
 
 	var notResume links.L
 
-	test.opFromReg(code, types.I64, regResult, regResult)
+	test.opFromReg(code, types.I64, RegResult, RegResult)
 	je.rel8.opStub(code)
 	notResume.AddSite(code.Len())
 	ret.op(code) // simulate return from snapshot function call
@@ -336,7 +335,7 @@ func (mach X86) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t types.T, reg regs.
 
 // OpMove must not update CPU's condition flags if preserveFlags is set.
 //
-// X86 implementation note: must not blindly rely on regScratch or regResult in
+// X86 implementation note: must not blindly rely on RegScratch or RegResult in
 // this function because we may be moving to one of them.
 func (mach X86) OpMove(code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	switch x.Type.Category() {
@@ -364,7 +363,7 @@ func (mach X86) OpMove(code gen.Coder, targetReg regs.R, x values.Operand, prese
 			if sourceReg := x.Reg(); sourceReg != targetReg {
 				mov.opFromReg(code, x.Type, targetReg, sourceReg)
 				zeroExt = true
-			} else if targetReg == regResult {
+			} else if targetReg == RegResult {
 				zeroExt = x.RegZeroExt()
 			} else {
 				panic("moving temporary integer register to itself")
@@ -416,8 +415,8 @@ func (mach X86) OpMove(code gen.Coder, targetReg regs.R, x values.Operand, prese
 			if value := x.ImmValue(); value == 0 {
 				pxorSSE.opFromReg(code, x.Type, targetReg, targetReg)
 			} else {
-				movImm64.op(code, x.Type, regScratch, value) // integer scratch register
-				movSSE.opFromReg(code, x.Type, targetReg, regScratch)
+				movImm64.op(code, x.Type, RegScratch, value) // integer scratch register
+				movSSE.opFromReg(code, x.Type, targetReg, RegScratch)
 			}
 
 		case values.VarMem:
@@ -431,7 +430,7 @@ func (mach X86) OpMove(code gen.Coder, targetReg regs.R, x values.Operand, prese
 		case values.TempReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
 				movsSSE.opFromReg(code, x.Type, targetReg, sourceReg)
-			} else if targetReg != regResult {
+			} else if targetReg != RegResult {
 				panic("moving temporary float register to itself")
 			}
 
@@ -480,7 +479,7 @@ func (mach X86) opMoveIntImm(code gen.OpCoder, reg regs.R, value int64) {
 
 // OpClearIntResultReg may update CPU's condition flags.
 func (mach X86) OpClearIntResultReg(code gen.OpCoder) {
-	xor.opFromReg(code, types.I32, regResult, regResult)
+	xor.opFromReg(code, types.I32, RegResult, RegResult)
 }
 
 // OpPush must not allocate registers, and must not update CPU's condition
@@ -508,7 +507,7 @@ func (mach X86) OpPush(code gen.Coder, x values.Operand) {
 		fallthrough
 
 	default:
-		reg = regScratch
+		reg = RegScratch
 		mach.OpMove(code, reg, x, true)
 	}
 
@@ -643,7 +642,7 @@ func (mach X86) OpStoreStack(code gen.Coder, offset int32, x values.Operand) {
 	if x.Storage.IsReg() {
 		reg = x.Reg()
 	} else {
-		reg = regScratch
+		reg = RegScratch
 		mach.OpMove(code, reg, x, true)
 	}
 
@@ -670,8 +669,8 @@ func (mach X86) OpStoreStackReg(code gen.OpCoder, t types.T, offset int32, reg r
 
 // OpCopyStack must not allocate registers.
 func (mach X86) OpCopyStack(code gen.OpCoder, targetOffset, sourceOffset int32) {
-	mov.opFromStack(code, types.I64, regScratch, sourceOffset)
-	mov.opToStack(code, types.I64, regScratch, targetOffset)
+	mov.opFromStack(code, types.I64, RegScratch, sourceOffset)
+	mov.opToStack(code, types.I64, RegScratch, targetOffset)
 }
 
 // OpSwap must not allocate registers, or update CPU's condition flags.
@@ -679,23 +678,23 @@ func (mach X86) OpSwap(code gen.Coder, cat gen.RegCategory, a, b regs.R) {
 	if cat == gen.RegCategoryInt {
 		xchg.opFromReg(code, types.I64, a, b)
 	} else {
-		movSSE.opFromReg(code, types.F64, regScratch, a)
+		movSSE.opFromReg(code, types.F64, RegScratch, a)
 		movSSE.opFromReg(code, types.F64, a, b)
-		movSSE.opFromReg(code, types.F64, b, regScratch)
+		movSSE.opFromReg(code, types.F64, b, RegScratch)
 	}
 }
 
 func (mach X86) OpEnterExitTrapHandler(code gen.OpCoder) {
-	shlImm.op(code, types.I64, regResult, 32) // exit code at top, trap id (0) at bottom
-	movMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
-	jmp.opReg(code, regScratch)
+	shlImm.op(code, types.I64, RegResult, 32) // exit code at top, trap id (0) at bottom
+	movMMX.opToReg(code, types.I64, RegScratch, RegTrapHandlerMMX)
+	jmp.opReg(code, RegScratch)
 }
 
 // OpEnterTrapHandler must not generate over 16 bytes of code.
 func (mach X86) OpEnterTrapHandler(code gen.OpCoder, id traps.Id) {
-	mov.opImm(code, types.I32, regResult, int32(id)) // automatic zero-extension
-	movMMX.opToReg(code, types.I64, regScratch, regTrapHandlerMMX)
-	jmp.opReg(code, regScratch)
+	mov.opImm(code, types.I32, RegResult, int32(id)) // automatic zero-extension
+	movMMX.opToReg(code, types.I64, RegScratch, RegTrapHandlerMMX)
+	jmp.opReg(code, RegScratch)
 }
 
 func (mach X86) OpBranch(code gen.Coder, addr int32) int32 {
@@ -751,19 +750,19 @@ func (mach X86) OpBranchIfOutOfBounds(code gen.Coder, indexReg regs.R, upperBoun
 }
 
 func (mach X86) opCompareBounds(code gen.Coder, indexReg regs.R, upperBound int32) {
-	movImm.opImm(code, types.I32, regScratch, upperBound)
+	movImm.opImm(code, types.I32, RegScratch, upperBound)
 	test.opFromReg(code, types.I32, indexReg, indexReg)
-	cmovl.opFromReg(code, types.I32, indexReg, regScratch) // negative index -> upper bound
-	cmp.opFromReg(code, types.I32, regScratch, indexReg)
+	cmovl.opFromReg(code, types.I32, indexReg, RegScratch) // negative index -> upper bound
+	cmp.opFromReg(code, types.I32, RegScratch, indexReg)
 }
 
 func (mach X86) OpTrapIfStackExhausted(code gen.Coder) (stackCheckAddr int32) {
 	var checked links.L
 
-	lea.opFromStack(code, types.I64, regScratch, -0x80000000) // reserve 32-bit displacement
+	lea.opFromStack(code, types.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
 	stackCheckAddr = code.Len()
 
-	cmp.opFromReg(code, types.I64, regScratch, regStackLimit)
+	cmp.opFromReg(code, types.I64, RegScratch, RegStackLimit)
 
 	jge.rel8.opStub(code)
 	checked.AddSite(code.Len())
@@ -823,7 +822,7 @@ func (mach X86) opBorrowMaybeScratchReg(code gen.Coder, x values.Operand, preser
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
 	} else {
-		reg = regScratch
+		reg = RegScratch
 		zeroExt = mach.OpMove(code, reg, x, preserveFlags)
 	}
 	own = (x.Storage == values.TempReg)
@@ -843,7 +842,7 @@ func (mach X86) opBorrowMaybeResultReg(code gen.RegCoder, x values.Operand, pres
 		zeroExt = x.RegZeroExt()
 	} else {
 		reg, zeroExt = mach.opMaybeResultReg(code, x, preserveFlags)
-		own = (reg != regResult)
+		own = (reg != RegResult)
 	}
 	return
 }
@@ -860,7 +859,7 @@ func (mach X86) opMaybeResultReg(code gen.RegCoder, x values.Operand, preserveFl
 
 		reg, ok = code.TryAllocReg(x.Type)
 		if !ok {
-			reg = regResult
+			reg = RegResult
 		}
 
 		if x.Storage != values.Nowhere {

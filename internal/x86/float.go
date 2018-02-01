@@ -61,11 +61,11 @@ var (
 )
 
 func pushFloatOp(code gen.OpCoder, t types.T, source regs.R) {
-	sub.opImm(code, types.I64, regStackPtr, gen.WordSize)
+	sub.opImm(code, types.I64, RegStackPtr, gen.WordSize)
 	movsSSE.opToStack(code, t, source, 0)
 }
 
 func popFloatOp(code gen.OpCoder, t types.T, target regs.R) {
 	movsSSE.opFromStack(code, t, target, 0)
-	add.opImm(code, types.I64, regStackPtr, gen.WordSize)
+	add.opImm(code, types.I64, RegStackPtr, gen.WordSize)
 }

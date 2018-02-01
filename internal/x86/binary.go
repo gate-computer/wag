@@ -126,8 +126,8 @@ func (mach X86) binaryIntCompareOp(code gen.RegCoder, cond uint8, a, b values.Op
 		return
 
 	default:
-		mach.OpMove(code, regScratch, b, false)
-		cmp.opFromReg(code, a.Type, targetReg, regScratch)
+		mach.OpMove(code, RegScratch, b, false)
+		cmp.opFromReg(code, a.Type, targetReg, RegScratch)
 		return
 	}
 }
@@ -163,8 +163,8 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 	checkOverflow := true
 
 	if b.Storage.IsReg() {
-		if b.Reg() == regResult {
-			newReg := regScratch
+		if b.Reg() == RegResult {
+			newReg := RegScratch
 
 			if division {
 				var ok bool
@@ -173,14 +173,14 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 				newReg, ok = code.TryAllocReg(t)
 				if !ok {
 					// borrow a register which we don't need in this function
-					movMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
-					defer movMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
+					movMMX.opFromReg(code, types.I64, RegScratchMMX, RegTextBase)
+					defer movMMX.opToReg(code, types.I64, RegTextBase, RegScratchMMX)
 
-					newReg = regTextBase
+					newReg = RegTextBase
 				}
 			}
 
-			mov.opFromReg(code, t, newReg, regResult)
+			mov.opFromReg(code, t, newReg, RegResult)
 			b = values.RegOperand(true, t, newReg)
 		}
 	} else {
@@ -197,17 +197,17 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 		reg, ok := code.TryAllocReg(t)
 		if !ok {
 			// borrow a register which we don't need in this function
-			movMMX.opFromReg(code, types.I64, regScratchMMX, regTextBase)
-			defer movMMX.opToReg(code, types.I64, regTextBase, regScratchMMX)
+			movMMX.opFromReg(code, types.I64, RegScratchMMX, RegTextBase)
+			defer movMMX.opToReg(code, types.I64, RegTextBase, RegScratchMMX)
 
-			reg = regTextBase
+			reg = RegTextBase
 		}
 
 		mach.OpMove(code, reg, b, true)
 		b = values.RegOperand(true, t, reg)
 	}
 
-	mach.OpMove(code, regResult, a, false)
+	mach.OpMove(code, RegResult, a, false)
 
 	remainder := (index & opers.DivmulRem) != 0
 
@@ -237,7 +237,7 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 			var do links.L
 
 			if remainder {
-				xor.opFromReg(code, types.I32, regScratch, regScratch) // moved to result at the end
+				xor.opFromReg(code, types.I32, RegScratch, RegScratch) // moved to result at the end
 
 				cmp.opImm(code, t, b.Reg(), -1)
 				je.rel8.opStub(code)
@@ -245,11 +245,11 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 			} else {
 				switch t.Size() {
 				case types.Size32:
-					cmp.opImm(code, t, regResult, -0x80000000)
+					cmp.opImm(code, t, RegResult, -0x80000000)
 
 				case types.Size64:
-					movImm64.op(code, t, regScratch, -0x8000000000000000)
-					cmp.opFromReg(code, t, regResult, regScratch)
+					movImm64.op(code, t, RegScratch, -0x8000000000000000)
+					cmp.opFromReg(code, t, RegResult, RegScratch)
 
 				default:
 					panic(a)
@@ -274,7 +274,7 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 			cdqCqo.op(code, t)
 		} else {
 			// zero-extend dividend high bits
-			xor.opFromReg(code, types.I32, regScratch, regScratch)
+			xor.opFromReg(code, types.I32, RegScratch, RegScratch)
 		}
 	}
 
@@ -285,10 +285,10 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 	mach.updateBranches8(code, &doNot)
 
 	if remainder {
-		mov.opFromReg(code, t, regResult, regScratch)
+		mov.opFromReg(code, t, RegResult, RegScratch)
 	}
 
-	return values.TempRegOperand(t, regResult, true)
+	return values.TempRegOperand(t, RegResult, true)
 }
 
 func (mach X86) opCheckDivideByZero(code gen.RegCoder, t types.T, reg regs.R) {
@@ -324,39 +324,39 @@ func (mach X86) binaryIntShiftOp(code gen.RegCoder, index uint8, a, b values.Ope
 		insn.imm.op(code, b.Type, reg, uint8(b.ImmValue()))
 		result = values.TempRegOperand(a.Type, reg, true)
 
-	case b.Storage.IsReg() && b.Reg() == regShiftCount:
+	case b.Storage.IsReg() && b.Reg() == RegShiftCount:
 		reg, _ := mach.opMaybeResultReg(code, a, false)
 		insn.reg.opReg(code, a.Type, reg)
 		code.Discard(b)
 		result = values.TempRegOperand(a.Type, reg, true)
 
-	case code.RegAllocated(types.I32, regShiftCount):
+	case code.RegAllocated(types.I32, RegShiftCount):
 		reg, _ := mach.opMaybeResultReg(code, a, true)
-		if reg == regShiftCount {
-			mov.opFromReg(code, a.Type, regResult, regShiftCount)
-			result = mach.subtleShiftOp(code, insn.reg, a.Type, regResult, b)
-			code.FreeReg(types.I32, regShiftCount)
+		if reg == RegShiftCount {
+			mov.opFromReg(code, a.Type, RegResult, RegShiftCount)
+			result = mach.subtleShiftOp(code, insn.reg, a.Type, RegResult, b)
+			code.FreeReg(types.I32, RegShiftCount)
 		} else {
-			// unknown operand in regShiftCount
-			mov.opFromReg(code, types.I64, regScratch, regShiftCount) // save
+			// unknown operand in RegShiftCount
+			mov.opFromReg(code, types.I64, RegScratch, RegShiftCount) // save
 			result = mach.subtleShiftOp(code, insn.reg, a.Type, reg, b)
-			mov.opFromReg(code, types.I64, regShiftCount, regScratch) // restore
+			mov.opFromReg(code, types.I64, RegShiftCount, RegScratch) // restore
 		}
 
 	default:
-		code.AllocSpecificReg(types.I32, regShiftCount)
+		code.AllocSpecificReg(types.I32, RegShiftCount)
 		reg, _ := mach.opMaybeResultReg(code, a, true)
 		result = mach.subtleShiftOp(code, insn.reg, a.Type, reg, b)
-		code.FreeReg(types.I32, regShiftCount)
+		code.FreeReg(types.I32, RegShiftCount)
 	}
 
 	return
 }
 
-// subtleShiftOp trashes regShiftCount.
+// subtleShiftOp trashes RegShiftCount.
 func (mach X86) subtleShiftOp(code gen.RegCoder, insn insnRexM, t types.T, reg regs.R, count values.Operand) values.Operand {
 	count.Type = types.I32                         // TODO: 8-bit mov
-	mach.OpMove(code, regShiftCount, count, false) //
+	mach.OpMove(code, RegShiftCount, count, false) //
 	insn.opReg(code, t, reg)
 	return values.TempRegOperand(t, reg, true)
 }
@@ -447,12 +447,12 @@ func (mach X86) binaryFloatCopysignOp(code gen.RegCoder, a, b values.Operand) va
 
 	var done links.L
 
-	xorpSSE.opFromReg(code, types.F64, regScratch, regScratch) // float reg
-	ucomisSSE.opFromReg(code, a.Type, regScratch, targetReg)   // float regs
-	setbe.opReg(code, regScratch)                              // integer reg
-	ucomisSSE.opFromReg(code, a.Type, regScratch, sourceReg)   // float regs
-	setbe.opReg(code, regResult)                               // integer reg
-	xor.opFromReg(code, types.I32, regScratch, regResult)      // TODO: 8-bit xor
+	xorpSSE.opFromReg(code, types.F64, RegScratch, RegScratch) // float reg
+	ucomisSSE.opFromReg(code, a.Type, RegScratch, targetReg)   // float regs
+	setbe.opReg(code, RegScratch)                              // integer reg
+	ucomisSSE.opFromReg(code, a.Type, RegScratch, sourceReg)   // float regs
+	setbe.opReg(code, RegResult)                               // integer reg
+	xor.opFromReg(code, types.I32, RegScratch, RegResult)      // TODO: 8-bit xor
 	je.rel8.opStub(code)
 	done.AddSite(code.Len())
 

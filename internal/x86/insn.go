@@ -282,12 +282,12 @@ func (i insnRexM) opIndirect(code gen.OpCoder, t types.T, reg regs.R, disp int32
 }
 
 func (i insnRexM) opStack(code gen.OpCoder, t types.T, disp int32) {
-	mod, imm := dispMod(t, regStackPtr, disp)
+	mod, imm := dispMod(t, RegStackPtr, disp)
 
 	writeRexSizeTo(code, t, 0, 0, 0)
 	code.Write(i.opcode)
 	writeModTo(code, mod, i.ro, MemSIB)
-	writeSibTo(code, 0, regStackPtr, regStackPtr)
+	writeSibTo(code, 0, RegStackPtr, RegStackPtr)
 	imm.writeTo(code)
 }
 
@@ -377,12 +377,12 @@ func writePrefixIndirectInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []b
 }
 
 func writePrefixStackInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []byte, reg regs.R, disp int32) {
-	mod, imm := dispMod(t, regStackPtr, disp)
+	mod, imm := dispMod(t, RegStackPtr, disp)
 
 	p.writeTo(code, t, byte(reg), 0, 0)
 	code.Write(opcode)
 	writeModTo(code, mod, byte(reg), MemSIB)
-	writeSibTo(code, 0, regStackPtr, regStackPtr)
+	writeSibTo(code, 0, RegStackPtr, RegStackPtr)
 	imm.writeTo(code)
 }
 
@@ -443,13 +443,13 @@ func (i insnPrefixMI) opImmToIndirect(code gen.OpCoder, t types.T, scale uint8, 
 }
 
 func (i insnPrefixMI) opImmToStack(code gen.OpCoder, t types.T, disp, value int32) {
-	mod, immDisp := dispMod(t, regStackPtr, disp)
+	mod, immDisp := dispMod(t, RegStackPtr, disp)
 	opcode, immValue := i.immOpcode(value)
 
 	i.prefix.writeTo(code, t, 0, 0, 0)
 	code.WriteByte(opcode)
 	writeModTo(code, mod, i.ro, MemSIB)
-	writeSibTo(code, 0, regStackPtr, regStackPtr)
+	writeSibTo(code, 0, RegStackPtr, RegStackPtr)
 	immDisp.writeTo(code)
 	immValue.writeTo(code)
 }
