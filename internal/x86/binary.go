@@ -248,7 +248,7 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 					cmp.opImm(code, t, RegResult, -0x80000000)
 
 				case types.Size64:
-					cmp.opFromAddr(code, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr)
+					cmp.opFromAddr(code, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr64)
 
 				default:
 					panic(a)
@@ -444,7 +444,7 @@ func (mach X86) binaryFloatCopysignOp(code gen.RegCoder, a, b values.Operand) va
 
 	var done links.L
 
-	signMaskAddr := gen.TypeMaskAddr(code, gen.ROMask80Addr, a.Type)
+	signMaskAddr := gen.MaskAddr(code, gen.Mask80Base, a.Type)
 
 	movSSE.opToReg(code, a.Type, RegScratch, sourceReg) // int <- float
 	and.opFromAddr(code, a.Type, RegScratch, 0, NoIndex, signMaskAddr)

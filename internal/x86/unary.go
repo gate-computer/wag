@@ -110,17 +110,12 @@ func (mach X86) unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (
 
 // opAbsFloatReg in-place.
 func (mach X86) opAbsFloatReg(code gen.RegCoder, t types.T, reg regs.R) {
-	mask := (uint64(1) << (uint(t.Size()) * 8)) - 1          // all bits set
-	absMask := ^(uint64(1) << (uint(t.Size())*8 - 1)) & mask // only high bit cleared
-	movImm64.op(code, t, RegScratch, int64(absMask))         // integer scratch register
-	movSSE.opFromReg(code, t, RegScratch, RegScratch)        // float scratch register
-	andpSSE.opFromReg(code, t, reg, RegScratch)
+	absMaskAddr := gen.MaskAddr(code, gen.Mask7fBase, t)
+	andpSSE.opFromAddr(code, t, reg, 0, NoIndex, absMaskAddr)
 }
 
 // opNegFloatReg in-place.
 func (mach X86) opNegFloatReg(code gen.RegCoder, t types.T, reg regs.R) {
-	signMask := int64(-1) << (uint(t.Size())*8 - 1)   // only high bit set
-	movImm64.op(code, t, RegScratch, signMask)        // integer scratch register
-	movSSE.opFromReg(code, t, RegScratch, RegScratch) // float scratch register
-	xorpSSE.opFromReg(code, t, reg, RegScratch)
+	signMaskAddr := gen.MaskAddr(code, gen.Mask80Base, t)
+	xorpSSE.opFromAddr(code, t, reg, 0, NoIndex, signMaskAddr)
 }

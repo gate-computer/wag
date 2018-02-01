@@ -51,18 +51,15 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 
 	m.funcLinks = make([]links.FunctionL, len(m.funcSigs))
 
-	if m.roData.alloc(8, 8) != gen.ROMask7fAddr {
-		panic("0x7fffffffffffffff constant could not be allocated at designated read-only memory offset")
+	if m.roData.alloc(gen.ROTableAddr, 16) != 0 { // allocate everything preceding table
+		panic("read-only memory buffer must be empty")
 	}
-	if m.roData.alloc(8, 8) != gen.ROMask80Addr {
-		panic("0x8000000000000000 constant could not be allocated at designated read-only memory offset")
-	}
-	if m.roData.alloc(int32(len(m.tableFuncs))*8, 8) != gen.ROTableAddr {
-		panic("table could not be allocated at designated read-only memory offset")
-	}
+	m.roData.alloc(int32(len(m.tableFuncs))*8, 8) // allocate table
 
-	binary.LittleEndian.PutUint64(m.roData.buf[gen.ROMask7fAddr:], 0x7fffffffffffffff)
-	binary.LittleEndian.PutUint64(m.roData.buf[gen.ROMask80Addr:], 0x8000000000000000)
+	binary.LittleEndian.PutUint32(m.roData.buf[gen.ROMask7fAddr32:], 0x7fffffff)
+	binary.LittleEndian.PutUint64(m.roData.buf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
+	binary.LittleEndian.PutUint32(m.roData.buf[gen.ROMask80Addr32:], 0x80000000)
+	binary.LittleEndian.PutUint64(m.roData.buf[gen.ROMask80Addr64:], 0x8000000000000000)
 
 	mach.OpEnterTrapHandler(m, traps.MissingFunction) // at zero address
 
