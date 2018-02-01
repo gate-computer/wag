@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// Don't use regResult for effective addresses etc. to avoid information
+	// Don't use RegResult for effective addresses etc. to avoid information
 	// leaks.  Void functions may leave information in the result register, and
 	// call stack could be rewritten during snapshot/restore to cause void
 	// function to return to a non-void call site.
