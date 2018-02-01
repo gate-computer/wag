@@ -60,10 +60,37 @@ func unparse(expr interface{}, buf *bytes.Buffer) {
 		}
 
 	case Quoted:
-		data, err := json.Marshal(x.String())
-		if err != nil {
-			panic(err)
+		var data []byte
+		var err error
+
+		manual := false
+
+		for _, b := range []byte(x.String()) {
+			if b < 32 || b > 127 {
+				manual = true
+				break
+			}
 		}
+
+		if manual {
+			data = []byte{'"'}
+
+			for _, b := range []byte(x.String()) {
+				if b < 32 || b > 127 {
+					data = append(data, fmt.Sprintf("\\%02x", b)...)
+				} else {
+					data = append(data, b)
+				}
+			}
+
+			data = append(data, '"')
+		} else {
+			data, err = json.Marshal(x.String())
+			if err != nil {
+				panic(err)
+			}
+		}
+
 		if _, err := buf.Write(data); err != nil {
 			panic(err)
 		}

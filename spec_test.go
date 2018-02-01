@@ -39,12 +39,10 @@ const (
 // func Test_fac(t *testing.T)                   { spec(t, "fac") }
 // func Test_float_exprs(t *testing.T)           { spec(t, "float_exprs") }
 // func Test_float_literals(t *testing.T)        { spec(t, "float_literals") }
-// func Test_float_memory(t *testing.T)          { spec(t, "float_memory") }
 // func Test_func(t *testing.T)                  { spec(t, "func") }
 // func Test_func_ptrs(t *testing.T)             { spec(t, "func_ptrs") }
 // func Test_imports(t *testing.T)               { spec(t, "imports") }
 // func Test_linking(t *testing.T)               { spec(t, "linking") }
-// func Test_memory(t *testing.T)                { spec(t, "memory") }
 // func Test_names(t *testing.T)                 { spec(t, "names") }
 // func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
 // func Test_start(t *testing.T)                 { spec(t, "start") }
@@ -68,6 +66,7 @@ func Test_f32_cmp(t *testing.T)                { spec(t, "f32_cmp") }
 func Test_f64(t *testing.T)                    { spec(t, "f64") }
 func Test_f64_bitwise(t *testing.T)            { spec(t, "f64_bitwise") }
 func Test_f64_cmp(t *testing.T)                { spec(t, "f64_cmp") }
+func Test_float_memory(t *testing.T)           { spec(t, "float_memory") }
 func Test_float_misc(t *testing.T)             { spec(t, "float_misc") }
 func Test_forward(t *testing.T)                { spec(t, "forward") }
 func Test_get_local(t *testing.T)              { spec(t, "get_local") }
@@ -81,6 +80,7 @@ func Test_int_literals(t *testing.T)           { spec(t, "int_literals") }
 func Test_labels(t *testing.T)                 { spec(t, "labels") }
 func Test_left_to_right(t *testing.T)          { spec(t, "left-to-right") }
 func Test_loop(t *testing.T)                   { spec(t, "loop") }
+func Test_memory(t *testing.T)                 { spec(t, "memory") }
 func Test_memory_redundancy(t *testing.T)      { spec(t, "memory_redundancy") }
 func Test_memory_trap(t *testing.T)            { spec(t, "memory_trap") }
 func Test_nop(t *testing.T)                    { spec(t, "nop") }
