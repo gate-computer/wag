@@ -248,8 +248,7 @@ func (mach X86) binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Op
 					cmp.opImm(code, t, RegResult, -0x80000000)
 
 				case types.Size64:
-					movImm64.op(code, t, RegScratch, -0x8000000000000000)
-					cmp.opFromReg(code, t, RegResult, RegScratch)
+					cmp.opFromAddr(code, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr)
 
 				default:
 					panic(a)
