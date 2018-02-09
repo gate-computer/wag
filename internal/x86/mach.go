@@ -286,6 +286,7 @@ func (mach X86) OpSetGlobal(code gen.Coder, offset int32, x values.Operand) {
 
 	if x.Storage.IsReg() {
 		reg = x.Reg()
+		code.Discard(x)
 	} else {
 		mach.OpMove(code, RegScratch, x, true)
 		reg = RegScratch
