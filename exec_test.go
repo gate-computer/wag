@@ -37,7 +37,7 @@ func TestExec(t *testing.T) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	m := Module{MainSymbol: "main"}
+	m := Module{EntrySymbol: "main"}
 	m.loadPreliminarySections(wasm, runner.Env)
 
 	var codeBuf bytes.Buffer

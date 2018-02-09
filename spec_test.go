@@ -437,7 +437,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		var nameSection sections.NameSection
 
 		m := Module{
-			MainSymbol: "test",
+			EntrySymbol: "test",
 			UnknownSectionLoader: sections.UnknownLoaders{
 				"name": nameSection.Load,
 			}.Load,

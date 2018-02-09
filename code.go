@@ -36,8 +36,8 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		debugDepth = 0
 	}
 
-	if m.MainSymbol != "" && !m.mainDefined {
-		panic(fmt.Errorf("%s function not found in export section", m.MainSymbol))
+	if m.EntrySymbol != "" && !m.entryDefined {
+		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
 	if m.roDataAbsAddr <= 0 {
@@ -76,15 +76,15 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		// start func returns here; execution proceeds to main func or exit trap
 	}
 
-	if m.mainDefined {
-		if index := int(m.mainIndex); index > maxInitIndex {
+	if m.entryDefined {
+		if index := int(m.entryIndex); index > maxInitIndex {
 			maxInitIndex = index
 		}
 
-		sigIndex := m.funcSigs[m.mainIndex]
+		sigIndex := m.funcSigs[m.entryIndex]
 		mainResultType = m.sigs[sigIndex].Result
 
-		m.opInitCall(&m.funcLinks[m.mainIndex])
+		m.opInitCall(&m.funcLinks[m.entryIndex])
 		// main func returns here; execution proceeds to exit trap
 	}
 

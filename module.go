@@ -143,7 +143,7 @@ func appendGlobalsData(buf []byte, globals []global) []byte {
 }
 
 type Module struct {
-	MainSymbol           string
+	EntrySymbol          string
 	UnknownSectionLoader func(r reader.Reader, payloadLen uint32) error
 
 	sigs             []types.Function
@@ -153,8 +153,8 @@ type Module struct {
 	memoryLimits     resizableLimits
 	globals          []global
 	numImportGlobals int
-	mainIndex        uint32
-	mainDefined      bool
+	entryIndex       uint32
+	entryDefined     bool
 	startIndex       uint32
 	startDefined     bool
 	tableFuncs       []uint32
@@ -442,7 +442,7 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 
 			switch kind {
 			case externalKindFunction:
-				if fieldLen > 0 && string(fieldStr) == m.MainSymbol {
+				if fieldLen > 0 && string(fieldStr) == m.EntrySymbol {
 					if index >= uint32(len(m.funcSigs)) {
 						panic(fmt.Errorf("export function index out of bounds: %d", index))
 					}
@@ -450,11 +450,11 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 					sigIndex := m.funcSigs[index]
 					sig := m.sigs[sigIndex]
 					if len(sig.Args) > 0 || !(sig.Result == types.Void || sig.Result == types.I32) {
-						panic(fmt.Errorf("invalid main function signature: %s %s", m.MainSymbol, sig))
+						panic(fmt.Errorf("invalid main function signature: %s %s", m.EntrySymbol, sig))
 					}
 
-					m.mainIndex = index
-					m.mainDefined = true
+					m.entryIndex = index
+					m.entryDefined = true
 				}
 
 			case externalKindTable, externalKindMemory, externalKindGlobal:
