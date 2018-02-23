@@ -49,6 +49,10 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
+	if m.InsnMap != nil {
+		m.InsnMap.Init(int(funcCodeCount))
+	}
+
 	m.funcLinks = make([]links.FunctionL, len(m.funcSigs))
 
 	if m.roData.alloc(gen.ROTableAddr, 16) != 0 { // allocate everything preceding table
@@ -545,6 +549,9 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 	addr := code.Len()
 	code.funcLinks[funcIndex].Addr = addr
 	code.mapFunctionAddr(addr)
+	if code.InsnMap != nil {
+		code.InsnMap.PutFunc(code.Len())
+	}
 	mach.OpEnterFunction(code)
 
 	code.resultType = sig.Result
@@ -766,6 +773,10 @@ func (code *funcCoder) genOp(load loader.L, op opcode) (deadend bool) {
 	if debug {
 		debugf("%s op", op)
 		debugDepth++
+	}
+
+	if code.InsnMap != nil {
+		code.InsnMap.PutInsn(code.Len())
 	}
 
 	impl := opcodeImpls[op]

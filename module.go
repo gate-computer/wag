@@ -38,6 +38,12 @@ type Buffer interface {
 	Len() int
 }
 
+type InsnMap interface {
+	Init(numFuncs int)
+	PutFunc(pos int32)
+	PutInsn(pos int32)
+}
+
 const (
 	maxStringLen          = 255 // TODO
 	maxImportParams       = gen.StackReserve/gen.WordSize - 2
@@ -145,6 +151,7 @@ func appendGlobalsData(buf []byte, globals []global) []byte {
 type Module struct {
 	EntrySymbol          string
 	UnknownSectionLoader func(r reader.Reader, payloadLen uint32) error
+	InsnMap              InsnMap
 
 	sigs             []types.Function
 	funcSigs         []uint32
