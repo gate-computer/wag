@@ -48,7 +48,7 @@ const (
 	maxStringLen          = 255 // TODO
 	maxImportParams       = gen.StackReserve/gen.WordSize - 2
 	maxFunctionParams     = 255   // index+1 must fit in uint8
-	maxFunctionVars       = 511   // index must fit in uint16; TODO
+	maxFunctionVars       = 8191  // index must fit in uint16; TODO
 	maxTableLimit         = 32768 // TODO
 	maxInitialMemoryLimit = 256   // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wasm.PageBits
