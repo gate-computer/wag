@@ -580,7 +580,7 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 	for range load.Count() {
 		params := load.Count()
 		if uint64(len(code.vars))+uint64(len(params)) >= maxFunctionVars {
-			panic(errors.New("function with too many variables"))
+			panic(fmt.Errorf("function #%d has too many variables: %d params, %d locals", funcIndex, len(params), len(code.vars)))
 		}
 
 		t := types.ByEncoding(load.Varint7())
