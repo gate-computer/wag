@@ -13,6 +13,8 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/traps"
@@ -25,7 +27,7 @@ type moduleCoder struct {
 }
 
 func (m moduleCoder) globalOffset(index uint32) int32 {
-	return (int32(index) - int32(len(m.globals))) * gen.WordSize
+	return (int32(index) - int32(len(m.Globals))) * gen.WordSize
 }
 
 func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
@@ -36,16 +38,16 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		debugDepth = 0
 	}
 
-	if m.EntrySymbol != "" && !m.entryDefined {
+	if m.EntrySymbol != "" && !m.EntryDefined {
 		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
-	if m.roDataAbsAddr <= 0 {
-		panic(fmt.Errorf("invalid read-only memory address: %d", m.roDataAbsAddr))
+	if m.RODataAbsAddr <= 0 {
+		panic(fmt.Errorf("invalid read-only memory address: %d", m.RODataAbsAddr))
 	}
 
 	funcCodeCount := load.Varuint32()
-	if needed := len(m.funcSigs) - len(m.importFuncs); funcCodeCount != uint32(needed) {
+	if needed := len(m.FuncSigs) - len(m.ImportFuncs); funcCodeCount != uint32(needed) {
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
@@ -53,17 +55,14 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		m.InsnMap.Init(int(funcCodeCount))
 	}
 
-	m.funcLinks = make([]links.FunctionL, len(m.funcSigs))
+	m.FuncLinks = make([]links.FunctionL, len(m.FuncSigs))
 
-	if m.roData.alloc(gen.ROTableAddr, 16) != 0 { // allocate everything preceding table
-		panic("read-only memory buffer must be empty")
-	}
-	m.roData.alloc(int32(len(m.tableFuncs))*8, 8) // allocate table
-
-	binary.LittleEndian.PutUint32(m.roData.buf[gen.ROMask7fAddr32:], 0x7fffffff)
-	binary.LittleEndian.PutUint64(m.roData.buf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
-	binary.LittleEndian.PutUint32(m.roData.buf[gen.ROMask80Addr32:], 0x80000000)
-	binary.LittleEndian.PutUint64(m.roData.buf[gen.ROMask80Addr64:], 0x8000000000000000)
+	roTableSize := int32(len(m.TableFuncs) * 8)
+	m.RODataBuf = allocateRODataBeginning(m.RODataBuf, gen.ROTableAddr+roTableSize)
+	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask7fAddr32:], 0x7fffffff)
+	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
+	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask80Addr32:], 0x80000000)
+	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask80Addr64:], 0x8000000000000000)
 
 	mach.OpEnterTrapHandler(m, traps.MissingFunction) // at zero address
 
@@ -73,22 +72,22 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	maxInitIndex := -1
 	mainResultType := types.Void
 
-	if m.startDefined {
-		maxInitIndex = int(m.startIndex)
+	if m.StartDefined {
+		maxInitIndex = int(m.StartIndex)
 
-		m.opInitCall(&m.funcLinks[m.startIndex])
+		m.opInitCall(&m.FuncLinks[m.StartIndex])
 		// start func returns here; execution proceeds to main func or exit trap
 	}
 
-	if m.entryDefined {
-		if index := int(m.entryIndex); index > maxInitIndex {
+	if m.EntryDefined {
+		if index := int(m.EntryIndex); index > maxInitIndex {
 			maxInitIndex = index
 		}
 
-		sigIndex := m.funcSigs[m.entryIndex]
-		mainResultType = m.sigs[sigIndex].Result
+		sigIndex := m.FuncSigs[m.EntryIndex]
+		mainResultType = m.Sigs[sigIndex].Result
 
-		m.opInitCall(&m.funcLinks[m.entryIndex])
+		m.opInitCall(&m.FuncLinks[m.EntryIndex])
 		// main func returns here; execution proceeds to exit trap
 	}
 
@@ -99,39 +98,39 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	mach.OpEnterExitTrapHandler(m)
 
 	for id := traps.MissingFunction + 1; id < traps.NumTraps; id++ {
-		m.trapLinks[id].Addr = m.Len()
+		m.TrapLinks[id].Addr = m.Len()
 		mach.OpEnterTrapHandler(m, id)
 	}
 
-	for i, imp := range m.importFuncs {
+	for i, imp := range m.ImportFuncs {
 		addr := m.genImportEntry(imp)
-		m.funcLinks[i].Addr = addr
+		m.FuncLinks[i].Addr = addr
 	}
 
-	m.regs.init(mach.AvailRegs())
+	m.Regs.Init(mach.AvailRegs())
 
 	var midpoint int
 
 	if machNative && startTrigger != nil {
 		midpoint = maxInitIndex + 1
 	} else {
-		midpoint = len(m.funcSigs)
+		midpoint = len(m.FuncSigs)
 	}
 
-	for i := len(m.importFuncs); i < midpoint; i++ {
+	for i := len(m.ImportFuncs); i < midpoint; i++ {
 		code := funcCoder{moduleCoder: m}
 		code.genFunction(load, i)
 
-		mach.UpdateCalls(code, &m.funcLinks[i].L)
+		mach.UpdateCalls(code, &m.FuncLinks[i].L)
 	}
 
-	ptr := m.roData.buf[gen.ROTableAddr:]
+	ptr := m.RODataBuf[gen.ROTableAddr:]
 
-	for i, funcIndex := range m.tableFuncs {
+	for i, funcIndex := range m.TableFuncs {
 		var funcAddr uint32 // missing function trap by default
 
-		if funcIndex < uint32(len(m.funcLinks)) {
-			link := &m.funcLinks[funcIndex]
+		if funcIndex < uint32(len(m.FuncLinks)) {
+			link := &m.FuncLinks[funcIndex]
 			funcAddr = uint32(link.Addr) // missing if not generated yet
 			if funcAddr == 0 {
 				link.AddTableIndex(i)
@@ -140,8 +139,8 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 
 		sigIndex := uint32(math.MaxInt32) // invalid signature index by default
 
-		if funcIndex < uint32(len(m.funcSigs)) {
-			sigIndex = m.funcSigs[funcIndex]
+		if funcIndex < uint32(len(m.FuncSigs)) {
+			sigIndex = m.FuncSigs[funcIndex]
 		}
 
 		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(funcAddr))
@@ -154,21 +153,21 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		close(startTrigger)
 	}
 
-	if midpoint < len(m.funcSigs) {
-		for i := midpoint; i < len(m.funcSigs); i++ {
+	if midpoint < len(m.FuncSigs) {
+		for i := midpoint; i < len(m.FuncSigs); i++ {
 			code := funcCoder{moduleCoder: m}
 			code.genFunction(load, i)
 		}
 
 		mach.ClearInsnCache()
 
-		for i := midpoint; i < len(m.funcSigs); i++ {
-			link := &m.funcLinks[i]
+		for i := midpoint; i < len(m.FuncSigs); i++ {
+			link := &m.FuncLinks[i]
 			addr := uint32(link.Addr)
 
 			for _, tableIndex := range link.TableIndexes {
 				offset := gen.ROTableAddr + tableIndex*8
-				mach.PutUint32(m.roData.buf[offset:offset+4], addr) // overwrite only function addr
+				mach.PutUint32(m.RODataBuf[offset:offset+4], addr) // overwrite only function addr
 			}
 
 			mach.UpdateCalls(m, &link.L)
@@ -179,7 +178,7 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 }
 
 func (m moduleCoder) Write(buf []byte) (n int, err error) {
-	n, err = m.text.Write(buf)
+	n, err = m.TextBuffer.Write(buf)
 	if err != nil {
 		panic(err)
 	}
@@ -187,7 +186,7 @@ func (m moduleCoder) Write(buf []byte) (n int, err error) {
 }
 
 func (m moduleCoder) WriteByte(b byte) (err error) {
-	err = m.text.WriteByte(b)
+	err = m.TextBuffer.WriteByte(b)
 	if err != nil {
 		panic(err)
 	}
@@ -195,31 +194,31 @@ func (m moduleCoder) WriteByte(b byte) (err error) {
 }
 
 func (m moduleCoder) Align(alignment int, padding byte) {
-	size := (alignment - m.text.Len()) & (alignment - 1)
-	m.text.Grow(size)
+	size := (alignment - m.TextBuffer.Len()) & (alignment - 1)
+	m.TextBuffer.Grow(size)
 	for i := 0; i < size; i++ {
-		m.text.WriteByte(padding)
+		m.TextBuffer.WriteByte(padding)
 	}
 }
 
 func (m moduleCoder) Bytes() []byte {
-	return m.text.Bytes()
+	return m.TextBuffer.Bytes()
 }
 
 func (m moduleCoder) Len() int32 {
-	return int32(m.text.Len())
+	return int32(m.TextBuffer.Len())
 }
 
 func (m moduleCoder) MinMemorySize() wasm.MemorySize {
-	return wasm.MemorySize(m.memoryLimits.initial)
+	return wasm.MemorySize(m.MemoryLimitValues.Initial)
 }
 
 func (m moduleCoder) RODataAddr() int32 {
-	return m.roDataAbsAddr
+	return m.RODataAbsAddr
 }
 
 func (m moduleCoder) TrapEntryAddr(id traps.Id) int32 {
-	return m.trapLinks[id].FinalAddr()
+	return m.TrapLinks[id].FinalAddr()
 }
 
 func (m moduleCoder) opInitCall(l *links.FunctionL) {
@@ -231,12 +230,12 @@ func (m moduleCoder) opInitCall(l *links.FunctionL) {
 func (m moduleCoder) mapCallAddr(retAddr, stackOffset int32) {
 	entry := (uint64(stackOffset) << 32) | uint64(retAddr)
 	debugf("map call: retAddr=0x%x stackOffset=%d", retAddr, stackOffset)
-	if err := binary.Write(&m.callMap, binary.LittleEndian, uint64(entry)); err != nil {
+	if err := binary.Write(&m.CallMapBuffer, binary.LittleEndian, uint64(entry)); err != nil {
 		panic(err)
 	}
 }
 
-func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
+func (m moduleCoder) genImportEntry(imp module.ImportFunction) (addr int32) {
 	if debug {
 		debugf("import function")
 		debugDepth++
@@ -248,24 +247,24 @@ func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
 	addr = m.Len()
 	m.mapFunctionAddr(addr)
 
-	sigIndex := m.funcSigs[imp.funcIndex]
-	sig := m.sigs[sigIndex]
+	sigIndex := m.FuncSigs[imp.FuncIndex]
+	sig := m.Sigs[sigIndex]
 
-	if imp.variadic {
-		var paramRegs regIterator
-		numStackParams := paramRegs.init(mach.ParamRegs(), sig.Args)
+	if imp.Variadic {
+		var paramRegs regalloc.Iterator
+		numStackParams := paramRegs.Init(mach.ParamRegs(), sig.Args)
 		if numStackParams > 0 {
 			panic("import function has stack parameters")
 		}
 
 		for i := range sig.Args {
 			t := sig.Args[i]
-			reg := paramRegs.iterForward(gen.TypeRegCategory(t))
+			reg := paramRegs.IterForward(gen.TypeRegCategory(t))
 			mach.OpStoreStackReg(m, t, -(int32(i)+1)*gen.WordSize, reg)
 		}
 	}
 
-	mach.OpEnterImportFunction(m, imp.absAddr, imp.variadic, len(sig.Args), int(sigIndex))
+	mach.OpEnterImportFunction(m, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
 
 	if debug {
 		debugDepth--
@@ -277,7 +276,7 @@ func (m moduleCoder) genImportEntry(imp importFunction) (addr int32) {
 
 func (m moduleCoder) mapFunctionAddr(addr int32) {
 	debugf("map function: addr=0x%x", addr)
-	if err := binary.Write(&m.funcMap, binary.LittleEndian, addr); err != nil {
+	if err := binary.Write(&m.FuncMapBuffer, binary.LittleEndian, addr); err != nil {
 		panic(err)
 	}
 }
@@ -343,20 +342,20 @@ type funcCoder struct {
 }
 
 func (code *funcCoder) TryAllocReg(t types.T) (reg regs.R, ok bool) {
-	return code.regs.alloc(gen.TypeRegCategory(t))
+	return code.Regs.Alloc(gen.TypeRegCategory(t))
 }
 
 func (code *funcCoder) AllocSpecificReg(t types.T, reg regs.R) {
-	code.regs.allocSpecific(gen.TypeRegCategory(t), reg)
+	code.Regs.AllocSpecific(gen.TypeRegCategory(t), reg)
 }
 
 func (code *funcCoder) FreeReg(t types.T, reg regs.R) {
-	code.regs.free(gen.TypeRegCategory(t), reg)
+	code.Regs.Free(gen.TypeRegCategory(t), reg)
 }
 
 // RegAllocated indicates if we can hang onto a register returned by mach ops.
 func (code *funcCoder) RegAllocated(t types.T, reg regs.R) bool {
-	return code.regs.allocated(gen.TypeRegCategory(t), reg)
+	return code.Regs.Allocated(gen.TypeRegCategory(t), reg)
 }
 
 func (code *funcCoder) mapCallAddr(retAddr int32) {
@@ -533,11 +532,11 @@ func (code *funcCoder) TrapTrampolineAddr(id traps.Id) (addr int32) {
 }
 
 func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
-	sigIndex := code.funcSigs[funcIndex]
-	sig := code.sigs[sigIndex]
+	sigIndex := code.FuncSigs[funcIndex]
+	sig := code.Sigs[sigIndex]
 
 	if debug {
-		debugf("function %d %s", funcIndex-len(code.importFuncs), sig)
+		debugf("function %d %s", funcIndex-len(code.ImportFuncs), sig)
 		debugDepth++
 	}
 
@@ -547,7 +546,7 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 		code.Align(machFunctionAlignment, machPaddingByte)
 	}
 	addr := code.Len()
-	code.funcLinks[funcIndex].Addr = addr
+	code.FuncLinks[funcIndex].Addr = addr
 	code.mapFunctionAddr(addr)
 	if code.InsnMap != nil {
 		code.InsnMap.PutFunc(code.Len())
@@ -558,8 +557,8 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 
 	code.vars = make([]varState, len(sig.Args))
 
-	var paramRegs regIterator
-	code.numStackParams = paramRegs.init(mach.ParamRegs(), sig.Args)
+	var paramRegs regalloc.Iterator
+	code.numStackParams = paramRegs.Init(mach.ParamRegs(), sig.Args)
 	code.numInitedVars = code.numStackParams // they're already there
 
 	for i := 0; i < int(code.numStackParams); i++ {
@@ -569,8 +568,8 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 	for i := code.numStackParams; i < int32(len(sig.Args)); i++ {
 		t := sig.Args[i]
 		cat := gen.TypeRegCategory(t)
-		reg := paramRegs.iterForward(cat)
-		code.regs.allocSpecific(cat, reg)
+		reg := paramRegs.IterForward(cat)
+		code.Regs.AllocSpecific(cat, reg)
 		code.vars[i] = varState{
 			cache: values.VarRegOperand(t, i, reg, false),
 			dirty: true,
@@ -642,7 +641,7 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 		}
 	}
 
-	code.regs.assertNoneAllocated()
+	code.Regs.AssertNoneAllocated()
 
 	if debug {
 		debugDepth--
@@ -661,7 +660,7 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 	}
 
 	for _, table := range code.branchTables {
-		buf := code.roData.buf[table.roDataAddr:]
+		buf := code.RODataBuf[table.roDataAddr:]
 		for _, target := range table.targets {
 			targetAddr := uint32(target.label.FinalAddr())
 			if table.codeStackOffset < 0 {
@@ -1119,8 +1118,12 @@ func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 		}
 	}
 
-	tableSize := int32(len(targetTable)) << tableScale
-	tableAddr := code.roData.alloc(tableSize, 1<<tableScale)
+	var (
+		tableSize int32
+		tableAddr int32
+	)
+	tableSize = int32(len(targetTable)) << tableScale
+	code.RODataBuf, tableAddr = allocateROData(code.RODataBuf, tableSize, 1<<tableScale)
 
 	code.opSaveTemporaryOperands() // TODO: avoid saving operands which we are going to skip over?
 	code.opInitVars()
@@ -1153,7 +1156,7 @@ func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 		regZeroExt = mach.OpMove(code, reg, index, false)
 	}
 
-	code.regs.freeAll()
+	code.Regs.FreeAll()
 
 	// vars were already stored and regs freed
 	for i := range code.vars {
@@ -1210,27 +1213,27 @@ func skipBrTable(load loader.L, op opcode) {
 
 func genCall(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	funcIndex := load.Varuint32()
-	if funcIndex >= uint32(len(code.funcSigs)) {
+	if funcIndex >= uint32(len(code.FuncSigs)) {
 		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
-	sigIndex := code.funcSigs[funcIndex]
-	sig := code.sigs[sigIndex]
+	sigIndex := code.FuncSigs[funcIndex]
+	sig := code.Sigs[sigIndex]
 
 	numStackParams := code.setupCallOperands(op, sig, values.Operand{})
 
-	code.opCall(&code.funcLinks[funcIndex].L)
+	code.opCall(&code.FuncLinks[funcIndex].L)
 	code.opBackoffStackPtr(numStackParams * gen.WordSize)
 	return
 }
 
 func genCallIndirect(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
-	if sigIndex >= uint32(len(code.sigs)) {
+	if sigIndex >= uint32(len(code.Sigs)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
 
-	sig := code.sigs[sigIndex]
+	sig := code.Sigs[sigIndex]
 
 	load.Byte() // reserved
 
@@ -1247,7 +1250,7 @@ func genCallIndirect(code *funcCoder, load loader.L, op opcode, info opInfo) (de
 		code.opMove(machResultReg, funcIndex, false)
 	}
 
-	retAddr := mach.OpCallIndirect(code, int32(len(code.tableFuncs)), int32(sigIndex))
+	retAddr := mach.OpCallIndirect(code, int32(len(code.TableFuncs)), int32(sigIndex))
 	code.mapCallAddr(retAddr)
 	code.opBackoffStackPtr(numStackParams * gen.WordSize)
 	return
@@ -1267,9 +1270,9 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 	code.opSaveTemporaryOperands()
 	code.opStoreRegVars()
 
-	code.regs.freeAll()
+	code.Regs.FreeAll()
 
-	var regArgs regMap
+	var regArgs regalloc.Map
 
 	for i, value := range args {
 		if value.Type != sig.Args[i] {
@@ -1295,28 +1298,28 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 		if ok {
 			cat := gen.TypeRegCategory(value.Type)
 
-			code.regs.setAllocated(cat, reg)
-			regArgs.set(cat, reg, i)
+			code.Regs.SetAllocated(cat, reg)
+			regArgs.Set(cat, reg, i)
 		}
 	}
 
 	// relocate indirect index to result reg if it already occupies some reg
 	if indirect.Storage.IsReg() && indirect.Reg() != machResultReg {
-		if i := regArgs.get(gen.RegCategoryInt, machResultReg); i >= 0 {
+		if i := regArgs.Get(gen.RegCategoryInt, machResultReg); i >= 0 {
 			debugf("indirect call index: %s <-> %s", machResultReg, indirect)
 			mach.OpSwap(code, gen.RegCategoryInt, machResultReg, indirect.Reg())
 
 			args[i] = values.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
-			regArgs.clear(gen.RegCategoryInt, machResultReg)
-			regArgs.set(gen.RegCategoryInt, indirect.Reg(), i)
+			regArgs.Clear(gen.RegCategoryInt, machResultReg)
+			regArgs.Set(gen.RegCategoryInt, indirect.Reg(), i)
 		} else {
 			debugf("indirect call index: %s <- %s", machResultReg, indirect)
 			mach.OpMoveReg(code, types.I32, machResultReg, indirect.Reg())
 		}
 	}
 
-	var paramRegs regIterator
-	numStackParams = paramRegs.init(mach.ParamRegs(), sig.Args)
+	var paramRegs regalloc.Iterator
+	numStackParams = paramRegs.Init(mach.ParamRegs(), sig.Args)
 
 	var numMissingStackArgs int32
 
@@ -1368,7 +1371,7 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 		if value.Storage == values.VarReg {
 			cat := gen.TypeRegCategory(value.Type)
 
-			if regArgs.get(cat, value.Reg()) != i {
+			if regArgs.Get(cat, value.Reg()) != i {
 				reg, ok := code.TryAllocReg(value.Type)
 				if !ok {
 					panic("not enough registers for all register args")
@@ -1378,31 +1381,31 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 				mach.OpMoveReg(code, value.Type, reg, value.Reg())
 
 				args[i] = values.RegOperand(false, value.Type, reg)
-				regArgs.set(cat, reg, i)
+				regArgs.Set(cat, reg, i)
 			}
 		}
 	}
 
-	code.regs.freeAll()
+	code.Regs.FreeAll()
 
 	var preserveFlags bool
 
 	for i := numStackParams; i < int32(len(args)); i++ {
 		value := args[i]
 		cat := gen.TypeRegCategory(value.Type)
-		posReg := paramRegs.iterForward(cat)
+		posReg := paramRegs.IterForward(cat)
 
 		switch {
 		case value.Storage.IsReg(): // Vars backed by RegVars were replaced by earlier loop
 			if value.Reg() == posReg {
 				debugf("call param #%d: %s %s already in place", i, cat, posReg)
 			} else {
-				if otherArgIndex := regArgs.get(cat, posReg); otherArgIndex >= 0 {
+				if otherArgIndex := regArgs.Get(cat, posReg); otherArgIndex >= 0 {
 					debugf("call param #%d: %s %s <-> %s", i, cat, posReg, value.Reg())
 					mach.OpSwap(code, cat, posReg, value.Reg())
 
 					args[otherArgIndex] = value
-					regArgs.set(cat, value.Reg(), otherArgIndex)
+					regArgs.Set(cat, value.Reg(), otherArgIndex)
 				} else {
 					debugf("call param #%d: %s %s <- %s", i, cat, posReg, value.Reg())
 					mach.OpMoveReg(code, value.Type, posReg, value.Reg())
@@ -1414,12 +1417,12 @@ func (code *funcCoder) setupCallOperands(op opcode, sig types.Function, indirect
 		}
 	}
 
-	paramRegs.initRegs(mach.ParamRegs())
+	paramRegs.InitRegs(mach.ParamRegs())
 
 	for i := int32(len(args)) - 1; i >= numStackParams; i-- {
 		value := args[i]
 		cat := gen.TypeRegCategory(value.Type)
-		posReg := paramRegs.iterBackward(cat)
+		posReg := paramRegs.IterBackward(cat)
 
 		if !value.Storage.IsReg() {
 			debugf("call param #%d: %s %s <- %s", i, cat, posReg, value)
@@ -1463,15 +1466,15 @@ func genDrop(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bo
 
 func genGetGlobal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
-	if globalIndex >= uint32(len(code.globals)) {
+	if globalIndex >= uint32(len(code.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
-	global := code.globals[globalIndex]
+	global := code.Globals[globalIndex]
 	offset := code.globalOffset(globalIndex)
 
 	code.opStabilizeOperandStack()
-	result := mach.OpGetGlobal(code, global.t, offset)
+	result := mach.OpGetGlobal(code, global.Type, offset)
 	code.pushOperand(result)
 	return
 }
@@ -1656,20 +1659,20 @@ func genSelect(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend 
 
 func genSetGlobal(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
-	if globalIndex >= uint32(len(code.globals)) {
+	if globalIndex >= uint32(len(code.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
-	global := code.globals[globalIndex]
-	if !global.mutable {
+	global := code.Globals[globalIndex]
+	if !global.Mutable {
 		panic(fmt.Errorf("%s: global %d is immutable", op, globalIndex))
 	}
 
 	offset := code.globalOffset(globalIndex)
 
 	x := code.opMaterializeOperand(code.popOperand())
-	if x.Type != global.t {
-		panic(fmt.Errorf("%s operand type is %s, but type of global %d is %s", op, x.Type, globalIndex, global.t))
+	if x.Type != global.Type {
+		panic(fmt.Errorf("%s operand type is %s, but type of global %d is %s", op, x.Type, globalIndex, global.Type))
 	}
 
 	mach.OpSetGlobal(code, offset, x)
@@ -2013,7 +2016,7 @@ func (code *funcCoder) OpTrapCall(id traps.Id) {
 	t := &code.trapTrampolines[id]
 	t.stackOffset = code.stackOffset
 	t.link.Addr = code.Len()
-	code.opCall(&code.trapLinks[id])
+	code.opCall(&code.TrapLinks[id])
 }
 
 // opMove must not allocate registers.

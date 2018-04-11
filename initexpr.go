@@ -33,12 +33,12 @@ func readInitExpr(load loader.L, m *Module) (valueBits uint64, t types.T) {
 
 	case opcodeGetGlobal:
 		i := load.Varuint32()
-		if i >= uint32(m.numImportGlobals) {
+		if i >= uint32(m.NumImportGlobals) {
 			panic(fmt.Errorf("import global index out of bounds in initializer expression: %d", i))
 		}
-		g := m.globals[i]
-		valueBits = g.init
-		t = g.t
+		g := m.Globals[i]
+		valueBits = g.Init
+		t = g.Type
 
 	default:
 		panic(fmt.Errorf("unsupported operation in initializer expression: %s", op))

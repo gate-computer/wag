@@ -10,12 +10,12 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/reader"
+	"github.com/tsavola/wag/internal/module"
 )
 
-// L provides panicking alternatives for reader.Reader methods, and then some.
+// L provides panicking alternatives for module.Reader methods, and then some.
 type L struct {
-	reader.Reader
+	module.Reader
 }
 
 func (load L) Into(buf []byte) {

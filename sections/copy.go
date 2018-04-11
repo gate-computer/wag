@@ -10,32 +10,31 @@ import (
 
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/sectionids"
-	"github.com/tsavola/wag/reader"
+	"github.com/tsavola/wag/internal/module"
 )
 
 // CopyCodeSection if there is one.  Unknown sections preceding the code
 // section are silently discarded.  If another known section type is found, it
 // is left untouched (the reader will be backed up before the section id).
-func CopyCodeSection(w io.Writer, r reader.Reader) (ok bool, err error) {
+func CopyCodeSection(w io.Writer, r module.Reader) (ok bool, err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	ok = copySection(w, r, sectionids.Code)
+	ok = copySection(w, r, module.SectionCode)
 	return
 }
 
-func DiscardUnknownSections(r reader.Reader) (err error) {
+func DiscardUnknownSections(r module.Reader) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	copySection(ioutil.Discard, r, sectionids.Unknown)
+	copySection(ioutil.Discard, r, module.SectionUnknown)
 	return
 }
 
-func copySection(w io.Writer, r reader.Reader, expectId byte) (ok bool) {
+func copySection(w io.Writer, r module.Reader, expectId byte) (ok bool) {
 	store := storer{w}
 	load := loader.L{Reader: r}
 
@@ -50,7 +49,7 @@ loop:
 		}
 
 		switch {
-		case id == sectionids.Unknown:
+		case id == module.SectionUnknown:
 			payloadLen := load.Varuint32()
 			if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
 				panic(err)

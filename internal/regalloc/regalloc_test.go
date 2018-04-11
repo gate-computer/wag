@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package regalloc
 
 import (
 	"testing"
@@ -11,48 +11,48 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 )
 
-func TestRegAllocInit(t *testing.T) {
+func TestAllocatorInit(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 0, 123456789} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var ra regAllocator
-		ra.init(avail)
+		var a Allocator
+		a.Init(avail)
 
-		ra.assertNoneAllocated()
+		a.AssertNoneAllocated()
 	}
 }
 
-func TestRegAlloc(t *testing.T) {
+func TestAlloc(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 0xf} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var ra regAllocator
-		ra.init(avail)
+		var a Allocator
+		a.Init(avail)
 
-		r1, ok := ra.alloc(gen.RegCategoryInt)
+		r1, ok := a.Alloc(gen.RegCategoryInt)
 		if !ok {
 			t.Fatal("1")
 		}
-		if !ra.allocated(gen.RegCategoryInt, r1) {
+		if !a.Allocated(gen.RegCategoryInt, r1) {
 			t.Fatal("2")
 		}
 
-		r2, ok := ra.alloc(gen.RegCategoryInt)
+		r2, ok := a.Alloc(gen.RegCategoryInt)
 		if !ok {
 			t.Fatal("3")
 		}
-		if !ra.allocated(gen.RegCategoryInt, r2) {
+		if !a.Allocated(gen.RegCategoryInt, r2) {
 			t.Fatal("4")
 		}
 		if r1 == r2 {
 			t.Fatal("5")
 		}
 
-		r1f, ok := ra.alloc(gen.RegCategoryFloat)
+		r1f, ok := a.Alloc(gen.RegCategoryFloat)
 		if !ok {
 			t.Fatal("6")
 		}
-		if !ra.allocated(gen.RegCategoryFloat, r1f) {
+		if !a.Allocated(gen.RegCategoryFloat, r1f) {
 			t.Fatal("7")
 		}
 		t.Logf("r1  = %v", r1)
@@ -63,21 +63,21 @@ func TestRegAlloc(t *testing.T) {
 	}
 }
 
-func TestRegAllocSpecific(t *testing.T) {
+func TestAllocSpecific(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 1 << (5 << 1)} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var ra regAllocator
-		ra.init(avail)
+		var a Allocator
+		a.Init(avail)
 
 		t.Logf("cat = %#v", gen.RegCategoryInt)
 		t.Logf("reg = %#v", regs.R(5))
-		t.Logf("ra = %#v", ra)
+		t.Logf("a = %#v", a)
 		t.Logf("reg index = %v", regIndex(gen.RegCategoryInt, regs.R(5)))
 		t.Logf("reg mask = %v", regMask(gen.RegCategoryInt, regs.R(5)))
 
-		ra.allocSpecific(gen.RegCategoryInt, regs.R(5))
-		if !ra.allocated(gen.RegCategoryInt, regs.R(5)) {
+		a.AllocSpecific(gen.RegCategoryInt, regs.R(5))
+		if !a.Allocated(gen.RegCategoryInt, regs.R(5)) {
 			t.Fatal("1")
 		}
 
@@ -87,25 +87,25 @@ func TestRegAllocSpecific(t *testing.T) {
 					t.Fatal("2")
 				}
 			}()
-			ra.allocSpecific(gen.RegCategoryInt, regs.R(5))
+			a.AllocSpecific(gen.RegCategoryInt, regs.R(5))
 		}()
 	}
 }
 
-func TestRegAllocSet(t *testing.T) {
+func TestSetAllocated(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 1 << (5 << 1)} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var ra regAllocator
-		ra.init(avail)
+		var a Allocator
+		a.Init(avail)
 
-		ra.setAllocated(gen.RegCategoryInt, regs.R(5))
-		if !ra.allocated(gen.RegCategoryInt, regs.R(5)) {
+		a.SetAllocated(gen.RegCategoryInt, regs.R(5))
+		if !a.Allocated(gen.RegCategoryInt, regs.R(5)) {
 			t.Fatal("1")
 		}
 
-		ra.setAllocated(gen.RegCategoryInt, regs.R(5))
-		if !ra.allocated(gen.RegCategoryInt, regs.R(5)) {
+		a.SetAllocated(gen.RegCategoryInt, regs.R(5))
+		if !a.Allocated(gen.RegCategoryInt, regs.R(5)) {
 			t.Fatal("2")
 		}
 
@@ -115,7 +115,7 @@ func TestRegAllocSet(t *testing.T) {
 					t.Fatal("3")
 				}
 			}()
-			ra.allocSpecific(gen.RegCategoryInt, regs.R(5))
+			a.AllocSpecific(gen.RegCategoryInt, regs.R(5))
 		}()
 	}
 }

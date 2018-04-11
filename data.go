@@ -5,10 +5,35 @@
 package wag
 
 import (
+	"encoding/binary"
 	"fmt"
 
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
 )
+
+func appendGlobalsData(buf []byte, globals []module.Global) []byte {
+	oldSize := len(buf)
+	newSize := oldSize + len(globals)*gen.WordSize
+
+	if cap(buf) >= newSize {
+		buf = buf[:newSize]
+	} else {
+		newBuf := make([]byte, newSize)
+		copy(newBuf, buf)
+		buf = newBuf
+	}
+
+	ptr := buf[oldSize:]
+
+	for _, global := range globals {
+		binary.LittleEndian.PutUint64(ptr, global.Init)
+		ptr = ptr[8:]
+	}
+
+	return buf
+}
 
 func (m *Module) genData(load loader.L) {
 	if debug {
@@ -16,12 +41,12 @@ func (m *Module) genData(load loader.L) {
 		debugDepth++
 	}
 
-	if m.memoryOffset&15 != 0 {
+	if m.MemoryOffset&15 != 0 {
 		// not 16-byte aligned?  (assume at least 8-byte alignment.)
-		n := len(m.globals)
-		m.globals = append(m.globals, global{})
-		m.data = appendGlobalsData(m.data, m.globals[n:])
-		m.memoryOffset = len(m.data)
+		n := len(m.Globals)
+		m.Globals = append(m.Globals, module.Global{})
+		m.DataBuf = appendGlobalsData(m.DataBuf, m.Globals[n:])
+		m.MemoryOffset = len(m.DataBuf)
 	}
 
 	for i := range load.Count() {
@@ -39,23 +64,23 @@ func (m *Module) genData(load loader.L) {
 		size := load.Varuint32()
 
 		needMemorySize := int64(offset) + int64(size)
-		if needMemorySize > int64(m.memoryLimits.initial) {
+		if needMemorySize > int64(m.MemoryLimitValues.Initial) {
 			panic(fmt.Errorf("memory segment #%d exceeds initial memory size", i))
 		}
 
-		needDataSize := int64(m.memoryOffset) + needMemorySize
-		if needDataSize > int64(len(m.data)) {
-			if int64(cap(m.data)) >= needDataSize {
-				m.data = m.data[:needDataSize]
+		needDataSize := int64(m.MemoryOffset) + needMemorySize
+		if needDataSize > int64(len(m.DataBuf)) {
+			if int64(cap(m.DataBuf)) >= needDataSize {
+				m.DataBuf = m.DataBuf[:needDataSize]
 			} else {
 				buf := make([]byte, needDataSize)
-				copy(buf, m.data)
-				m.data = buf
+				copy(buf, m.DataBuf)
+				m.DataBuf = buf
 			}
 		}
 
-		dataOffset := m.memoryOffset + int(offset)
-		load.Into(m.data[dataOffset:needDataSize])
+		dataOffset := m.MemoryOffset + int(offset)
+		load.Into(m.DataBuf[dataOffset:needDataSize])
 
 		if debug {
 			debugDepth--
@@ -69,20 +94,25 @@ func (m *Module) genData(load loader.L) {
 	}
 }
 
-type dataArena struct {
-	buf []byte
+func allocateRODataBeginning(oldArena []byte, size int32) (newArena []byte) {
+	if len(oldArena) != 0 {
+		panic("read-only data buffer length is non-zero")
+	}
+
+	newArena, _ = allocateROData(oldArena, size, 1)
+	return
 }
 
-func (arena *dataArena) alloc(size, alignment int32) int32 {
-	oldSize := uint64(len(arena.buf))
-	addr := (oldSize + uint64(alignment-1)) &^ uint64(alignment-1)
-	newSize := addr + uint64(size)
-	if newSize <= uint64(cap(arena.buf)) {
-		arena.buf = arena.buf[:newSize]
+func allocateROData(oldArena []byte, size, alignment int32) (newArena []byte, addr int32) {
+	oldSize := uint64(len(oldArena))
+	addr64 := (oldSize + uint64(alignment-1)) &^ uint64(alignment-1)
+	newSize := addr64 + uint64(size)
+	if newSize <= uint64(cap(oldArena)) {
+		newArena = oldArena[:newSize]
 	} else {
-		newBuf := make([]byte, newSize)
-		copy(newBuf, arena.buf)
-		arena.buf = newBuf
+		newArena = make([]byte, newSize)
+		copy(newArena, oldArena)
 	}
-	return int32(addr)
+	addr = int32(addr64)
+	return
 }
