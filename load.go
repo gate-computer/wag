@@ -366,7 +366,7 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 
 					sigIndex := m.FuncSigs[index]
 					sig := m.Sigs[sigIndex]
-					if len(sig.Args) > maxEntryParams || len(sig.Args) != len(m.EntryArgs) || !(sig.Result == types.Void || sig.Result == types.I32) {
+					if len(sig.Args) > maxEntryParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == types.Void || sig.Result == types.I32) {
 						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
 					}
 
