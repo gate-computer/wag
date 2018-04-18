@@ -44,6 +44,7 @@ const (
 	maxTableLimit         = 32768 // TODO
 	maxInitialMemoryLimit = 256   // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wasm.PageBits
+	maxEntryParams        = 8     // param registers on x86-64
 	maxBranchTableSize    = 32768 // TODO
 )
 
@@ -76,6 +77,7 @@ func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int
 
 type Module struct {
 	EntrySymbol          string
+	EntryArgs            []uint64
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 	InsnMap              InsnMap
 
@@ -364,8 +366,8 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 
 					sigIndex := m.FuncSigs[index]
 					sig := m.Sigs[sigIndex]
-					if len(sig.Args) > 0 || !(sig.Result == types.Void || sig.Result == types.I32) {
-						panic(fmt.Errorf("invalid main function signature: %s %s", m.EntrySymbol, sig))
+					if len(sig.Args) > maxEntryParams || len(sig.Args) != len(m.EntryArgs) || !(sig.Result == types.Void || sig.Result == types.I32) {
+						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
 					}
 
 					m.EntryIndex = index

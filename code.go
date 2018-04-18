@@ -85,10 +85,25 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		}
 
 		sigIndex := m.FuncSigs[m.EntryIndex]
-		mainResultType = m.Sigs[sigIndex].Result
+		sig := m.Sigs[sigIndex]
+
+		{
+			code := &funcCoder{moduleCoder: m}
+
+			var paramRegs regalloc.Iterator
+			paramRegs.Init(mach.ParamRegs(), sig.Args)
+
+			for i, t := range sig.Args {
+				reg := paramRegs.IterForward(gen.TypeRegCategory(t))
+				value := values.ImmOperand(t, m.EntryArgs[i])
+				mach.OpMove(code, reg, value, false)
+			}
+		}
 
 		m.opInitCall(&m.FuncLinks[m.EntryIndex])
 		// main func returns here; execution proceeds to exit trap
+
+		mainResultType = sig.Result
 	}
 
 	if mainResultType != types.I32 {
