@@ -83,7 +83,7 @@ func (env) ImportGlobal(module, field string, t types.T) (valueBits uint64, err 
 	switch module {
 	case "spectest":
 		switch field {
-		case "global":
+		case "global", "global_i32":
 			return
 		}
 	}
