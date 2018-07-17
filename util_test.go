@@ -39,7 +39,7 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 		}
 		defer f3.Close()
 
-		cmd3 := exec.Command(path.Join(binDir, "wat2wasm"), "-o", f3.Name(), f.Name())
+		cmd3 := exec.Command(path.Join(binDir, "wat2wasm"), "--no-check", "-o", f3.Name(), f.Name())
 		cmd3.Stdout = os.Stdout
 		cmd3.Stderr = os.Stderr
 		if err := cmd3.Run(); err != nil {
@@ -48,7 +48,7 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 			panic(err)
 		}
 
-		cmd2 := exec.Command(path.Join(binDir, "wasm2wat"), "-o", "/dev/stdout", f3.Name())
+		cmd2 := exec.Command(path.Join(binDir, "wasm2wat"), "--no-check", "-o", "/dev/stdout", f3.Name())
 		cmd2.Stdout = os.Stdout
 		cmd2.Stderr = os.Stderr
 		if err := cmd2.Run(); err != nil {
@@ -58,7 +58,7 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 
 	if dumpWASM {
-		cmd := exec.Command(path.Join(binDir, "wat2wasm"), "-v", f.Name())
+		cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--no-check", "-v", f.Name())
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -74,7 +74,7 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 	os.Remove(f2.Name())
 
-	cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--debug-names", "-o", "/dev/stdout", f.Name())
+	cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--debug-names", "--no-check", "-o", "/dev/stdout", f.Name())
 	cmd.Stdout = f2
 	if !quiet {
 		cmd.Stderr = os.Stderr
