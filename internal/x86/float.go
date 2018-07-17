@@ -38,6 +38,7 @@ var (
 )
 
 var (
+	movapSSE  = insnPrefix{operandSize, []byte{0x0f, 0x28}, nil}
 	ucomisSSE = insnPrefix{operandSize, []byte{0x0f, 0x2e}, nil}
 	andpSSE   = insnPrefix{operandSize, []byte{0x0f, 0x54}, nil}
 	orpSSE    = insnPrefix{operandSize, []byte{0x0f, 0x56}, nil}

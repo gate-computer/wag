@@ -97,7 +97,7 @@ func (mach X86) opTruncFloatToUnsignedI64(code gen.Coder, sourceType types.T, in
 
 	truncMaskAddr := gen.MaskAddr(code, gen.MaskTruncBase, sourceType)
 
-	movsSSE.opFromReg(code, sourceType, RegScratch, inputReg)
+	movapSSE.opFromReg(code, sourceType, RegScratch, inputReg)
 	subsSSE.opFromAddr(code, sourceType, RegScratch, 0, NoIndex, truncMaskAddr)
 	cvttsSSE2si.opReg(code, sourceType, types.I64, RegResult, RegScratch)
 	mov.opFromAddr(code, types.I64, RegScratch, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr64)

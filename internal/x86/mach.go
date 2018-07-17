@@ -425,12 +425,12 @@ func (mach X86) OpMove(code gen.Coder, targetReg regs.R, x values.Operand, prese
 
 		case values.VarReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
-				movsSSE.opFromReg(code, x.Type, targetReg, sourceReg)
+				movapSSE.opFromReg(code, x.Type, targetReg, sourceReg)
 			}
 
 		case values.TempReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
-				movsSSE.opFromReg(code, x.Type, targetReg, sourceReg)
+				movapSSE.opFromReg(code, x.Type, targetReg, sourceReg)
 			} else if targetReg != RegResult {
 				panic("moving temporary float register to itself")
 			}
@@ -462,7 +462,7 @@ func (mach X86) OpMoveReg(code gen.Coder, t types.T, targetReg, sourceReg regs.R
 		mov.opFromReg(code, t, targetReg, sourceReg)
 
 	case types.Float:
-		movsSSE.opFromReg(code, t, targetReg, sourceReg)
+		movapSSE.opFromReg(code, t, targetReg, sourceReg)
 
 	default:
 		panic(t)
