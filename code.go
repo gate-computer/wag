@@ -63,6 +63,8 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
 	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask80Addr32:], 0x80000000)
 	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask80Addr64:], 0x8000000000000000)
+	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask5f00Addr32:], 0x5f000000)
+	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask43e0Addr64:], 0x43e0000000000000)
 
 	mach.OpEnterTrapHandler(m, traps.MissingFunction) // at zero address
 

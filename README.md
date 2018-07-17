@@ -30,8 +30,6 @@ Status
 
 - WebAssembly binary encoding version 1.
 
-- Some floating-point instructions haven't been implemented yet.
-
 - The Go package API hasn't been finalized.
 
 - Cross-compilation will be supported once the backend interface stabilizes.
@@ -44,7 +42,7 @@ Status
 Testing
 -------
 
-Requires Linux, Go, make, clang and libcapstone.  About 70% of the WebAssembly
+Requires Linux, Go, make, clang and libcapstone.  About 75% of the WebAssembly
 spec testsuite is run, by first converting the tests to binary format:
 
 1. `go get -t github.com/tsavola/wag`

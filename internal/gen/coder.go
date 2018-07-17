@@ -16,11 +16,13 @@ import (
 
 const (
 	// Masks are 16-byte aligned for x86-64 SSE.
-	ROMask7fAddr32 = 0
-	ROMask7fAddr64 = 16
-	ROMask80Addr32 = 32
-	ROMask80Addr64 = 48
-	ROTableAddr    = 64
+	ROMask7fAddr32 = iota * 16
+	ROMask7fAddr64
+	ROMask80Addr32
+	ROMask80Addr64
+	ROMask5f00Addr32 // 01011111000000000000000000000000
+	ROMask43e0Addr64 // 0100001111100000000000000000000000000000000000000000000000000000
+	ROTableAddr
 )
 
 const (
@@ -63,8 +65,9 @@ type RegCoder interface {
 type MaskBaseAddr int32
 
 const (
-	Mask7fBase = MaskBaseAddr(ROMask7fAddr32)
-	Mask80Base = MaskBaseAddr(ROMask80Addr32)
+	Mask7fBase    = MaskBaseAddr(ROMask7fAddr32)
+	Mask80Base    = MaskBaseAddr(ROMask80Addr32)
+	MaskTruncBase = MaskBaseAddr(ROMask5f00Addr32)
 )
 
 // MaskAddr calculates the absolute read-only data address for reading a mask

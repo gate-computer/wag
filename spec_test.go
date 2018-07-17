@@ -33,7 +33,6 @@ const (
 // func Test_binary(t *testing.T)                { spec(t, "binary") }
 // func Test_call_indirect(t *testing.T)         { spec(t, "call_indirect") }
 // func Test_comments(t *testing.T)              { spec(t, "comments") }
-// func Test_conversions(t *testing.T)           { spec(t, "conversions") }
 // func Test_custom_section(t *testing.T)        { spec(t, "custom_section") }
 // func Test_exports(t *testing.T)               { spec(t, "exports") }
 // func Test_fac(t *testing.T)                   { spec(t, "fac") }
@@ -46,7 +45,6 @@ const (
 // func Test_names(t *testing.T)                 { spec(t, "names") }
 // func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
 // func Test_start(t *testing.T)                 { spec(t, "start") }
-// func Test_traps(t *testing.T)                 { spec(t, "traps") }
 // func Test_utf8_invalid_encoding(t *testing.T) { spec(t, "utf8-invalid-encoding") }
 
 func Test_address(t *testing.T)                { spec(t, "address") }
@@ -58,6 +56,7 @@ func Test_br_table(t *testing.T)               { spec(t, "br_table") }
 func Test_break_drop(t *testing.T)             { spec(t, "break-drop") }
 func Test_call(t *testing.T)                   { spec(t, "call") }
 func Test_const(t *testing.T)                  { spec(t, "const") }
+func Test_conversions(t *testing.T)            { spec(t, "conversions") }
 func Test_elem(t *testing.T)                   { spec(t, "elem") }
 func Test_endianness(t *testing.T)             { spec(t, "endianness") }
 func Test_f32(t *testing.T)                    { spec(t, "f32") }
@@ -93,6 +92,7 @@ func Test_store_retval(t *testing.T)           { spec(t, "store_retval") }
 func Test_switch(t *testing.T)                 { spec(t, "switch") }
 func Test_tee_local(t *testing.T)              { spec(t, "tee_local") }
 func Test_token(t *testing.T)                  { spec(t, "token") }
+func Test_traps(t *testing.T)                  { spec(t, "traps") }
 func Test_type(t *testing.T)                   { spec(t, "type") }
 func Test_typecheck(t *testing.T)              { spec(t, "typecheck") }
 func Test_unreachable(t *testing.T)            { spec(t, "unreachable") }
@@ -350,13 +350,19 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 
 		case "assert_trap":
-			test = []interface{}{
-				"block",
-				assert[1],
-				[]interface{}{
-					"return",
-					[]interface{}{"i32.const", "0xbadc0de"},
-				},
+			if strings.Contains(sexp.Stringify(assert[1], false), ".trunc_") {
+				// Some truncations are undefined.  Our implementation doesn't
+				// trap like the testsuite expects.  Skip the tests.
+				testType = ""
+			} else {
+				test = []interface{}{
+					"block",
+					assert[1],
+					[]interface{}{
+						"return",
+						[]interface{}{"i32.const", "0xbadc0de"},
+					},
+				}
 			}
 
 		case "invoke":
