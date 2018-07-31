@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	specTestDir = "testdata/wabt/third_party/testsuite"
+	specTestDir = "testdata/spec/test/core"
 )
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { spec(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
@@ -33,6 +33,7 @@ const (
 // func Test_binary(t *testing.T)                { spec(t, "binary") }
 // func Test_call_indirect(t *testing.T)         { spec(t, "call_indirect") }
 // func Test_comments(t *testing.T)              { spec(t, "comments") }
+// func Test_data(t *testing.T)                  { spec(t, "data") }
 // func Test_exports(t *testing.T)               { spec(t, "exports") }
 // func Test_fac(t *testing.T)                   { spec(t, "fac") }
 // func Test_float_exprs(t *testing.T)           { spec(t, "float_exprs") }
@@ -41,7 +42,6 @@ const (
 // func Test_imports(t *testing.T)               { spec(t, "imports") }
 // func Test_linking(t *testing.T)               { spec(t, "linking") }
 // func Test_names(t *testing.T)                 { spec(t, "names") }
-// func Test_skip_stack_guard_page(t *testing.T) { spec(t, "skip-stack-guard-page") }
 // func Test_start(t *testing.T)                 { spec(t, "start") }
 // func Test_utf8_invalid_encoding(t *testing.T) { spec(t, "utf8-invalid-encoding") }
 
@@ -55,7 +55,7 @@ func Test_break_drop(t *testing.T)             { spec(t, "break-drop") }
 func Test_call(t *testing.T)                   { spec(t, "call") }
 func Test_const(t *testing.T)                  { spec(t, "const") }
 func Test_conversions(t *testing.T)            { spec(t, "conversions") }
-func Test_custom_section(t *testing.T)         { spec(t, "custom_section") }
+func Test_custom(t *testing.T)                 { spec(t, "custom") }
 func Test_elem(t *testing.T)                   { spec(t, "elem") }
 func Test_endianness(t *testing.T)             { spec(t, "endianness") }
 func Test_f32(t *testing.T)                    { spec(t, "f32") }
@@ -80,13 +80,14 @@ func Test_labels(t *testing.T)                 { spec(t, "labels") }
 func Test_left_to_right(t *testing.T)          { spec(t, "left-to-right") }
 func Test_loop(t *testing.T)                   { spec(t, "loop") }
 func Test_memory(t *testing.T)                 { spec(t, "memory") }
+func Test_memory_grow(t *testing.T)            { spec(t, "memory_grow") }
 func Test_memory_redundancy(t *testing.T)      { spec(t, "memory_redundancy") }
 func Test_memory_trap(t *testing.T)            { spec(t, "memory_trap") }
 func Test_nop(t *testing.T)                    { spec(t, "nop") }
-func Test_resizing(t *testing.T)               { spec(t, "resizing") }
 func Test_return(t *testing.T)                 { spec(t, "return") }
 func Test_select(t *testing.T)                 { spec(t, "select") }
 func Test_set_local(t *testing.T)              { spec(t, "set_local") }
+func Test_skip_stack_guard_page(t *testing.T)  { spec(t, "skip-stack-guard-page") }
 func Test_stack(t *testing.T)                  { spec(t, "stack") }
 func Test_store_retval(t *testing.T)           { spec(t, "store_retval") }
 func Test_switch(t *testing.T)                 { spec(t, "switch") }
@@ -218,7 +219,11 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			i++
 
 		case "export":
-			exports[item[1].(string)] = item[2].(string)
+			if s, ok := item[2].(string); ok {
+				exports[item[1].(string)] = s
+			} else {
+				t.Logf("run: module %s: export %v not supported", filename, item[2])
+			}
 			module = append(module[:i], module[i+1:]...)
 
 		case "func":
