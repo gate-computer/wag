@@ -28,6 +28,9 @@ func importGetArg() uint64
 func importSnapshot() uint64
 func importSpectestPrint() uint64
 func importPutns() uint64
+func importBenchmarkBegin() uint64
+func importBenchmarkEnd() uint64
+func importBenchmarkBarrier() uint64
 
 var importFunctions = map[string]map[string]imports.Function{
 	"spectest": {
@@ -56,6 +59,26 @@ var importFunctions = map[string]map[string]imports.Function{
 				Args: []types.T{types.I32, types.I32},
 			},
 			AbsAddr: importPutns(),
+		},
+		"benchmark_begin": imports.Function{
+			Function: types.Function{
+				Result: types.I64,
+			},
+			AbsAddr: importBenchmarkBegin(),
+		},
+		"benchmark_end": imports.Function{
+			Function: types.Function{
+				Args:   []types.T{types.I64},
+				Result: types.I32,
+			},
+			AbsAddr: importBenchmarkEnd(),
+		},
+		"benchmark_barrier": imports.Function{
+			Function: types.Function{
+				Args:   []types.T{types.I64, types.I64},
+				Result: types.I64,
+			},
+			AbsAddr: importBenchmarkBarrier(),
 		},
 	},
 }

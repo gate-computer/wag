@@ -201,6 +201,52 @@ fail4:
 	MOVQ	$3004, AX
 	JMP	trap<>(SB)
 
+// func importBenchmarkBegin() uint64
+TEXT ·importBenchmarkBegin(SB),$0-8
+	PUSHQ	AX
+	LEAQ	benchmarkBegin<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	POPQ	AX
+	RET
+
+TEXT benchmarkBegin<>(SB),NOSPLIT,$0
+	CPUID			// serialize
+	RDTSC
+	SHLQ	$32, DX
+	ORQ	DX, AX
+	RET
+
+// func importBenchmarkEnd() uint64
+TEXT ·importBenchmarkEnd(SB),$0-8
+	PUSHQ	AX
+	LEAQ	benchmarkEnd<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	POPQ	AX
+	RET
+
+TEXT benchmarkEnd<>(SB),NOSPLIT,$0
+	RDTSC
+	SHLQ	$32, DX
+	ORQ	DX, AX
+	SUBQ	CX, AX
+	MOVL	$-1, DX
+	MOVQ	$0x80000000, CX
+	CMPQ	CX, AX
+	CMOVLLE	DX, AX
+	RET
+
+// func importBenchmarkBarrier() uint64
+TEXT ·importBenchmarkBarrier(SB),$0-8
+	PUSHQ	AX
+	LEAQ	benchmarkBarrier<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	POPQ	AX
+	RET
+
+TEXT benchmarkBarrier<>(SB),NOSPLIT,$0
+	MOVQ	CX, AX
+	RET
+
 // func importGetArg() uint64
 TEXT ·importGetArg(SB),$0-8
 	PUSHQ	AX
