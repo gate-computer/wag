@@ -23,7 +23,7 @@ func TestBenchmarkNqueens(t *testing.T) {
 		maxRODataSize = 4096
 		stackSize     = 65536
 
-		dumpText = true
+		dumpText = false
 	)
 
 	data, err := ioutil.ReadFile(filename)
