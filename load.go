@@ -42,7 +42,7 @@ const (
 	maxFunctionParams     = 255   // index+1 must fit in uint8
 	maxFunctionVars       = 8191  // index must fit in uint16; TODO
 	maxTableLimit         = 32768 // TODO
-	maxInitialMemoryLimit = 256   // TODO
+	maxInitialMemoryLimit = 16384 // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wasm.PageBits
 	maxEntryParams        = 8     // param registers on x86-64
 	maxBranchTableSize    = 32768 // TODO
@@ -192,6 +192,26 @@ func (m moduleLoader) loadUntil(load loader.L, untilSection byte) byte {
 	}
 }
 
+func (m moduleLoader) readTable(load loader.L) {
+	if m.TableLimitValues.Defined {
+		panic(errors.New("multiple tables not supported"))
+	}
+
+	if elementType := load.Varint7(); elementType != -0x10 {
+		panic(fmt.Errorf("unsupported table element type: %d", elementType))
+	}
+
+	m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
+}
+
+func (m moduleLoader) readMemory(load loader.L) {
+	if m.MemoryLimitValues.Defined {
+		panic(errors.New("multiple memories not supported"))
+	}
+
+	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wasm.Page))
+}
+
 var sectionLoaders = []func(moduleLoader, loader.L){
 	module.SectionType: func(m moduleLoader, load loader.L) {
 		for i := range load.Count() {
@@ -263,6 +283,12 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 					AbsAddr:   absAddr,
 				})
 
+			case module.ExternalKindTable:
+				m.readTable(load)
+
+			case module.ExternalKindMemory:
+				m.readMemory(load)
+
 			case module.ExternalKindGlobal:
 				t := types.ByEncoding(load.Varint7())
 
@@ -306,25 +332,13 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 
 	module.SectionTable: func(m moduleLoader, load loader.L) {
 		for range load.Count() {
-			if m.TableLimitValues.Defined {
-				panic(errors.New("multiple tables not supported"))
-			}
-
-			if elementType := load.Varint7(); elementType != -0x10 {
-				panic(fmt.Errorf("unsupported table element type: %d", elementType))
-			}
-
-			m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
+			m.readTable(load)
 		}
 	},
 
 	module.SectionMemory: func(m moduleLoader, load loader.L) {
 		for range load.Count() {
-			if m.MemoryLimitValues.Defined {
-				panic(errors.New("multiple memories not supported"))
-			}
-
-			m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wasm.Page))
+			m.readMemory(load)
 		}
 	},
 
