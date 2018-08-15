@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/tsavola/wag/dewag"
-	"github.com/tsavola/wag/internal/sexp"
-	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/internal/test/sexp"
 	"github.com/tsavola/wag/sections"
 	"github.com/tsavola/wag/traps"
 )

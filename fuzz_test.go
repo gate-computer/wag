@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/internal/test/runner"
 )
 
 const (

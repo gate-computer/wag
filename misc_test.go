@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/tsavola/wag/dewag"
-	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/internal/test/runner"
 )
 
 func TestCallWithDuplicatedOperand(t *testing.T) {

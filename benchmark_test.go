@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/tsavola/wag/dewag"
-	"github.com/tsavola/wag/runner"
+	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/types"
 )
 
