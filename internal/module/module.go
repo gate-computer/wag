@@ -81,6 +81,11 @@ type Buffer interface {
 	Len() int
 }
 
+type DataBuffer interface {
+	Bytes() []byte
+	ResizeBytes(n int) []byte
+}
+
 type ImportFunction struct {
 	FuncIndex int
 	Variadic  bool
@@ -122,6 +127,6 @@ type Internal struct {
 	CallMapBuffer bytes.Buffer
 	Regs          regalloc.Allocator
 
-	DataBuf      []byte
+	DataBuffer   DataBuffer
 	MemoryOffset int
 }

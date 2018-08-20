@@ -30,6 +30,8 @@ type Reader = module.Reader
 
 type Buffer = module.Buffer
 
+type DataBuffer = module.DataBuffer
+
 type InsnMap interface {
 	Init(numFuncs int)
 	PutFunc(pos int32)
@@ -102,25 +104,25 @@ func (m *Module) loadPreliminarySections(r Reader, env Environment) {
 	moduleLoader{m, env}.loadUntil(loader.L{Reader: r}, module.SectionCode)
 }
 
-type impossible interface {
-	unexported()
-}
-
 // Load all (remaining) sections.
-func (m *Module) Load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dummy impossible) (err error) {
+func (m *Module) Load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dataBuffer DataBuffer) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.load(r, env, textBuffer, roDataBuf, roDataAbsAddr, dummy)
+	m.load(r, env, textBuffer, roDataBuf, roDataAbsAddr, dataBuffer)
 	return
 }
 
-func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dummy impossible) {
+func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dataBuffer DataBuffer) {
 	m.TextBuffer = textBuffer
 	m.RODataBuf = roDataBuf[:0]
 	m.RODataAbsAddr = roDataAbsAddr
-	m.DataBuf = []byte{}
+
+	if dataBuffer == nil {
+		dataBuffer = new(defaultDataBuffer)
+	}
+	m.DataBuffer = dataBuffer
 
 	moduleLoader{m, env}.load(loader.L{Reader: r})
 }
@@ -494,24 +496,24 @@ func (m *Module) loadCodeSection(r Reader, textBuffer Buffer, roDataBuf []byte, 
 }
 
 // LoadDataSection, after loading the preliminary sections.
-func (m *Module) LoadDataSection(r Reader, dataBuf []byte) (err error) {
+func (m *Module) LoadDataSection(r Reader, dataBuffer DataBuffer) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.loadDataSection(r, dataBuf)
+	m.loadDataSection(r, dataBuffer)
 	return
 }
 
-func (m *Module) loadDataSection(r Reader, dataBuf []byte) {
-	if m.DataBuf != nil {
+func (m *Module) loadDataSection(r Reader, dataBuffer DataBuffer) {
+	if m.DataBuffer != nil {
 		panic(errors.New("data section has already been loaded"))
 	}
 
-	if dataBuf == nil {
-		dataBuf = []byte{}
+	if dataBuffer == nil {
+		dataBuffer = new(defaultDataBuffer)
 	}
-	m.DataBuf = dataBuf[:0]
+	m.DataBuffer = dataBuffer
 
 	m.genDataGlobals()
 
@@ -593,13 +595,16 @@ func (m *Module) CallMap() []byte {
 // Data is available after data section has been loaded.  memoryOffset is an
 // offset into data.  It will be a multiple of MemoryAlignment.
 func (m *Module) Data() (data []byte, memoryOffset int) {
-	if len(m.DataBuf) == 0 && len(m.Globals) != 0 {
+	if m.DataBuffer == nil {
+		m.DataBuffer = new(defaultDataBuffer)
+	}
+
+	if len(m.Globals) > 0 && m.MemoryOffset == 0 {
 		// simple program without data section, but has globals
-		m.DataBuf = []byte{}
 		m.genDataGlobals()
 	}
 
-	data = m.DataBuf
+	data = m.DataBuffer.Bytes()
 	memoryOffset = m.MemoryOffset
 	return
 }

@@ -101,7 +101,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 
 	text := make([]byte, 0, loadBenchmarkMaxTextSize)
 	roData := make([]byte, loadBenchmarkMaxRODataSize)
-	data := make([]byte, loadBenchmarkMaxDataSize)
+	data := make([]byte, 0, loadBenchmarkMaxDataSize)
 
 	var (
 		elapPre  testDuration
@@ -120,6 +120,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 
 		r := bytes.NewReader(wasm)
 		textBuf := bytes.NewBuffer(text)
+		dataBuf := NewFixedBuffer(data)
 		trigger := makeOptionalTrigger()
 
 		b.StartTimer()
@@ -129,7 +130,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		t1 := time.Now()
 		m.loadCodeSection(r, textBuf, roData, loadBenchmarkRODataAddr, trigger)
 		t2 := time.Now()
-		m.loadDataSection(r, data)
+		m.loadDataSection(r, dataBuf)
 		t3 := time.Now()
 
 		b.StopTimer()

@@ -8,29 +8,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
 )
-
-func putGlobalsData(buf []byte, offset int, globals []module.Global) []byte {
-	size := offset + len(globals)*gen.WordSize
-
-	if cap(buf) >= size {
-		buf = buf[:size]
-	} else {
-		buf = make([]byte, size)
-	}
-
-	ptr := buf[offset:]
-
-	for _, global := range globals {
-		binary.LittleEndian.PutUint64(ptr, global.Init)
-		ptr = ptr[8:]
-	}
-
-	return buf
-}
 
 func (m *Module) genDataGlobals() {
 	align := m.MemoryAlignment
@@ -38,13 +17,22 @@ func (m *Module) genDataGlobals() {
 		align = DefaultMemoryAlignment
 	}
 
-	globalsOffset := 0
-	if n := m.GlobalsSize() & (align - 1); n > 0 {
-		globalsOffset = align - n
+	size := m.GlobalsSize()
+
+	offset := 0
+	if n := size & (align - 1); n > 0 {
+		offset = align - n
 	}
 
-	m.DataBuf = putGlobalsData(m.DataBuf, globalsOffset, m.Globals)
-	m.MemoryOffset = len(m.DataBuf)
+	buf := m.DataBuffer.ResizeBytes(offset + size)
+
+	ptr := buf[offset:]
+	for _, global := range m.Globals {
+		binary.LittleEndian.PutUint64(ptr, global.Init)
+		ptr = ptr[8:]
+	}
+
+	m.MemoryOffset = len(buf)
 }
 
 func (m *Module) genDataMemory(load loader.L) {
@@ -52,6 +40,8 @@ func (m *Module) genDataMemory(load loader.L) {
 		debugf("data section")
 		debugDepth++
 	}
+
+	buf := m.DataBuffer.Bytes()
 
 	for i := range load.Count() {
 		if debug {
@@ -72,19 +62,13 @@ func (m *Module) genDataMemory(load loader.L) {
 			panic(fmt.Errorf("memory segment #%d exceeds initial memory size", i))
 		}
 
-		needDataSize := int64(m.MemoryOffset) + needMemorySize
-		if needDataSize > int64(len(m.DataBuf)) {
-			if int64(cap(m.DataBuf)) >= needDataSize {
-				m.DataBuf = m.DataBuf[:needDataSize]
-			} else {
-				buf := make([]byte, needDataSize)
-				copy(buf, m.DataBuf)
-				m.DataBuf = buf
-			}
+		needDataSize := m.MemoryOffset + int(needMemorySize)
+		if needDataSize > len(buf) {
+			buf = m.DataBuffer.ResizeBytes(needDataSize)
 		}
 
 		dataOffset := m.MemoryOffset + int(offset)
-		load.Into(m.DataBuf[dataOffset:needDataSize])
+		load.Into(buf[dataOffset:needDataSize])
 
 		if debug {
 			debugDepth--
