@@ -13,19 +13,16 @@ import (
 	"github.com/tsavola/wag/internal/module"
 )
 
-func appendGlobalsData(buf []byte, globals []module.Global) []byte {
-	oldSize := len(buf)
-	newSize := oldSize + len(globals)*gen.WordSize
+func putGlobalsData(buf []byte, offset int, globals []module.Global) []byte {
+	size := offset + len(globals)*gen.WordSize
 
-	if cap(buf) >= newSize {
-		buf = buf[:newSize]
+	if cap(buf) >= size {
+		buf = buf[:size]
 	} else {
-		newBuf := make([]byte, newSize)
-		copy(newBuf, buf)
-		buf = newBuf
+		buf = make([]byte, size)
 	}
 
-	ptr := buf[oldSize:]
+	ptr := buf[offset:]
 
 	for _, global := range globals {
 		binary.LittleEndian.PutUint64(ptr, global.Init)
@@ -35,18 +32,25 @@ func appendGlobalsData(buf []byte, globals []module.Global) []byte {
 	return buf
 }
 
-func (m *Module) genData(load loader.L) {
+func (m *Module) genDataGlobals() {
+	align := m.MemoryAlignment
+	if align == 0 {
+		align = DefaultMemoryAlignment
+	}
+
+	globalsOffset := 0
+	if n := m.GlobalsSize() & (align - 1); n > 0 {
+		globalsOffset = align - n
+	}
+
+	m.DataBuf = putGlobalsData(m.DataBuf, globalsOffset, m.Globals)
+	m.MemoryOffset = len(m.DataBuf)
+}
+
+func (m *Module) genDataMemory(load loader.L) {
 	if debug {
 		debugf("data section")
 		debugDepth++
-	}
-
-	if m.MemoryOffset&15 != 0 {
-		// not 16-byte aligned?  (assume at least 8-byte alignment.)
-		n := len(m.Globals)
-		m.Globals = append(m.Globals, module.Global{})
-		m.DataBuf = appendGlobalsData(m.DataBuf, m.Globals[n:])
-		m.MemoryOffset = len(m.DataBuf)
 	}
 
 	for i := range load.Count() {

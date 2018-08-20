@@ -49,6 +49,7 @@ const (
 	loadBenchmarkEntrySymbol   = "run"
 	loadBenchmarkEntryNumArgs  = 2
 	loadBenchmarkMaxTextSize   = 16 * 1024 * 1024
+	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxRODataSize = 4096
 	loadBenchmarkRODataAddr    = 0x10000
 	loadBenchmarkTextSum       = "dea5d76345f70be24fc3f28b3baf52b5c03401c4009c87cdc6d1f609e525b35e"
@@ -102,6 +103,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 
 	text := make([]byte, 0, loadBenchmarkMaxTextSize)
 	roData := make([]byte, loadBenchmarkMaxRODataSize)
+	data := make([]byte, loadBenchmarkMaxDataSize)
 
 	var (
 		elapPre  testDuration
@@ -129,7 +131,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		t1 := time.Now()
 		m.loadCodeSection(r, textBuf, roData, loadBenchmarkRODataAddr, trigger)
 		t2 := time.Now()
-		m.loadDataSection(r)
+		m.loadDataSection(r, data)
 		t3 := time.Now()
 
 		b.StopTimer()
@@ -192,7 +194,10 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 	defer p.Close()
 
-	m := Module{EntrySymbol: "benchmark_main"}
+	m := Module{
+		EntrySymbol:     "benchmark_main",
+		MemoryAlignment: os.Getpagesize(),
+	}
 	m.load(bytes.NewReader(data), runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())

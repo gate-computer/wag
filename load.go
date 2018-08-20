@@ -37,6 +37,8 @@ type InsnMap interface {
 }
 
 const (
+	DefaultMemoryAlignment = 16 // see Module.MemoryAlignment
+
 	maxStringLen          = 255 // TODO
 	maxImportParams       = gen.StackReserve/gen.WordSize - 2
 	maxFunctionParams     = 255   // index+1 must fit in uint8
@@ -44,6 +46,7 @@ const (
 	maxTableLimit         = 32768 // TODO
 	maxInitialMemoryLimit = 16384 // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wasm.PageBits
+	maxGlobals            = 512   // 4096 bytes
 	maxEntryParams        = 8     // param registers on x86-64
 	maxBranchTableSize    = 32768 // TODO
 )
@@ -78,6 +81,7 @@ func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int
 type Module struct {
 	EntrySymbol          string
 	EntryArgs            []uint64
+	MemoryAlignment      int // see Data()
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 	InsnMap              InsnMap
 
@@ -112,6 +116,7 @@ func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuf []
 	m.TextBuffer = textBuffer
 	m.RODataBuf = roDataBuf[:0]
 	m.RODataAbsAddr = roDataAbsAddr
+	m.DataBuf = []byte{}
 
 	moduleLoader{m, env, startTrigger}.load(loader.L{Reader: r})
 }
@@ -290,6 +295,10 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 				m.readMemory(load)
 
 			case module.ExternalKindGlobal:
+				if len(m.Globals) >= maxGlobals {
+					panic(errors.New("too many imported globals"))
+				}
+
 				t := types.ByEncoding(load.Varint7())
 
 				mutable := load.Varuint1()
@@ -314,9 +323,6 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 		}
 
 		m.NumImportGlobals = len(m.Globals)
-
-		m.DataBuf = appendGlobalsData(m.DataBuf, m.Globals)
-		m.MemoryOffset = len(m.DataBuf)
 	},
 
 	module.SectionFunction: func(m moduleLoader, load loader.L) {
@@ -343,8 +349,11 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 	},
 
 	module.SectionGlobal: func(m moduleLoader, load loader.L) {
-		// TODO: limit number of globals
 		for range load.Count() {
+			if len(m.Globals) >= maxGlobals {
+				panic(errors.New("too many globals"))
+			}
+
 			t := types.ByEncoding(load.Varint7())
 			mutable := load.Varuint1()
 			init, _ := readInitExpr(load, m.Module)
@@ -355,9 +364,6 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 				Init:    init,
 			})
 		}
-
-		m.DataBuf = appendGlobalsData(m.DataBuf, m.Globals[m.NumImportGlobals:])
-		m.MemoryOffset = len(m.DataBuf)
 	},
 
 	module.SectionExport: func(m moduleLoader, load loader.L) {
@@ -453,7 +459,8 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 	},
 
 	module.SectionData: func(m moduleLoader, load loader.L) {
-		m.genData(load)
+		m.genDataGlobals()
+		m.genDataMemory(load)
 	},
 }
 
@@ -484,20 +491,31 @@ func (m *Module) loadCodeSection(r Reader, textBuffer Buffer, roDataBuf []byte, 
 }
 
 // LoadDataSection, after loading the preliminary sections.
-func (m *Module) LoadDataSection(r Reader) (err error) {
+func (m *Module) LoadDataSection(r Reader, dataBuf []byte) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.loadDataSection(r)
+	m.loadDataSection(r, dataBuf)
 	return
 }
 
-func (m *Module) loadDataSection(r Reader) {
+func (m *Module) loadDataSection(r Reader, dataBuf []byte) {
+	if m.DataBuf != nil {
+		panic(errors.New("data section has already been loaded"))
+	}
+
+	if dataBuf == nil {
+		dataBuf = []byte{}
+	}
+	m.DataBuf = dataBuf[:0]
+
+	m.genDataGlobals()
+
 	load := loader.L{Reader: r}
 
 	if readSectionHeader(load, module.SectionData, "not a data section") {
-		m.genData(load)
+		m.genDataMemory(load)
 	}
 }
 
@@ -541,6 +559,11 @@ func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
 	return
 }
 
+// GlobalsSize is available after preliminary sections have been loaded.
+func (m *Module) GlobalsSize() int {
+	return len(m.Globals) * gen.WordSize
+}
+
 // Text is available after code section has been loaded.
 func (m *Module) Text() (b []byte) {
 	if m.TextBuffer != nil {
@@ -564,8 +587,15 @@ func (m *Module) CallMap() []byte {
 	return m.CallMapBuffer.Bytes()
 }
 
-// Data is available after data section has been loaded.
+// Data is available after data section has been loaded.  memoryOffset is an
+// offset into data.  It will be a multiple of MemoryAlignment.
 func (m *Module) Data() (data []byte, memoryOffset int) {
+	if len(m.DataBuf) == 0 && len(m.Globals) != 0 {
+		// simple program without data section, but has globals
+		m.DataBuf = []byte{}
+		m.genDataGlobals()
+	}
+
 	data = m.DataBuf
 	memoryOffset = m.MemoryOffset
 	return

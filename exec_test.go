@@ -70,7 +70,7 @@ func TestExec(t *testing.T) {
 	var printBuf bytes.Buffer
 	e, trigger := r.NewExecutor(m.Signatures(), &printBuf)
 
-	m.loadDataSection(wasm)
+	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
 	m.loadCodeSection(&codeBuf, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), trigger)
 	p.Seal()
