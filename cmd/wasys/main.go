@@ -120,6 +120,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	progReader := bytes.NewReader(prog)
 
 	roDataMem, err := makeMem(roDataSize, 0, syscall.MAP_32BIT)
 	if err != nil {
@@ -134,11 +135,37 @@ func main() {
 	textAddr := memAddr(textMem)
 	textBuf := &fixedBuf{textMem[:0]}
 
+	pageSize := os.Getpagesize()
+	pageMask := pageSize - 1
+
 	m := wag.Module{
-		EntrySymbol: entrySymbol,
-		EntryArgs:   make([]uint64, 2),
+		EntrySymbol:     entrySymbol,
+		EntryArgs:       make([]uint64, 2),
+		MemoryAlignment: pageSize,
 	}
-	err = m.Load(bytes.NewReader(prog), &env{}, textBuf, roDataMem, int32(roDataAddr), nil)
+
+	err = m.LoadPreliminarySections(progReader, &env{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = m.LoadCodeSection(progReader, textBuf, roDataMem, int32(roDataAddr), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	memoryOffset := (m.GlobalsSize() + pageMask) &^ pageMask
+	initMemorySize, growMemorySize := m.MemoryLimits()
+	globalsMemoryMem, err := makeMem(memoryOffset+int(growMemorySize), 0, 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dataBuf := wag.NewFixedBuffer(globalsMemoryMem[:0])
+	memoryAddr := memAddr(globalsMemoryMem) + uintptr(memoryOffset)
+	initMemoryEnd := memoryAddr + uintptr(initMemorySize)
+	growMemoryEnd := memoryAddr + uintptr(growMemorySize)
+
+	err = m.LoadDataSection(progReader, dataBuf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -150,17 +177,6 @@ func main() {
 	if err := syscall.Mprotect(textMem, syscall.PROT_EXEC); err != nil {
 		log.Fatal(err)
 	}
-
-	data, memoryOffset := m.Data()
-	initMemorySize, growMemorySize := m.MemoryLimits()
-	globalsMemoryMem, err := makeMem(memoryOffset+int(growMemorySize), 0, 0)
-	if err != nil {
-		log.Fatal(err)
-	}
-	copy(globalsMemoryMem, data)
-	memoryAddr := memAddr(globalsMemoryMem) + uintptr(memoryOffset)
-	initMemoryEnd := memoryAddr + uintptr(initMemorySize)
-	growMemoryEnd := memoryAddr + uintptr(growMemorySize)
 
 	stackMem, err := makeMem(stackSize, 0, syscall.MAP_STACK)
 	if err != nil {
