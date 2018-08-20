@@ -167,6 +167,10 @@ func checkLoadBenchmarkOutput(b *testing.B, textBuf *bytes.Buffer, roData []byte
 }
 
 func TestBenchmarkRunNqueens(t *testing.T) {
+	if !testing.Verbose() {
+		t.SkipNow()
+	}
+
 	const (
 		filename = "testdata/nqueens.wasm"
 
