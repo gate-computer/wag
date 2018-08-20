@@ -99,32 +99,35 @@ func (m *Module) LoadPreliminarySections(r Reader, env Environment) (err error) 
 }
 
 func (m *Module) loadPreliminarySections(r Reader, env Environment) {
-	moduleLoader{m, env, nil}.loadUntil(loader.L{Reader: r}, module.SectionCode)
+	moduleLoader{m, env}.loadUntil(loader.L{Reader: r}, module.SectionCode)
+}
+
+type impossible interface {
+	unexported()
 }
 
 // Load all (remaining) sections.
-func (m *Module) Load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
+func (m *Module) Load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dummy impossible) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.load(r, env, textBuffer, roDataBuf, roDataAbsAddr, startTrigger)
+	m.load(r, env, textBuffer, roDataBuf, roDataAbsAddr, dummy)
 	return
 }
 
-func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
+func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dummy impossible) {
 	m.TextBuffer = textBuffer
 	m.RODataBuf = roDataBuf[:0]
 	m.RODataAbsAddr = roDataAbsAddr
 	m.DataBuf = []byte{}
 
-	moduleLoader{m, env, startTrigger}.load(loader.L{Reader: r})
+	moduleLoader{m, env}.load(loader.L{Reader: r})
 }
 
 type moduleLoader struct {
 	*Module
-	env          Environment
-	startTrigger chan<- struct{}
+	env Environment
 }
 
 func (m moduleLoader) load(load loader.L) {
@@ -455,7 +458,7 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 	},
 
 	module.SectionCode: func(m moduleLoader, load loader.L) {
-		moduleCoder{m.Module}.genCode(load, m.startTrigger)
+		moduleCoder{m.Module}.genCode(load, nil)
 	},
 
 	module.SectionData: func(m moduleLoader, load loader.L) {

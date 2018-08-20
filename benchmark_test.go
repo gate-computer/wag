@@ -56,12 +56,11 @@ const (
 	loadBenchmarkRODataSum     = "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
 )
 
-func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b, makeNoTrigger) }
+func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b) }
 func BenchmarkLoadSections(b *testing.B)        { benchmarkLoadSections(b, makeNoTrigger) }
-func BenchmarkLoadTrigger(b *testing.B)         { benchmarkLoad(b, makeTrigger) }
 func BenchmarkLoadTriggerSections(b *testing.B) { benchmarkLoadSections(b, makeTrigger) }
 
-func benchmarkLoad(b *testing.B, makeOptionalTrigger func() chan struct{}) {
+func benchmarkLoad(b *testing.B) {
 	b.Helper()
 
 	wasm, err := ioutil.ReadFile(loadBenchmarkFilename)
@@ -83,10 +82,9 @@ func benchmarkLoad(b *testing.B, makeOptionalTrigger func() chan struct{}) {
 
 		r := bytes.NewReader(wasm)
 		textBuf := bytes.NewBuffer(text)
-		trigger := makeOptionalTrigger()
 
 		b.StartTimer()
-		m.load(r, loadBenchmarkEnv, textBuf, roData, loadBenchmarkRODataAddr, trigger)
+		m.load(r, loadBenchmarkEnv, textBuf, roData, loadBenchmarkRODataAddr, nil)
 		b.StopTimer()
 
 		checkLoadBenchmarkOutput(b, textBuf, roData)
