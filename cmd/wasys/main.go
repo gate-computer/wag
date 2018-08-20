@@ -127,6 +127,7 @@ func main() {
 		log.Fatal(err)
 	}
 	roDataAddr := memAddr(roDataMem)
+	roDataBuf := wag.NewFixedBuffer(roDataMem[:0])
 
 	textMem, err := makeMem(textSize, syscall.PROT_EXEC, 0)
 	if err != nil {
@@ -149,7 +150,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = m.LoadCodeSection(progReader, textBuf, roDataMem, int32(roDataAddr), nil)
+	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), nil)
 	if err != nil {
 		log.Fatal(err)
 	}

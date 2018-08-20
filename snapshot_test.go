@@ -43,7 +43,7 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	m := Module{EntrySymbol: "main"}
-	m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
+	m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
 	p.SetFunctionMap(m.FunctionMap())

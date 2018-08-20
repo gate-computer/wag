@@ -81,26 +81,3 @@ func (m *Module) genDataMemory(load loader.L) {
 		debugf("data sectioned")
 	}
 }
-
-func allocateRODataBeginning(oldArena []byte, size int32) (newArena []byte) {
-	if len(oldArena) != 0 {
-		panic("read-only data buffer length is non-zero")
-	}
-
-	newArena, _ = allocateROData(oldArena, size, 1)
-	return
-}
-
-func allocateROData(oldArena []byte, size, alignment int32) (newArena []byte, addr int32) {
-	oldSize := uint64(len(oldArena))
-	addr64 := (oldSize + uint64(alignment-1)) &^ uint64(alignment-1)
-	newSize := addr64 + uint64(size)
-	if newSize <= uint64(cap(oldArena)) {
-		newArena = oldArena[:newSize]
-	} else {
-		newArena = make([]byte, newSize)
-		copy(newArena, oldArena)
-	}
-	addr = int32(addr64)
-	return
-}

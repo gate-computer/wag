@@ -461,7 +461,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}.Load,
 		}
 
-		m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
+		m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 		p.Seal()
 		p.SetData(m.Data())
 		p.SetFunctionMap(m.FunctionMap())

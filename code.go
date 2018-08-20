@@ -57,14 +57,14 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 
 	m.FuncLinks = make([]links.FunctionL, len(m.FuncSigs))
 
-	roTableSize := int32(len(m.TableFuncs) * 8)
-	m.RODataBuf = allocateRODataBeginning(m.RODataBuf, gen.ROTableAddr+roTableSize)
-	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask7fAddr32:], 0x7fffffff)
-	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
-	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask80Addr32:], 0x80000000)
-	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask80Addr64:], 0x8000000000000000)
-	binary.LittleEndian.PutUint32(m.RODataBuf[gen.ROMask5f00Addr32:], 0x5f000000)
-	binary.LittleEndian.PutUint64(m.RODataBuf[gen.ROMask43e0Addr64:], 0x43e0000000000000)
+	roTableSize := len(m.TableFuncs) * 8
+	buf := m.RODataBuffer.ResizeBytes(gen.ROTableAddr + roTableSize)
+	binary.LittleEndian.PutUint32(buf[gen.ROMask7fAddr32:], 0x7fffffff)
+	binary.LittleEndian.PutUint64(buf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
+	binary.LittleEndian.PutUint32(buf[gen.ROMask80Addr32:], 0x80000000)
+	binary.LittleEndian.PutUint64(buf[gen.ROMask80Addr64:], 0x8000000000000000)
+	binary.LittleEndian.PutUint32(buf[gen.ROMask5f00Addr32:], 0x5f000000)
+	binary.LittleEndian.PutUint64(buf[gen.ROMask43e0Addr64:], 0x43e0000000000000)
 
 	mach.OpEnterTrapHandler(m, traps.MissingFunction) // at zero address
 
@@ -141,7 +141,7 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 		mach.UpdateCalls(code, &m.FuncLinks[i].L)
 	}
 
-	ptr := m.RODataBuf[gen.ROTableAddr:]
+	ptr := m.RODataBuffer.Bytes()[gen.ROTableAddr:]
 
 	for i, funcIndex := range m.TableFuncs {
 		var funcAddr uint32 // missing function trap by default
@@ -178,13 +178,15 @@ func (m moduleCoder) genCode(load loader.L, startTrigger chan<- struct{}) {
 
 		mach.ClearInsnCache()
 
+		roDataBuf := m.RODataBuffer.Bytes()
+
 		for i := midpoint; i < len(m.FuncSigs); i++ {
 			link := &m.FuncLinks[i]
 			addr := uint32(link.Addr)
 
 			for _, tableIndex := range link.TableIndexes {
 				offset := gen.ROTableAddr + tableIndex*8
-				mach.PutUint32(m.RODataBuf[offset:offset+4], addr) // overwrite only function addr
+				mach.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
 			}
 
 			mach.UpdateCalls(m, &link.L)
@@ -676,8 +678,10 @@ func (code *funcCoder) genFunction(load loader.L, funcIndex int) {
 		mach.UpdateStackCheck(code, code.stackCheckAddr, code.maxStackOffset)
 	}
 
+	roDataBuf := code.RODataBuffer.Bytes()
+
 	for _, table := range code.branchTables {
-		buf := code.RODataBuf[table.roDataAddr:]
+		buf := roDataBuf[table.roDataAddr:]
 		for _, target := range table.targets {
 			targetAddr := uint32(target.label.FinalAddr())
 			if table.codeStackOffset < 0 {
@@ -1135,12 +1139,10 @@ func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 		}
 	}
 
-	var (
-		tableSize int32
-		tableAddr int32
-	)
-	tableSize = int32(len(targetTable)) << tableScale
-	code.RODataBuf, tableAddr = allocateROData(code.RODataBuf, tableSize, 1<<tableScale)
+	tableSize := len(targetTable) << tableScale
+	alignMask := (1 << tableScale) - 1
+	tableAddr := (len(code.RODataBuffer.Bytes()) + alignMask) &^ alignMask
+	code.RODataBuffer.ResizeBytes(tableAddr + tableSize)
 
 	code.opSaveTemporaryOperands() // TODO: avoid saving operands which we are going to skip over?
 	code.opInitVars()
@@ -1189,7 +1191,7 @@ func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 	mach.OpAddImmToStackPtr(code, defaultDelta)
 	tableStackOffset := code.stackOffset - defaultDelta
 	code.opBranchIfOutOfBounds(reg, int32(len(targetTable)), &defaultTarget.label)
-	regZeroExt = mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, regZeroExt, tableScale, tableAddr)
+	regZeroExt = mach.OpLoadROIntIndex32ScaleDisp(code, tableType, reg, regZeroExt, tableScale, int32(tableAddr))
 
 	if commonStackOffset >= 0 {
 		mach.OpAddImmToStackPtr(code, tableStackOffset-commonStackOffset)
@@ -1206,7 +1208,7 @@ func genBrTable(code *funcCoder, load loader.L, op opcode, info opInfo) (deadend
 	// end of critical section.
 
 	t := branchTable{
-		roDataAddr: tableAddr,
+		roDataAddr: int32(tableAddr),
 		targets:    targetTable,
 	}
 	if commonStackOffset >= 0 {

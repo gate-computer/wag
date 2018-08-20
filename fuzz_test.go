@@ -66,7 +66,7 @@ func fuzz(t *testing.T, filename string) {
 		}
 	}()
 
-	err = m.Load(bufio.NewReader(f), runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
+	err = m.Load(bufio.NewReader(f), runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	if err == nil {
 		t.Logf("%s: no error", filename)
 	} else {

@@ -120,7 +120,7 @@ type Internal struct {
 
 	TextBuffer    Buffer
 	RODataAbsAddr int32
-	RODataBuf     []byte
+	RODataBuffer  DataBuffer
 	TrapLinks     [traps.NumTraps]links.L
 	FuncLinks     []links.FunctionL
 	FuncMapBuffer bytes.Buffer

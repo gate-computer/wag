@@ -50,10 +50,10 @@ const (
 	loadBenchmarkEntryNumArgs  = 2
 	loadBenchmarkMaxTextSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
-	loadBenchmarkMaxRODataSize = 4096
+	loadBenchmarkMaxRODataSize = 16 * 1024 * 1024
 	loadBenchmarkRODataAddr    = 0x10000
 	loadBenchmarkTextSum       = "dea5d76345f70be24fc3f28b3baf52b5c03401c4009c87cdc6d1f609e525b35e"
-	loadBenchmarkRODataSum     = "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
+	loadBenchmarkRODataSum     = "d67a7105e3f2136b04bd4f5e6c3dace936b71c057dd1009300bf36061ec2388e"
 )
 
 func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b) }
@@ -69,7 +69,7 @@ func benchmarkLoad(b *testing.B) {
 	}
 
 	text := make([]byte, 0, loadBenchmarkMaxTextSize)
-	roData := make([]byte, loadBenchmarkMaxRODataSize)
+	roData := make([]byte, 0, loadBenchmarkMaxRODataSize)
 
 	b.StopTimer()
 	b.ResetTimer()
@@ -82,12 +82,13 @@ func benchmarkLoad(b *testing.B) {
 
 		r := bytes.NewReader(wasm)
 		textBuf := bytes.NewBuffer(text)
+		roDataBuf := NewFixedBuffer(roData)
 
 		b.StartTimer()
-		m.load(r, loadBenchmarkEnv, textBuf, roData, loadBenchmarkRODataAddr, nil)
+		m.load(r, loadBenchmarkEnv, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil)
 		b.StopTimer()
 
-		checkLoadBenchmarkOutput(b, textBuf, roData)
+		checkLoadBenchmarkOutput(b, textBuf, roDataBuf)
 	}
 }
 
@@ -100,7 +101,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 	}
 
 	text := make([]byte, 0, loadBenchmarkMaxTextSize)
-	roData := make([]byte, loadBenchmarkMaxRODataSize)
+	roData := make([]byte, 0, loadBenchmarkMaxRODataSize)
 	data := make([]byte, 0, loadBenchmarkMaxDataSize)
 
 	var (
@@ -120,6 +121,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 
 		r := bytes.NewReader(wasm)
 		textBuf := bytes.NewBuffer(text)
+		roDataBuf := NewFixedBuffer(roData)
 		dataBuf := NewFixedBuffer(data)
 		trigger := makeOptionalTrigger()
 
@@ -128,7 +130,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		t0 := time.Now()
 		m.loadPreliminarySections(r, loadBenchmarkEnv)
 		t1 := time.Now()
-		m.loadCodeSection(r, textBuf, roData, loadBenchmarkRODataAddr, trigger)
+		m.loadCodeSection(r, textBuf, roDataBuf, loadBenchmarkRODataAddr, trigger)
 		t2 := time.Now()
 		m.loadDataSection(r, dataBuf)
 		t3 := time.Now()
@@ -139,7 +141,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		elapCode.set(t2.Sub(t1))
 		elapData.set(t3.Sub(t2))
 
-		checkLoadBenchmarkOutput(b, textBuf, roData)
+		checkLoadBenchmarkOutput(b, textBuf, roDataBuf)
 	}
 
 	b.Logf("pre:  %v", elapPre)
@@ -147,7 +149,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 	b.Logf("data: %v", elapData)
 }
 
-func checkLoadBenchmarkOutput(b *testing.B, textBuf *bytes.Buffer, roData []byte) {
+func checkLoadBenchmarkOutput(b *testing.B, textBuf *bytes.Buffer, roDataBuf *FixedBuffer) {
 	b.Helper()
 
 	if textBuf.Len() > loadBenchmarkMaxTextSize {
@@ -160,7 +162,7 @@ func checkLoadBenchmarkOutput(b *testing.B, textBuf *bytes.Buffer, roData []byte
 		b.Errorf("text checksum changed: %s", textSum)
 	}
 
-	sum = sha256.Sum256(roData)
+	sum = sha256.Sum256(roDataBuf.Bytes())
 	roDataSum := hex.EncodeToString(sum[:])
 	if roDataSum != loadBenchmarkRODataSum {
 		b.Errorf("read-only data checksum changed: %s", roDataSum)
@@ -197,7 +199,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
 	}
-	m.load(bytes.NewReader(data), runner.Env, bytes.NewBuffer(p.Text[:0]), p.ROData, p.RODataAddr(), nil)
+	m.load(bytes.NewReader(data), runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
 	p.SetFunctionMap(m.FunctionMap())

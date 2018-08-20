@@ -105,18 +105,22 @@ func (m *Module) loadPreliminarySections(r Reader, env Environment) {
 }
 
 // Load all (remaining) sections.
-func (m *Module) Load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dataBuffer DataBuffer) (err error) {
+func (m *Module) Load(r Reader, env Environment, textBuffer Buffer, roDataBuffer DataBuffer, roDataAbsAddr int32, dataBuffer DataBuffer) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.load(r, env, textBuffer, roDataBuf, roDataAbsAddr, dataBuffer)
+	m.load(r, env, textBuffer, roDataBuffer, roDataAbsAddr, dataBuffer)
 	return
 }
 
-func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, dataBuffer DataBuffer) {
+func (m *Module) load(r Reader, env Environment, textBuffer Buffer, roDataBuffer DataBuffer, roDataAbsAddr int32, dataBuffer DataBuffer) {
 	m.TextBuffer = textBuffer
-	m.RODataBuf = roDataBuf[:0]
+
+	if roDataBuffer == nil {
+		roDataBuffer = new(defaultDataBuffer)
+	}
+	m.RODataBuffer = roDataBuffer
 	m.RODataAbsAddr = roDataAbsAddr
 
 	if dataBuffer == nil {
@@ -470,22 +474,26 @@ var sectionLoaders = []func(moduleLoader, loader.L){
 }
 
 // LoadCodeSection, after loading the preliminary sections.
-func (m *Module) LoadCodeSection(r Reader, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
+func (m *Module) LoadCodeSection(r Reader, textBuffer Buffer, roDataBuffer DataBuffer, roDataAbsAddr int32, startTrigger chan<- struct{}) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.loadCodeSection(r, textBuffer, roDataBuf, roDataAbsAddr, startTrigger)
+	m.loadCodeSection(r, textBuffer, roDataBuffer, roDataAbsAddr, startTrigger)
 	return
 }
 
-func (m *Module) loadCodeSection(r Reader, textBuffer Buffer, roDataBuf []byte, roDataAbsAddr int32, startTrigger chan<- struct{}) {
+func (m *Module) loadCodeSection(r Reader, textBuffer Buffer, roDataBuffer DataBuffer, roDataAbsAddr int32, startTrigger chan<- struct{}) {
 	if m.FuncLinks != nil {
 		panic(errors.New("code section has already been loaded"))
 	}
 
 	m.TextBuffer = textBuffer
-	m.RODataBuf = roDataBuf[:0]
+
+	if roDataBuffer == nil {
+		roDataBuffer = new(defaultDataBuffer)
+	}
+	m.RODataBuffer = roDataBuffer
 	m.RODataAbsAddr = roDataAbsAddr
 
 	load := loader.L{Reader: r}
@@ -578,8 +586,11 @@ func (m *Module) Text() (b []byte) {
 }
 
 // ROData is available after code section has been loaded.
-func (m *Module) ROData() []byte {
-	return m.RODataBuf
+func (m *Module) ROData() (b []byte) {
+	if m.RODataBuffer != nil {
+		b = m.RODataBuffer.Bytes()
+	}
+	return
 }
 
 // FunctionMap is available after code section has been loaded.

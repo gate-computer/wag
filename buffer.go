@@ -5,8 +5,10 @@
 package wag
 
 import (
-	"bytes"
+	"errors"
 )
+
+var errOutOfCapacity = errors.New("buffer ran out of capacity")
 
 // FixedBuffer is a fixed-capacity implementation of DataBuffer.
 type FixedBuffer struct {
@@ -20,7 +22,7 @@ func (f *FixedBuffer) ResizeBytes(n int) []byte {
 	if n <= cap(f.b) {
 		f.b = f.b[:n]
 	} else {
-		panic(bytes.ErrTooLarge)
+		panic(errOutOfCapacity)
 	}
 	return f.b
 }
