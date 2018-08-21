@@ -11,9 +11,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/dewag"
+	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/sections"
+	"github.com/tsavola/wag/section"
 )
 
 func TestExec(t *testing.T) {
@@ -42,14 +42,14 @@ func TestExec(t *testing.T) {
 
 	var codeBuf bytes.Buffer
 
-	if ok, err := sections.CopyCodeSection(&codeBuf, wasm); err != nil {
+	if ok, err := section.CopyCodeSection(&codeBuf, wasm); err != nil {
 		t.Fatal(err)
 	} else if !ok {
 		t.Fatal(ok)
 	}
 
 	// skip name section
-	if err := sections.DiscardUnknownSections(wasm); err != nil {
+	if err := section.DiscardUnknownSections(wasm); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +72,7 @@ func TestExec(t *testing.T) {
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), trigger)
+	m.loadCodeSection(&codeBuf, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), trigger)
 	p.Seal()
 	p.SetFunctionMap(m.FunctionMap())
 	p.SetCallMap(m.CallMap())
@@ -91,6 +91,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
 	}
 }

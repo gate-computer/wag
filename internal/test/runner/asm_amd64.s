@@ -12,7 +12,7 @@ TEXT ·setRunArg(SB),$0-8
 	POPQ	AX
 	RET
 
-// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap uint64, currentMemorySize int, stackPtr uintptr)
+// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trapId uint64, currentMemorySize int, stackPtr uintptr)
 TEXT ·run(SB),$0-120
 	PUSHQ	AX
 	PUSHQ	CX
@@ -42,7 +42,7 @@ TEXT ·run(SB),$0-120
 	MOVQ	resumeResult+80(FP), AX	// resume result (0 = don't resume)
 	MOVQ	slaveFd+88(FP), M6	// slave fd
 	CALL	run<>(SB)
-	MOVQ	AX, trap+96(FP)
+	MOVQ	AX, trapId+96(FP)
 	SUBQ	R14, R15
 	MOVQ	R15, currentMemorySize+104(FP)
 	MOVQ	BX, stackPtr+112(FP)

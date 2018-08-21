@@ -10,10 +10,11 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wasm/function"
 )
 
-func spectestPrint(f io.Reader, sigs []types.Function, sigIndex int64, printer io.Writer) {
+func spectestPrint(f io.Reader, sigs []function.Type, sigIndex int64, printer io.Writer) {
 	if sigIndex >= int64(len(sigs)) {
 		panic(fmt.Sprintf("0x%x", sigIndex))
 	}
@@ -37,16 +38,16 @@ func spectestPrint(f io.Reader, sigs []types.Function, sigIndex int64, printer i
 		var err error
 
 		switch t {
-		case types.I32:
+		case wasm.I32:
 			_, err = fmt.Fprintf(printer, "%d", int32(x))
 
-		case types.I64:
+		case wasm.I64:
 			_, err = fmt.Fprintf(printer, "%d", int64(x))
 
-		case types.F32:
+		case wasm.F32:
 			_, err = fmt.Fprintf(printer, "%f", math.Float32frombits(uint32(x)))
 
-		case types.F64:
+		case wasm.F64:
 			_, err = fmt.Fprintf(printer, "%f", math.Float64frombits(x))
 
 		default:

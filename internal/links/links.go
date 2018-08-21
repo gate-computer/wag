@@ -28,6 +28,10 @@ func (l *L) AddSite(addr int32) {
 	l.Sites = append(l.Sites, addr)
 }
 
+func (l *L) AddSites(addrs []int32) {
+	l.Sites = append(l.Sites, addrs...)
+}
+
 func (l *L) FinalAddr() int32 {
 	if l.Addr == 0 {
 		panic("link address is undefined")

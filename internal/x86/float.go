@@ -7,7 +7,7 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
 )
 
 type floatSizePrefix struct {
@@ -15,19 +15,19 @@ type floatSizePrefix struct {
 	size64 []byte
 }
 
-func (p *floatSizePrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
+func (p *floatSizePrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
 	switch t.Size() {
-	case types.Size32:
-		code.Write(p.size32)
+	case wasm.Size32:
+		code.PutBytes(p.size32)
 
-	case types.Size64:
-		code.Write(p.size64)
+	case wasm.Size64:
+		code.PutBytes(p.size64)
 
 	default:
 		panic(t)
 	}
 
-	writeRexTo(code, 0, ro, index, rmOrBase)
+	putRex(code, 0, ro, index, rmOrBase)
 }
 
 var (
@@ -61,12 +61,12 @@ var (
 	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
-func pushFloatOp(code gen.OpCoder, t types.T, source regs.R) {
-	sub.opImm(code, types.I64, RegStackPtr, gen.WordSize)
+func pushFloatOp(code gen.Buffer, t wasm.Type, source regs.R) {
+	sub.opImm(code, wasm.I64, RegStackPtr, gen.WordSize)
 	movsSSE.opToStack(code, t, source, 0)
 }
 
-func popFloatOp(code gen.OpCoder, t types.T, target regs.R) {
+func popFloatOp(code gen.Buffer, t wasm.Type, target regs.R) {
 	movsSSE.opFromStack(code, t, target, 0)
-	add.opImm(code, types.I64, RegStackPtr, gen.WordSize)
+	add.opImm(code, wasm.I64, RegStackPtr, gen.WordSize)
 }

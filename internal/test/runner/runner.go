@@ -14,15 +14,16 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/internal/imports"
-	"github.com/tsavola/wag/sections"
-	"github.com/tsavola/wag/traps"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/section"
+	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wasm/function"
 )
 
 func setRunArg(arg int64)
 
-func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trap uint64, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trapId uint64, currentMemorySize int, stackPtr uintptr)
 
 func importGetArg() uint64
 func importSnapshot() uint64
@@ -41,42 +42,42 @@ var importFunctions = map[string]map[string]imports.Function{
 	},
 	"wag": {
 		"get_arg": imports.Function{
-			Function: types.Function{
-				Result: types.I64,
+			Type: function.Type{
+				Result: wasm.I64,
 			},
 			AbsAddr: importGetArg(),
 		},
 		"snapshot": imports.Function{
-			Function: types.Function{
-				Result: types.I32,
+			Type: function.Type{
+				Result: wasm.I32,
 			},
 			AbsAddr: importSnapshot(),
 		},
 	},
 	"env": {
 		"putns": imports.Function{
-			Function: types.Function{
-				Args: []types.T{types.I32, types.I32},
+			Type: function.Type{
+				Args: []wasm.Type{wasm.I32, wasm.I32},
 			},
 			AbsAddr: importPutns(),
 		},
 		"benchmark_begin": imports.Function{
-			Function: types.Function{
-				Result: types.I64,
+			Type: function.Type{
+				Result: wasm.I64,
 			},
 			AbsAddr: importBenchmarkBegin(),
 		},
 		"benchmark_end": imports.Function{
-			Function: types.Function{
-				Args:   []types.T{types.I64},
-				Result: types.I32,
+			Type: function.Type{
+				Args:   []wasm.Type{wasm.I64},
+				Result: wasm.I32,
 			},
 			AbsAddr: importBenchmarkEnd(),
 		},
 		"benchmark_barrier": imports.Function{
-			Function: types.Function{
-				Args:   []types.T{types.I64, types.I64},
-				Result: types.I64,
+			Type: function.Type{
+				Args:   []wasm.Type{wasm.I64, wasm.I64},
+				Result: wasm.I64,
 			},
 			AbsAddr: importBenchmarkBarrier(),
 		},
@@ -85,7 +86,7 @@ var importFunctions = map[string]map[string]imports.Function{
 
 type env struct{}
 
-func (env) ImportFunction(module, field string, sig types.Function) (variadic bool, absAddr uint64, err error) {
+func (env) ImportFunction(module, field string, sig function.Type) (variadic bool, absAddr uint64, err error) {
 	f, found := importFunctions[module][field]
 	if !found {
 		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
@@ -102,7 +103,7 @@ func (env) ImportFunction(module, field string, sig types.Function) (variadic bo
 	return
 }
 
-func (env) ImportGlobal(module, field string, t types.T) (valueBits uint64, err error) {
+func (env) ImportGlobal(module, field string, t wasm.Type) (valueBits uint64, err error) {
 	switch module {
 	case "spectest":
 		switch field {
@@ -121,7 +122,7 @@ type runnable interface {
 	getText() []byte
 	getData() ([]byte, int)
 	getStack() []byte
-	writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *sections.NameSection, stack []byte) error
+	writeStacktraceTo(w io.Writer, funcSigs []function.Type, ns *section.NameSection, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
 }
 
@@ -132,8 +133,8 @@ type Program struct {
 	data         []byte
 	memoryOffset int
 
-	funcMap []byte
-	callMap []byte
+	funcMap []int32
+	callMap []module.CallSite
 
 	funcAddrs map[int]int
 	callSites map[int]callSite
@@ -170,11 +171,11 @@ func (p *Program) SetData(data []byte, memoryOffset int) {
 	p.memoryOffset = memoryOffset
 }
 
-func (p *Program) SetFunctionMap(funcMap []byte) {
+func (p *Program) SetFunctionMap(funcMap []int32) {
 	p.funcMap = funcMap
 }
 
-func (p *Program) SetCallMap(callMap []byte) {
+func (p *Program) SetCallMap(callMap []module.CallSite) {
 	p.callMap = callMap
 }
 
@@ -234,7 +235,7 @@ type Runner struct {
 	memorySize    wasm.MemorySize
 	stack         []byte
 
-	lastTrap     traps.Id
+	lastTrap     trap.Id
 	lastStackPtr uintptr
 
 	Snapshots []*Snapshot
@@ -313,7 +314,7 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int64, sigs []types.Function, printer io.Writer) (result int32, err error) {
+func (r *Runner) Run(arg int64, sigs []function.Type, printer io.Writer) (result int32, err error) {
 	e := Executor{
 		runner:  r,
 		arg:     arg,
@@ -330,7 +331,7 @@ type Executor struct {
 	runner *Runner
 
 	arg     int64
-	sigs    []types.Function
+	sigs    []function.Type
 	printer io.Writer
 
 	cont chan struct{}
@@ -340,7 +341,7 @@ type Executor struct {
 	err    error
 }
 
-func (r *Runner) NewExecutor(sigs []types.Function, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
+func (r *Runner) NewExecutor(sigs []function.Type, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
 	e = &Executor{
 		runner:  r,
 		sigs:    sigs,
@@ -410,14 +411,14 @@ func (e *Executor) run() {
 	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
 	growMemorySize := len(e.runner.globalsMemory) - e.runner.memoryOffset
 
-	trap, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.stack, stackOffset, resumeResult, fds[1])
+	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.stack, stackOffset, resumeResult, fds[1])
 
 	e.runner.memorySize = wasm.MemorySize(memorySize)
-	e.runner.lastTrap = traps.Id(uint32(trap))
+	e.runner.lastTrap = trap.Id(uint32(trapId))
 	e.runner.lastStackPtr = stackPtr
 
-	if e.runner.lastTrap == traps.Exit {
-		e.result = int32(uint32(trap >> 32))
+	if e.runner.lastTrap == trap.Exit {
+		e.result = int32(uint32(trapId >> 32))
 	} else {
 		e.err = e.runner.lastTrap
 	}

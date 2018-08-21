@@ -5,12 +5,11 @@
 package gen
 
 import (
-	"io"
+	"encoding/binary"
 
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/traps"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
 )
 
@@ -30,36 +29,33 @@ const (
 	StackReserve = WordSize + 128 // trap/import call return address + red zone
 )
 
-type OpCoder interface {
-	io.Writer
-	io.ByteWriter
-
+type Buffer interface {
 	Bytes() []byte
-	Len() int32
-
-	Align(alignment int, padding byte)
+	Pos() int32
+	Extend(n int) []byte
+	PutByte(byte)
+	PutBytes([]byte)
 }
 
 type Coder interface {
-	OpCoder
+	Buffer
 
-	MinMemorySize() wasm.MemorySize
+	MinMemorySize() int
 	RODataAddr() int32
-	TrapEntryAddr(id traps.Id) int32
-	TrapTrampolineAddr(id traps.Id) int32
-	OpTrapCall(id traps.Id)
+	TrapTrampolineAddr(id trap.Id) int32
+	OpTrapCall(id trap.Id)
 
 	Discard(values.Operand)
 	Consumed(values.Operand)
-	RegAllocated(types.T, regs.R) bool
-	FreeReg(types.T, regs.R)
+	RegAllocated(wasm.Type, regs.R) bool
+	FreeReg(wasm.Type, regs.R)
 }
 
 type RegCoder interface {
 	Coder
 
-	TryAllocReg(t types.T) (reg regs.R, ok bool)
-	AllocSpecificReg(t types.T, reg regs.R)
+	TryAllocReg(t wasm.Type) (reg regs.R, ok bool)
+	AllocSpecificReg(t wasm.Type, reg regs.R)
 }
 
 type MaskBaseAddr int32
@@ -73,6 +69,22 @@ const (
 // MaskAddr calculates the absolute read-only data address for reading a mask
 // for the given type size.  maskBaseAddr should be one of the Mask*Base
 // constants.
-func MaskAddr(code Coder, maskBaseAddr MaskBaseAddr, t types.T) int32 {
-	return code.RODataAddr() + int32(maskBaseAddr) + int32((t.Size()&8)<<1)
+func MaskAddr(roDataAddr int32, maskBaseAddr MaskBaseAddr, t wasm.Type) int32 {
+	return roDataAddr + int32(maskBaseAddr) + int32((t.Size()&8)<<1)
+}
+
+func PutInt8(code Buffer, value int8) {
+	code.PutByte(uint8(value))
+}
+
+func PutInt16(code Buffer, value int16) {
+	binary.LittleEndian.PutUint16(code.Extend(2), uint16(value))
+}
+
+func PutInt32(code Buffer, value int32) {
+	binary.LittleEndian.PutUint32(code.Extend(4), uint32(value))
+}
+
+func PutInt64(code Buffer, value int64) {
+	binary.LittleEndian.PutUint64(code.Extend(8), uint64(value))
 }

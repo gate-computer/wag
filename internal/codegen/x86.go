@@ -2,17 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+// +build wag_amd64 amd64,!wag_arm64
+
+package codegen
 
 import (
 	"github.com/tsavola/wag/internal/x86"
 )
 
-const (
-	machNative            = x86.Native
-	machFunctionAlignment = x86.FunctionAlignment
-	machPaddingByte       = x86.PaddingByte
-	machResultReg         = x86.RegResult
-)
-
-var mach x86.X86
+var isa x86.ISA

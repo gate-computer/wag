@@ -12,54 +12,40 @@ import (
 	"sort"
 	"unsafe"
 
-	"github.com/tsavola/wag/sections"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/section"
+	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wasm/function"
 )
 
-func (p *Program) findCaller(retAddr uint32) (num int, initial, ok bool) {
-	count := len(p.funcMap) / 4
-	if count == 0 {
+func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {
+	if len(p.funcMap) == 0 {
 		return
 	}
 
-	firstFuncAddr := byteOrder.Uint32(p.funcMap[:4])
+	firstFuncAddr := p.funcMap[0]
 	if retAddr > 0 && retAddr < firstFuncAddr {
 		initial = true
 		ok = true
 		return
 	}
 
-	num = sort.Search(count, func(i int) bool {
-		var funcEndAddr uint32
+	num = sort.Search(len(p.funcMap), func(i int) bool {
+		var funcEndAddr int32
 
 		i++
-		if i == count {
-			funcEndAddr = uint32(len(p.Text))
+		if i == len(p.funcMap) {
+			funcEndAddr = int32(len(p.Text))
 		} else {
-			funcEndAddr = byteOrder.Uint32(p.funcMap[i*4 : (i+1)*4])
+			funcEndAddr = p.funcMap[i]
 		}
 
 		return retAddr <= funcEndAddr
 	})
 
-	if num < count {
+	if num < len(p.funcMap) {
 		ok = true
 	}
 	return
-}
-
-func (p *Program) FuncAddrs() map[int]int {
-	if p.funcAddrs == nil {
-		p.funcAddrs = make(map[int]int)
-
-		buf := p.funcMap
-		for i := 0; len(buf) > 0; i++ {
-			p.funcAddrs[i] = int(byteOrder.Uint32(buf[:4]))
-			buf = buf[4:]
-		}
-	}
-
-	return p.funcAddrs
 }
 
 type callSite struct {
@@ -70,16 +56,11 @@ type callSite struct {
 func (p *Program) CallSites() map[int]callSite {
 	if p.callSites == nil {
 		p.callSites = make(map[int]callSite)
-
-		buf := p.callMap
-		for i := 0; len(buf) > 0; i++ {
-			entry := byteOrder.Uint64(buf[:8])
-			buf = buf[8:]
-
-			addr := int(uint32(entry))
-			stackOffset := int(entry >> 32)
-
-			p.callSites[addr] = callSite{uint64(i), stackOffset}
+		for i, site := range p.callMap {
+			p.callSites[int(site.ReturnAddr)] = callSite{
+				uint64(i),
+				int(site.StackOffset),
+			}
 		}
 	}
 
@@ -117,7 +98,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 			return
 		}
 
-		_, start, ok := p.findCaller(uint32(retAddr))
+		_, start, ok := p.findCaller(int32(retAddr))
 		if !ok {
 			err = errors.New("function not found for return address")
 			return
@@ -160,7 +141,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 	return
 }
 
-func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *sections.NameSection, stack []byte) (err error) {
+func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []function.Type, ns *section.NameSection, stack []byte) (err error) {
 	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
@@ -175,7 +156,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *
 			return
 		}
 
-		funcNum, start, ok := p.findCaller(uint32(retAddr))
+		funcNum, start, ok := p.findCaller(int32(retAddr))
 		if !ok {
 			fmt.Fprintf(w, "#%d  <function not found for return address 0x%x>\n", depth, retAddr)
 			return
@@ -217,7 +198,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *
 		var sigStr string
 
 		if funcNum < len(funcSigs) {
-			sigStr = funcSigs[funcNum].StringWithNames(localNames)
+			sigStr = functionSignatureWithNames(funcSigs[funcNum], localNames)
 		}
 
 		fmt.Fprintf(w, "#%d  %s%s\n", depth, name, sigStr)
@@ -229,7 +210,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []types.Function, ns *
 	return
 }
 
-func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []types.Function, ns *sections.NameSection) (err error) {
+func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []function.Type, ns *section.NameSection) (err error) {
 	if r.lastTrap != 0 {
 		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
 	}
@@ -246,4 +227,22 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []types.Function, ns *s
 	}
 
 	return r.prog.writeStacktraceTo(w, funcSigs, ns, r.stack[unused:])
+}
+
+func functionSignatureWithNames(f function.Type, localNames []string) (s string) {
+	s = "("
+	for i, t := range f.Args {
+		if i > 0 {
+			s += ", "
+		}
+		if i < len(localNames) {
+			s += localNames[i] + " "
+		}
+		s += t.String()
+	}
+	s += ")"
+	if f.Result != wasm.Void {
+		s += " " + f.Result.String()
+	}
+	return
 }

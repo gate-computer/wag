@@ -11,7 +11,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/dewag"
+	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 )
 
@@ -43,7 +43,7 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	m := Module{EntrySymbol: "main"}
-	m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
+	m.load(wasm, runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
 	p.SetFunctionMap(m.FunctionMap())
@@ -57,7 +57,7 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
 	}
 
 	var printBuf bytes.Buffer

@@ -13,3 +13,7 @@ type R byte
 func (reg R) String() string {
 	return fmt.Sprintf("r%d", reg)
 }
+
+const (
+	Result = R(0)
+)

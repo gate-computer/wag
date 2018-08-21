@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tsavola/wag/dewag"
+	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
-	"github.com/tsavola/wag/sections"
-	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/section"
+	"github.com/tsavola/wag/trap"
 )
 
 const (
@@ -452,16 +452,16 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 		}()
 
-		var nameSection sections.NameSection
+		var nameSection section.NameSection
 
 		m := Module{
 			EntrySymbol: "test",
-			UnknownSectionLoader: sections.UnknownLoaders{
+			UnknownSectionLoader: section.UnknownLoaders{
 				"name": nameSection.Load,
 			}.Load,
 		}
 
-		m.load(wasm, runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
+		m.load(wasm, runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 		p.Seal()
 		p.SetData(m.Data())
 		p.SetFunctionMap(m.FunctionMap())
@@ -475,7 +475,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 
 		if dumpText && testing.Verbose() {
-			dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), &nameSection)
+			disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), &nameSection)
 		}
 
 		if dumpROData {
@@ -589,7 +589,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 
 			if err != nil {
-				if trapId, ok := err.(traps.Id); ok {
+				if trapId, ok := err.(trap.Id); ok {
 					if testType == "assert_trap" {
 						t.Logf("run: module %s: test #%d: pass", filename, id)
 					} else {

@@ -11,7 +11,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 )
 
-func (m *Module) genDataGlobals() {
+func genDataGlobals(m *Module) {
 	align := m.MemoryAlignment
 	if align == 0 {
 		align = DefaultMemoryAlignment
@@ -24,7 +24,7 @@ func (m *Module) genDataGlobals() {
 		offset = align - n
 	}
 
-	buf := m.DataBuffer.ResizeBytes(offset + size)
+	buf := m.Module.Data.ResizeBytes(offset + size)
 
 	ptr := buf[offset:]
 	for _, global := range m.Globals {
@@ -35,25 +35,15 @@ func (m *Module) genDataGlobals() {
 	m.MemoryOffset = len(buf)
 }
 
-func (m *Module) genDataMemory(load loader.L) {
-	if debug {
-		debugf("data section")
-		debugDepth++
-	}
-
-	buf := m.DataBuffer.Bytes()
+func genDataMemory(m *Module, load loader.L) {
+	buf := m.Module.Data.Bytes()
 
 	for i := range load.Count() {
-		if debug {
-			debugf("data segment")
-			debugDepth++
-		}
-
 		if index := load.Varuint32(); index != 0 {
 			panic(fmt.Errorf("unsupported memory index: %d", index))
 		}
 
-		offset := readOffsetInitExpr(load, m)
+		offset := readOffsetInitExpr(m, load)
 
 		size := load.Varuint32()
 
@@ -64,20 +54,10 @@ func (m *Module) genDataMemory(load loader.L) {
 
 		needDataSize := m.MemoryOffset + int(needMemorySize)
 		if needDataSize > len(buf) {
-			buf = m.DataBuffer.ResizeBytes(needDataSize)
+			buf = m.Module.Data.ResizeBytes(needDataSize)
 		}
 
 		dataOffset := m.MemoryOffset + int(offset)
 		load.Into(buf[dataOffset:needDataSize])
-
-		if debug {
-			debugDepth--
-			debugf("data segmented: offset=0x%x size=0x%x", offset, size)
-		}
-	}
-
-	if debug {
-		debugDepth--
-		debugf("data sectioned")
 	}
 }

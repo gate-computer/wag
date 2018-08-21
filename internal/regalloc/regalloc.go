@@ -9,7 +9,7 @@ import (
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
 )
 
 func regIndex(cat gen.RegCategory, reg regs.R) uint8 {
@@ -109,7 +109,7 @@ type Iterator struct {
 	regs   [2][]regs.R
 }
 
-func (iter *Iterator) Init(paramRegs [2][]regs.R, paramTypes []types.T) (stackCount int32) {
+func (iter *Iterator) Init(paramRegs [2][]regs.R, paramTypes []wasm.Type) (stackCount int32) {
 	for i := int32(len(paramTypes)) - 1; i >= 0; i-- {
 		cat := gen.TypeRegCategory(paramTypes[i])
 		if iter.counts[cat] == len(paramRegs[cat]) {

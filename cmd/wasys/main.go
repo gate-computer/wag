@@ -18,7 +18,8 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wasm/function"
 )
 
 var (
@@ -29,7 +30,7 @@ var importFuncs = make(map[string]uint64)
 
 type env struct{}
 
-func (*env) ImportFunction(module, field string, sig types.Function) (variadic bool, absAddr uint64, err error) {
+func (*env) ImportFunction(module, field string, sig function.Type) (variadic bool, absAddr uint64, err error) {
 	if verbose {
 		log.Printf("import %s%s", field, sig)
 	}
@@ -48,31 +49,8 @@ func (*env) ImportFunction(module, field string, sig types.Function) (variadic b
 	return
 }
 
-func (*env) ImportGlobal(module, field string, t types.T) (valueBits uint64, err error) {
+func (*env) ImportGlobal(module, field string, t wasm.Type) (valueBits uint64, err error) {
 	err = fmt.Errorf("imported global not supported: %s %s", module, field)
-	return
-}
-
-type fixedBuf struct {
-	b []byte
-}
-
-func (f *fixedBuf) Bytes() []byte { return f.b }
-func (f *fixedBuf) Grow(n int)    {}
-func (f *fixedBuf) Len() int      { return len(f.b) }
-
-func (f *fixedBuf) Write(b []byte) (n int, err error) {
-	offset := len(f.b)
-	n = len(b)
-	f.b = f.b[:len(f.b)+n]
-	copy(f.b[offset:], b)
-	return
-}
-
-func (f *fixedBuf) WriteByte(b byte) (err error) {
-	offset := len(f.b)
-	f.b = f.b[:offset+1]
-	f.b[offset] = b
 	return
 }
 
@@ -134,7 +112,7 @@ func main() {
 		log.Fatal(err)
 	}
 	textAddr := memAddr(textMem)
-	textBuf := &fixedBuf{textMem[:0]}
+	textBuf := wag.NewFixedBuffer(textMem[:0])
 
 	pageSize := os.Getpagesize()
 	pageMask := pageSize - 1

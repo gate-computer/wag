@@ -2,10 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package dewag
+package disasm
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"strconv"
@@ -13,12 +12,12 @@ import (
 
 	"github.com/bnagy/gapstone"
 
-	"github.com/tsavola/wag/sections"
-	"github.com/tsavola/wag/traps"
+	"github.com/tsavola/wag/section"
+	"github.com/tsavola/wag/trap"
 )
 
-func PrintTo(w io.Writer, text, funcMap []byte, ns *sections.NameSection) (err error) {
-	var names []sections.FunctionName
+func Fprint(w io.Writer, text []byte, funcMap []int32, ns *section.NameSection) (err error) {
+	var names []section.FunctionName
 	if ns != nil {
 		names = ns.FunctionNames
 	}
@@ -43,11 +42,11 @@ func PrintTo(w io.Writer, text, funcMap []byte, ns *sections.NameSection) (err e
 		16: "start",
 	}
 
-	firstFuncAddr := uint(binary.LittleEndian.Uint32(funcMap))
+	firstFuncAddr := uint(funcMap[0])
 
 	for i := 0; len(funcMap) > 0; i++ {
-		addr := binary.LittleEndian.Uint32(funcMap)
-		funcMap = funcMap[4:]
+		addr := funcMap[0]
+		funcMap = funcMap[1:]
 
 		var name string
 		if i < len(names) {
@@ -76,7 +75,7 @@ func PrintTo(w io.Writer, text, funcMap []byte, ns *sections.NameSection) (err e
 		case insn.Address < firstFuncAddr && insn.Mnemonic == "movl" && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", %eax"):
 			var n uint
 			fmt.Sscanf(insn.OpStr, "$%d, %%eax", &n)
-			if id := traps.Id(n); id < traps.NumTraps {
+			if id := trap.Id(n); id < trap.NumTraps {
 				targets[insn.Address] = strings.Replace(id.String(), " ", "_", -1)
 			}
 			continue

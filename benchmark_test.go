@@ -14,9 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tsavola/wag/dewag"
+	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wasm/function"
 )
 
 type testDuration struct {
@@ -34,15 +35,15 @@ func makeTrigger() chan struct{}   { return make(chan struct{}) }
 
 type dummyEnv struct{}
 
-func (*dummyEnv) ImportFunction(module, field string, sig types.Function) (variadic bool, absAddr uint64, err error) {
+func (*dummyEnv) ImportFunction(module, field string, sig function.Type) (variadic bool, absAddr uint64, err error) {
 	return
 }
 
-func (*dummyEnv) ImportGlobal(module, field string, t types.T) (valueBits uint64, err error) {
+func (*dummyEnv) ImportGlobal(module, field string, t wasm.Type) (valueBits uint64, err error) {
 	return
 }
 
-var loadBenchmarkEnv Environment = new(dummyEnv)
+var loadBenchmarkEnv Env = new(dummyEnv)
 
 const (
 	loadBenchmarkFilename      = "testdata/large.wasm"
@@ -81,7 +82,7 @@ func benchmarkLoad(b *testing.B) {
 		}
 
 		r := bytes.NewReader(wasm)
-		textBuf := bytes.NewBuffer(text)
+		textBuf := NewFixedBuffer(text)
 		roDataBuf := NewFixedBuffer(roData)
 
 		b.StartTimer()
@@ -120,7 +121,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		}
 
 		r := bytes.NewReader(wasm)
-		textBuf := bytes.NewBuffer(text)
+		textBuf := NewFixedBuffer(text)
 		roDataBuf := NewFixedBuffer(roData)
 		dataBuf := NewFixedBuffer(data)
 		trigger := makeOptionalTrigger()
@@ -149,11 +150,11 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 	b.Logf("data: %v", elapData)
 }
 
-func checkLoadBenchmarkOutput(b *testing.B, textBuf *bytes.Buffer, roDataBuf *FixedBuffer) {
+func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *FixedBuffer) {
 	b.Helper()
 
-	if textBuf.Len() > loadBenchmarkMaxTextSize {
-		b.Errorf("loadBenchmarkMaxTextSize is too small (text size is %d)", textBuf.Len())
+	if textBuf.Pos() > loadBenchmarkMaxTextSize {
+		b.Errorf("loadBenchmarkMaxTextSize is too small (text size is %d)", textBuf.Pos())
 	}
 
 	sum := sha256.Sum256(textBuf.Bytes())
@@ -199,7 +200,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
 	}
-	m.load(bytes.NewReader(data), runner.Env, bytes.NewBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
+	m.load(bytes.NewReader(data), runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
 	p.SetFunctionMap(m.FunctionMap())
@@ -227,6 +228,6 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		dewag.PrintTo(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
 	}
 }

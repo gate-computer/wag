@@ -7,24 +7,24 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
 )
 
 type prefix interface {
-	writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte)
+	put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte)
 }
 
 type constPrefix []byte
 
-func (bytes constPrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
-	code.Write(bytes)
+func (bytes constPrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+	code.PutBytes(bytes)
 }
 
 type multiPrefix []prefix
 
-func (array multiPrefix) writeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
+func (array multiPrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
 	for _, p := range array {
-		p.writeTo(code, t, ro, index, rmOrBase)
+		p.put(code, t, ro, index, rmOrBase)
 	}
 }
 
@@ -36,7 +36,7 @@ const (
 	RexB = Rex | (1 << 0)
 )
 
-func writeRexTo(code gen.OpCoder, rex, ro, index, rmOrBase byte) {
+func putRex(code gen.Buffer, rex, ro, index, rmOrBase byte) {
 	if ro >= 8 {
 		rex |= RexR
 	}
@@ -48,24 +48,24 @@ func writeRexTo(code gen.OpCoder, rex, ro, index, rmOrBase byte) {
 	}
 
 	if rex != 0 {
-		code.WriteByte(rex)
+		code.PutByte(rex)
 	}
 }
 
-func writeRexSizeTo(code gen.OpCoder, t types.T, ro, index, rmOrBase byte) {
+func putRexSize(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
 	var rex byte
 
 	switch t.Size() {
-	case types.Size32:
+	case wasm.Size32:
 
-	case types.Size64:
+	case wasm.Size64:
 		rex |= RexW
 
 	default:
 		panic(t)
 	}
 
-	writeRexTo(code, rex, ro, index, rmOrBase)
+	putRex(code, rex, ro, index, rmOrBase)
 }
 
 type mod byte
@@ -77,25 +77,31 @@ const (
 	ModReg       = mod((1 << 7) | (1 << 6))
 )
 
-func dispMod(t types.T, baseReg regs.R, offset int32) (mod mod, disp imm) {
+func dispMod(t wasm.Type, baseReg regs.R, offset int32) mod {
 	switch {
 	case offset == 0 && (baseReg&7) != 0x5: // rbp and r13 need displacement
-		mod = ModMem
+		return ModMem
 
 	case offset >= -0x80 && offset < 0x80:
-		mod = ModMemDisp8
-		disp.value = int8(offset)
+		return ModMemDisp8
 
 	default:
-		mod = ModMemDisp32
-		disp.value = offset
+		return ModMemDisp32
 	}
-
-	return
 }
 
-func writeModTo(code gen.OpCoder, mod mod, ro, rm byte) {
-	code.WriteByte(byte(mod) | ((ro & 7) << 3) | (rm & 7))
+func putMod(code gen.Buffer, mod mod, ro, rm byte) {
+	code.PutByte(byte(mod) | ((ro & 7) << 3) | (rm & 7))
+}
+
+func putDisp(code gen.Buffer, mod mod, offset int32) {
+	switch mod {
+	case ModMemDisp8:
+		gen.PutInt8(code, int8(offset))
+
+	case ModMemDisp32:
+		gen.PutInt32(code, offset)
+	}
 }
 
 const (
@@ -108,19 +114,19 @@ const (
 	NoBase  = regs.R((1 << 2) | (1 << 0))
 )
 
-func writeSibTo(code gen.OpCoder, scale byte, index, base regs.R) {
+func putSib(code gen.Buffer, scale byte, index, base regs.R) {
 	if scale >= 4 {
 		panic("scale factor out of bounds")
 	}
 
-	code.WriteByte((scale << 6) | (byte(index&7) << 3) | byte(base&7))
+	code.PutByte((scale << 6) | (byte(index&7) << 3) | byte(base&7))
 }
 
 //
 type insnConst []byte
 
-func (opcode insnConst) op(code gen.OpCoder) {
-	code.Write(opcode)
+func (opcode insnConst) op(code gen.Buffer) {
+	code.PutBytes(opcode)
 }
 
 //
@@ -128,20 +134,25 @@ type insnO struct {
 	opbase byte
 }
 
-func (i insnO) op(code gen.OpCoder, reg regs.R) {
+func (i insnO) op(code gen.Buffer, reg regs.R) {
 	if reg >= 8 {
 		panic("register not supported by instruction")
 	}
 
-	code.WriteByte(i.opbase + byte(reg))
+	code.PutByte(i.opbase + byte(reg))
 }
 
 //
 type insnI []byte
 
-func (opcode insnI) op(code gen.OpCoder, imm imm) {
-	code.Write(opcode)
-	imm.writeTo(code)
+func (opcode insnI) op8(code gen.Buffer, value int8) {
+	code.PutBytes(opcode)
+	gen.PutInt8(code, value)
+}
+
+func (opcode insnI) op32(code gen.Buffer, value int32) {
+	code.PutBytes(opcode)
+	gen.PutInt32(code, value)
 }
 
 //
@@ -151,21 +162,21 @@ func (opcode insnAddr8) size() int32 {
 	return int32(len(opcode)) + 1
 }
 
-func (opcode insnAddr8) op(code gen.OpCoder, addr int32) (ok bool) {
+func (opcode insnAddr8) op(code gen.Buffer, addr int32) (ok bool) {
 	insnSize := int32(len(opcode)) + 1
-	siteAddr := code.Len() + insnSize
+	siteAddr := code.Pos() + insnSize
 	offset := addr - siteAddr
 
 	if offset >= -0x80 && offset < 0x80 {
-		code.Write(opcode)
-		code.WriteByte(uint8(offset))
+		code.PutBytes(opcode)
+		gen.PutInt8(code, int8(offset))
 		ok = true
 	}
 	return
 }
 
-func (i insnAddr8) opStub(code gen.OpCoder) {
-	i.op(code, code.Len()) // infinite loop as placeholder
+func (i insnAddr8) opStub(code gen.Buffer) {
+	i.op(code, code.Pos()) // infinite loop as placeholder
 }
 
 //
@@ -175,25 +186,25 @@ func (opcode insnAddr32) size() int32 {
 	return int32(len(opcode)) + 4
 }
 
-func (i insnAddr32) op(code gen.OpCoder, addr int32) {
+func (i insnAddr32) op(code gen.Buffer, addr int32) {
 	var offset int32
 	if addr != 0 {
-		siteAddr := code.Len() + i.size()
+		siteAddr := code.Pos() + i.size()
 		offset = addr - siteAddr
 	} else {
 		offset = -i.size() // infinite loop as placeholder
 	}
-	i.writeTo(code, offset)
+	i.put(code, offset)
 }
 
-func (i insnAddr32) opMissingFunction(code gen.OpCoder) {
-	siteAddr := code.Len() + i.size()
-	i.writeTo(code, -siteAddr)
+func (i insnAddr32) opMissingFunction(code gen.Buffer) {
+	siteAddr := code.Pos() + i.size()
+	i.put(code, -siteAddr)
 }
 
-func (opcode insnAddr32) writeTo(code gen.OpCoder, offset int32) {
-	code.Write(opcode)
-	writeInt32To(code, offset)
+func (opcode insnAddr32) put(code gen.Buffer, offset int32) {
+	code.PutBytes(opcode)
+	gen.PutInt32(code, offset)
 }
 
 //
@@ -202,7 +213,7 @@ type insnAddr struct {
 	rel32 insnAddr32
 }
 
-func (i insnAddr) op(code gen.OpCoder, addr int32) {
+func (i insnAddr) op(code gen.Buffer, addr int32) {
 	var ok bool
 	if addr != 0 {
 		ok = i.rel8.op(code, addr)
@@ -215,9 +226,9 @@ func (i insnAddr) op(code gen.OpCoder, addr int32) {
 //
 type insnRex []byte
 
-func (opcode insnRex) op(code gen.OpCoder, t types.T) {
-	writeRexSizeTo(code, t, 0, 0, 0)
-	code.Write(opcode)
+func (opcode insnRex) op(code gen.Buffer, t wasm.Type) {
+	putRexSize(code, t, 0, 0, 0)
+	code.PutBytes(opcode)
 }
 
 //
@@ -226,10 +237,10 @@ type insnRexOM struct {
 	ro     byte
 }
 
-func (i insnRexOM) opReg(code gen.OpCoder, reg regs.R) {
-	writeRexTo(code, 0, 0, 0, byte(reg))
-	code.Write(i.opcode)
-	writeModTo(code, ModReg, i.ro, byte(reg))
+func (i insnRexOM) opReg(code gen.Buffer, reg regs.R) {
+	putRex(code, 0, 0, 0, byte(reg))
+	code.PutBytes(i.opcode)
+	putMod(code, ModReg, i.ro, byte(reg))
 }
 
 //
@@ -237,9 +248,9 @@ type insnRexO struct {
 	opbase byte
 }
 
-func (i insnRexO) op(code gen.OpCoder, t types.T, reg regs.R) {
-	writeRexSizeTo(code, t, 0, 0, byte(reg))
-	code.WriteByte(i.opbase + (byte(reg) & 7))
+func (i insnRexO) op(code gen.Buffer, t wasm.Type, reg regs.R) {
+	putRexSize(code, t, 0, 0, byte(reg))
+	code.PutByte(i.opbase + (byte(reg) & 7))
 }
 
 //
@@ -247,10 +258,16 @@ type insnRexOI struct {
 	opbase byte
 }
 
-func (i insnRexOI) op(code gen.OpCoder, t types.T, reg regs.R, imm imm) {
-	writeRexSizeTo(code, t, 0, 0, byte(reg))
-	code.WriteByte(i.opbase + (byte(reg) & 7))
-	imm.writeTo(code)
+func (i insnRexOI) op32(code gen.Buffer, t wasm.Type, reg regs.R, value uint32) {
+	putRexSize(code, t, 0, 0, byte(reg))
+	code.PutByte(i.opbase + (byte(reg) & 7))
+	gen.PutInt32(code, int32(value))
+}
+
+func (i insnRexOI) op64(code gen.Buffer, t wasm.Type, reg regs.R, value int64) {
+	putRexSize(code, t, 0, 0, byte(reg))
+	code.PutByte(i.opbase + (byte(reg) & 7))
+	gen.PutInt64(code, value)
 }
 
 //
@@ -259,36 +276,36 @@ type insnRexM struct {
 	ro     byte
 }
 
-func (i insnRexM) opReg(code gen.OpCoder, t types.T, reg regs.R) {
-	writeRexSizeTo(code, t, 0, 0, byte(reg))
-	code.Write(i.opcode)
-	writeModTo(code, ModReg, i.ro, byte(reg))
+func (i insnRexM) opReg(code gen.Buffer, t wasm.Type, reg regs.R) {
+	putRexSize(code, t, 0, 0, byte(reg))
+	code.PutBytes(i.opcode)
+	putMod(code, ModReg, i.ro, byte(reg))
 }
 
-func (i insnRexM) opIndirect(code gen.OpCoder, t types.T, reg regs.R, disp int32) {
-	mod, imm := dispMod(t, reg, disp)
+func (i insnRexM) opIndirect(code gen.Buffer, t wasm.Type, reg regs.R, disp int32) {
+	mod := dispMod(t, reg, disp)
 
-	writeRexSizeTo(code, t, 0, 0, byte(reg))
-	code.Write(i.opcode)
+	putRexSize(code, t, 0, 0, byte(reg))
+	code.PutBytes(i.opcode)
 
 	if reg != 12 {
-		writeModTo(code, mod, i.ro, byte(reg))
+		putMod(code, mod, i.ro, byte(reg))
 	} else {
-		writeModTo(code, mod, i.ro, MemSIB)
-		writeSibTo(code, 0, NoIndex, reg)
+		putMod(code, mod, i.ro, MemSIB)
+		putSib(code, 0, NoIndex, reg)
 	}
 
-	imm.writeTo(code)
+	putDisp(code, mod, disp)
 }
 
-func (i insnRexM) opStack(code gen.OpCoder, t types.T, disp int32) {
-	mod, imm := dispMod(t, RegStackPtr, disp)
+func (i insnRexM) opStack(code gen.Buffer, t wasm.Type, disp int32) {
+	mod := dispMod(t, RegStackPtr, disp)
 
-	writeRexSizeTo(code, t, 0, 0, 0)
-	code.Write(i.opcode)
-	writeModTo(code, mod, i.ro, MemSIB)
-	writeSibTo(code, 0, RegStackPtr, RegStackPtr)
-	imm.writeTo(code)
+	putRexSize(code, t, 0, 0, 0)
+	code.PutBytes(i.opcode)
+	putMod(code, mod, i.ro, MemSIB)
+	putSib(code, 0, RegStackPtr, RegStackPtr)
+	putDisp(code, mod, disp)
 }
 
 var (
@@ -302,88 +319,88 @@ type insnPrefix struct {
 	opcodeMR []byte
 }
 
-func (i insnPrefix) opFromReg(code gen.OpCoder, t types.T, target, source regs.R) {
-	writePrefixRegInsnTo(code, i.prefix, t, i.opcodeRM, byte(target), byte(source))
+func (i insnPrefix) opFromReg(code gen.Buffer, t wasm.Type, target, source regs.R) {
+	putPrefixRegInsn(code, i.prefix, t, i.opcodeRM, byte(target), byte(source))
 }
 
-func (i insnPrefix) opFromAddr(code gen.OpCoder, t types.T, target regs.R, scale uint8, index regs.R, addr int32) {
-	writePrefixAddrInsnTo(code, i.prefix, t, i.opcodeRM, target, scale, index, addr)
+func (i insnPrefix) opFromAddr(code gen.Buffer, t wasm.Type, target regs.R, scale uint8, index regs.R, addr int32) {
+	putPrefixAddrInsn(code, i.prefix, t, i.opcodeRM, target, scale, index, addr)
 }
 
-func (i insnPrefix) opFromIndirect(code gen.OpCoder, t types.T, target regs.R, scale uint8, index, base regs.R, disp int32) {
-	writePrefixIndirectInsnTo(code, i.prefix, t, i.opcodeRM, target, scale, index, base, disp)
+func (i insnPrefix) opFromIndirect(code gen.Buffer, t wasm.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
+	putPrefixIndirectInsn(code, i.prefix, t, i.opcodeRM, target, scale, index, base, disp)
 }
 
-func (i insnPrefix) opFromStack(code gen.OpCoder, t types.T, target regs.R, disp int32) {
-	writePrefixStackInsnTo(code, i.prefix, t, i.opcodeRM, target, disp)
+func (i insnPrefix) opFromStack(code gen.Buffer, t wasm.Type, target regs.R, disp int32) {
+	putPrefixStackInsn(code, i.prefix, t, i.opcodeRM, target, disp)
 }
 
-func (i insnPrefix) opToReg(code gen.OpCoder, t types.T, target, source regs.R) {
-	writePrefixRegInsnTo(code, i.prefix, t, i.opcodeMR, byte(source), byte(target))
+func (i insnPrefix) opToReg(code gen.Buffer, t wasm.Type, target, source regs.R) {
+	putPrefixRegInsn(code, i.prefix, t, i.opcodeMR, byte(source), byte(target))
 }
 
-func (i insnPrefix) opToAddr(code gen.OpCoder, t types.T, source regs.R, scale uint8, index regs.R, addr int32) {
-	writePrefixAddrInsnTo(code, i.prefix, t, i.opcodeMR, source, scale, index, addr)
+func (i insnPrefix) opToAddr(code gen.Buffer, t wasm.Type, source regs.R, scale uint8, index regs.R, addr int32) {
+	putPrefixAddrInsn(code, i.prefix, t, i.opcodeMR, source, scale, index, addr)
 }
 
-func (i insnPrefix) opToIndirect(code gen.OpCoder, t types.T, target regs.R, scale uint8, index, base regs.R, disp int32) {
-	writePrefixIndirectInsnTo(code, i.prefix, t, i.opcodeMR, target, scale, index, base, disp)
+func (i insnPrefix) opToIndirect(code gen.Buffer, t wasm.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
+	putPrefixIndirectInsn(code, i.prefix, t, i.opcodeMR, target, scale, index, base, disp)
 }
 
-func (i insnPrefix) opToStack(code gen.OpCoder, t types.T, source regs.R, disp int32) {
-	writePrefixStackInsnTo(code, i.prefix, t, i.opcodeMR, source, disp)
+func (i insnPrefix) opToStack(code gen.Buffer, t wasm.Type, source regs.R, disp int32) {
+	putPrefixStackInsn(code, i.prefix, t, i.opcodeMR, source, disp)
 }
 
-func writePrefixRegInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []byte, ro, rm byte) {
+func putPrefixRegInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, ro, rm byte) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
 
-	p.writeTo(code, t, ro, 0, rm)
-	code.Write(opcode)
-	writeModTo(code, ModReg, ro, rm)
+	p.put(code, t, ro, 0, rm)
+	code.PutBytes(opcode)
+	putMod(code, ModReg, ro, rm)
 }
 
-func writePrefixAddrInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []byte, reg regs.R, scale uint8, index regs.R, addr int32) {
+func putPrefixAddrInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, reg regs.R, scale uint8, index regs.R, addr int32) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
 
-	p.writeTo(code, t, byte(reg), 0, 0)
-	code.Write(opcode)
-	writeModTo(code, ModMem, byte(reg), MemSIB)
-	writeSibTo(code, scale, index, NoBase)
-	writeInt32To(code, addr)
+	p.put(code, t, byte(reg), 0, 0)
+	code.PutBytes(opcode)
+	putMod(code, ModMem, byte(reg), MemSIB)
+	putSib(code, scale, index, NoBase)
+	gen.PutInt32(code, addr)
 }
 
-func writePrefixIndirectInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []byte, reg regs.R, scale uint8, index, base regs.R, disp int32) {
+func putPrefixIndirectInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, reg regs.R, scale uint8, index, base regs.R, disp int32) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
 
-	mod, imm := dispMod(t, base, disp)
+	mod := dispMod(t, base, disp)
 
-	p.writeTo(code, t, byte(reg), byte(index), byte(base))
-	code.Write(opcode)
+	p.put(code, t, byte(reg), byte(index), byte(base))
+	code.PutBytes(opcode)
 
 	if scale == 0 && index == NoIndex && base != 12 {
-		writeModTo(code, mod, byte(reg), byte(base))
+		putMod(code, mod, byte(reg), byte(base))
 	} else {
-		writeModTo(code, mod, byte(reg), MemSIB)
-		writeSibTo(code, scale, index, base)
+		putMod(code, mod, byte(reg), MemSIB)
+		putSib(code, scale, index, base)
 	}
 
-	imm.writeTo(code)
+	putDisp(code, mod, disp)
 }
 
-func writePrefixStackInsnTo(code gen.OpCoder, p prefix, t types.T, opcode []byte, reg regs.R, disp int32) {
-	mod, imm := dispMod(t, RegStackPtr, disp)
+func putPrefixStackInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, reg regs.R, disp int32) {
+	mod := dispMod(t, RegStackPtr, disp)
 
-	p.writeTo(code, t, byte(reg), 0, 0)
-	code.Write(opcode)
-	writeModTo(code, mod, byte(reg), MemSIB)
-	writeSibTo(code, 0, RegStackPtr, RegStackPtr)
-	imm.writeTo(code)
+	p.put(code, t, byte(reg), 0, 0)
+	code.PutBytes(opcode)
+	putMod(code, mod, byte(reg), MemSIB)
+	putSib(code, 0, RegStackPtr, RegStackPtr)
+	putDisp(code, mod, disp)
 }
 
 //
@@ -392,11 +409,11 @@ type insnPrefixRexRM struct {
 	opcode []byte
 }
 
-func (i insnPrefixRexRM) opReg(code gen.OpCoder, floatType, intType types.T, target, source regs.R) {
-	i.prefix.writeTo(code, floatType, 0, 0, 0)
-	writeRexSizeTo(code, intType, byte(target), 0, byte(source))
-	code.Write(i.opcode)
-	writeModTo(code, ModReg, byte(target), byte(source))
+func (i insnPrefixRexRM) opReg(code gen.Buffer, floatType, intType wasm.Type, target, source regs.R) {
+	i.prefix.put(code, floatType, 0, 0, 0)
+	putRexSize(code, intType, byte(target), 0, byte(source))
+	code.PutBytes(i.opcode)
+	putMod(code, ModReg, byte(target), byte(source))
 }
 
 //
@@ -408,71 +425,78 @@ type insnPrefixMI struct {
 	ro       byte
 }
 
-func (i insnPrefixMI) opImm(code gen.OpCoder, t types.T, reg regs.R, value int32) {
-	opcode, imm := i.immOpcode(value)
+func (i insnPrefixMI) opImm(code gen.Buffer, t wasm.Type, reg regs.R, value int32) {
+	opcode := i.immOpcode(value)
 
-	i.prefix.writeTo(code, t, 0, 0, byte(reg))
-	code.WriteByte(opcode)
-	writeModTo(code, ModReg, i.ro, byte(reg))
-	imm.writeTo(code)
+	i.prefix.put(code, t, 0, 0, byte(reg))
+	code.PutByte(opcode)
+	putMod(code, ModReg, i.ro, byte(reg))
+	i.putImm(code, opcode, value)
 }
 
-func (i insnPrefixMI) opImm8(code gen.OpCoder, t types.T, reg regs.R, value uint8) {
-	i.prefix.writeTo(code, t, 0, 0, byte(reg))
-	code.WriteByte(i.opcode8)
-	writeModTo(code, ModReg, i.ro, byte(reg))
-	code.WriteByte(value)
+func (i insnPrefixMI) opImm8(code gen.Buffer, t wasm.Type, reg regs.R, value uint8) {
+	i.prefix.put(code, t, 0, 0, byte(reg))
+	code.PutByte(i.opcode8)
+	putMod(code, ModReg, i.ro, byte(reg))
+	code.PutByte(value)
 }
 
-func (i insnPrefixMI) opImmToIndirect(code gen.OpCoder, t types.T, scale uint8, index, base regs.R, disp, value int32) {
-	mod, immDisp := dispMod(t, base, disp)
-	opcode, immValue := i.immOpcode(value)
+func (i insnPrefixMI) opImmToIndirect(code gen.Buffer, t wasm.Type, scale uint8, index, base regs.R, disp, value int32) {
+	mod := dispMod(t, base, disp)
+	opcode := i.immOpcode(value)
 
-	i.prefix.writeTo(code, t, 0, byte(index), byte(base))
-	code.WriteByte(opcode)
+	i.prefix.put(code, t, 0, byte(index), byte(base))
+	code.PutByte(opcode)
 
 	if scale == 0 && index == NoIndex && base != 12 {
-		writeModTo(code, mod, i.ro, byte(base))
+		putMod(code, mod, i.ro, byte(base))
 	} else {
-		writeModTo(code, mod, i.ro, MemSIB)
-		writeSibTo(code, scale, index, base)
+		putMod(code, mod, i.ro, MemSIB)
+		putSib(code, scale, index, base)
 	}
 
-	immDisp.writeTo(code)
-	immValue.writeTo(code)
+	putDisp(code, mod, disp)
+	i.putImm(code, opcode, value)
 }
 
-func (i insnPrefixMI) opImmToStack(code gen.OpCoder, t types.T, disp, value int32) {
-	mod, immDisp := dispMod(t, RegStackPtr, disp)
-	opcode, immValue := i.immOpcode(value)
+func (i insnPrefixMI) opImmToStack(code gen.Buffer, t wasm.Type, disp, value int32) {
+	mod := dispMod(t, RegStackPtr, disp)
+	opcode := i.immOpcode(value)
 
-	i.prefix.writeTo(code, t, 0, 0, 0)
-	code.WriteByte(opcode)
-	writeModTo(code, mod, i.ro, MemSIB)
-	writeSibTo(code, 0, RegStackPtr, RegStackPtr)
-	immDisp.writeTo(code)
-	immValue.writeTo(code)
+	i.prefix.put(code, t, 0, 0, 0)
+	code.PutByte(opcode)
+	putMod(code, mod, i.ro, MemSIB)
+	putSib(code, 0, RegStackPtr, RegStackPtr)
+	putDisp(code, mod, disp)
+	i.putImm(code, opcode, value)
 }
 
-func (i insnPrefixMI) immOpcode(value int32) (opcode byte, imm imm) {
+func (i insnPrefixMI) immOpcode(value int32) byte {
 	switch {
 	case i.opcode8 != 0 && value >= -0x80 && value < 0x80:
-		opcode = i.opcode8
-		imm.value = int8(value)
-		return
+		return i.opcode8
 
 	case i.opcode16 != 0 && value >= -0x8000 && value < 0x8000:
-		opcode = i.opcode16
-		imm.value = int16(value)
-		return
+		return i.opcode16
 
 	case i.opcode32 != 0:
-		opcode = i.opcode32
-		imm.value = value
-		return
+		return i.opcode32
 
 	default:
 		panic("immediate value out of range")
+	}
+}
+
+func (i insnPrefixMI) putImm(code gen.Buffer, opcode byte, value int32) {
+	switch opcode {
+	case i.opcode8:
+		gen.PutInt8(code, int8(value))
+
+	case i.opcode16:
+		gen.PutInt16(code, int16(value))
+
+	default: // i.opcode32
+		gen.PutInt32(code, value)
 	}
 }
 
@@ -486,11 +510,11 @@ type insnSuffixRMI struct {
 	suffix prefix
 }
 
-func (i insnSuffixRMI) opReg(code gen.OpCoder, t types.T, target, source regs.R, value int8) {
-	code.Write(i.opcode)
-	i.suffix.writeTo(code, t, byte(target), 0, byte(source))
-	writeModTo(code, ModReg, byte(target), byte(source))
-	code.WriteByte(uint8(value))
+func (i insnSuffixRMI) opReg(code gen.Buffer, t wasm.Type, target, source regs.R, value int8) {
+	code.PutBytes(i.opcode)
+	i.suffix.put(code, t, byte(target), 0, byte(source))
+	putMod(code, ModReg, byte(target), byte(source))
+	gen.PutInt8(code, value)
 }
 
 //
@@ -505,11 +529,11 @@ type pushPopInsn struct {
 	regAny insnRexM
 }
 
-func (i pushPopInsn) op(code gen.OpCoder, reg regs.R) {
+func (i pushPopInsn) op(code gen.Buffer, reg regs.R) {
 	if reg < 8 {
 		i.regLow.op(code, reg)
 	} else {
-		i.regAny.opReg(code, types.I32, reg)
+		i.regAny.opReg(code, wasm.I32, reg)
 	}
 }
 
@@ -519,7 +543,7 @@ type xchgInsn struct {
 	insnPrefix
 }
 
-func (i xchgInsn) opFromReg(code gen.OpCoder, t types.T, a, b regs.R) {
+func (i xchgInsn) opFromReg(code gen.Buffer, t wasm.Type, a, b regs.R) {
 	switch {
 	case a == regs.R(0):
 		i.r0.op(code, t, b)
@@ -542,7 +566,7 @@ func (i shiftImmInsn) defined() bool {
 	return i.one.opcode != nil
 }
 
-func (i shiftImmInsn) op(code gen.OpCoder, t types.T, reg regs.R, value uint8) {
+func (i shiftImmInsn) op(code gen.Buffer, t wasm.Type, reg regs.R, value uint8) {
 	if value == 1 {
 		i.one.opReg(code, t, reg)
 	} else {
@@ -560,15 +584,15 @@ type movImmInsn struct {
 	imm   insnRexOI
 }
 
-func (i movImmInsn) op(code gen.OpCoder, t types.T, reg regs.R, value int64) {
+func (i movImmInsn) op(code gen.Buffer, t wasm.Type, reg regs.R, value int64) {
 	switch {
 	case value >= -0x80000000 && value < 0x80000000:
 		i.imm32.opImm(code, t, reg, int32(value))
 
-	case t.Size() == types.Size64 && value >= 0 && value < 0x100000000:
-		i.imm.op(code, types.I32, reg, imm{uint32(value)})
+	case t.Size() == wasm.Size64 && value >= 0 && value < 0x100000000:
+		i.imm.op32(code, wasm.I32, reg, uint32(value))
 
 	default:
-		i.imm.op(code, t, reg, imm{value})
+		i.imm.op64(code, t, reg, value)
 	}
 }

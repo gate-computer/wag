@@ -1,5 +1,5 @@
-**wag** is a [WebAssembly](http://webassembly.org) compiler implemented as a
-[Go](https://golang.org) package.
+**wag** is a [WebAssembly](https://webassembly.org) compiler (or assembler?)
+implemented as a [Go](https://golang.org) package.
 
 - License: [3-clause BSD](LICENSE)
 - Author: Timo Savola <timo.savola@iki.fi>
@@ -8,19 +8,22 @@
 Features
 --------
 
-- Source is a wasm32 binary module.  The application embedding the compiler
-  decides what import functions it provides.
+- The input is a wasm32 binary module.  The embedders of the compiler decide
+  what kind of import functions they choose to implement and make available for
+  the WebAssembly programs.
 
-- Supports x86-64.  Support for 64-bit ARM is planned.  (Support for non-64-bit
-  or non-little-endian CPU architectures isn't planned.)
+- The output is executable x86-64 machine code.  Support for 64-bit ARM is
+  planned.  (Support for non-64-bit or non-little-endian CPU architectures
+  isn't planned.)
 
-- Single-pass, low-latency ahead-of-time compilation.  Early functions can be
-  executed while the latter functions are still being compiled, even while the
-  source is still being downloaded.
+- Single-pass, fast ahead-of-time compilation.  Early functions can be executed
+  while the latter functions are still being compiled, even while the source is
+  still being downloaded.
 
-- Generated code requires minimal runtime support.  It may be run e.g. in a
-  strict [seccomp](https://en.wikipedia.org/wiki/Seccomp) sandbox.
-  Note: calling standard library ABIs is not supported.
+- The generated code requires minimal runtime support; it's designed to be
+  executed in an isolated environment.  Calling standard library ABIs is not
+  supported, but see [wasys](cmd/wasys) for an example program which exposes
+  syscalls as WebAssembly import functions.
 
 - Supports snapshot-and-restore across compiler versions and CPU architectures.
 
@@ -28,15 +31,11 @@ Features
 Status
 ------
 
-- WebAssembly binary encoding version 1.
+- Implements WebAssembly binary encoding version 1.
 
 - The Go package API hasn't been finalized.
 
-- Cross-compilation will be supported once the backend interface stabilizes.
-
-- Multithreading is not supported.  (WebAssembly doesn't define it yet.)
-
-- Much debugging remains to be done...
+- The snapshot-and-restore functionality is beta quality.
 
 
 Testing
@@ -49,12 +48,24 @@ spec testsuite is run, by first converting the tests to binary format:
 2. `make -C $GOPATH/src/github.com/tsavola/wag/testdata/wabt`
 3. `go test -v github.com/tsavola/wag`
 
-The [wag-toolchain](https://github.com/tsavola/wag-toolchain) repository tests
-input from a C/C++ compiler.
 
+Screenshot #1
+-------------
 
-Screenshot
-----------
+```
+$ go get github.com/tsavola/wag/cmd/wasys
+$ wasys -v $GOPATH/src/github.com/tsavola/wag/testdata/hello.wasm
+import write(i32, i32, i32) i32
+import open(i32, i32, i32) i32
+import read(i32, i32, i32) i32
+import close(i32) i32
+import pipe2(i32, i32) i32
+import _exit(i32)
+hello, world
+```
+
+Screenshot #2
+-------------
 
 ```
 === RUN   TestSnapshot

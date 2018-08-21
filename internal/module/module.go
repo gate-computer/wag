@@ -5,14 +5,15 @@
 package module
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regalloc"
-	"github.com/tsavola/wag/traps"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/trap"
+	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wasm/function"
 )
 
 const (
@@ -72,13 +73,8 @@ type Reader interface {
 	io.ByteScanner
 }
 
-type Buffer interface {
-	io.Writer
-	io.ByteWriter
-
-	Bytes() []byte
-	Grow(n int)
-	Len() int
+type TextBuffer interface {
+	gen.Buffer
 }
 
 type DataBuffer interface {
@@ -99,13 +95,18 @@ type ResizableLimits struct {
 }
 
 type Global struct {
-	Type    types.T
+	Type    wasm.Type
 	Mutable bool
 	Init    uint64
 }
 
-type Internal struct {
-	Sigs              []types.Function
+type CallSite struct {
+	ReturnAddr  int32
+	StackOffset int32
+}
+
+type Module struct {
+	Sigs              []function.Type
 	FuncSigs          []uint32
 	ImportFuncs       []ImportFunction
 	TableLimitValues  ResizableLimits
@@ -118,15 +119,15 @@ type Internal struct {
 	StartDefined      bool
 	TableFuncs        []uint32
 
-	TextBuffer    Buffer
-	RODataAbsAddr int32
-	RODataBuffer  DataBuffer
-	TrapLinks     [traps.NumTraps]links.L
-	FuncLinks     []links.FunctionL
-	FuncMapBuffer bytes.Buffer
-	CallMapBuffer bytes.Buffer
-	Regs          regalloc.Allocator
+	Text       TextBuffer
+	RODataAddr int32
+	ROData     DataBuffer
+	TrapLinks  [trap.NumTraps]links.L
+	FuncLinks  []links.FunctionL
+	FuncMap    []int32
+	CallMap    []CallSite
+	Regs       regalloc.Allocator
 
-	DataBuffer   DataBuffer
+	Data         DataBuffer
 	MemoryOffset int
 }

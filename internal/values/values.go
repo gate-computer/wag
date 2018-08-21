@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
 )
 
 type Storage uint8
@@ -139,29 +139,29 @@ type Bounds struct {
 type Operand struct {
 	payload uint64
 	Bounds  Bounds
-	Type    types.T
+	Type    wasm.Type
 	Storage Storage
 }
 
-func NoOperand(t types.T) Operand {
+func NoOperand(t wasm.Type) Operand {
 	return Operand{0, Bounds{}, t, Nowhere}
 }
 
-func ImmOperand(t types.T, payload uint64) Operand {
+func ImmOperand(t wasm.Type, payload uint64) Operand {
 	return Operand{payload, Bounds{}, t, Imm}
 }
 
-func VarReferenceOperand(t types.T, index int32) Operand {
+func VarReferenceOperand(t wasm.Type, index int32) Operand {
 	payload := uint64(index) << 32
 	return Operand{payload, Bounds{}, t, VarReference}
 }
 
-func VarMemOperand(t types.T, index, offset int32) Operand {
+func VarMemOperand(t wasm.Type, index, offset int32) Operand {
 	payload := (uint64(index) << 32) | uint64(uint32(offset))
 	return Operand{payload, Bounds{}, t, VarMem}
 }
 
-func VarRegOperand(t types.T, index int32, reg regs.R, zeroExt bool) Operand {
+func VarRegOperand(t wasm.Type, index int32, reg regs.R, zeroExt bool) Operand {
 	payload := (uint64(index) << 32) | uint64(byte(reg))
 	if zeroExt {
 		payload |= payloadZeroExt
@@ -169,7 +169,7 @@ func VarRegOperand(t types.T, index int32, reg regs.R, zeroExt bool) Operand {
 	return Operand{payload, Bounds{}, t, VarReg}
 }
 
-func TempRegOperand(t types.T, reg regs.R, zeroExt bool) Operand {
+func TempRegOperand(t wasm.Type, reg regs.R, zeroExt bool) Operand {
 	payload := uint64(byte(reg))
 	if zeroExt {
 		payload |= payloadZeroExt
@@ -177,7 +177,7 @@ func TempRegOperand(t types.T, reg regs.R, zeroExt bool) Operand {
 	return Operand{payload, Bounds{}, t, TempReg}
 }
 
-func RegOperand(own bool, t types.T, reg regs.R) Operand {
+func RegOperand(own bool, t wasm.Type, reg regs.R) Operand {
 	var s Storage
 	if own {
 		s = TempReg
@@ -188,13 +188,13 @@ func RegOperand(own bool, t types.T, reg regs.R) Operand {
 	return Operand{payload, Bounds{}, t, s}
 }
 
-func StackOperand(t types.T) Operand {
+func StackOperand(t wasm.Type) Operand {
 	return Operand{0, Bounds{}, t, Stack}
 }
 
 func ConditionFlagsOperand(cond Condition) Operand {
 	payload := uint64(int(cond))
-	return Operand{payload, Bounds{}, types.I32, ConditionFlags}
+	return Operand{payload, Bounds{}, wasm.I32, ConditionFlags}
 }
 
 func (o Operand) WithBounds(b Bounds) Operand {
@@ -203,7 +203,7 @@ func (o Operand) WithBounds(b Bounds) Operand {
 }
 
 func (o Operand) ImmValue() int64 {
-	if o.Type.Size() == types.Size32 {
+	if o.Type.Size() == wasm.Size32 {
 		return int64(int32(uint32(o.payload)))
 	} else {
 		return int64(o.payload)
@@ -233,7 +233,7 @@ func (o Operand) Condition() Condition {
 func (o Operand) String() string {
 	switch o.Storage {
 	case Nowhere:
-		if o.Type == types.Void {
+		if o.Type == wasm.Void {
 			return "nothing"
 		} else {
 			return fmt.Sprintf("placeholder for %s", o.Type)
@@ -252,7 +252,7 @@ func (o Operand) String() string {
 		return fmt.Sprintf("%s %s", o.Type, o.Storage)
 
 	case Imm:
-		if o.Type.Category() == types.Int {
+		if o.Type.Category() == wasm.Int {
 			return fmt.Sprintf("immediate %s 0x%x", o.Type, o.payload)
 		} else {
 			return fmt.Sprintf("immediate %s bits 0x%x", o.Type, o.payload)

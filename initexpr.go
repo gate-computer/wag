@@ -7,31 +7,32 @@ package wag
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/internal/codegen"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/types"
+	"github.com/tsavola/wag/wasm"
 )
 
-func readInitExpr(load loader.L, m *Module) (valueBits uint64, t types.T) {
-	op := opcode(load.Byte())
+func readInitExpr(m *Module, load loader.L) (valueBits uint64, t wasm.Type) {
+	op := codegen.Opcode(load.Byte())
 
 	switch op {
-	case opcodeI32Const:
+	case codegen.OpcodeI32Const:
 		valueBits = uint64(int64(load.Varint32()))
-		t = types.I32
+		t = wasm.I32
 
-	case opcodeI64Const:
+	case codegen.OpcodeI64Const:
 		valueBits = uint64(load.Varint64())
-		t = types.I64
+		t = wasm.I64
 
-	case opcodeF32Const:
+	case codegen.OpcodeF32Const:
 		valueBits = uint64(load.Uint32())
-		t = types.F32
+		t = wasm.F32
 
-	case opcodeF64Const:
+	case codegen.OpcodeF64Const:
 		valueBits = load.Uint64()
-		t = types.F64
+		t = wasm.F64
 
-	case opcodeGetGlobal:
+	case codegen.OpcodeGetGlobal:
 		i := load.Varuint32()
 		if i >= uint32(m.NumImportGlobals) {
 			panic(fmt.Errorf("import global index out of bounds in initializer expression: %d", i))
@@ -44,16 +45,16 @@ func readInitExpr(load loader.L, m *Module) (valueBits uint64, t types.T) {
 		panic(fmt.Errorf("unsupported operation in initializer expression: %s", op))
 	}
 
-	if op := opcode(load.Byte()); op != opcodeEnd {
+	if op := codegen.Opcode(load.Byte()); op != codegen.OpcodeEnd {
 		panic(fmt.Errorf("unexpected operation in initializer expression when expecting end: %s", op))
 	}
 
 	return
 }
 
-func readOffsetInitExpr(load loader.L, m *Module) uint32 {
-	offset, t := readInitExpr(load, m)
-	if t != types.I32 {
+func readOffsetInitExpr(m *Module, load loader.L) uint32 {
+	offset, t := readInitExpr(m, load)
+	if t != wasm.I32 {
 		panic(fmt.Errorf("offset initializer expression has invalid type: %s", t))
 	}
 	return uint32(int32(int64(offset)))
