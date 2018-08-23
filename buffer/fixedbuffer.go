@@ -11,7 +11,6 @@ type Fixed struct {
 
 func NewFixed(b []byte) *Fixed     { return &Fixed{b} }
 func (f *Fixed) Bytes() []byte     { return f.b }
-func (f *Fixed) Pos() int32        { return int32(len(f.b)) }
 func (f *Fixed) PutByte(b byte)    { f.Extend(1)[0] = b }
 func (f *Fixed) PutBytes(b []byte) { copy(f.Extend(len(b)), b) }
 

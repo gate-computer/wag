@@ -12,7 +12,7 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-func (ISA) UnaryOp(text gen.Buffer, code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
+func (ISA) UnaryOp(text *gen.Text, code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
 	if (oper & opers.UnaryFloat) == 0 {
 		return unaryIntOp(text, code, oper, x)
 	} else {
@@ -20,7 +20,7 @@ func (ISA) UnaryOp(text gen.Buffer, code gen.RegCoder, oper uint16, x values.Ope
 	}
 }
 
-func unaryIntOp(text gen.Buffer, code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
+func unaryIntOp(text *gen.Text, code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
 	switch index := uint8(oper); index {
 	case opers.IndexIntEqz:
 		return opIntEqz(text, code, x)
@@ -30,7 +30,7 @@ func unaryIntOp(text gen.Buffer, code gen.RegCoder, oper uint16, x values.Operan
 	}
 }
 
-func opIntEqz(text gen.Buffer, code gen.Coder, x values.Operand) values.Operand {
+func opIntEqz(text *gen.Text, code gen.Coder, x values.Operand) values.Operand {
 	reg, _, own := opBorrowMaybeScratchReg(text, code, x, false)
 	if own {
 		defer code.FreeReg(x.Type, reg)
@@ -40,7 +40,7 @@ func opIntEqz(text gen.Buffer, code gen.Coder, x values.Operand) values.Operand 
 	return values.ConditionFlagsOperand(values.Eq)
 }
 
-func commonUnaryIntOp(text gen.Buffer, code gen.RegCoder, index uint8, x values.Operand) (result values.Operand) {
+func commonUnaryIntOp(text *gen.Text, code gen.RegCoder, index uint8, x values.Operand) (result values.Operand) {
 	var ok bool
 	var targetReg regs.R
 
@@ -79,7 +79,7 @@ func commonUnaryIntOp(text gen.Buffer, code gen.RegCoder, index uint8, x values.
 	panic("unknown unary int op")
 }
 
-func unaryFloatOp(text gen.Buffer, code gen.RegCoder, oper uint16, x values.Operand) (result values.Operand) {
+func unaryFloatOp(text *gen.Text, code gen.RegCoder, oper uint16, x values.Operand) (result values.Operand) {
 	// TODO: support memory source operands
 
 	reg, _ := opMaybeResultReg(text, code, x, false)
@@ -109,13 +109,13 @@ func unaryFloatOp(text gen.Buffer, code gen.RegCoder, oper uint16, x values.Oper
 }
 
 // opAbsFloatReg in-place.
-func opAbsFloatReg(text gen.Buffer, code gen.Coder, t abi.Type, reg regs.R) {
+func opAbsFloatReg(text *gen.Text, code gen.Coder, t abi.Type, reg regs.R) {
 	absMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask7fBase, t)
 	andpSSE.opFromAddr(text, t, reg, 0, NoIndex, absMaskAddr)
 }
 
 // opNegFloatReg in-place.
-func opNegFloatReg(text gen.Buffer, code gen.Coder, t abi.Type, reg regs.R) {
+func opNegFloatReg(text *gen.Text, code gen.Coder, t abi.Type, reg regs.R) {
 	signMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask80Base, t)
 	xorpSSE.opFromAddr(text, t, reg, 0, NoIndex, signMaskAddr)
 }

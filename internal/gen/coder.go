@@ -31,10 +31,38 @@ const (
 
 type Buffer interface {
 	Bytes() []byte
-	Pos() int32
 	Extend(n int) []byte
 	PutByte(byte)
 	PutBytes([]byte)
+}
+
+type Text struct {
+	B   Buffer
+	pos int32
+}
+
+func (text *Text) Pos() int32 {
+	return text.pos
+}
+
+func (text *Text) Bytes() []byte {
+	return text.B.Bytes()
+}
+
+func (text *Text) Extend(n int) (b []byte) {
+	b = text.B.Extend(n)
+	text.pos += int32(n)
+	return
+}
+
+func (text *Text) PutByte(x byte) {
+	text.B.PutByte(x)
+	text.pos++
+}
+
+func (text *Text) PutBytes(x []byte) {
+	text.B.PutBytes(x)
+	text.pos += int32(len(x))
 }
 
 type Coder interface {

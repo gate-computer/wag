@@ -124,7 +124,7 @@ type M struct {
 	StartDefined      bool
 	TableFuncs        []uint32
 
-	Text       TextBuffer
+	Text       gen.Text
 	RODataAddr int32
 	ROData     DataBuffer
 	TrapLinks  [trap.NumTraps]links.L

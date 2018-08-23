@@ -134,7 +134,7 @@ func binaryOp(f *function, op Opcode, left, right values.Operand, info opInfo) {
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.BinaryOp(f.Text, f, info.oper(), left, right)
+	result := isa.BinaryOp(&f.Text, f, info.oper(), left, right)
 	pushOperand(f, result)
 }
 
@@ -165,7 +165,7 @@ func genConversionOp(f *function, load loader.L, op Opcode, info opInfo) (deaden
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.ConversionOp(f.Text, f, info.oper(), info.primaryType(), x)
+	result := isa.ConversionOp(&f.Text, f, info.oper(), info.primaryType(), x)
 	pushOperand(f, result)
 	return
 }
@@ -182,7 +182,7 @@ func genLoadOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	result := isa.LoadOp(f.Text, f, info.oper(), index, info.primaryType(), offset)
+	result := isa.LoadOp(&f.Text, f, info.oper(), index, info.primaryType(), offset)
 	updateMemoryIndex(f, virtualIndex, offset, info.oper())
 	pushOperand(f, result)
 	return
@@ -205,7 +205,7 @@ func genStoreOp(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	isa.StoreOp(f.Text, f, info.oper(), index, value, offset)
+	isa.StoreOp(&f.Text, f, info.oper(), index, value, offset)
 	updateMemoryIndex(f, virtualIndex, offset, info.oper())
 	return
 }
@@ -222,7 +222,7 @@ func genUnaryOp(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.UnaryOp(f.Text, f, info.oper(), x)
+	result := isa.UnaryOp(&f.Text, f, info.oper(), x)
 	pushOperand(f, result)
 	return
 }
@@ -231,7 +231,7 @@ func genCurrentMemory(f *function, load loader.L, op Opcode, info opInfo) (deade
 	load.Byte() // reserved
 
 	opStabilizeOperandStack(f)
-	result := isa.OpCurrentMemory(f.Text)
+	result := isa.OpCurrentMemory(&f.Text)
 	pushOperand(f, result)
 	return
 }
@@ -250,7 +250,7 @@ func genGrowMemory(f *function, load loader.L, op Opcode, info opInfo) (deadend 
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.OpGrowMemory(f.Text, f, x)
+	result := isa.OpGrowMemory(&f.Text, f, x)
 	pushOperand(f, result)
 	return
 }
@@ -268,8 +268,8 @@ func genReturn(f *function, load loader.L, op Opcode, info opInfo) (deadend bool
 		opMove(f, regs.Result, result, false)
 	}
 
-	isa.OpAddImmToStackPtr(f.Text, f.stackOffset)
-	isa.OpReturn(f.Text)
+	isa.OpAddImmToStackPtr(&f.Text, f.stackOffset)
+	isa.OpReturn(&f.Text)
 	deadend = true
 	return
 }
@@ -286,7 +286,7 @@ func genSelect(f *function, load loader.L, op Opcode, info opInfo) (deadend bool
 		panic(fmt.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
 	}
 
-	result := isa.OpSelect(f.Text, f, left, right, cond)
+	result := isa.OpSelect(&f.Text, f, left, right, cond)
 	pushOperand(f, result)
 	return
 }

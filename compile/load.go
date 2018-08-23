@@ -116,7 +116,7 @@ func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roD
 		objMap = dummyMap{}
 	}
 
-	m.M.Text = text
+	m.M.Text = gen.Text{B: text}
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
 	m.M.Data = data
@@ -487,7 +487,7 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 		objMap = dummyMap{}
 	}
 
-	m.M.Text = text
+	m.M.Text = gen.Text{B: text}
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
 	m.M.Map = objMap
@@ -583,8 +583,8 @@ func (m *Module) GlobalsSize() int {
 
 // Text is available after code section has been loaded.
 func (m *Module) Text() (b []byte) {
-	if m.M.Text != nil {
-		b = m.M.Text.Bytes()
+	if m.M.Text.B != nil {
+		b = m.M.Text.B.Bytes()
 	}
 	return
 }

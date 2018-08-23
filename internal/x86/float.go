@@ -15,7 +15,7 @@ type floatSizePrefix struct {
 	size64 []byte
 }
 
-func (p *floatSizePrefix) put(text gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
+func (p *floatSizePrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
 	switch t.Size() {
 	case abi.Size32:
 		text.PutBytes(p.size32)
@@ -61,12 +61,12 @@ var (
 	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
-func pushFloatOp(text gen.Buffer, t abi.Type, source regs.R) {
+func pushFloatOp(text *gen.Text, t abi.Type, source regs.R) {
 	sub.opImm(text, abi.I64, RegStackPtr, gen.WordSize)
 	movsSSE.opToStack(text, t, source, 0)
 }
 
-func popFloatOp(text gen.Buffer, t abi.Type, target regs.R) {
+func popFloatOp(text *gen.Text, t abi.Type, target regs.R) {
 	movsSSE.opFromStack(text, t, target, 0)
 	add.opImm(text, abi.I64, RegStackPtr, gen.WordSize)
 }

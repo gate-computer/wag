@@ -50,9 +50,9 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	binary.LittleEndian.PutUint32(buf[gen.ROMask5f00Addr32:], 0x5f000000)
 	binary.LittleEndian.PutUint64(buf[gen.ROMask43e0Addr64:], 0x43e0000000000000)
 
-	isa.OpEnterTrapHandler(m.Text, trap.MissingFunction) // at zero address
+	isa.OpEnterTrapHandler(&m.Text, trap.MissingFunction) // at zero address
 
-	isa.OpInit(m.Text)
+	isa.OpInit(&m.Text)
 	// after init, execution proceeds to start func, main func, or exit trap
 
 	maxInitIndex := -1
@@ -79,7 +79,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 
 			for i, t := range sig.Args {
 				reg := paramRegs.IterForward(gen.TypeRegCategory(t))
-				isa.OpMoveIntImm(m.Text, reg, entryArgs[i])
+				isa.OpMoveIntImm(&m.Text, reg, entryArgs[i])
 			}
 		}
 
@@ -90,14 +90,14 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 
 	if mainResultType != abi.I32 {
-		isa.OpClearIntResultReg(m.Text)
+		isa.OpClearIntResultReg(&m.Text)
 	}
 
-	isa.OpEnterExitTrapHandler(m.Text)
+	isa.OpEnterExitTrapHandler(&m.Text)
 
 	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
 		m.TrapLinks[id].Addr = m.Text.Pos()
-		isa.OpEnterTrapHandler(m.Text, id)
+		isa.OpEnterTrapHandler(&m.Text, id)
 	}
 
 	for i, imp := range m.ImportFuncs {
@@ -175,7 +175,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 }
 
 func opInitCall(m *Module, l *links.FuncL) {
-	retAddr := isa.OpInitCall(m.Text)
+	retAddr := isa.OpInitCall(&m.Text)
 	m.Map.PutCallSite(object.TextAddr(retAddr), 0) // initial stack frame
 	l.AddSite(retAddr)
 }
@@ -186,7 +186,7 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 		debugDepth++
 	}
 
-	isa.AlignFunc(m.Text)
+	isa.AlignFunc(&m.Text)
 	addr = m.Text.Pos()
 	m.Map.PutImportFuncAddr(object.TextAddr(addr))
 
@@ -203,11 +203,11 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 		for i := range sig.Args {
 			t := sig.Args[i]
 			reg := paramRegs.IterForward(gen.TypeRegCategory(t))
-			isa.OpStoreStackReg(m.Text, t, -(int32(i)+1)*gen.WordSize, reg)
+			isa.OpStoreStackReg(&m.Text, t, -(int32(i)+1)*gen.WordSize, reg)
 		}
 	}
 
-	isa.OpEnterImportFunc(m.Text, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
+	isa.OpEnterImportFunc(&m.Text, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
 
 	if debug {
 		debugDepth--

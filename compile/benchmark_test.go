@@ -152,10 +152,6 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *buffer.Fixed) {
 	b.Helper()
 
-	if textBuf.Pos() > loadBenchmarkMaxTextSize {
-		b.Errorf("loadBenchmarkMaxTextSize is too small (text size is %d)", textBuf.Pos())
-	}
-
 	sum := crc32.ChecksumIEEE(textBuf.Bytes())
 	if sum != loadBenchmarkTextCRC32 {
 		b.Errorf("text checksum changed: 0x%x", sum)

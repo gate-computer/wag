@@ -14,7 +14,7 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func (ISA) BinaryOp(text gen.Buffer, code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
+func (ISA) BinaryOp(text *gen.Text, code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
 	if (oper & opers.BinaryFloat) == 0 {
 		switch {
 		case (oper & opers.BinaryCompare) != 0:
@@ -54,7 +54,7 @@ var commonBinaryIntInsns = []binaryInsn{
 	opers.IndexIntXor: xor,
 }
 
-func commonBinaryIntOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+func commonBinaryIntOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
 	if index == opers.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
 		return inplaceIntOp(text, code, neg, b)
 	}
@@ -103,7 +103,7 @@ func commonBinaryIntOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b val
 	}
 }
 
-func binaryIntCompareOp(text gen.Buffer, code gen.RegCoder, cond uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntCompareOp(text *gen.Text, code gen.RegCoder, cond uint8, a, b values.Operand) (result values.Operand) {
 	targetReg, _, own := opBorrowMaybeResultReg(text, code, a, false)
 	if own {
 		defer code.FreeReg(a.Type, targetReg)
@@ -143,7 +143,7 @@ var binaryDivmulInsns = []struct {
 	opers.IndexDivmulMul:  {mul, shlImm},
 }
 
-func binaryIntDivmulOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
 	insn := binaryDivmulInsns[index]
 	t := a.Type
 
@@ -290,7 +290,7 @@ func binaryIntDivmulOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b val
 	return values.TempRegOperand(t, RegResult, true)
 }
 
-func opCheckDivideByZero(text gen.Buffer, code gen.Coder, t abi.Type, reg regs.R) {
+func opCheckDivideByZero(text *gen.Text, code gen.Coder, t abi.Type, reg regs.R) {
 	var end links.L
 
 	test.opFromReg(text, t, reg, reg)
@@ -314,7 +314,7 @@ var binaryShiftInsns = []struct {
 	opers.IndexShiftShrU: {shr, shrImm},
 }
 
-func binaryIntShiftOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntShiftOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
 	insn := binaryShiftInsns[index]
 
 	switch {
@@ -353,7 +353,7 @@ func binaryIntShiftOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b valu
 }
 
 // subtleShiftOp trashes RegShiftCount.
-func subtleShiftOp(text gen.Buffer, code gen.Coder, insn insnRexM, t abi.Type, reg regs.R, count values.Operand) values.Operand {
+func subtleShiftOp(text *gen.Text, code gen.Coder, insn insnRexM, t abi.Type, reg regs.R, count values.Operand) values.Operand {
 	count.Type = abi.I32                            // TODO: 8-bit mov
 	opMove(text, code, RegShiftCount, count, false) //
 	insn.opReg(text, t, reg)
@@ -369,7 +369,7 @@ var commonBinaryFloatInsns = []insnPrefix{
 
 // TODO: support memory source operands
 
-func commonBinaryFloatOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func commonBinaryFloatOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
 	targetReg, _ := opMaybeResultReg(text, code, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)
@@ -389,7 +389,7 @@ var binaryFloatMinmaxInsns = []struct {
 	opers.IndexMinmaxMax: {maxsSSE, andpSSE},
 }
 
-func binaryFloatMinmaxOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func binaryFloatMinmaxOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
 	targetReg, _ := opMaybeResultReg(text, code, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)
@@ -419,7 +419,7 @@ func binaryFloatMinmaxOp(text gen.Buffer, code gen.RegCoder, index uint8, a, b v
 	return values.TempRegOperand(a.Type, targetReg, false)
 }
 
-func binaryFloatCompareOp(text gen.Buffer, code gen.RegCoder, cond uint8, a, b values.Operand) values.Operand {
+func binaryFloatCompareOp(text *gen.Text, code gen.RegCoder, cond uint8, a, b values.Operand) values.Operand {
 	aReg, _, own := opBorrowMaybeResultReg(text, code, a, true)
 	if own {
 		defer code.FreeReg(a.Type, aReg)
@@ -434,7 +434,7 @@ func binaryFloatCompareOp(text gen.Buffer, code gen.RegCoder, cond uint8, a, b v
 	return values.ConditionFlagsOperand(values.Condition(cond))
 }
 
-func binaryFloatCopysignOp(text gen.Buffer, code gen.RegCoder, a, b values.Operand) values.Operand {
+func binaryFloatCopysignOp(text *gen.Text, code gen.RegCoder, a, b values.Operand) values.Operand {
 	targetReg, _ := opMaybeResultReg(text, code, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)

@@ -196,11 +196,11 @@ func (ISA) UpdateCalls(text []byte, l *links.L) {
 	}
 }
 
-func (ISA) AlignFunc(text gen.Buffer) {
+func (ISA) AlignFunc(text *gen.Text) {
 	alignFunc(text)
 }
 
-func alignFunc(text gen.Buffer) {
+func alignFunc(text *gen.Text) {
 	n := (FuncAlignment - text.Pos()) & (FuncAlignment - 1)
 	buf := text.Extend(int(n))
 	for i := range buf {
@@ -208,22 +208,22 @@ func alignFunc(text gen.Buffer) {
 	}
 }
 
-func (ISA) OpAddImmToStackPtr(text gen.Buffer, offset int32) {
+func (ISA) OpAddImmToStackPtr(text *gen.Text, offset int32) {
 	if offset != 0 {
 		add.opImm(text, abi.I64, RegStackPtr, offset)
 	}
 }
 
-func (ISA) OpAddToStackPtr(text gen.Buffer, source regs.R) {
+func (ISA) OpAddToStackPtr(text *gen.Text, source regs.R) {
 	add.opFromReg(text, abi.I64, RegStackPtr, source)
 }
 
 // OpMoveIntImm may update CPU's condition flags.
-func (ISA) OpMoveIntImm(text gen.Buffer, reg regs.R, value uint64) {
+func (ISA) OpMoveIntImm(text *gen.Text, reg regs.R, value uint64) {
 	opMoveIntImm(text, reg, int64(value))
 }
 
-func opMoveIntImm(text gen.Buffer, reg regs.R, value int64) {
+func opMoveIntImm(text *gen.Text, reg regs.R, value int64) {
 	if value == 0 {
 		xor.opFromReg(text, abi.I32, reg, reg)
 	} else {
@@ -231,7 +231,7 @@ func opMoveIntImm(text gen.Buffer, reg regs.R, value int64) {
 	}
 }
 
-func (ISA) OpInit(text gen.Buffer) {
+func (ISA) OpInit(text *gen.Text) {
 	if text.Pos() == 0 || text.Pos() > FuncAlignment {
 		panic("inconsistency")
 	}
@@ -249,13 +249,13 @@ func (ISA) OpInit(text gen.Buffer) {
 	updateLocalBranches(text, &notResume)
 }
 
-func (ISA) OpInitCall(text gen.Buffer) (retAddr int32) {
+func (ISA) OpInitCall(text *gen.Text) (retAddr int32) {
 	// no alignment since initial calls are always generated before execution
 	callRel.opMissingFunc(text)
 	return text.Pos()
 }
 
-func (ISA) OpEnterImportFunc(text gen.Buffer, absAddr uint64, variadic bool, argCount, sigIndex int) {
+func (ISA) OpEnterImportFunc(text *gen.Text, absAddr uint64, variadic bool, argCount, sigIndex int) {
 	if variadic {
 		opMoveIntImm(text, RegImportArgCount, int64(argCount))
 		opMoveIntImm(text, RegImportSigIndex, int64(sigIndex))
@@ -268,7 +268,7 @@ func (ISA) OpEnterImportFunc(text gen.Buffer, absAddr uint64, variadic bool, arg
 
 // OpBranchIndirect32 must not allocate registers.  The supplied register is
 // trashed.
-func (ISA) OpBranchIndirect32(text gen.Buffer, reg regs.R, regZeroExt bool) {
+func (ISA) OpBranchIndirect32(text *gen.Text, reg regs.R, regZeroExt bool) {
 	if !regZeroExt {
 		mov.opFromReg(text, abi.I32, reg, reg)
 	}
@@ -277,7 +277,7 @@ func (ISA) OpBranchIndirect32(text gen.Buffer, reg regs.R, regZeroExt bool) {
 	jmp.opReg(text, reg)
 }
 
-func (ISA) OpCall(text gen.Buffer, addr int32) (retAddr int32) {
+func (ISA) OpCall(text *gen.Text, addr int32) (retAddr int32) {
 	if addr == 0 {
 		// address slot must be aligned
 		if relPos := (text.Pos() + callRel.size()) & 3; relPos > 0 {
@@ -292,22 +292,22 @@ func (ISA) OpCall(text gen.Buffer, addr int32) (retAddr int32) {
 }
 
 // OpClearIntResultReg may update CPU's condition flags.
-func (ISA) OpClearIntResultReg(text gen.Buffer) {
+func (ISA) OpClearIntResultReg(text *gen.Text) {
 	xor.opFromReg(text, abi.I32, RegResult, RegResult)
 }
 
-func (ISA) OpReturn(text gen.Buffer) {
+func (ISA) OpReturn(text *gen.Text) {
 	ret.op(text)
 }
 
-func (ISA) OpEnterExitTrapHandler(text gen.Buffer) {
+func (ISA) OpEnterExitTrapHandler(text *gen.Text) {
 	shlImm.op(text, abi.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
 	movMMX.opToReg(text, abi.I64, RegScratch, RegTrapHandlerMMX)
 	jmp.opReg(text, RegScratch)
 }
 
 // OpMoveReg must not allocate registers.
-func (ISA) OpMoveReg(text gen.Buffer, t abi.Type, targetReg, sourceReg regs.R) {
+func (ISA) OpMoveReg(text *gen.Text, t abi.Type, targetReg, sourceReg regs.R) {
 	if targetReg == sourceReg {
 		panic("target and source registers are the same")
 	}
@@ -325,17 +325,17 @@ func (ISA) OpMoveReg(text gen.Buffer, t abi.Type, targetReg, sourceReg regs.R) {
 }
 
 // OpShiftRightLogical32Bits must not allocate registers.
-func (ISA) OpShiftRightLogical32Bits(text gen.Buffer, subject regs.R) {
+func (ISA) OpShiftRightLogical32Bits(text *gen.Text, subject regs.R) {
 	shrImm.op(text, abi.I64, subject, 32)
 }
 
 // OpStoreStackReg must not allocate registers.
-func (ISA) OpStoreStackReg(text gen.Buffer, t abi.Type, offset int32, reg regs.R) {
+func (ISA) OpStoreStackReg(text *gen.Text, t abi.Type, offset int32, reg regs.R) {
 	opStoreStackReg(text, t, offset, reg)
 }
 
 // opStoreStackReg has same restrictions as OpStoreStackReg.
-func opStoreStackReg(text gen.Buffer, t abi.Type, offset int32, reg regs.R) {
+func opStoreStackReg(text *gen.Text, t abi.Type, offset int32, reg regs.R) {
 	switch t.Category() {
 	case abi.Int:
 		mov.opToStack(text, t, reg, offset)
@@ -349,13 +349,13 @@ func opStoreStackReg(text gen.Buffer, t abi.Type, offset int32, reg regs.R) {
 }
 
 // OpCopyStack must not allocate registers.
-func (ISA) OpCopyStack(text gen.Buffer, targetOffset, sourceOffset int32) {
+func (ISA) OpCopyStack(text *gen.Text, targetOffset, sourceOffset int32) {
 	mov.opFromStack(text, abi.I64, RegScratch, sourceOffset)
 	mov.opToStack(text, abi.I64, RegScratch, targetOffset)
 }
 
 // OpSwap must not allocate registers, or update CPU's condition flags.
-func (ISA) OpSwap(text gen.Buffer, cat gen.RegCategory, a, b regs.R) {
+func (ISA) OpSwap(text *gen.Text, cat gen.RegCategory, a, b regs.R) {
 	if cat == gen.RegCategoryInt {
 		xchg.opFromReg(text, abi.I64, a, b)
 	} else {
@@ -366,26 +366,26 @@ func (ISA) OpSwap(text gen.Buffer, cat gen.RegCategory, a, b regs.R) {
 }
 
 // OpEnterTrapHandler must not generate over 16 bytes of text.
-func (ISA) OpEnterTrapHandler(text gen.Buffer, id trap.Id) {
+func (ISA) OpEnterTrapHandler(text *gen.Text, id trap.Id) {
 	mov.opImm(text, abi.I32, RegResult, int32(id)) // automatic zero-extension
 	movMMX.opToReg(text, abi.I64, RegScratch, RegTrapHandlerMMX)
 	jmp.opReg(text, RegScratch)
 }
 
-func (ISA) OpBranch(text gen.Buffer, addr int32) int32 {
+func (ISA) OpBranch(text *gen.Text, addr int32) int32 {
 	jmpRel.op(text, addr)
 	return text.Pos()
 }
 
 // OpBranchIfOutOfBounds must not allocate registers.  indexReg will be
 // zero-extended.
-func (ISA) OpBranchIfOutOfBounds(text gen.Buffer, indexReg regs.R, upperBound, addr int32) int32 {
+func (ISA) OpBranchIfOutOfBounds(text *gen.Text, indexReg regs.R, upperBound, addr int32) int32 {
 	opCompareBounds(text, indexReg, upperBound)
 	jle.op(text, addr) // TODO: is this the correct comparison?
 	return text.Pos()
 }
 
-func opCompareBounds(text gen.Buffer, indexReg regs.R, upperBound int32) {
+func opCompareBounds(text *gen.Text, indexReg regs.R, upperBound int32) {
 	movImm.opImm(text, abi.I32, RegScratch, upperBound)
 	test.opFromReg(text, abi.I32, indexReg, indexReg)
 	cmovl.opFromReg(text, abi.I32, indexReg, RegScratch) // negative index -> upper bound
@@ -393,21 +393,21 @@ func opCompareBounds(text gen.Buffer, indexReg regs.R, upperBound int32) {
 }
 
 // updateLocalBranches modifies 8-bit relocations of Jmp and Jcc instructions.
-func updateLocalBranches(text gen.Buffer, l *links.L) {
+func updateLocalBranches(text *gen.Text, l *links.L) {
 	labelAddr := l.FinalAddr()
 	for _, retAddr := range l.Sites {
 		updateLocalAddr(text, retAddr, labelAddr-retAddr)
 	}
 }
 
-func updateLocalAddr(text gen.Buffer, addr, value int32) {
+func updateLocalAddr(text *gen.Text, addr, value int32) {
 	if value < -0x80 || value >= 0x80 {
 		panic(value)
 	}
 	text.Bytes()[addr-1] = uint8(value)
 }
 
-func (ISA) OpEnterFunc(text gen.Buffer, code gen.Coder) {
+func (ISA) OpEnterFunc(text *gen.Text, code gen.Coder) {
 	var skip links.L
 
 	test.opFromReg(text, abi.I64, RegSuspendFlag, RegSuspendFlag)
@@ -421,7 +421,7 @@ func (ISA) OpEnterFunc(text gen.Buffer, code gen.Coder) {
 }
 
 // OpCallIndirect using table index located in result register.
-func (ISA) OpCallIndirect(text gen.Buffer, code gen.Coder, tableLen, sigIndex int32) int32 {
+func (ISA) OpCallIndirect(text *gen.Text, code gen.Coder, tableLen, sigIndex int32) int32 {
 	var outOfBounds links.L
 	var checksOut links.L
 
@@ -452,7 +452,7 @@ func (ISA) OpCallIndirect(text gen.Buffer, code gen.Coder, tableLen, sigIndex in
 }
 
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
-func (ISA) OpLoadROIntIndex32ScaleDisp(text gen.Buffer, code gen.Coder, t abi.Type, reg regs.R, regZeroExt bool, scale uint8, addr int32) (resultZeroExt bool) {
+func (ISA) OpLoadROIntIndex32ScaleDisp(text *gen.Text, code gen.Coder, t abi.Type, reg regs.R, regZeroExt bool, scale uint8, addr int32) (resultZeroExt bool) {
 	if !regZeroExt {
 		mov.opFromReg(text, abi.I32, reg, reg)
 	}
@@ -463,7 +463,7 @@ func (ISA) OpLoadROIntIndex32ScaleDisp(text gen.Buffer, code gen.Coder, t abi.Ty
 }
 
 // OpSetGlobal must not update CPU's condition flags.
-func (ISA) OpSetGlobal(text gen.Buffer, code gen.Coder, offset int32, x values.Operand) {
+func (ISA) OpSetGlobal(text *gen.Text, code gen.Coder, offset int32, x values.Operand) {
 	var reg regs.R
 
 	if x.Storage.IsReg() {
@@ -482,14 +482,14 @@ func (ISA) OpSetGlobal(text gen.Buffer, code gen.Coder, offset int32, x values.O
 }
 
 // OpMove must not update CPU's condition flags if preserveFlags is set.
-func (ISA) OpMove(text gen.Buffer, code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
+func (ISA) OpMove(text *gen.Text, code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	return opMove(text, code, targetReg, x, preserveFlags)
 }
 
 // opMove has same restrictions as OpMove.  Additional ISA restriction: opMove
 // must not blindly rely on RegScratch or RegResult in this function because we
 // may be moving to one of them.
-func opMove(text gen.Buffer, code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
+func opMove(text *gen.Text, code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	switch x.Type.Category() {
 	case abi.Int:
 		switch x.Storage {
@@ -604,7 +604,7 @@ func opMove(text gen.Buffer, code gen.Coder, targetReg regs.R, x values.Operand,
 
 // OpPush must not allocate registers, and must not update CPU's condition
 // flags unless the operand is the condition flags.
-func (ISA) OpPush(text gen.Buffer, code gen.Coder, x values.Operand) {
+func (ISA) OpPush(text *gen.Text, code gen.Coder, x values.Operand) {
 	var reg regs.R
 
 	switch {
@@ -648,7 +648,7 @@ func (ISA) OpPush(text gen.Buffer, code gen.Coder, x values.Operand) {
 }
 
 // OpStoreStack must not allocate registers.
-func (ISA) OpStoreStack(text gen.Buffer, code gen.Coder, offset int32, x values.Operand) {
+func (ISA) OpStoreStack(text *gen.Text, code gen.Coder, offset int32, x values.Operand) {
 	var reg regs.R
 
 	if x.Storage.IsReg() {
@@ -665,7 +665,7 @@ func (ISA) OpStoreStack(text gen.Buffer, code gen.Coder, offset int32, x values.
 	}
 }
 
-func (ISA) OpBranchIf(text gen.Buffer, code gen.Coder, x values.Operand, yes bool, addr int32) (sites []int32) {
+func (ISA) OpBranchIf(text *gen.Text, code gen.Coder, x values.Operand, yes bool, addr int32) (sites []int32) {
 	var cond values.Condition
 
 	if x.Storage == values.ConditionFlags {
@@ -704,7 +704,7 @@ func (ISA) OpBranchIf(text gen.Buffer, code gen.Coder, x values.Operand, yes boo
 	return
 }
 
-func (ISA) OpTrapIfStackExhausted(text gen.Buffer, code gen.Coder) (stackCheckAddr int32) {
+func (ISA) OpTrapIfStackExhausted(text *gen.Text, code gen.Coder) (stackCheckAddr int32) {
 	var checked links.L
 
 	lea.opFromStack(text, abi.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
@@ -724,7 +724,7 @@ func (ISA) OpTrapIfStackExhausted(text gen.Buffer, code gen.Coder) (stackCheckAd
 
 // opBorrowMaybeScratchReg returns either the register of the given operand, or
 // the reserved scratch register with the value of the operand.
-func opBorrowMaybeScratchReg(text gen.Buffer, code gen.Coder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
+func opBorrowMaybeScratchReg(text *gen.Text, code gen.Coder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
 	if x.Storage.IsReg() {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
@@ -736,13 +736,13 @@ func opBorrowMaybeScratchReg(text gen.Buffer, code gen.Coder, x values.Operand, 
 	return
 }
 
-func opBorrowMaybeScratchRegOperand(text gen.Buffer, code gen.Coder, x values.Operand, preserveFlags bool) values.Operand {
+func opBorrowMaybeScratchRegOperand(text *gen.Text, code gen.Coder, x values.Operand, preserveFlags bool) values.Operand {
 	reg, _, own := opBorrowMaybeScratchReg(text, code, x, preserveFlags)
 	return values.RegOperand(own, x.Type, reg)
 }
 
 // OpGetGlobal must not update CPU's condition flags.
-func (ISA) OpGetGlobal(text gen.Buffer, code gen.RegCoder, t abi.Type, offset int32) values.Operand {
+func (ISA) OpGetGlobal(text *gen.Text, code gen.RegCoder, t abi.Type, offset int32) values.Operand {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
 		reg = RegResult
@@ -757,7 +757,7 @@ func (ISA) OpGetGlobal(text gen.Buffer, code gen.RegCoder, t abi.Type, offset in
 	return values.TempRegOperand(t, reg, true)
 }
 
-func (ISA) OpSelect(text gen.Buffer, code gen.RegCoder, a, b, condOperand values.Operand) values.Operand {
+func (ISA) OpSelect(text *gen.Text, code gen.RegCoder, a, b, condOperand values.Operand) values.Operand {
 	defer code.Consumed(condOperand)
 
 	var cond values.Condition
@@ -858,7 +858,7 @@ func (ISA) OpSelect(text gen.Buffer, code gen.RegCoder, a, b, condOperand values
 
 // opBorrowMaybeResultReg returns either the register of the given operand, or
 // the reserved result register with the value of the operand.
-func opBorrowMaybeResultReg(text gen.Buffer, code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
+func opBorrowMaybeResultReg(text *gen.Text, code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
 	if x.Storage == values.VarReg {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
@@ -872,7 +872,7 @@ func opBorrowMaybeResultReg(text gen.Buffer, code gen.RegCoder, x values.Operand
 // opMaybeResultReg returns either the register of the given operand, or the
 // reserved result register with the value of the operand.  The caller has
 // exclusive ownership of the register.
-func opMaybeResultReg(text gen.Buffer, code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
+func opMaybeResultReg(text *gen.Text, code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
 	if x.Storage == values.TempReg {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()

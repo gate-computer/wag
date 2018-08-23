@@ -41,7 +41,7 @@ var memoryStores = []memoryAccess{
 }
 
 // LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) LoadOp(text gen.Buffer, code gen.RegCoder, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
+func (ISA) LoadOp(text *gen.Text, code gen.RegCoder, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
 	size := oper >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(text, code, size, index, offset)
@@ -68,7 +68,7 @@ func (ISA) LoadOp(text gen.Buffer, code gen.RegCoder, oper uint16, index values.
 }
 
 // StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) StoreOp(text gen.Buffer, code gen.RegCoder, oper uint16, index, x values.Operand, offset uint32) {
+func (ISA) StoreOp(text *gen.Text, code gen.RegCoder, oper uint16, index, x values.Operand, offset uint32) {
 	size := oper >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(text, code, size, index, offset)
@@ -115,7 +115,7 @@ func (ISA) StoreOp(text gen.Buffer, code gen.RegCoder, oper uint16, index, x val
 }
 
 // opMemoryAddress may return the scratch register as the base.
-func opMemoryAddress(text gen.Buffer, code gen.Coder, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
+func opMemoryAddress(text *gen.Text, code gen.Coder, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
 	sizeReach := uint64(size - 1)
 	reachOffset := uint64(offset) + sizeReach
 
@@ -196,7 +196,7 @@ func opMemoryAddress(text gen.Buffer, code gen.Coder, size uint16, index values.
 	return
 }
 
-func (ISA) OpCurrentMemory(text gen.Buffer) values.Operand {
+func (ISA) OpCurrentMemory(text *gen.Text) values.Operand {
 	mov.opFromReg(text, abi.I64, RegResult, RegMemoryLimit)
 	sub.opFromReg(text, abi.I64, RegResult, RegMemoryBase)
 	shrImm.op(text, abi.I64, RegResult, wasm.PageBits)
@@ -204,7 +204,7 @@ func (ISA) OpCurrentMemory(text gen.Buffer) values.Operand {
 	return values.TempRegOperand(abi.I32, RegResult, true)
 }
 
-func (ISA) OpGrowMemory(text gen.Buffer, code gen.RegCoder, x values.Operand) values.Operand {
+func (ISA) OpGrowMemory(text *gen.Text, code gen.RegCoder, x values.Operand) values.Operand {
 	var out links.L
 	var fail links.L
 
