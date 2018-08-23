@@ -9,8 +9,8 @@ import (
 	"github.com/tsavola/wag/meta"
 )
 
-// Map implements Mapper.  It stores all function and call site information,
-// but no instruction information.
+// Map implements Mapper.  It stores all function addresses and call sites, but
+// no instruction information.
 type Map struct {
 	funcmap.Map
 	CallSites []meta.CallSite
@@ -21,7 +21,7 @@ func (m *Map) InitModule(numImportFuncs, numOtherFuncs int) {
 	m.CallSites = make([]meta.CallSite, 0, numImportFuncs+numOtherFuncs) // conservative guess
 }
 
-func (m *Map) PutCall(retAddr meta.TextAddr, stackOffset int32) {
+func (m *Map) PutCallSite(retAddr meta.TextAddr, stackOffset int32) {
 	m.CallSites = append(m.CallSites, meta.CallSite{
 		ReturnAddr:  meta.TextAddr(retAddr),
 		StackOffset: stackOffset,

@@ -104,10 +104,10 @@ type Global struct {
 // function calls and instructions within the text (machine code) section.
 type Mapper interface {
 	InitModule(numImportFuncs, numOtherFuncs int)
-	PutImportFunc(meta.TextAddr)
-	PutFunc(meta.TextAddr)
-	PutCall(returnAddr meta.TextAddr, stackOffset int32)
-	PutInsn(meta.TextAddr)
+	PutImportFuncAddr(meta.TextAddr)
+	PutFuncAddr(meta.TextAddr)
+	PutCallSite(returnAddr meta.TextAddr, stackOffset int32)
+	PutInsnAddr(meta.TextAddr)
 }
 
 type M struct {

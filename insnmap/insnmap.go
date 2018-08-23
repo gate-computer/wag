@@ -31,14 +31,14 @@ func (m *Map) InitModule(numImportFuncs, numOtherFuncs int) {
 	m.fun = -1
 }
 
-func (m *Map) PutFunc(pos meta.TextAddr) {
-	m.Map.PutFunc(pos)
+func (m *Map) PutFuncAddr(pos meta.TextAddr) {
+	m.Map.PutFuncAddr(pos)
 	m.fun++
 	m.base = pos
 	m.ins = -1
 }
 
-func (m *Map) PutInsn(absPos meta.TextAddr) {
+func (m *Map) PutInsnAddr(absPos meta.TextAddr) {
 	m.ins++
 	relPos := int32(absPos - m.base)
 

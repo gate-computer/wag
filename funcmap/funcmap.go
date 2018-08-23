@@ -8,8 +8,8 @@ import (
 	"github.com/tsavola/wag/meta"
 )
 
-// Map implements Mapper.  It stores all function addresses, but no instruction
-// information.
+// Map implements Mapper.  It stores all function addresses, but no call or
+// instruction information.
 type Map struct {
 	FuncAddrs []meta.TextAddr
 }
@@ -18,13 +18,13 @@ func (m *Map) InitModule(numImportFuncs, numOtherFuncs int) {
 	m.FuncAddrs = make([]meta.TextAddr, 0, numImportFuncs+numOtherFuncs)
 }
 
-func (m *Map) PutImportFunc(addr meta.TextAddr) {
-	m.PutFunc(addr)
+func (m *Map) PutImportFuncAddr(addr meta.TextAddr) {
+	m.PutFuncAddr(addr)
 }
 
-func (m *Map) PutFunc(addr meta.TextAddr) {
+func (m *Map) PutFuncAddr(addr meta.TextAddr) {
 	m.FuncAddrs = append(m.FuncAddrs, addr)
 }
 
-func (*Map) PutCall(meta.TextAddr, int32) {}
-func (*Map) PutInsn(meta.TextAddr)        {}
+func (*Map) PutCallAddr(meta.TextAddr, int32) {}
+func (*Map) PutInsnAddr(meta.TextAddr)        {}

@@ -226,7 +226,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	isa.AlignFunc(f)
 	addr := f.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
-	f.Mapper.PutFunc(meta.TextAddr(addr))
+	f.Mapper.PutFuncAddr(meta.TextAddr(addr))
 	isa.OpEnterFunc(f)
 
 	f.resultType = sig.Result

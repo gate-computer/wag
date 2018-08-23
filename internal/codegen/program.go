@@ -176,7 +176,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 
 func opInitCall(m *Module, l *links.FuncL) {
 	retAddr := isa.OpInitCall(m.Text)
-	m.Mapper.PutCall(meta.TextAddr(retAddr), 0) // initial stack frame
+	m.Mapper.PutCallSite(meta.TextAddr(retAddr), 0) // initial stack frame
 	l.AddSite(retAddr)
 }
 
@@ -188,7 +188,7 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 
 	isa.AlignFunc(m.Text)
 	addr = m.Text.Pos()
-	m.Mapper.PutImportFunc(meta.TextAddr(addr))
+	m.Mapper.PutImportFuncAddr(meta.TextAddr(addr))
 
 	sigIndex := m.FuncSigs[imp.FuncIndex]
 	sig := m.Sigs[sigIndex]

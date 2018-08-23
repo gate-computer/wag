@@ -18,7 +18,7 @@ import (
 )
 
 func mapCallAddr(f *function, retAddr int32) {
-	f.Mapper.PutCall(meta.TextAddr(retAddr), f.stackOffset+gen.WordSize)
+	f.Mapper.PutCallSite(meta.TextAddr(retAddr), f.stackOffset+gen.WordSize)
 }
 
 func genCall(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {

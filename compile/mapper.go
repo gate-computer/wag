@@ -13,8 +13,8 @@ type Mapper = module.Mapper
 
 type dummyMapper struct{}
 
-func (dummyMapper) InitModule(int, int)          {}
-func (dummyMapper) PutImportFunc(meta.TextAddr)  {}
-func (dummyMapper) PutFunc(meta.TextAddr)        {}
-func (dummyMapper) PutCall(meta.TextAddr, int32) {}
-func (dummyMapper) PutInsn(meta.TextAddr)        {}
+func (dummyMapper) InitModule(int, int)              {}
+func (dummyMapper) PutImportFuncAddr(meta.TextAddr)  {}
+func (dummyMapper) PutFuncAddr(meta.TextAddr)        {}
+func (dummyMapper) PutCallSite(meta.TextAddr, int32) {}
+func (dummyMapper) PutInsnAddr(meta.TextAddr)        {}
