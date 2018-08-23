@@ -580,8 +580,10 @@ func popOperands(f *function, n int) (xs []values.Operand) {
 		}
 	}
 
-	for i, x := range xs {
-		debugf("pop operand %d/%d: %s", i+1, len(xs), x)
+	if debug {
+		for i, x := range xs {
+			debugf("pop operand %d/%d: %s", i+1, len(xs), x)
+		}
 	}
 
 	return
