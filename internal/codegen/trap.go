@@ -19,7 +19,7 @@ type trampoline struct {
 func opTrapCall(f *function, id trap.Id) {
 	t := &f.trapTrampolines[id]
 	t.stackOffset = f.stackOffset
-	t.link.Addr = f.Pos()
+	t.link.Addr = f.Text.Pos()
 	opCall(f, &f.TrapLinks[id])
 }
 

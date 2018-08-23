@@ -71,16 +71,11 @@ type function struct {
 }
 
 func (f *function) AllocSpecificReg(t abi.Type, reg regs.R)  { allocSpecificReg(f, t, reg) }
-func (f *function) Bytes() []byte                            { return f.Text.Bytes() }
 func (f *function) Consumed(x values.Operand)                { consumed(f, x) }
 func (f *function) Discard(x values.Operand)                 { discard(f, x) }
-func (f *function) Extend(n int) []byte                      { return f.Text.Extend(n) }
 func (f *function) FreeReg(t abi.Type, reg regs.R)           { freeReg(f, t, reg) }
 func (f *function) MinMemorySize() int                       { return f.MemoryLimitValues.Initial }
 func (f *function) OpTrapCall(id trap.Id)                    { opTrapCall(f, id) }
-func (f *function) Pos() int32                               { return f.Text.Pos() }
-func (f *function) PutByte(b byte)                           { f.Text.PutByte(b) }
-func (f *function) PutBytes(b []byte)                        { f.Text.PutBytes(b) }
 func (f *function) RODataAddr() int32                        { return f.Module.RODataAddr }
 func (f *function) RegAllocated(t abi.Type, reg regs.R) bool { return regAllocated(f, t, reg) }
 func (f *function) TrapTrampolineAddr(id trap.Id) int32      { return trapTrampolineAddr(f, id) }
@@ -223,11 +218,11 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	load.Varuint32() // body size
 
-	isa.AlignFunc(f)
-	addr := f.Pos()
+	isa.AlignFunc(f.Text)
+	addr := f.Text.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
 	f.Map.PutFuncAddr(object.TextAddr(addr))
-	isa.OpEnterFunc(f)
+	isa.OpEnterFunc(f.Text, f)
 
 	f.resultType = sig.Result
 
@@ -292,13 +287,13 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	if end := popBranchTarget(f); end.Live() {
 		opLabel(f, end)
-		isa.UpdateBranches(f.Bytes(), end)
+		isa.UpdateBranches(f.Text.Bytes(), end)
 		deadend = false
 	}
 
 	if !deadend {
 		opBackoffStackPtr(f, f.stackOffset)
-		isa.OpReturn(f)
+		isa.OpReturn(f.Text)
 	}
 
 	if len(f.operands) != 0 {
@@ -332,7 +327,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	}
 
 	if f.stackCheckAddr != 0 {
-		isa.UpdateStackCheck(f.Bytes(), f.stackCheckAddr, f.maxStackOffset)
+		isa.UpdateStackCheck(f.Text.Bytes(), f.stackCheckAddr, f.maxStackOffset)
 	}
 
 	roDataBuf := f.ROData.Bytes()
@@ -376,7 +371,7 @@ func opTryAllocVarReg(f *function, t abi.Type) (reg regs.R, ok bool) {
 func opStackCheck(f *function) {
 	if f.stackCheckAddr == 0 {
 		debugf("stack check")
-		f.stackCheckAddr = isa.OpTrapIfStackExhausted(f)
+		f.stackCheckAddr = isa.OpTrapIfStackExhausted(f.Text, f)
 	}
 }
 
@@ -393,11 +388,11 @@ func opReserveStack(f *function, offset int32) {
 
 func opAdvanceStackPtr(f *function, offset int32) {
 	opReserveStack(f, offset)
-	isa.OpAddImmToStackPtr(f, -offset)
+	isa.OpAddImmToStackPtr(f.Text, -offset)
 }
 
 func opBackoffStackPtr(f *function, offset int32) {
-	isa.OpAddImmToStackPtr(f, offset)
+	isa.OpAddImmToStackPtr(f.Text, offset)
 	f.stackOffset -= offset
 
 	debugf("stack offset: %d", f.stackOffset)
@@ -406,7 +401,7 @@ func opBackoffStackPtr(f *function, offset int32) {
 func opPush(f *function, x values.Operand) {
 	x = effectiveOperand(f, x)
 	opReserveStack(f, gen.WordSize)
-	isa.OpPush(f, x)
+	isa.OpPush(f.Text, f, x)
 }
 
 func opInitVars(f *function) {
@@ -446,7 +441,7 @@ func opInitVarsUntil(f *function, lastIndex int32, lastValue values.Operand) {
 // opMove must not allocate registers.
 func opMove(f *function, target regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	x = effectiveOperand(f, x)
-	return isa.OpMove(f, target, x, preserveFlags)
+	return isa.OpMove(f.Text, f, target, x, preserveFlags)
 }
 
 func opMaterializeOperand(f *function, x values.Operand) values.Operand {
@@ -740,6 +735,6 @@ func opStoreVar(f *function, index int32, x values.Operand) {
 		opInitVarsUntil(f, index, x)
 	} else {
 		offset := effectiveVarStackOffset(f, index)
-		isa.OpStoreStack(f, offset, x)
+		isa.OpStoreStack(f.Text, f, offset, x)
 	}
 }

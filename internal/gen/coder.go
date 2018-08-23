@@ -38,8 +38,6 @@ type Buffer interface {
 }
 
 type Coder interface {
-	Buffer
-
 	MinMemorySize() int
 	RODataAddr() int32
 	TrapTrampolineAddr(id trap.Id) int32

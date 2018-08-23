@@ -12,21 +12,21 @@ import (
 
 type rexPrefix byte
 
-func (rex rexPrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
-	putRex(code, byte(rex), ro, index, rmOrBase)
+func (rex rexPrefix) put(text gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
+	putRex(text, byte(rex), ro, index, rmOrBase)
 }
 
 type rexSizePrefix struct{}
 
-func (rexSizePrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
-	putRexSize(code, t, ro, index, rmOrBase)
+func (rexSizePrefix) put(text gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
+	putRexSize(text, t, ro, index, rmOrBase)
 }
 
 type data16RexSizePrefix struct{}
 
-func (data16RexSizePrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
-	code.PutByte(0x66)
-	putRexSize(code, t, ro, index, rmOrBase)
+func (data16RexSizePrefix) put(text gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
+	text.PutByte(0x66)
+	putRexSize(text, t, ro, index, rmOrBase)
 }
 
 var (
@@ -168,8 +168,8 @@ func log2(value uint64) (count uint8) {
 	}
 }
 
-func inplaceIntOp(code gen.RegCoder, insn insnRexM, x values.Operand) values.Operand {
-	reg, _ := opMaybeResultReg(code, x, false)
-	insn.opReg(code, x.Type, reg)
+func inplaceIntOp(text gen.Buffer, code gen.RegCoder, insn insnRexM, x values.Operand) values.Operand {
+	reg, _ := opMaybeResultReg(text, code, x, false)
+	insn.opReg(text, x.Type, reg)
 	return values.TempRegOperand(x.Type, reg, true)
 }

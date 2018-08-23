@@ -15,19 +15,19 @@ type floatSizePrefix struct {
 	size64 []byte
 }
 
-func (p *floatSizePrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
+func (p *floatSizePrefix) put(text gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	switch t.Size() {
 	case abi.Size32:
-		code.PutBytes(p.size32)
+		text.PutBytes(p.size32)
 
 	case abi.Size64:
-		code.PutBytes(p.size64)
+		text.PutBytes(p.size64)
 
 	default:
 		panic(t)
 	}
 
-	putRex(code, 0, ro, index, rmOrBase)
+	putRex(text, 0, ro, index, rmOrBase)
 }
 
 var (
@@ -61,12 +61,12 @@ var (
 	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
-func pushFloatOp(code gen.Buffer, t abi.Type, source regs.R) {
-	sub.opImm(code, abi.I64, RegStackPtr, gen.WordSize)
-	movsSSE.opToStack(code, t, source, 0)
+func pushFloatOp(text gen.Buffer, t abi.Type, source regs.R) {
+	sub.opImm(text, abi.I64, RegStackPtr, gen.WordSize)
+	movsSSE.opToStack(text, t, source, 0)
 }
 
-func popFloatOp(code gen.Buffer, t abi.Type, target regs.R) {
-	movsSSE.opFromStack(code, t, target, 0)
-	add.opImm(code, abi.I64, RegStackPtr, gen.WordSize)
+func popFloatOp(text gen.Buffer, t abi.Type, target regs.R) {
+	movsSSE.opFromStack(text, t, target, 0)
+	add.opImm(text, abi.I64, RegStackPtr, gen.WordSize)
 }
