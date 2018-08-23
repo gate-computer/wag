@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/section"
@@ -75,7 +76,7 @@ func TestExec(t *testing.T) {
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), trigger)
+	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), trigger)
 	p.Seal()
 	p.SetFunctionMap(m.FunctionMap())
 	p.SetCallMap(m.CallMap())

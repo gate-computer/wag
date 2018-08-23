@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/compile"
 )
 
@@ -104,14 +105,14 @@ func main() {
 		log.Fatal(err)
 	}
 	roDataAddr := memAddr(roDataMem)
-	roDataBuf := compile.NewFixedBuffer(roDataMem[:0])
+	roDataBuf := buffer.NewFixed(roDataMem[:0])
 
 	textMem, err := makeMem(textSize, syscall.PROT_EXEC, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
 	textAddr := memAddr(textMem)
-	textBuf := compile.NewFixedBuffer(textMem[:0])
+	textBuf := buffer.NewFixed(textMem[:0])
 
 	pageSize := os.Getpagesize()
 	pageMask := pageSize - 1
@@ -138,7 +139,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dataBuf := compile.NewFixedBuffer(globalsMemoryMem[:0])
+	dataBuf := buffer.NewFixed(globalsMemoryMem[:0])
 	memoryAddr := memAddr(globalsMemoryMem) + uintptr(memoryOffset)
 	initMemoryEnd := memoryAddr + uintptr(initMemorySize)
 	growMemoryEnd := memoryAddr + uintptr(growMemorySize)

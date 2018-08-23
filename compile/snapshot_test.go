@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 )
@@ -46,7 +47,7 @@ func TestSnapshot(t *testing.T) {
 		EntrySymbol:    "main",
 		CallMapEnabled: true,
 	}
-	m.load(wasm, runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
+	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
 	p.SetFunctionMap(m.FunctionMap())

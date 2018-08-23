@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
@@ -462,7 +463,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}.Load,
 		}
 
-		m.load(wasm, runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
+		m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 		p.Seal()
 		p.SetData(m.Data())
 		p.SetFunctionMap(m.FunctionMap())

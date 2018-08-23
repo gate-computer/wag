@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 )
@@ -80,8 +81,8 @@ func benchmarkLoad(b *testing.B) {
 		}
 
 		r := bytes.NewReader(wasm)
-		textBuf := NewFixedBuffer(text)
-		roDataBuf := NewFixedBuffer(roData)
+		textBuf := buffer.NewFixed(text)
+		roDataBuf := buffer.NewFixed(roData)
 
 		b.StartTimer()
 		m.load(r, loadBenchmarkEnv, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil)
@@ -119,9 +120,9 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		}
 
 		r := bytes.NewReader(wasm)
-		textBuf := NewFixedBuffer(text)
-		roDataBuf := NewFixedBuffer(roData)
-		dataBuf := NewFixedBuffer(data)
+		textBuf := buffer.NewFixed(text)
+		roDataBuf := buffer.NewFixed(roData)
+		dataBuf := buffer.NewFixed(data)
 		trigger := makeOptionalTrigger()
 
 		b.StartTimer()
@@ -148,7 +149,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 	b.Logf("data: %v", elapData)
 }
 
-func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *FixedBuffer) {
+func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *buffer.Fixed) {
 	b.Helper()
 
 	if textBuf.Pos() > loadBenchmarkMaxTextSize {
@@ -197,7 +198,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		MemoryAlignment: os.Getpagesize(),
 		CallMapEnabled:  true,
 	}
-	m.load(bytes.NewReader(data), runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
+	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
 	p.SetFunctionMap(m.FunctionMap())
