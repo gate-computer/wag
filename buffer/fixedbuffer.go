@@ -4,12 +4,6 @@
 
 package buffer
 
-import (
-	"errors"
-)
-
-var errOutOfCapacity = errors.New("buffer ran out of capacity")
-
 // Fixed is a fixed-capacity implementation of TextBuffer and DataBuffer.
 type Fixed struct {
 	b []byte
@@ -22,20 +16,16 @@ func (f *Fixed) PutByte(b byte)    { f.Extend(1)[0] = b }
 func (f *Fixed) PutBytes(b []byte) { copy(f.Extend(len(b)), b) }
 
 func (f *Fixed) Extend(n int) []byte {
-	offset := len(f.b)
-	if size := offset + n; size <= cap(f.b) {
-		f.b = f.b[:size]
-	} else {
-		panic(errOutOfCapacity)
-	}
-	return f.b[offset:]
+	b := f.b
+	offset := len(b)
+	b = b[:offset+n]
+	f.b = b
+	return b[offset:]
 }
 
 func (f *Fixed) ResizeBytes(n int) []byte {
-	if n <= cap(f.b) {
-		f.b = f.b[:n]
-	} else {
-		panic(errOutOfCapacity)
-	}
-	return f.b
+	b := f.b
+	b = b[:n]
+	f.b = b
+	return b
 }
