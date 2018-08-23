@@ -26,5 +26,5 @@ func (m *Map) PutFuncAddr(addr meta.TextAddr) {
 	m.FuncAddrs = append(m.FuncAddrs, addr)
 }
 
-func (*Map) PutCallAddr(meta.TextAddr, int32) {}
+func (*Map) PutCallSite(meta.TextAddr, int32) {}
 func (*Map) PutInsnAddr(meta.TextAddr)        {}
