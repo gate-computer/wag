@@ -5,11 +5,11 @@
 package x86
 
 import (
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/wasm"
 )
 
 func (ISA) UnaryOp(code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
@@ -109,13 +109,13 @@ func unaryFloatOp(code gen.RegCoder, oper uint16, x values.Operand) (result valu
 }
 
 // opAbsFloatReg in-place.
-func opAbsFloatReg(code gen.Coder, t wasm.Type, reg regs.R) {
+func opAbsFloatReg(code gen.Coder, t abi.Type, reg regs.R) {
 	absMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask7fBase, t)
 	andpSSE.opFromAddr(code, t, reg, 0, NoIndex, absMaskAddr)
 }
 
 // opNegFloatReg in-place.
-func opNegFloatReg(code gen.Coder, t wasm.Type, reg regs.R) {
+func opNegFloatReg(code gen.Coder, t abi.Type, reg regs.R) {
 	signMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask80Base, t)
 	xorpSSE.opFromAddr(code, t, reg, 0, NoIndex, signMaskAddr)
 }

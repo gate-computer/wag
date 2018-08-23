@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regalloc"
@@ -16,7 +17,6 @@ import (
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
 )
 
 const (
@@ -49,7 +49,7 @@ type function struct {
 	*Module
 	insnMap InsnMap
 
-	resultType wasm.Type
+	resultType abi.Type
 
 	vars           []varState
 	numStackParams int32
@@ -70,36 +70,36 @@ type function struct {
 	trapTrampolines [trap.NumTraps]trampoline
 }
 
-func (f *function) AllocSpecificReg(t wasm.Type, reg regs.R)  { allocSpecificReg(f, t, reg) }
-func (f *function) Bytes() []byte                             { return f.Text.Bytes() }
-func (f *function) Consumed(x values.Operand)                 { consumed(f, x) }
-func (f *function) Discard(x values.Operand)                  { discard(f, x) }
-func (f *function) Extend(n int) []byte                       { return f.Text.Extend(n) }
-func (f *function) FreeReg(t wasm.Type, reg regs.R)           { freeReg(f, t, reg) }
-func (f *function) MinMemorySize() int                        { return f.MemoryLimitValues.Initial }
-func (f *function) OpTrapCall(id trap.Id)                     { opTrapCall(f, id) }
-func (f *function) Pos() int32                                { return f.Text.Pos() }
-func (f *function) PutByte(b byte)                            { f.Text.PutByte(b) }
-func (f *function) PutBytes(b []byte)                         { f.Text.PutBytes(b) }
-func (f *function) RODataAddr() int32                         { return f.Module.RODataAddr }
-func (f *function) RegAllocated(t wasm.Type, reg regs.R) bool { return regAllocated(f, t, reg) }
-func (f *function) TrapTrampolineAddr(id trap.Id) int32       { return trapTrampolineAddr(f, id) }
-func (f *function) TryAllocReg(t wasm.Type) (regs.R, bool)    { return tryAllocReg(f, t) }
+func (f *function) AllocSpecificReg(t abi.Type, reg regs.R)  { allocSpecificReg(f, t, reg) }
+func (f *function) Bytes() []byte                            { return f.Text.Bytes() }
+func (f *function) Consumed(x values.Operand)                { consumed(f, x) }
+func (f *function) Discard(x values.Operand)                 { discard(f, x) }
+func (f *function) Extend(n int) []byte                      { return f.Text.Extend(n) }
+func (f *function) FreeReg(t abi.Type, reg regs.R)           { freeReg(f, t, reg) }
+func (f *function) MinMemorySize() int                       { return f.MemoryLimitValues.Initial }
+func (f *function) OpTrapCall(id trap.Id)                    { opTrapCall(f, id) }
+func (f *function) Pos() int32                               { return f.Text.Pos() }
+func (f *function) PutByte(b byte)                           { f.Text.PutByte(b) }
+func (f *function) PutBytes(b []byte)                        { f.Text.PutBytes(b) }
+func (f *function) RODataAddr() int32                        { return f.Module.RODataAddr }
+func (f *function) RegAllocated(t abi.Type, reg regs.R) bool { return regAllocated(f, t, reg) }
+func (f *function) TrapTrampolineAddr(id trap.Id) int32      { return trapTrampolineAddr(f, id) }
+func (f *function) TryAllocReg(t abi.Type) (regs.R, bool)    { return tryAllocReg(f, t) }
 
-func tryAllocReg(f *function, t wasm.Type) (reg regs.R, ok bool) {
+func tryAllocReg(f *function, t abi.Type) (reg regs.R, ok bool) {
 	return f.Regs.Alloc(gen.TypeRegCategory(t))
 }
 
-func allocSpecificReg(f *function, t wasm.Type, reg regs.R) {
+func allocSpecificReg(f *function, t abi.Type, reg regs.R) {
 	f.Regs.AllocSpecific(gen.TypeRegCategory(t), reg)
 }
 
-func freeReg(f *function, t wasm.Type, reg regs.R) {
+func freeReg(f *function, t abi.Type, reg regs.R) {
 	f.Regs.Free(gen.TypeRegCategory(t), reg)
 }
 
 // regAllocated indicates if we can hang onto a register returned by mach ops.
-func regAllocated(f *function, t wasm.Type, reg regs.R) bool {
+func regAllocated(f *function, t abi.Type, reg regs.R) bool {
 	return f.Regs.Allocated(gen.TypeRegCategory(t), reg)
 }
 
@@ -287,7 +287,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 			debugf("discarding operand at end of function due to deadend: %s", x)
 			discard(f, x)
 		}
-	} else if f.resultType != wasm.Void {
+	} else if f.resultType != abi.Void {
 		result := popOperand(f)
 		if result.Type != f.resultType {
 			panic(fmt.Errorf("function result operand type is %s, but function result type is %s", result.Type, f.resultType))
@@ -362,7 +362,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	return
 }
 
-func opAllocReg(f *function, t wasm.Type) (reg regs.R) {
+func opAllocReg(f *function, t abi.Type) (reg regs.R) {
 	reg, ok := tryAllocReg(f, t)
 	if !ok {
 		reg = opStealReg(f, t)
@@ -370,7 +370,7 @@ func opAllocReg(f *function, t wasm.Type) (reg regs.R) {
 	return
 }
 
-func opTryAllocVarReg(f *function, t wasm.Type) (reg regs.R, ok bool) {
+func opTryAllocVarReg(f *function, t abi.Type) (reg regs.R, ok bool) {
 	reg, ok = tryAllocReg(f, t)
 	if !ok {
 		reg, ok = opTryStealVarReg(f, t)
@@ -436,7 +436,7 @@ func opInitVarsUntil(f *function, lastIndex int32, lastValue values.Operand) {
 
 		// float 0 has same bit pattern as int 0
 		if x.Storage == values.Imm && x.ImmValue() == 0 {
-			x = values.ImmOperand(wasm.I64, 0)
+			x = values.ImmOperand(abi.I64, 0)
 		}
 
 		debugf("initializing variable %d/%d (%s) <- %s", i+1, len(f.vars), v.cache.Type, x)
@@ -488,13 +488,13 @@ func opPreloadOperand(f *function, x values.Operand) values.Operand {
 	return x
 }
 
-func pushImmOperand(f *function, t wasm.Type, bits uint64) {
+func pushImmOperand(f *function, t abi.Type, bits uint64) {
 	x := values.ImmOperand(t, bits)
 	debugf("push operand: %s", x)
 	f.operands = append(f.operands, x)
 }
 
-func pushResultRegOperand(f *function, t wasm.Type) {
+func pushResultRegOperand(f *function, t abi.Type) {
 	x := values.TempRegOperand(t, regs.Result, false)
 	debugf("push operand: %s", x)
 	f.operands = append(f.operands, x)
@@ -590,7 +590,7 @@ func popOperands(f *function, n int) (xs []values.Operand) {
 }
 
 // opStealReg doesn't change the allocation state of the register.
-func opStealReg(f *function, needType wasm.Type) (reg regs.R) {
+func opStealReg(f *function, needType abi.Type) (reg regs.R) {
 	debugf("steal %s register", needType)
 
 	reg, ok := opTryStealVarReg(f, needType)
@@ -641,7 +641,7 @@ func opStealReg(f *function, needType wasm.Type) (reg regs.R) {
 }
 
 // opTryStealVarReg doesn't change the allocation state of the register.
-func opTryStealVarReg(f *function, needType wasm.Type) (reg regs.R, ok bool) {
+func opTryStealVarReg(f *function, needType abi.Type) (reg regs.R, ok bool) {
 	debugf("try steal %s variable register", needType)
 
 	opInitVars(f)

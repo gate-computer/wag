@@ -5,26 +5,26 @@
 package x86
 
 import (
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/wasm"
 )
 
 type rexPrefix byte
 
-func (rex rexPrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func (rex rexPrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	putRex(code, byte(rex), ro, index, rmOrBase)
 }
 
 type rexSizePrefix struct{}
 
-func (rexSizePrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func (rexSizePrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	putRexSize(code, t, ro, index, rmOrBase)
 }
 
 type data16RexSizePrefix struct{}
 
-func (data16RexSizePrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func (data16RexSizePrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	code.PutByte(0x66)
 	putRexSize(code, t, ro, index, rmOrBase)
 }

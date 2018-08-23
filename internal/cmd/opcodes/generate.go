@@ -99,9 +99,9 @@ func generatePanic(w io.Writer, input string) {
 	out(`package codegen`)
 
 	out(`import (`)
+	out(`    "github.com/tsavola/wag/abi"`)
 	out(`    "github.com/tsavola/wag/internal/loader"`)
 	out(`    "github.com/tsavola/wag/internal/opers"`)
-	out(`    "github.com/tsavola/wag/wasm"`)
 	out(`)`)
 
 	out(`const (`)
@@ -139,23 +139,23 @@ func generatePanic(w io.Writer, input string) {
 			if m := regexp.MustCompile("^(...)\\.const$").FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "genConst" + strings.ToUpper(m[1])
-					type1 = "wasm." + strings.ToUpper(m[1])
+					type1 = "abi." + strings.ToUpper(m[1])
 				)
 
 				out(`Opcode%s: {%s, opInfo(%s)},`, op.sym, impl, type1)
 			} else if m := regexp.MustCompile("^(...)\\.(.+)/(...)$").FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "genConversionOp"
-					type1 = "wasm." + strings.ToUpper(m[1])
+					type1 = "abi." + strings.ToUpper(m[1])
 					oper  = "opers." + symbol(m[2])
-					type2 = "wasm." + strings.ToUpper(m[3])
+					type2 = "abi." + strings.ToUpper(m[3])
 				)
 
 				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, oper)
 			} else if m := regexp.MustCompile("^(.)(..)\\.(load|store)(.*)$").FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "gen" + symbol(m[3]) + "Op"
-					type1 = "wasm." + strings.ToUpper(m[1]+m[2])
+					type1 = "abi." + strings.ToUpper(m[1]+m[2])
 					oper  string
 				)
 
@@ -169,7 +169,7 @@ func generatePanic(w io.Writer, input string) {
 			} else if m := regexp.MustCompile("^(.)(..)\\.(.+)$").FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = operGen(m[3])
-					type1 = "wasm." + strings.ToUpper(m[1]+m[2])
+					type1 = "abi." + strings.ToUpper(m[1]+m[2])
 					oper  = "opers." + typeCategory(m[1]) + symbol(m[3])
 				)
 

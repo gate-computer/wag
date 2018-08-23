@@ -12,9 +12,8 @@ import (
 	"sort"
 	"unsafe"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wasm"
-	"github.com/tsavola/wag/wasm/function"
 )
 
 func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {
@@ -141,7 +140,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 	return
 }
 
-func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []function.Type, ns *section.NameSection, stack []byte) (err error) {
+func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns *section.NameSection, stack []byte) (err error) {
 	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
@@ -210,7 +209,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []function.Type, ns *s
 	return
 }
 
-func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []function.Type, ns *section.NameSection) (err error) {
+func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns *section.NameSection) (err error) {
 	if r.lastTrap != 0 {
 		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
 	}
@@ -229,7 +228,7 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []function.Type, ns *se
 	return r.prog.writeStacktraceTo(w, funcSigs, ns, r.stack[unused:])
 }
 
-func functionSignatureWithNames(f function.Type, localNames []string) (s string) {
+func functionSignatureWithNames(f abi.FunctionType, localNames []string) (s string) {
 	s = "("
 	for i, t := range f.Args {
 		if i > 0 {
@@ -241,7 +240,7 @@ func functionSignatureWithNames(f function.Type, localNames []string) (s string)
 		s += t.String()
 	}
 	s += ")"
-	if f.Result != wasm.Void {
+	if f.Result != abi.Void {
 		s += " " + f.Result.String()
 	}
 	return

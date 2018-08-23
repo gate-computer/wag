@@ -11,9 +11,9 @@ import (
 	"reflect"
 	"unsafe"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/wasm"
-	"github.com/tsavola/wag/wasm/function"
 )
 
 type Snapshot struct {
@@ -120,7 +120,7 @@ func (s *Snapshot) getStack() []byte {
 	return s.nativeStack
 }
 
-func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []function.Type, ns *section.NameSection, stack []byte) (err error) {
+func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []abi.FunctionType, ns *section.NameSection, stack []byte) (err error) {
 	return s.prog.writeStacktraceTo(w, sigs, ns, stack)
 }
 

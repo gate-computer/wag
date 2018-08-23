@@ -5,24 +5,24 @@
 package x86
 
 import (
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/wasm"
 )
 
 type prefix interface {
-	put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte)
+	put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte)
 }
 
 type constPrefix []byte
 
-func (bytes constPrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func (bytes constPrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	code.PutBytes(bytes)
 }
 
 type multiPrefix []prefix
 
-func (array multiPrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func (array multiPrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	for _, p := range array {
 		p.put(code, t, ro, index, rmOrBase)
 	}
@@ -52,13 +52,13 @@ func putRex(code gen.Buffer, rex, ro, index, rmOrBase byte) {
 	}
 }
 
-func putRexSize(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func putRexSize(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	var rex byte
 
 	switch t.Size() {
-	case wasm.Size32:
+	case abi.Size32:
 
-	case wasm.Size64:
+	case abi.Size64:
 		rex |= RexW
 
 	default:
@@ -77,7 +77,7 @@ const (
 	ModReg       = mod((1 << 7) | (1 << 6))
 )
 
-func dispMod(t wasm.Type, baseReg regs.R, offset int32) mod {
+func dispMod(t abi.Type, baseReg regs.R, offset int32) mod {
 	switch {
 	case offset == 0 && (baseReg&7) != 0x5: // rbp and r13 need displacement
 		return ModMem
@@ -226,7 +226,7 @@ func (i insnAddr) op(code gen.Buffer, addr int32) {
 //
 type insnRex []byte
 
-func (opcode insnRex) op(code gen.Buffer, t wasm.Type) {
+func (opcode insnRex) op(code gen.Buffer, t abi.Type) {
 	putRexSize(code, t, 0, 0, 0)
 	code.PutBytes(opcode)
 }
@@ -248,7 +248,7 @@ type insnRexO struct {
 	opbase byte
 }
 
-func (i insnRexO) op(code gen.Buffer, t wasm.Type, reg regs.R) {
+func (i insnRexO) op(code gen.Buffer, t abi.Type, reg regs.R) {
 	putRexSize(code, t, 0, 0, byte(reg))
 	code.PutByte(i.opbase + (byte(reg) & 7))
 }
@@ -258,13 +258,13 @@ type insnRexOI struct {
 	opbase byte
 }
 
-func (i insnRexOI) op32(code gen.Buffer, t wasm.Type, reg regs.R, value uint32) {
+func (i insnRexOI) op32(code gen.Buffer, t abi.Type, reg regs.R, value uint32) {
 	putRexSize(code, t, 0, 0, byte(reg))
 	code.PutByte(i.opbase + (byte(reg) & 7))
 	gen.PutInt32(code, int32(value))
 }
 
-func (i insnRexOI) op64(code gen.Buffer, t wasm.Type, reg regs.R, value int64) {
+func (i insnRexOI) op64(code gen.Buffer, t abi.Type, reg regs.R, value int64) {
 	putRexSize(code, t, 0, 0, byte(reg))
 	code.PutByte(i.opbase + (byte(reg) & 7))
 	gen.PutInt64(code, value)
@@ -276,13 +276,13 @@ type insnRexM struct {
 	ro     byte
 }
 
-func (i insnRexM) opReg(code gen.Buffer, t wasm.Type, reg regs.R) {
+func (i insnRexM) opReg(code gen.Buffer, t abi.Type, reg regs.R) {
 	putRexSize(code, t, 0, 0, byte(reg))
 	code.PutBytes(i.opcode)
 	putMod(code, ModReg, i.ro, byte(reg))
 }
 
-func (i insnRexM) opIndirect(code gen.Buffer, t wasm.Type, reg regs.R, disp int32) {
+func (i insnRexM) opIndirect(code gen.Buffer, t abi.Type, reg regs.R, disp int32) {
 	mod := dispMod(t, reg, disp)
 
 	putRexSize(code, t, 0, 0, byte(reg))
@@ -298,7 +298,7 @@ func (i insnRexM) opIndirect(code gen.Buffer, t wasm.Type, reg regs.R, disp int3
 	putDisp(code, mod, disp)
 }
 
-func (i insnRexM) opStack(code gen.Buffer, t wasm.Type, disp int32) {
+func (i insnRexM) opStack(code gen.Buffer, t abi.Type, disp int32) {
 	mod := dispMod(t, RegStackPtr, disp)
 
 	putRexSize(code, t, 0, 0, 0)
@@ -319,39 +319,39 @@ type insnPrefix struct {
 	opcodeMR []byte
 }
 
-func (i insnPrefix) opFromReg(code gen.Buffer, t wasm.Type, target, source regs.R) {
+func (i insnPrefix) opFromReg(code gen.Buffer, t abi.Type, target, source regs.R) {
 	putPrefixRegInsn(code, i.prefix, t, i.opcodeRM, byte(target), byte(source))
 }
 
-func (i insnPrefix) opFromAddr(code gen.Buffer, t wasm.Type, target regs.R, scale uint8, index regs.R, addr int32) {
+func (i insnPrefix) opFromAddr(code gen.Buffer, t abi.Type, target regs.R, scale uint8, index regs.R, addr int32) {
 	putPrefixAddrInsn(code, i.prefix, t, i.opcodeRM, target, scale, index, addr)
 }
 
-func (i insnPrefix) opFromIndirect(code gen.Buffer, t wasm.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
+func (i insnPrefix) opFromIndirect(code gen.Buffer, t abi.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
 	putPrefixIndirectInsn(code, i.prefix, t, i.opcodeRM, target, scale, index, base, disp)
 }
 
-func (i insnPrefix) opFromStack(code gen.Buffer, t wasm.Type, target regs.R, disp int32) {
+func (i insnPrefix) opFromStack(code gen.Buffer, t abi.Type, target regs.R, disp int32) {
 	putPrefixStackInsn(code, i.prefix, t, i.opcodeRM, target, disp)
 }
 
-func (i insnPrefix) opToReg(code gen.Buffer, t wasm.Type, target, source regs.R) {
+func (i insnPrefix) opToReg(code gen.Buffer, t abi.Type, target, source regs.R) {
 	putPrefixRegInsn(code, i.prefix, t, i.opcodeMR, byte(source), byte(target))
 }
 
-func (i insnPrefix) opToAddr(code gen.Buffer, t wasm.Type, source regs.R, scale uint8, index regs.R, addr int32) {
+func (i insnPrefix) opToAddr(code gen.Buffer, t abi.Type, source regs.R, scale uint8, index regs.R, addr int32) {
 	putPrefixAddrInsn(code, i.prefix, t, i.opcodeMR, source, scale, index, addr)
 }
 
-func (i insnPrefix) opToIndirect(code gen.Buffer, t wasm.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
+func (i insnPrefix) opToIndirect(code gen.Buffer, t abi.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
 	putPrefixIndirectInsn(code, i.prefix, t, i.opcodeMR, target, scale, index, base, disp)
 }
 
-func (i insnPrefix) opToStack(code gen.Buffer, t wasm.Type, source regs.R, disp int32) {
+func (i insnPrefix) opToStack(code gen.Buffer, t abi.Type, source regs.R, disp int32) {
 	putPrefixStackInsn(code, i.prefix, t, i.opcodeMR, source, disp)
 }
 
-func putPrefixRegInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, ro, rm byte) {
+func putPrefixRegInsn(code gen.Buffer, p prefix, t abi.Type, opcode []byte, ro, rm byte) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
@@ -361,7 +361,7 @@ func putPrefixRegInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, ro,
 	putMod(code, ModReg, ro, rm)
 }
 
-func putPrefixAddrInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, reg regs.R, scale uint8, index regs.R, addr int32) {
+func putPrefixAddrInsn(code gen.Buffer, p prefix, t abi.Type, opcode []byte, reg regs.R, scale uint8, index regs.R, addr int32) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
@@ -373,7 +373,7 @@ func putPrefixAddrInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, re
 	gen.PutInt32(code, addr)
 }
 
-func putPrefixIndirectInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, reg regs.R, scale uint8, index, base regs.R, disp int32) {
+func putPrefixIndirectInsn(code gen.Buffer, p prefix, t abi.Type, opcode []byte, reg regs.R, scale uint8, index, base regs.R, disp int32) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
@@ -393,7 +393,7 @@ func putPrefixIndirectInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte
 	putDisp(code, mod, disp)
 }
 
-func putPrefixStackInsn(code gen.Buffer, p prefix, t wasm.Type, opcode []byte, reg regs.R, disp int32) {
+func putPrefixStackInsn(code gen.Buffer, p prefix, t abi.Type, opcode []byte, reg regs.R, disp int32) {
 	mod := dispMod(t, RegStackPtr, disp)
 
 	p.put(code, t, byte(reg), 0, 0)
@@ -409,7 +409,7 @@ type insnPrefixRexRM struct {
 	opcode []byte
 }
 
-func (i insnPrefixRexRM) opReg(code gen.Buffer, floatType, intType wasm.Type, target, source regs.R) {
+func (i insnPrefixRexRM) opReg(code gen.Buffer, floatType, intType abi.Type, target, source regs.R) {
 	i.prefix.put(code, floatType, 0, 0, 0)
 	putRexSize(code, intType, byte(target), 0, byte(source))
 	code.PutBytes(i.opcode)
@@ -425,7 +425,7 @@ type insnPrefixMI struct {
 	ro       byte
 }
 
-func (i insnPrefixMI) opImm(code gen.Buffer, t wasm.Type, reg regs.R, value int32) {
+func (i insnPrefixMI) opImm(code gen.Buffer, t abi.Type, reg regs.R, value int32) {
 	opcode := i.immOpcode(value)
 
 	i.prefix.put(code, t, 0, 0, byte(reg))
@@ -434,14 +434,14 @@ func (i insnPrefixMI) opImm(code gen.Buffer, t wasm.Type, reg regs.R, value int3
 	i.putImm(code, opcode, value)
 }
 
-func (i insnPrefixMI) opImm8(code gen.Buffer, t wasm.Type, reg regs.R, value uint8) {
+func (i insnPrefixMI) opImm8(code gen.Buffer, t abi.Type, reg regs.R, value uint8) {
 	i.prefix.put(code, t, 0, 0, byte(reg))
 	code.PutByte(i.opcode8)
 	putMod(code, ModReg, i.ro, byte(reg))
 	code.PutByte(value)
 }
 
-func (i insnPrefixMI) opImmToIndirect(code gen.Buffer, t wasm.Type, scale uint8, index, base regs.R, disp, value int32) {
+func (i insnPrefixMI) opImmToIndirect(code gen.Buffer, t abi.Type, scale uint8, index, base regs.R, disp, value int32) {
 	mod := dispMod(t, base, disp)
 	opcode := i.immOpcode(value)
 
@@ -459,7 +459,7 @@ func (i insnPrefixMI) opImmToIndirect(code gen.Buffer, t wasm.Type, scale uint8,
 	i.putImm(code, opcode, value)
 }
 
-func (i insnPrefixMI) opImmToStack(code gen.Buffer, t wasm.Type, disp, value int32) {
+func (i insnPrefixMI) opImmToStack(code gen.Buffer, t abi.Type, disp, value int32) {
 	mod := dispMod(t, RegStackPtr, disp)
 	opcode := i.immOpcode(value)
 
@@ -510,7 +510,7 @@ type insnSuffixRMI struct {
 	suffix prefix
 }
 
-func (i insnSuffixRMI) opReg(code gen.Buffer, t wasm.Type, target, source regs.R, value int8) {
+func (i insnSuffixRMI) opReg(code gen.Buffer, t abi.Type, target, source regs.R, value int8) {
 	code.PutBytes(i.opcode)
 	i.suffix.put(code, t, byte(target), 0, byte(source))
 	putMod(code, ModReg, byte(target), byte(source))
@@ -533,7 +533,7 @@ func (i pushPopInsn) op(code gen.Buffer, reg regs.R) {
 	if reg < 8 {
 		i.regLow.op(code, reg)
 	} else {
-		i.regAny.opReg(code, wasm.I32, reg)
+		i.regAny.opReg(code, abi.I32, reg)
 	}
 }
 
@@ -543,7 +543,7 @@ type xchgInsn struct {
 	insnPrefix
 }
 
-func (i xchgInsn) opFromReg(code gen.Buffer, t wasm.Type, a, b regs.R) {
+func (i xchgInsn) opFromReg(code gen.Buffer, t abi.Type, a, b regs.R) {
 	switch {
 	case a == regs.R(0):
 		i.r0.op(code, t, b)
@@ -566,7 +566,7 @@ func (i shiftImmInsn) defined() bool {
 	return i.one.opcode != nil
 }
 
-func (i shiftImmInsn) op(code gen.Buffer, t wasm.Type, reg regs.R, value uint8) {
+func (i shiftImmInsn) op(code gen.Buffer, t abi.Type, reg regs.R, value uint8) {
 	if value == 1 {
 		i.one.opReg(code, t, reg)
 	} else {
@@ -584,13 +584,13 @@ type movImmInsn struct {
 	imm   insnRexOI
 }
 
-func (i movImmInsn) op(code gen.Buffer, t wasm.Type, reg regs.R, value int64) {
+func (i movImmInsn) op(code gen.Buffer, t abi.Type, reg regs.R, value int64) {
 	switch {
 	case value >= -0x80000000 && value < 0x80000000:
 		i.imm32.opImm(code, t, reg, int32(value))
 
-	case t.Size() == wasm.Size64 && value >= 0 && value < 0x100000000:
-		i.imm.op32(code, wasm.I32, reg, uint32(value))
+	case t.Size() == abi.Size64 && value >= 0 && value < 0x100000000:
+		i.imm.op32(code, abi.I32, reg, uint32(value))
 
 	default:
 		i.imm.op64(code, t, reg, value)

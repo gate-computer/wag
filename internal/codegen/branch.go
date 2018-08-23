@@ -8,19 +8,19 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/wasm"
 )
 
 type branchTarget struct {
 	label       links.L
 	stackOffset int32
-	valueType   wasm.Type
+	valueType   abi.Type
 	functionEnd bool
 }
 
@@ -30,7 +30,7 @@ type branchTable struct {
 	codeStackOffset int32 // -1 indicates common offset
 }
 
-func pushBranchTarget(f *function, valueType wasm.Type, functionEnd bool) {
+func pushBranchTarget(f *function, valueType abi.Type, functionEnd bool) {
 	stackOffset := f.stackOffset
 
 	if int(f.numInitedVars) < len(f.vars) {
@@ -97,7 +97,7 @@ func genBlock(f *function, load loader.L, op Opcode, info opInfo) (deadend bool)
 			discard(f, x)
 		}
 	} else {
-		if t != wasm.Void {
+		if t != abi.Void {
 			result = popOperand(f)
 			if result.Type != t {
 				panic(fmt.Errorf("%s result has wrong type: %s", op, result.Type))
@@ -116,7 +116,7 @@ func genBlock(f *function, load loader.L, op Opcode, info opInfo) (deadend bool)
 			opMove(f, regs.Result, result, false)
 		}
 
-		if t != wasm.Void {
+		if t != abi.Void {
 			result = values.TempRegOperand(t, regs.Result, false)
 		}
 
@@ -136,7 +136,7 @@ func genBr(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
-	if target.valueType != wasm.Void {
+	if target.valueType != abi.Void {
 		value := popOperand(f)
 		if value.Type != target.valueType {
 			panic(fmt.Errorf("%s value operand type is %s, but target expects %s", op, value.Type, target.valueType))
@@ -164,13 +164,13 @@ func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	target := getBranchTarget(f, relativeDepth)
 
 	cond := opPreloadOperand(f, popOperand(f))
-	if cond.Type != wasm.I32 {
+	if cond.Type != abi.I32 {
 		panic(fmt.Errorf("%s: condition operand has wrong type: %s", op, cond.Type))
 	}
 
 	var value values.Operand
 
-	if target.valueType != wasm.Void {
+	if target.valueType != abi.Void {
 		value = popOperand(f)
 		if value.Type != target.valueType {
 			panic(fmt.Errorf("%s: value operand has wrong type: %s", op, value.Type))
@@ -181,9 +181,9 @@ func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opInitVars(f)
 	opStoreVars(f, false)
 
-	if value.Type != wasm.Void {
+	if value.Type != abi.Void {
 		if cond.Storage == values.TempReg && cond.Reg() == regs.Result {
-			reg := opAllocReg(f, wasm.I32)
+			reg := opAllocReg(f, abi.I32)
 			zeroExt := opMove(f, reg, cond, true)
 			cond = values.TempRegOperand(cond.Type, reg, zeroExt)
 		}
@@ -197,7 +197,7 @@ func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opBranchIf(f, cond, true, &target.label)
 	isa.OpAddImmToStackPtr(f, -stackDelta)
 
-	if target.valueType != wasm.Void {
+	if target.valueType != abi.Void {
 		pushResultRegOperand(f, target.valueType)
 	}
 	return
@@ -223,7 +223,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	defaultTarget.label.SetLive()
 
 	index := opPreloadOperand(f, popOperand(f))
-	if index.Type != wasm.I32 {
+	if index.Type != abi.I32 {
 		panic(fmt.Errorf("%s: index operand has wrong type: %s", op, index.Type))
 	}
 
@@ -237,7 +237,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 
 	var value values.Operand
 
-	if valueType != wasm.Void {
+	if valueType != abi.Void {
 		value = popOperand(f)
 		if value.Type != valueType {
 			panic(fmt.Errorf("%s: value operand has wrong type: %s", op, value.Type))
@@ -245,7 +245,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	var commonStackOffset int32
-	var tableType = wasm.I32
+	var tableType = abi.I32
 	var tableScale uint8 = 2
 
 	if len(targetTable) > 0 {
@@ -253,7 +253,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 		for _, target := range targetTable[1:] {
 			if target.stackOffset != commonStackOffset {
 				commonStackOffset = -1
-				tableType = wasm.I64
+				tableType = abi.I64
 				tableScale = 3
 				break
 			}
@@ -272,12 +272,12 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	var reg2 regs.R
 
 	if commonStackOffset < 0 {
-		reg2 = opAllocReg(f, wasm.I32)
+		reg2 = opAllocReg(f, abi.I32)
 	}
 
-	if value.Type != wasm.Void {
+	if value.Type != abi.Void {
 		if index.Storage == values.TempReg && index.Reg() == regs.Result {
-			reg := opAllocReg(f, wasm.I32)
+			reg := opAllocReg(f, abi.I32)
 			zeroExt := opMove(f, reg, index, true)
 			index = values.TempRegOperand(index.Type, reg, zeroExt)
 		}
@@ -292,7 +292,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 		reg = index.Reg()
 		regZeroExt = index.RegZeroExt()
 	} else {
-		reg = opAllocReg(f, wasm.I32)
+		reg = opAllocReg(f, abi.I32)
 		regZeroExt = isa.OpMove(f, reg, index, false)
 	}
 
@@ -317,7 +317,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	if commonStackOffset >= 0 {
 		isa.OpAddImmToStackPtr(f, tableStackOffset-commonStackOffset)
 	} else {
-		isa.OpMoveReg(f, wasm.I64, reg2, reg)
+		isa.OpMoveReg(f, abi.I64, reg2, reg)
 		isa.OpShiftRightLogical32Bits(f, reg2)
 		isa.OpAddToStackPtr(f, reg2)
 
@@ -351,7 +351,7 @@ func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	var afterThen links.L
 
 	cond := popOperand(f)
-	if cond.Type != wasm.I32 {
+	if cond.Type != abi.I32 {
 		panic(fmt.Errorf("if condition has wrong type: %s", cond.Type))
 	}
 
@@ -362,12 +362,12 @@ func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 
 	thenDeadend, haveElse := genThenOps(f, load)
 
-	if !haveElse && t != wasm.Void {
+	if !haveElse && t != abi.Void {
 		panic(errors.New("if without else has a value type"))
 	}
 
 	if !thenDeadend {
-		if t != wasm.Void {
+		if t != abi.Void {
 			value := popOperand(f)
 			if value.Type != t {
 				panic(fmt.Errorf("%s value operand has type %s, but target expects %s", op, value.Type, t))
@@ -388,7 +388,7 @@ func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	if haveElse {
 		deadend = genOps(f, load)
 
-		if t != wasm.Void && !deadend {
+		if t != abi.Void && !deadend {
 			value := popOperand(f)
 			if value.Type != t {
 				panic(fmt.Errorf("%s value operand has type %s, but target expects %s", op, value.Type, t))
@@ -406,7 +406,7 @@ func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 		isa.UpdateBranches(f.Bytes(), end)
 	}
 
-	if t != wasm.Void {
+	if t != abi.Void {
 		pushResultRegOperand(f, t)
 	}
 	return
@@ -419,7 +419,7 @@ func genLoop(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opInitVars(f)
 	opStoreVars(f, false)
 
-	pushBranchTarget(f, wasm.Void, false) // begin
+	pushBranchTarget(f, abi.Void, false) // begin
 	opLabel(f, &getBranchTarget(f, 0).label)
 
 	savedMinBlockOperand := f.minBlockOperand

@@ -7,11 +7,11 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
 )
 
 func genOps(f *function, load loader.L) (deadend bool) {
@@ -138,22 +138,22 @@ func binaryOp(f *function, op Opcode, left, right values.Operand, info opInfo) {
 }
 
 func genConstI32(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	pushImmOperand(f, wasm.I32, uint64(int64(load.Varint32())))
+	pushImmOperand(f, abi.I32, uint64(int64(load.Varint32())))
 	return
 }
 
 func genConstI64(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	pushImmOperand(f, wasm.I64, uint64(load.Varint64()))
+	pushImmOperand(f, abi.I64, uint64(load.Varint64()))
 	return
 }
 
 func genConstF32(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	pushImmOperand(f, wasm.F32, uint64(load.Uint32()))
+	pushImmOperand(f, abi.F32, uint64(load.Uint32()))
 	return
 }
 
 func genConstF64(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	pushImmOperand(f, wasm.F64, load.Uint64())
+	pushImmOperand(f, abi.F64, load.Uint64())
 	return
 }
 
@@ -171,7 +171,7 @@ func genConversionOp(f *function, load loader.L, op Opcode, info opInfo) (deaden
 
 func genLoadOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	virtualIndex := popOperand(f)
-	if virtualIndex.Type != wasm.I32 {
+	if virtualIndex.Type != abi.I32 {
 		panic(fmt.Errorf("%s index has wrong type: %s", op, virtualIndex.Type))
 	}
 
@@ -194,7 +194,7 @@ func genStoreOp(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	virtualIndex := opMaterializeOperand(f, popOperand(f))
-	if virtualIndex.Type != wasm.I32 {
+	if virtualIndex.Type != abi.I32 {
 		panic(fmt.Errorf("%s index has wrong type: %s", op, virtualIndex.Type))
 	}
 
@@ -244,7 +244,7 @@ func genGrowMemory(f *function, load loader.L, op Opcode, info opInfo) (deadend 
 	load.Byte() // reserved
 
 	x := opMaterializeOperand(f, popOperand(f))
-	if x.Type != wasm.I32 {
+	if x.Type != abi.I32 {
 		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
 	}
 
@@ -259,7 +259,7 @@ func genNop(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 }
 
 func genReturn(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	if f.resultType != wasm.Void {
+	if f.resultType != abi.Void {
 		result := popOperand(f)
 		if result.Type != f.resultType {
 			panic(fmt.Errorf("%s value operand type is %s, but function result type is %s", op, result.Type, f.resultType))
@@ -275,7 +275,7 @@ func genReturn(f *function, load loader.L, op Opcode, info opInfo) (deadend bool
 
 func genSelect(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	cond := opPreloadOperand(f, popOperand(f))
-	if cond.Type != wasm.I32 {
+	if cond.Type != abi.I32 {
 		panic(fmt.Errorf("%s: condition operand has wrong type: %s", op, cond.Type))
 	}
 

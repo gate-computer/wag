@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
 )
 
 type Module = module.Module
@@ -55,7 +55,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	// after init, execution proceeds to start func, main func, or exit trap
 
 	maxInitIndex := -1
-	mainResultType := wasm.Void
+	mainResultType := abi.Void
 
 	if m.StartDefined {
 		maxInitIndex = int(m.StartIndex)
@@ -88,7 +88,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 		mainResultType = sig.Result
 	}
 
-	if mainResultType != wasm.I32 {
+	if mainResultType != abi.I32 {
 		isa.OpClearIntResultReg(m.Text)
 	}
 

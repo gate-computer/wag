@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"math"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/codegen"
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/gen"
@@ -19,12 +20,11 @@ import (
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/wasm"
-	"github.com/tsavola/wag/wasm/function"
 )
 
 type Env interface {
-	ImportFunction(module, field string, sig function.Type) (variadic bool, absAddr uint64, err error)
-	ImportGlobal(module, field string, t wasm.Type) (valueBits uint64, err error)
+	ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error)
+	ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error)
 }
 
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
@@ -222,14 +222,14 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 				panic(fmt.Errorf("unsupported function type form: %d", form))
 			}
 
-			var sig function.Type
+			var sig abi.FunctionType
 
 			paramCount := load.Varuint32()
 			if paramCount > codegen.MaxFunctionParams {
 				panic(fmt.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 			}
 
-			sig.Args = make([]wasm.Type, paramCount)
+			sig.Args = make([]abi.Type, paramCount)
 			for j := range sig.Args {
 				sig.Args[j] = typeutil.ValueTypeByEncoding(load.Varint7())
 			}
@@ -384,7 +384,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 					sigIndex := m.FuncSigs[index]
 					sig := m.Sigs[sigIndex]
-					if len(sig.Args) > codegen.MaxEntryParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == wasm.Void || sig.Result == wasm.I32) {
+					if len(sig.Args) > codegen.MaxEntryParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == abi.Void || sig.Result == abi.I32) {
 						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
 					}
 
@@ -408,7 +408,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 		sigIndex := m.FuncSigs[index]
 		sig := m.Sigs[sigIndex]
-		if len(sig.Args) > 0 || sig.Result != wasm.Void {
+		if len(sig.Args) > 0 || sig.Result != abi.Void {
 			panic(fmt.Errorf("invalid start function signature: %s", sig))
 		}
 
@@ -565,13 +565,13 @@ func readSectionHeader(load loader.L, expectId byte, idError string) (ok bool) {
 }
 
 // Signatures are available after preliminary sections have been loaded.
-func (m *Module) Signatures() []function.Type {
+func (m *Module) Signatures() []abi.FunctionType {
 	return m.Sigs
 }
 
 // FunctionSignatures are available after preliminary sections have been loaded.
-func (m *Module) FunctionSignatures() (funcSigs []function.Type) {
-	funcSigs = make([]function.Type, len(m.FuncSigs))
+func (m *Module) FunctionSignatures() (funcSigs []abi.FunctionType) {
+	funcSigs = make([]abi.FunctionType, len(m.FuncSigs))
 	for i, sigIndex := range m.FuncSigs {
 		funcSigs[i] = m.Sigs[sigIndex]
 	}

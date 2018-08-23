@@ -7,20 +7,20 @@ package imports
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/wasm/function"
+	"github.com/tsavola/wag/abi"
 )
 
 type Function struct {
-	function.Type
+	abi.FunctionType
 	Variadic bool
 	AbsAddr  uint64
 }
 
-func (impl Function) Implements(signature function.Type) bool {
+func (impl Function) Implements(signature abi.FunctionType) bool {
 	if impl.Variadic {
-		return equalTypesVariadic(impl.Type, signature)
+		return equalTypesVariadic(impl.FunctionType, signature)
 	} else {
-		return equalTypes(impl.Type, signature)
+		return equalTypes(impl.FunctionType, signature)
 	}
 }
 
@@ -39,7 +39,7 @@ func (f Function) String() (s string) {
 	return
 }
 
-func compareTypes(sig1, sig2 function.Type) int {
+func compareTypes(sig1, sig2 abi.FunctionType) int {
 	len1 := len(sig1.Args)
 	len2 := len(sig2.Args)
 
@@ -53,11 +53,11 @@ func compareTypes(sig1, sig2 function.Type) int {
 	return compareTypePrefixes(sig1, sig2, len1)
 }
 
-func equalTypes(sig1, sig2 function.Type) bool {
+func equalTypes(sig1, sig2 abi.FunctionType) bool {
 	return compareTypes(sig1, sig2) == 0
 }
 
-func equalTypesVariadic(partial, complete function.Type) bool {
+func equalTypesVariadic(partial, complete abi.FunctionType) bool {
 	minLen := len(partial.Args)
 
 	if len(complete.Args) < minLen {
@@ -67,7 +67,7 @@ func equalTypesVariadic(partial, complete function.Type) bool {
 	return compareTypePrefixes(partial, complete, minLen) == 0
 }
 
-func compareTypePrefixes(sig1, sig2 function.Type, numArgs int) int {
+func compareTypePrefixes(sig1, sig2 abi.FunctionType, numArgs int) int {
 	for i := 0; i < numArgs; i++ {
 		arg1 := sig1.Args[i]
 		arg2 := sig2.Args[i]

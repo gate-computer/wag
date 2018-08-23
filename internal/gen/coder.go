@@ -7,10 +7,10 @@ package gen
 import (
 	"encoding/binary"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
 )
 
 const (
@@ -47,15 +47,15 @@ type Coder interface {
 
 	Discard(values.Operand)
 	Consumed(values.Operand)
-	RegAllocated(wasm.Type, regs.R) bool
-	FreeReg(wasm.Type, regs.R)
+	RegAllocated(abi.Type, regs.R) bool
+	FreeReg(abi.Type, regs.R)
 }
 
 type RegCoder interface {
 	Coder
 
-	TryAllocReg(t wasm.Type) (reg regs.R, ok bool)
-	AllocSpecificReg(t wasm.Type, reg regs.R)
+	TryAllocReg(t abi.Type) (reg regs.R, ok bool)
+	AllocSpecificReg(t abi.Type, reg regs.R)
 }
 
 type MaskBaseAddr int32
@@ -69,7 +69,7 @@ const (
 // MaskAddr calculates the absolute read-only data address for reading a mask
 // for the given type size.  maskBaseAddr should be one of the Mask*Base
 // constants.
-func MaskAddr(roDataAddr int32, maskBaseAddr MaskBaseAddr, t wasm.Type) int32 {
+func MaskAddr(roDataAddr int32, maskBaseAddr MaskBaseAddr, t abi.Type) int32 {
 	return roDataAddr + int32(maskBaseAddr) + int32((t.Size()&8)<<1)
 }
 

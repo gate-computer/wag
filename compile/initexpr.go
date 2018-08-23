@@ -7,30 +7,30 @@ package compile
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/codegen"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/wasm"
 )
 
-func readInitExpr(m *Module, load loader.L) (valueBits uint64, t wasm.Type) {
+func readInitExpr(m *Module, load loader.L) (valueBits uint64, t abi.Type) {
 	op := codegen.Opcode(load.Byte())
 
 	switch op {
 	case codegen.OpcodeI32Const:
 		valueBits = uint64(int64(load.Varint32()))
-		t = wasm.I32
+		t = abi.I32
 
 	case codegen.OpcodeI64Const:
 		valueBits = uint64(load.Varint64())
-		t = wasm.I64
+		t = abi.I64
 
 	case codegen.OpcodeF32Const:
 		valueBits = uint64(load.Uint32())
-		t = wasm.F32
+		t = abi.F32
 
 	case codegen.OpcodeF64Const:
 		valueBits = load.Uint64()
-		t = wasm.F64
+		t = abi.F64
 
 	case codegen.OpcodeGetGlobal:
 		i := load.Varuint32()
@@ -54,7 +54,7 @@ func readInitExpr(m *Module, load loader.L) (valueBits uint64, t wasm.Type) {
 
 func readOffsetInitExpr(m *Module, load loader.L) uint32 {
 	offset, t := readInitExpr(m, load)
-	if t != wasm.I32 {
+	if t != abi.I32 {
 		panic(fmt.Errorf("offset initializer expression has invalid type: %s", t))
 	}
 	return uint32(int32(int64(offset)))

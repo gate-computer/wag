@@ -13,10 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/wasm"
-	"github.com/tsavola/wag/wasm/function"
 )
 
 type testDuration struct {
@@ -34,11 +33,11 @@ func makeTrigger() chan struct{}   { return make(chan struct{}) }
 
 type dummyEnv struct{}
 
-func (*dummyEnv) ImportFunction(module, field string, sig function.Type) (variadic bool, absAddr uint64, err error) {
+func (*dummyEnv) ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error) {
 	return
 }
 
-func (*dummyEnv) ImportGlobal(module, field string, t wasm.Type) (valueBits uint64, err error) {
+func (*dummyEnv) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error) {
 	return
 }
 

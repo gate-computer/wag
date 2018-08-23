@@ -8,12 +8,11 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
-	"github.com/tsavola/wag/wasm/function"
 )
 
 const (
@@ -95,7 +94,7 @@ type ResizableLimits struct {
 }
 
 type Global struct {
-	Type    wasm.Type
+	Type    abi.Type
 	Mutable bool
 	Init    uint64
 }
@@ -106,7 +105,7 @@ type CallSite struct {
 }
 
 type Module struct {
-	Sigs              []function.Type
+	Sigs              []abi.FunctionType
 	FuncSigs          []uint32
 	ImportFuncs       []ImportFunction
 	TableLimitValues  ResizableLimits

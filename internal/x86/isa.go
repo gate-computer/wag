@@ -7,12 +7,12 @@ package x86
 import (
 	"encoding/binary"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
 )
 
 const (
@@ -208,12 +208,12 @@ func alignFunction(code gen.Buffer) {
 
 func (ISA) OpAddImmToStackPtr(code gen.Buffer, offset int32) {
 	if offset != 0 {
-		add.opImm(code, wasm.I64, RegStackPtr, offset)
+		add.opImm(code, abi.I64, RegStackPtr, offset)
 	}
 }
 
 func (ISA) OpAddToStackPtr(code gen.Buffer, source regs.R) {
-	add.opFromReg(code, wasm.I64, RegStackPtr, source)
+	add.opFromReg(code, abi.I64, RegStackPtr, source)
 }
 
 // OpMoveIntImm may update CPU's condition flags.
@@ -223,9 +223,9 @@ func (ISA) OpMoveIntImm(code gen.Buffer, reg regs.R, value uint64) {
 
 func opMoveIntImm(code gen.Buffer, reg regs.R, value int64) {
 	if value == 0 {
-		xor.opFromReg(code, wasm.I32, reg, reg)
+		xor.opFromReg(code, abi.I32, reg, reg)
 	} else {
-		movImm64.op(code, wasm.I64, reg, value)
+		movImm64.op(code, abi.I64, reg, value)
 	}
 }
 
@@ -234,11 +234,11 @@ func (ISA) OpInit(code gen.Buffer) {
 		panic("inconsistency")
 	}
 	alignFunction(code)
-	add.opImm(code, wasm.I64, RegStackLimit, gen.StackReserve)
+	add.opImm(code, abi.I64, RegStackLimit, gen.StackReserve)
 
 	var notResume links.L
 
-	test.opFromReg(code, wasm.I64, RegResult, RegResult)
+	test.opFromReg(code, abi.I64, RegResult, RegResult)
 	je.rel8.opStub(code)
 	notResume.AddSite(code.Pos())
 	ret.op(code) // simulate return from snapshot function call
@@ -268,10 +268,10 @@ func (ISA) OpEnterImportFunction(code gen.Buffer, absAddr uint64, variadic bool,
 // trashed.
 func (ISA) OpBranchIndirect32(code gen.Buffer, reg regs.R, regZeroExt bool) {
 	if !regZeroExt {
-		mov.opFromReg(code, wasm.I32, reg, reg)
+		mov.opFromReg(code, abi.I32, reg, reg)
 	}
 
-	add.opFromReg(code, wasm.I64, reg, RegTextBase)
+	add.opFromReg(code, abi.I64, reg, RegTextBase)
 	jmp.opReg(code, reg)
 }
 
@@ -291,7 +291,7 @@ func (ISA) OpCall(code gen.Buffer, addr int32) (retAddr int32) {
 
 // OpClearIntResultReg may update CPU's condition flags.
 func (ISA) OpClearIntResultReg(code gen.Buffer) {
-	xor.opFromReg(code, wasm.I32, RegResult, RegResult)
+	xor.opFromReg(code, abi.I32, RegResult, RegResult)
 }
 
 func (ISA) OpReturn(code gen.Buffer) {
@@ -299,22 +299,22 @@ func (ISA) OpReturn(code gen.Buffer) {
 }
 
 func (ISA) OpEnterExitTrapHandler(code gen.Buffer) {
-	shlImm.op(code, wasm.I64, RegResult, 32) // exit code at top, trap id (0) at bottom
-	movMMX.opToReg(code, wasm.I64, RegScratch, RegTrapHandlerMMX)
+	shlImm.op(code, abi.I64, RegResult, 32) // exit code at top, trap id (0) at bottom
+	movMMX.opToReg(code, abi.I64, RegScratch, RegTrapHandlerMMX)
 	jmp.opReg(code, RegScratch)
 }
 
 // OpMoveReg must not allocate registers.
-func (ISA) OpMoveReg(code gen.Buffer, t wasm.Type, targetReg, sourceReg regs.R) {
+func (ISA) OpMoveReg(code gen.Buffer, t abi.Type, targetReg, sourceReg regs.R) {
 	if targetReg == sourceReg {
 		panic("target and source registers are the same")
 	}
 
 	switch t.Category() {
-	case wasm.Int:
+	case abi.Int:
 		mov.opFromReg(code, t, targetReg, sourceReg)
 
-	case wasm.Float:
+	case abi.Float:
 		movapSSE.opFromReg(code, t, targetReg, sourceReg)
 
 	default:
@@ -324,21 +324,21 @@ func (ISA) OpMoveReg(code gen.Buffer, t wasm.Type, targetReg, sourceReg regs.R) 
 
 // OpShiftRightLogical32Bits must not allocate registers.
 func (ISA) OpShiftRightLogical32Bits(code gen.Buffer, subject regs.R) {
-	shrImm.op(code, wasm.I64, subject, 32)
+	shrImm.op(code, abi.I64, subject, 32)
 }
 
 // OpStoreStackReg must not allocate registers.
-func (ISA) OpStoreStackReg(code gen.Buffer, t wasm.Type, offset int32, reg regs.R) {
+func (ISA) OpStoreStackReg(code gen.Buffer, t abi.Type, offset int32, reg regs.R) {
 	opStoreStackReg(code, t, offset, reg)
 }
 
 // opStoreStackReg has same restrictions as OpStoreStackReg.
-func opStoreStackReg(code gen.Buffer, t wasm.Type, offset int32, reg regs.R) {
+func opStoreStackReg(code gen.Buffer, t abi.Type, offset int32, reg regs.R) {
 	switch t.Category() {
-	case wasm.Int:
+	case abi.Int:
 		mov.opToStack(code, t, reg, offset)
 
-	case wasm.Float:
+	case abi.Float:
 		movsSSE.opToStack(code, t, reg, offset)
 
 	default:
@@ -348,25 +348,25 @@ func opStoreStackReg(code gen.Buffer, t wasm.Type, offset int32, reg regs.R) {
 
 // OpCopyStack must not allocate registers.
 func (ISA) OpCopyStack(code gen.Buffer, targetOffset, sourceOffset int32) {
-	mov.opFromStack(code, wasm.I64, RegScratch, sourceOffset)
-	mov.opToStack(code, wasm.I64, RegScratch, targetOffset)
+	mov.opFromStack(code, abi.I64, RegScratch, sourceOffset)
+	mov.opToStack(code, abi.I64, RegScratch, targetOffset)
 }
 
 // OpSwap must not allocate registers, or update CPU's condition flags.
 func (ISA) OpSwap(code gen.Buffer, cat gen.RegCategory, a, b regs.R) {
 	if cat == gen.RegCategoryInt {
-		xchg.opFromReg(code, wasm.I64, a, b)
+		xchg.opFromReg(code, abi.I64, a, b)
 	} else {
-		movSSE.opFromReg(code, wasm.F64, RegScratch, a)
-		movSSE.opFromReg(code, wasm.F64, a, b)
-		movSSE.opFromReg(code, wasm.F64, b, RegScratch)
+		movSSE.opFromReg(code, abi.F64, RegScratch, a)
+		movSSE.opFromReg(code, abi.F64, a, b)
+		movSSE.opFromReg(code, abi.F64, b, RegScratch)
 	}
 }
 
 // OpEnterTrapHandler must not generate over 16 bytes of code.
 func (ISA) OpEnterTrapHandler(code gen.Buffer, id trap.Id) {
-	mov.opImm(code, wasm.I32, RegResult, int32(id)) // automatic zero-extension
-	movMMX.opToReg(code, wasm.I64, RegScratch, RegTrapHandlerMMX)
+	mov.opImm(code, abi.I32, RegResult, int32(id)) // automatic zero-extension
+	movMMX.opToReg(code, abi.I64, RegScratch, RegTrapHandlerMMX)
 	jmp.opReg(code, RegScratch)
 }
 
@@ -384,16 +384,16 @@ func (ISA) OpBranchIfOutOfBounds(code gen.Buffer, indexReg regs.R, upperBound, a
 }
 
 func opCompareBounds(code gen.Buffer, indexReg regs.R, upperBound int32) {
-	movImm.opImm(code, wasm.I32, RegScratch, upperBound)
-	test.opFromReg(code, wasm.I32, indexReg, indexReg)
-	cmovl.opFromReg(code, wasm.I32, indexReg, RegScratch) // negative index -> upper bound
-	cmp.opFromReg(code, wasm.I32, RegScratch, indexReg)
+	movImm.opImm(code, abi.I32, RegScratch, upperBound)
+	test.opFromReg(code, abi.I32, indexReg, indexReg)
+	cmovl.opFromReg(code, abi.I32, indexReg, RegScratch) // negative index -> upper bound
+	cmp.opFromReg(code, abi.I32, RegScratch, indexReg)
 }
 
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
-func (ISA) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t wasm.Type, reg regs.R, regZeroExt bool, scale uint8, addr int32) (resultZeroExt bool) {
+func (ISA) OpLoadROIntIndex32ScaleDisp(code gen.Coder, t abi.Type, reg regs.R, regZeroExt bool, scale uint8, addr int32) (resultZeroExt bool) {
 	if !regZeroExt {
-		mov.opFromReg(code, wasm.I32, reg, reg)
+		mov.opFromReg(code, abi.I32, reg, reg)
 	}
 
 	mov.opFromAddr(code, t, reg, scale, reg, code.RODataAddr()+addr)
@@ -419,7 +419,7 @@ func updateLocalAddr(code gen.Buffer, addr, value int32) {
 func (ISA) OpEnterFunction(code gen.Coder) {
 	var skip links.L
 
-	test.opFromReg(code, wasm.I64, RegSuspendFlag, RegSuspendFlag)
+	test.opFromReg(code, abi.I64, RegSuspendFlag, RegSuspendFlag)
 	je.rel8.opStub(code)
 	skip.AddSite(code.Pos())
 
@@ -438,10 +438,10 @@ func (ISA) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 	jle.rel8.opStub(code)
 	outOfBounds.AddSite(code.Pos())
 
-	mov.opFromAddr(code, wasm.I64, RegResult, 3, RegResult, code.RODataAddr()+gen.ROTableAddr)
-	mov.opFromReg(code, wasm.I32, RegScratch, RegResult) // zero-extended function address
-	shrImm.op(code, wasm.I64, RegResult, 32)             // signature index
-	cmp.opImm(code, wasm.I32, RegResult, sigIndex)
+	mov.opFromAddr(code, abi.I64, RegResult, 3, RegResult, code.RODataAddr()+gen.ROTableAddr)
+	mov.opFromReg(code, abi.I32, RegScratch, RegResult) // zero-extended function address
+	shrImm.op(code, abi.I64, RegResult, 32)             // signature index
+	cmp.opImm(code, abi.I32, RegResult, sigIndex)
 	je.rel8.opStub(code)
 	checksOut.AddSite(code.Pos())
 
@@ -455,7 +455,7 @@ func (ISA) OpCallIndirect(code gen.Coder, tableLen, sigIndex int32) int32 {
 	checksOut.Addr = code.Pos()
 	updateLocalBranches(code, &checksOut)
 
-	add.opFromReg(code, wasm.I64, RegScratch, RegTextBase)
+	add.opFromReg(code, abi.I64, RegScratch, RegTextBase)
 	call.opReg(code, RegScratch)
 	return code.Pos()
 }
@@ -472,7 +472,7 @@ func (ISA) OpSetGlobal(code gen.Coder, offset int32, x values.Operand) {
 		reg = RegScratch
 	}
 
-	if x.Type.Category() == wasm.Int {
+	if x.Type.Category() == abi.Int {
 		mov.opToIndirect(code, x.Type, reg, 0, NoIndex, RegMemoryBase, offset)
 	} else {
 		movSSE.opToIndirect(code, x.Type, reg, 0, NoIndex, RegMemoryBase, offset)
@@ -489,11 +489,11 @@ func (ISA) OpMove(code gen.Coder, targetReg regs.R, x values.Operand, preserveFl
 // may be moving to one of them.
 func opMove(code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	switch x.Type.Category() {
-	case wasm.Int:
+	case abi.Int:
 		switch x.Storage {
 		case values.Imm:
 			if value := x.ImmValue(); value == 0 && !preserveFlags {
-				xor.opFromReg(code, wasm.I32, targetReg, targetReg)
+				xor.opFromReg(code, abi.I32, targetReg, targetReg)
 			} else {
 				movImm64.op(code, x.Type, targetReg, value)
 			}
@@ -523,7 +523,7 @@ func opMove(code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bo
 			pop.op(code, targetReg)
 
 		case values.ConditionFlags:
-			if x.Type != wasm.I32 {
+			if x.Type != abi.I32 {
 				panic(x)
 			}
 
@@ -559,7 +559,7 @@ func opMove(code gen.Coder, targetReg regs.R, x values.Operand, preserveFlags bo
 			panic(x)
 		}
 
-	case wasm.Float:
+	case abi.Float:
 		switch x.Storage {
 		case values.Imm:
 			if value := x.ImmValue(); value == 0 {
@@ -630,10 +630,10 @@ func (ISA) OpPush(code gen.Coder, x values.Operand) {
 	}
 
 	switch x.Type.Category() {
-	case wasm.Int:
+	case abi.Int:
 		push.op(code, reg)
 
-	case wasm.Float:
+	case abi.Float:
 		pushFloatOp(code, x.Type, reg)
 
 	default:
@@ -671,10 +671,10 @@ func (ISA) OpBranchIf(code gen.Coder, x values.Operand, yes bool, addr int32) (s
 	} else {
 		reg, _, own := opBorrowMaybeScratchReg(code, x, false)
 		if own {
-			defer code.FreeReg(wasm.I32, reg)
+			defer code.FreeReg(abi.I32, reg)
 		}
 
-		test.opFromReg(code, wasm.I32, reg, reg)
+		test.opFromReg(code, abi.I32, reg, reg)
 		cond = values.Ne
 	}
 
@@ -705,10 +705,10 @@ func (ISA) OpBranchIf(code gen.Coder, x values.Operand, yes bool, addr int32) (s
 func (ISA) OpTrapIfStackExhausted(code gen.Coder) (stackCheckAddr int32) {
 	var checked links.L
 
-	lea.opFromStack(code, wasm.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
+	lea.opFromStack(code, abi.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
 	stackCheckAddr = code.Pos()
 
-	cmp.opFromReg(code, wasm.I64, RegScratch, RegStackLimit)
+	cmp.opFromReg(code, abi.I64, RegScratch, RegStackLimit)
 
 	jge.rel8.opStub(code)
 	checked.AddSite(code.Pos())
@@ -740,13 +740,13 @@ func opBorrowMaybeScratchRegOperand(code gen.Coder, x values.Operand, preserveFl
 }
 
 // OpGetGlobal must not update CPU's condition flags.
-func (ISA) OpGetGlobal(code gen.RegCoder, t wasm.Type, offset int32) values.Operand {
+func (ISA) OpGetGlobal(code gen.RegCoder, t abi.Type, offset int32) values.Operand {
 	reg, ok := code.TryAllocReg(t)
 	if !ok {
 		reg = RegResult
 	}
 
-	if t.Category() == wasm.Int {
+	if t.Category() == abi.Int {
 		mov.opFromIndirect(code, t, reg, 0, NoIndex, RegMemoryBase, offset)
 	} else {
 		movSSE.opFromIndirect(code, t, reg, 0, NoIndex, RegMemoryBase, offset)
@@ -762,17 +762,17 @@ func (ISA) OpSelect(code gen.RegCoder, a, b, condOperand values.Operand) values.
 
 	switch condOperand.Storage {
 	case values.VarMem:
-		cmp.opImmToStack(code, wasm.I32, condOperand.VarMemOffset(), 0)
+		cmp.opImmToStack(code, abi.I32, condOperand.VarMemOffset(), 0)
 		cond = values.Ne
 
 	case values.VarReg, values.TempReg:
 		reg := condOperand.Reg()
-		test.opFromReg(code, wasm.I32, reg, reg)
+		test.opFromReg(code, abi.I32, reg, reg)
 		cond = values.Ne
 
 	case values.Stack:
-		add.opImm(code, wasm.I64, RegStackPtr, 8) // do before cmp to avoid overwriting flags
-		cmp.opImmToStack(code, wasm.I32, -8, 0)
+		add.opImm(code, abi.I64, RegStackPtr, 8) // do before cmp to avoid overwriting flags
+		cmp.opImmToStack(code, abi.I32, -8, 0)
 		cond = values.Ne
 
 	case values.ConditionFlags:
@@ -795,7 +795,7 @@ func (ISA) OpSelect(code gen.RegCoder, a, b, condOperand values.Operand) values.
 	targetReg, _ := opMaybeResultReg(code, b, true)
 
 	switch t.Category() {
-	case wasm.Int:
+	case abi.Int:
 		cmov := conditionInsns[cond].cmov
 
 		switch a.Storage {
@@ -811,7 +811,7 @@ func (ISA) OpSelect(code gen.RegCoder, a, b, condOperand values.Operand) values.
 			cmov.opFromReg(code, t, targetReg, aReg)
 		}
 
-	case wasm.Float:
+	case abi.Float:
 		var moveIt links.L
 		var end links.L
 

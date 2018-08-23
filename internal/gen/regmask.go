@@ -5,8 +5,8 @@
 package gen
 
 import (
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/wasm"
 )
 
 type RegCategory uint8
@@ -16,7 +16,7 @@ const (
 	RegCategoryFloat = RegCategory(1)
 )
 
-func TypeRegCategory(t wasm.Type) RegCategory {
+func TypeRegCategory(t abi.Type) RegCategory {
 	return RegCategory(t.Category() - 1)
 }
 

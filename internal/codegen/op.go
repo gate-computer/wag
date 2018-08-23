@@ -7,8 +7,8 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/wasm"
 )
 
 type Opcode byte
@@ -23,12 +23,12 @@ func (op Opcode) String() (s string) {
 
 type opInfo uint32
 
-func (info opInfo) primaryType() wasm.Type {
-	return wasm.Type(uint8(info))
+func (info opInfo) primaryType() abi.Type {
+	return abi.Type(uint8(info))
 }
 
-func (info opInfo) secondaryType() wasm.Type {
-	return wasm.Type(info >> 8)
+func (info opInfo) secondaryType() abi.Type {
+	return abi.Type(info >> 8)
 }
 
 func (info opInfo) oper() uint16 {

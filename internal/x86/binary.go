@@ -5,13 +5,13 @@
 package x86
 
 import (
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
 )
 
 func (ISA) BinaryOp(code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
@@ -173,8 +173,8 @@ func binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) valu
 				newReg, ok = code.TryAllocReg(t)
 				if !ok {
 					// borrow a register which we don't need in this function
-					movMMX.opFromReg(code, wasm.I64, RegScratchMMX, RegTextBase)
-					defer movMMX.opToReg(code, wasm.I64, RegTextBase, RegScratchMMX)
+					movMMX.opFromReg(code, abi.I64, RegScratchMMX, RegTextBase)
+					defer movMMX.opToReg(code, abi.I64, RegTextBase, RegScratchMMX)
 
 					newReg = RegTextBase
 				}
@@ -197,8 +197,8 @@ func binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) valu
 		reg, ok := code.TryAllocReg(t)
 		if !ok {
 			// borrow a register which we don't need in this function
-			movMMX.opFromReg(code, wasm.I64, RegScratchMMX, RegTextBase)
-			defer movMMX.opToReg(code, wasm.I64, RegTextBase, RegScratchMMX)
+			movMMX.opFromReg(code, abi.I64, RegScratchMMX, RegTextBase)
+			defer movMMX.opToReg(code, abi.I64, RegTextBase, RegScratchMMX)
 
 			reg = RegTextBase
 		}
@@ -220,7 +220,7 @@ func binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) valu
 
 		if a.Storage == values.Imm {
 			value := a.ImmValue()
-			if t.Size() == wasm.Size32 {
+			if t.Size() == abi.Size32 {
 				if value != -0x80000000 {
 					checkOverflow = false
 				}
@@ -237,17 +237,17 @@ func binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) valu
 			var do links.L
 
 			if remainder {
-				xor.opFromReg(code, wasm.I32, RegScratch, RegScratch) // moved to result at the end
+				xor.opFromReg(code, abi.I32, RegScratch, RegScratch) // moved to result at the end
 
 				cmp.opImm(code, t, b.Reg(), -1)
 				je.rel8.opStub(code)
 				doNot.AddSite(code.Pos())
 			} else {
 				switch t.Size() {
-				case wasm.Size32:
+				case abi.Size32:
 					cmp.opImm(code, t, RegResult, -0x80000000)
 
-				case wasm.Size64:
+				case abi.Size64:
 					cmp.opFromAddr(code, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr64)
 
 				default:
@@ -273,7 +273,7 @@ func binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) valu
 			cdqCqo.op(code, t)
 		} else {
 			// zero-extend dividend high bits
-			xor.opFromReg(code, wasm.I32, RegScratch, RegScratch)
+			xor.opFromReg(code, abi.I32, RegScratch, RegScratch)
 		}
 	}
 
@@ -290,7 +290,7 @@ func binaryIntDivmulOp(code gen.RegCoder, index uint8, a, b values.Operand) valu
 	return values.TempRegOperand(t, RegResult, true)
 }
 
-func opCheckDivideByZero(code gen.Coder, t wasm.Type, reg regs.R) {
+func opCheckDivideByZero(code gen.Coder, t abi.Type, reg regs.R) {
 	var end links.L
 
 	test.opFromReg(code, t, reg, reg)
@@ -329,32 +329,32 @@ func binaryIntShiftOp(code gen.RegCoder, index uint8, a, b values.Operand) (resu
 		code.Discard(b)
 		result = values.TempRegOperand(a.Type, reg, true)
 
-	case code.RegAllocated(wasm.I32, RegShiftCount):
+	case code.RegAllocated(abi.I32, RegShiftCount):
 		reg, _ := opMaybeResultReg(code, a, true)
 		if reg == RegShiftCount {
 			mov.opFromReg(code, a.Type, RegResult, RegShiftCount)
 			result = subtleShiftOp(code, insn.reg, a.Type, RegResult, b)
-			code.FreeReg(wasm.I32, RegShiftCount)
+			code.FreeReg(abi.I32, RegShiftCount)
 		} else {
 			// unknown operand in RegShiftCount
-			mov.opFromReg(code, wasm.I64, RegScratch, RegShiftCount) // save
+			mov.opFromReg(code, abi.I64, RegScratch, RegShiftCount) // save
 			result = subtleShiftOp(code, insn.reg, a.Type, reg, b)
-			mov.opFromReg(code, wasm.I64, RegShiftCount, RegScratch) // restore
+			mov.opFromReg(code, abi.I64, RegShiftCount, RegScratch) // restore
 		}
 
 	default:
-		code.AllocSpecificReg(wasm.I32, RegShiftCount)
+		code.AllocSpecificReg(abi.I32, RegShiftCount)
 		reg, _ := opMaybeResultReg(code, a, true)
 		result = subtleShiftOp(code, insn.reg, a.Type, reg, b)
-		code.FreeReg(wasm.I32, RegShiftCount)
+		code.FreeReg(abi.I32, RegShiftCount)
 	}
 
 	return
 }
 
 // subtleShiftOp trashes RegShiftCount.
-func subtleShiftOp(code gen.Coder, insn insnRexM, t wasm.Type, reg regs.R, count values.Operand) values.Operand {
-	count.Type = wasm.I32                     // TODO: 8-bit mov
+func subtleShiftOp(code gen.Coder, insn insnRexM, t abi.Type, reg regs.R, count values.Operand) values.Operand {
+	count.Type = abi.I32                      // TODO: 8-bit mov
 	opMove(code, RegShiftCount, count, false) //
 	insn.opReg(code, t, reg)
 	return values.TempRegOperand(t, reg, true)

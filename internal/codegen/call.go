@@ -7,14 +7,13 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/wasm"
-	functype "github.com/tsavola/wag/wasm/function"
 )
 
 func genCall(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
@@ -44,7 +43,7 @@ func genCallIndirect(f *function, load loader.L, op Opcode, info opInfo) (deaden
 	load.Byte() // reserved
 
 	funcIndex := opMaterializeOperand(f, popOperand(f))
-	if funcIndex.Type != wasm.I32 {
+	if funcIndex.Type != abi.I32 {
 		panic(fmt.Errorf("%s: function index operand has wrong type: %s", op, funcIndex.Type))
 	}
 
@@ -62,7 +61,7 @@ func genCallIndirect(f *function, load loader.L, op Opcode, info opInfo) (deaden
 	return
 }
 
-func setupCallOperands(f *function, op Opcode, sig functype.Type, indirect values.Operand) (numStackParams int32) {
+func setupCallOperands(f *function, op Opcode, sig abi.FunctionType, indirect values.Operand) (numStackParams int32) {
 	opStackCheck(f)
 
 	args := popOperands(f, len(sig.Args))
@@ -115,7 +114,7 @@ func setupCallOperands(f *function, op Opcode, sig functype.Type, indirect value
 			regArgs.Set(gen.RegCategoryInt, indirect.Reg(), i)
 		} else {
 			debugf("indirect call index: %s <- %s", regs.Result, indirect)
-			isa.OpMoveReg(f, wasm.I32, regs.Result, indirect.Reg())
+			isa.OpMoveReg(f, abi.I32, regs.Result, indirect.Reg())
 		}
 	}
 
@@ -244,7 +243,7 @@ func setupCallOperands(f *function, op Opcode, sig functype.Type, indirect value
 		f.maxStackOffset = n
 	}
 
-	if sig.Result != wasm.Void {
+	if sig.Result != abi.Void {
 		pushResultRegOperand(f, sig.Result)
 	}
 

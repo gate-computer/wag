@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/imports"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
-	"github.com/tsavola/wag/wasm/function"
 )
 
 func setRunArg(arg int64)
@@ -42,42 +42,42 @@ var importFunctions = map[string]map[string]imports.Function{
 	},
 	"wag": {
 		"get_arg": imports.Function{
-			Type: function.Type{
-				Result: wasm.I64,
+			FunctionType: abi.FunctionType{
+				Result: abi.I64,
 			},
 			AbsAddr: importGetArg(),
 		},
 		"snapshot": imports.Function{
-			Type: function.Type{
-				Result: wasm.I32,
+			FunctionType: abi.FunctionType{
+				Result: abi.I32,
 			},
 			AbsAddr: importSnapshot(),
 		},
 	},
 	"env": {
 		"putns": imports.Function{
-			Type: function.Type{
-				Args: []wasm.Type{wasm.I32, wasm.I32},
+			FunctionType: abi.FunctionType{
+				Args: []abi.Type{abi.I32, abi.I32},
 			},
 			AbsAddr: importPutns(),
 		},
 		"benchmark_begin": imports.Function{
-			Type: function.Type{
-				Result: wasm.I64,
+			FunctionType: abi.FunctionType{
+				Result: abi.I64,
 			},
 			AbsAddr: importBenchmarkBegin(),
 		},
 		"benchmark_end": imports.Function{
-			Type: function.Type{
-				Args:   []wasm.Type{wasm.I64},
-				Result: wasm.I32,
+			FunctionType: abi.FunctionType{
+				Args:   []abi.Type{abi.I64},
+				Result: abi.I32,
 			},
 			AbsAddr: importBenchmarkEnd(),
 		},
 		"benchmark_barrier": imports.Function{
-			Type: function.Type{
-				Args:   []wasm.Type{wasm.I64, wasm.I64},
-				Result: wasm.I64,
+			FunctionType: abi.FunctionType{
+				Args:   []abi.Type{abi.I64, abi.I64},
+				Result: abi.I64,
 			},
 			AbsAddr: importBenchmarkBarrier(),
 		},
@@ -86,7 +86,7 @@ var importFunctions = map[string]map[string]imports.Function{
 
 type env struct{}
 
-func (env) ImportFunction(module, field string, sig function.Type) (variadic bool, absAddr uint64, err error) {
+func (env) ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error) {
 	f, found := importFunctions[module][field]
 	if !found {
 		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
@@ -103,7 +103,7 @@ func (env) ImportFunction(module, field string, sig function.Type) (variadic boo
 	return
 }
 
-func (env) ImportGlobal(module, field string, t wasm.Type) (valueBits uint64, err error) {
+func (env) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error) {
 	switch module {
 	case "spectest":
 		switch field {
@@ -122,7 +122,7 @@ type runnable interface {
 	getText() []byte
 	getData() ([]byte, int)
 	getStack() []byte
-	writeStacktraceTo(w io.Writer, funcSigs []function.Type, ns *section.NameSection, stack []byte) error
+	writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns *section.NameSection, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
 }
 
@@ -314,7 +314,7 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int64, sigs []function.Type, printer io.Writer) (result int32, err error) {
+func (r *Runner) Run(arg int64, sigs []abi.FunctionType, printer io.Writer) (result int32, err error) {
 	e := Executor{
 		runner:  r,
 		arg:     arg,
@@ -331,7 +331,7 @@ type Executor struct {
 	runner *Runner
 
 	arg     int64
-	sigs    []function.Type
+	sigs    []abi.FunctionType
 	printer io.Writer
 
 	cont chan struct{}
@@ -341,7 +341,7 @@ type Executor struct {
 	err    error
 }
 
-func (r *Runner) NewExecutor(sigs []function.Type, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
+func (r *Runner) NewExecutor(sigs []abi.FunctionType, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
 	e = &Executor{
 		runner:  r,
 		sigs:    sigs,

@@ -5,9 +5,9 @@
 package x86
 
 import (
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/wasm"
 )
 
 type floatSizePrefix struct {
@@ -15,12 +15,12 @@ type floatSizePrefix struct {
 	size64 []byte
 }
 
-func (p *floatSizePrefix) put(code gen.Buffer, t wasm.Type, ro, index, rmOrBase byte) {
+func (p *floatSizePrefix) put(code gen.Buffer, t abi.Type, ro, index, rmOrBase byte) {
 	switch t.Size() {
-	case wasm.Size32:
+	case abi.Size32:
 		code.PutBytes(p.size32)
 
-	case wasm.Size64:
+	case abi.Size64:
 		code.PutBytes(p.size64)
 
 	default:
@@ -61,12 +61,12 @@ var (
 	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
-func pushFloatOp(code gen.Buffer, t wasm.Type, source regs.R) {
-	sub.opImm(code, wasm.I64, RegStackPtr, gen.WordSize)
+func pushFloatOp(code gen.Buffer, t abi.Type, source regs.R) {
+	sub.opImm(code, abi.I64, RegStackPtr, gen.WordSize)
 	movsSSE.opToStack(code, t, source, 0)
 }
 
-func popFloatOp(code gen.Buffer, t wasm.Type, target regs.R) {
+func popFloatOp(code gen.Buffer, t abi.Type, target regs.R) {
 	movsSSE.opFromStack(code, t, target, 0)
-	add.opImm(code, wasm.I64, RegStackPtr, gen.WordSize)
+	add.opImm(code, abi.I64, RegStackPtr, gen.WordSize)
 }

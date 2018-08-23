@@ -7,24 +7,24 @@ package typeutil
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/abi"
 )
 
-var valueTypes = []wasm.Type{
-	wasm.I32,
-	wasm.I64,
-	wasm.F32,
-	wasm.F64,
+var valueTypes = []abi.Type{
+	abi.I32,
+	abi.I64,
+	abi.F32,
+	abi.F64,
 }
 
-func ValueTypeByEncoding(x int8) wasm.Type {
+func ValueTypeByEncoding(x int8) abi.Type {
 	if i := uint(-1 - x); i < uint(len(valueTypes)) {
 		return valueTypes[i]
 	}
 	panic(fmt.Errorf("unknown value type %d", x))
 }
 
-func BlockTypeByEncoding(x int8) (t wasm.Type) {
+func BlockTypeByEncoding(x int8) (t abi.Type) {
 	if x == -0x40 { // empty block type
 		return
 	}
