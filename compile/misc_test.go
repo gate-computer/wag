@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/callmap"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 )
@@ -46,14 +45,10 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 	defer p.Close()
 
-	mapping := new(callmap.Map)
-
 	var m Module
-	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, mapping)
+	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
-	p.SetFuncMap(mapping.FuncAddrs)
-	p.SetCallMap(mapping.CallSites)
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
 	if dumpBin {
@@ -63,7 +58,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), mapping.FuncAddrs, nil)
+		disasm.Fprint(os.Stdout, m.Text(), p.ObjInfo.FuncAddrs, nil)
 	}
 
 	var printBuf bytes.Buffer

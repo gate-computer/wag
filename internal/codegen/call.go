@@ -14,11 +14,11 @@ import (
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 )
 
 func mapCallAddr(f *function, retAddr int32) {
-	f.Mapper.PutCallSite(meta.TextAddr(retAddr), f.stackOffset+gen.WordSize)
+	f.Map.PutCallSite(object.TextAddr(retAddr), f.stackOffset+gen.WordSize)
 }
 
 func genCall(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {

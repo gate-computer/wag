@@ -13,7 +13,6 @@ import (
 
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
-	"github.com/tsavola/wag/insnmap"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/section"
 )
@@ -69,17 +68,13 @@ func TestExec(t *testing.T) {
 	}
 	defer r.Close()
 
-	mapping := new(insnmap.Map)
-
 	var printBuf bytes.Buffer
 	e, trigger := r.NewExecutor(m.Sigs(), &printBuf)
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), mapping, trigger)
+	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), &p.ObjInfo, trigger)
 	p.Seal()
-	p.SetFuncMap(mapping.FuncAddrs)
-	p.SetCallMap(mapping.CallSites)
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +90,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), mapping.FuncAddrs, nil)
+		disasm.Fprint(os.Stdout, m.Text(), p.ObjInfo.FuncAddrs, nil)
 	}
 }

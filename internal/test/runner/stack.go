@@ -17,31 +17,31 @@ import (
 )
 
 func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {
-	if len(p.funcMap) == 0 {
+	if len(p.ObjInfo.FuncAddrs) == 0 {
 		return
 	}
 
-	firstFuncAddr := p.funcMap[0]
+	firstFuncAddr := p.ObjInfo.FuncAddrs[0]
 	if retAddr > 0 && retAddr < int32(firstFuncAddr) {
 		initial = true
 		ok = true
 		return
 	}
 
-	num = sort.Search(len(p.funcMap), func(i int) bool {
+	num = sort.Search(len(p.ObjInfo.FuncAddrs), func(i int) bool {
 		var funcEndAddr int32
 
 		i++
-		if i == len(p.funcMap) {
+		if i == len(p.ObjInfo.FuncAddrs) {
 			funcEndAddr = int32(len(p.Text))
 		} else {
-			funcEndAddr = int32(p.funcMap[i])
+			funcEndAddr = int32(p.ObjInfo.FuncAddrs[i])
 		}
 
 		return retAddr <= funcEndAddr
 	})
 
-	if num < len(p.funcMap) {
+	if num < len(p.ObjInfo.FuncAddrs) {
 		ok = true
 	}
 	return
@@ -55,7 +55,7 @@ type callSite struct {
 func (p *Program) CallSites() map[int]callSite {
 	if p.callSites == nil {
 		p.callSites = make(map[int]callSite)
-		for i, site := range p.callMap {
+		for i, site := range p.ObjInfo.CallSites {
 			p.callSites[int(site.ReturnAddr)] = callSite{
 				uint64(i),
 				int(site.StackOffset),

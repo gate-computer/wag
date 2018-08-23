@@ -12,7 +12,7 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regalloc"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -82,6 +82,16 @@ type DataBuffer interface {
 	ResizeBytes(n int) []byte
 }
 
+// ObjectMap gathers information about positions of (WebAssembly) functions,
+// function calls and instructions within the text (machine code) section.
+type ObjectMap interface {
+	InitObjectMap(numImportFuncs, numOtherFuncs int)
+	PutImportFuncAddr(object.TextAddr)
+	PutFuncAddr(object.TextAddr)
+	PutCallSite(returnAddr object.TextAddr, stackOffset int32)
+	PutInsnAddr(object.TextAddr)
+}
+
 type ImportFunc struct {
 	FuncIndex int
 	Variadic  bool
@@ -98,16 +108,6 @@ type Global struct {
 	Type    abi.Type
 	Mutable bool
 	Init    uint64
-}
-
-// Mapper accepts information about positions of (WebAssembly) functions,
-// function calls and instructions within the text (machine code) section.
-type Mapper interface {
-	InitModule(numImportFuncs, numOtherFuncs int)
-	PutImportFuncAddr(meta.TextAddr)
-	PutFuncAddr(meta.TextAddr)
-	PutCallSite(returnAddr meta.TextAddr, stackOffset int32)
-	PutInsnAddr(meta.TextAddr)
 }
 
 type M struct {
@@ -129,7 +129,7 @@ type M struct {
 	ROData     DataBuffer
 	TrapLinks  [trap.NumTraps]links.L
 	FuncLinks  []links.FuncL
-	Mapper     Mapper
+	Map        ObjectMap
 	Regs       regalloc.Allocator
 
 	Data         DataBuffer

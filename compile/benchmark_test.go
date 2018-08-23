@@ -15,7 +15,6 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/callmap"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 )
@@ -194,17 +193,13 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 	defer p.Close()
 
-	mapping := new(callmap.Map)
-
 	m := Module{
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
 	}
-	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, mapping)
+	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
-	p.SetFuncMap(mapping.FuncAddrs)
-	p.SetCallMap(mapping.CallSites)
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
 	r, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
@@ -228,6 +223,6 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), mapping.FuncAddrs, nil)
+		disasm.Fprint(os.Stdout, m.Text(), p.ObjInfo.FuncAddrs, nil)
 	}
 }

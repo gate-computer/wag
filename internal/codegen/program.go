@@ -15,7 +15,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regalloc"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -39,7 +39,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 
 	m.FuncLinks = make([]links.FuncL, len(m.FuncSigs))
-	m.Mapper.InitModule(len(m.ImportFuncs), int(funcCodeCount))
+	m.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
 	roTableSize := len(m.TableFuncs) * 8
 	buf := m.ROData.ResizeBytes(gen.ROTableAddr + roTableSize)
@@ -176,7 +176,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 
 func opInitCall(m *Module, l *links.FuncL) {
 	retAddr := isa.OpInitCall(m.Text)
-	m.Mapper.PutCallSite(meta.TextAddr(retAddr), 0) // initial stack frame
+	m.Map.PutCallSite(object.TextAddr(retAddr), 0) // initial stack frame
 	l.AddSite(retAddr)
 }
 
@@ -188,7 +188,7 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 
 	isa.AlignFunc(m.Text)
 	addr = m.Text.Pos()
-	m.Mapper.PutImportFuncAddr(meta.TextAddr(addr))
+	m.Map.PutImportFuncAddr(object.TextAddr(addr))
 
 	sigIndex := m.FuncSigs[imp.FuncIndex]
 	sig := m.Sigs[sigIndex]

@@ -2,43 +2,42 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package insnmap
+package debug
 
 import (
-	"github.com/tsavola/wag/callmap"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 )
 
-// Mapping from machine code instruction to WebAssembly instruction.
-type Mapping struct {
+// Instruction mapping from machine code to WebAssembly.
+type InsnMapping struct {
 	ObjectOffset int32 // Machine code byte position within a function
 	SourceIndex  int32 // WebAssembly instruction count within a function
 }
 
-// Map implements Mapper.  It stores everything.
-type Map struct {
-	callmap.Map
-	FuncInsns [][]Mapping
+// InsnMap implements compile.ObjectMap.  It stores everything.
+type InsnMap struct {
+	object.CallMap
+	FuncInsns [][]InsnMapping
 
 	fun  int
-	base meta.TextAddr
+	base object.TextAddr
 	ins  int32
 }
 
-func (m *Map) InitModule(numImportFuncs, numOtherFuncs int) {
-	m.Map.InitModule(numImportFuncs, numOtherFuncs)
-	m.FuncInsns = make([][]Mapping, numOtherFuncs)
+func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
+	m.CallMap.InitObjectMap(numImportFuncs, numOtherFuncs)
+	m.FuncInsns = make([][]InsnMapping, numOtherFuncs)
 	m.fun = -1
 }
 
-func (m *Map) PutFuncAddr(pos meta.TextAddr) {
-	m.Map.PutFuncAddr(pos)
+func (m *InsnMap) PutFuncAddr(pos object.TextAddr) {
+	m.CallMap.PutFuncAddr(pos)
 	m.fun++
 	m.base = pos
 	m.ins = -1
 }
 
-func (m *Map) PutInsnAddr(absPos meta.TextAddr) {
+func (m *InsnMap) PutInsnAddr(absPos object.TextAddr) {
 	m.ins++
 	relPos := int32(absPos - m.base)
 
@@ -47,6 +46,6 @@ func (m *Map) PutInsnAddr(absPos meta.TextAddr) {
 		// Replace previous mapping because no machine code was generated
 		m.FuncInsns[m.fun][prev].SourceIndex = m.ins
 	} else {
-		m.FuncInsns[m.fun] = append(m.FuncInsns[m.fun], Mapping{relPos, m.ins})
+		m.FuncInsns[m.fun] = append(m.FuncInsns[m.fun], InsnMapping{relPos, m.ins})
 	}
 }

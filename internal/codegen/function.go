@@ -16,7 +16,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -226,7 +226,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	isa.AlignFunc(f)
 	addr := f.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
-	f.Mapper.PutFuncAddr(meta.TextAddr(addr))
+	f.Map.PutFuncAddr(object.TextAddr(addr))
 	isa.OpEnterFunc(f)
 
 	f.resultType = sig.Result

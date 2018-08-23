@@ -93,16 +93,16 @@ func (m *Module) loadPreliminarySections(r Reader, env Env) {
 }
 
 // Load all (remaining) sections.
-func (m *Module) Load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, mapper Mapper) (err error) {
+func (m *Module) Load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, objMap ObjectMap) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.load(r, env, text, roData, roDataAddr, data, mapper)
+	m.load(r, env, text, roData, roDataAddr, data, objMap)
 	return
 }
 
-func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, mapper Mapper) {
+func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, objMap ObjectMap) {
 	if text == nil {
 		text = new(defaultBuffer)
 	}
@@ -112,15 +112,15 @@ func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roD
 	if data == nil {
 		data = new(defaultBuffer)
 	}
-	if mapper == nil {
-		mapper = dummyMapper{}
+	if objMap == nil {
+		objMap = dummyMap{}
 	}
 
 	m.M.Text = text
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
 	m.M.Data = data
-	m.M.Mapper = mapper
+	m.M.Map = objMap
 
 	load(m, loader.L{Reader: r}, env)
 }
@@ -463,16 +463,16 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 }
 
 // LoadCodeSection, after loading the preliminary sections.
-func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, mapper Mapper, startTrigger chan<- struct{}) (err error) {
+func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, startTrigger chan<- struct{}) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.loadCodeSection(r, text, roData, roDataAddr, mapper, startTrigger)
+	m.loadCodeSection(r, text, roData, roDataAddr, objMap, startTrigger)
 	return
 }
 
-func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, mapper Mapper, startTrigger chan<- struct{}) {
+func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, startTrigger chan<- struct{}) {
 	if m.FuncLinks != nil {
 		panic(errors.New("code section has already been loaded"))
 	}
@@ -483,14 +483,14 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 	if roData == nil {
 		roData = new(defaultBuffer)
 	}
-	if mapper == nil {
-		mapper = dummyMapper{}
+	if objMap == nil {
+		objMap = dummyMap{}
 	}
 
 	m.M.Text = text
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
-	m.M.Mapper = mapper
+	m.M.Map = objMap
 
 	load := loader.L{Reader: r}
 

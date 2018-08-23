@@ -11,7 +11,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -81,7 +81,7 @@ func genOp(f *function, load loader.L, op Opcode) (deadend bool) {
 		debugDepth++
 	}
 
-	f.Mapper.PutInsnAddr(meta.TextAddr(f.Pos()))
+	f.Map.PutInsnAddr(object.TextAddr(f.Pos()))
 
 	impl := opcodeImpls[op]
 	deadend = impl.gen(f, load, op, impl.info)

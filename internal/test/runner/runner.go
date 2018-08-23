@@ -15,7 +15,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/imports"
-	"github.com/tsavola/wag/meta"
+	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
@@ -127,14 +127,12 @@ type runnable interface {
 }
 
 type Program struct {
-	Text   []byte
-	ROData []byte
+	Text    []byte
+	ROData  []byte
+	ObjInfo object.CallMap
 
 	data         []byte
 	memoryOffset int
-
-	funcMap []meta.TextAddr
-	callMap []meta.CallSite
 
 	funcAddrs map[int]int
 	callSites map[int]callSite
@@ -169,14 +167,6 @@ func (p *Program) RODataAddr() int32 {
 func (p *Program) SetData(data []byte, memoryOffset int) {
 	p.data = data
 	p.memoryOffset = memoryOffset
-}
-
-func (p *Program) SetFuncMap(funcMap []meta.TextAddr) {
-	p.funcMap = funcMap
-}
-
-func (p *Program) SetCallMap(callMap []meta.CallSite) {
-	p.callMap = callMap
 }
 
 func (p *Program) Seal() (err error) {
