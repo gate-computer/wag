@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package compile
 
 import (
 	"bufio"
@@ -15,12 +15,10 @@ import (
 	"github.com/tsavola/wag/internal/test/runner"
 )
 
-func TestCallWithDuplicatedOperand(t *testing.T) {
-	misc(t, "testdata/call-with-duplicated-operand.wast", "32744 32 32\n")
-}
-
-func misc(t *testing.T, filename, expectOutput string) {
+func TestSnapshot(t *testing.T) {
 	const (
+		filename = "../testdata/snapshot.wast"
+
 		maxTextSize   = 65536
 		maxRODataSize = 4096
 		stackSize     = 4096
@@ -44,7 +42,10 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 	defer p.Close()
 
-	var m Module
+	m := Module{
+		EntrySymbol:    "main",
+		CallMapEnabled: true,
+	}
 	m.load(wasm, runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
@@ -64,20 +65,38 @@ func misc(t *testing.T, filename, expectOutput string) {
 
 	var printBuf bytes.Buffer
 
-	r, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
+	r1, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
+	_, err = r1.Run(0, m.Signatures(), &printBuf)
+	r1.Close()
 
-	_, err = r.Run(0, m.Signatures(), &printBuf)
+	if printBuf.Len() > 0 {
+		t.Logf("print output:\n%s", string(printBuf.Bytes()))
+	}
+
+	if len(r1.Snapshots) != 1 {
+		t.Fatal(r1.Snapshots)
+	}
+	s := r1.Snapshots[0]
+
+	t.Log("resuming")
+
+	printBuf.Reset()
+
+	r2, err := s.NewRunner(maxMemorySize, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = r2.Run(0, m.Signatures(), &printBuf)
+	r2.Close()
 
-	output := string(printBuf.Bytes())
-	t.Logf("print output:\n%s", output)
-	if output != expectOutput {
-		t.Fail()
+	if printBuf.Len() > 0 {
+		t.Logf("print output:\n%s", string(printBuf.Bytes()))
+	}
+
+	if len(r2.Snapshots) != 0 {
+		t.Fatal(r2.Snapshots)
 	}
 }

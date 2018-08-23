@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package compile
 
 import (
 	"bufio"
@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	specTestDir = "testdata/spec/test/core"
+	specTestDir = "../testdata/spec/test/core"
 )
 
 // for i in $(ls -1 *.wast); do echo 'func Test_'$(echo $i | sed 's/.wast$//' | tr - _ | tr . _)'(t *testing.T) { spec(t, "'$(echo $i | sed 's/.wast$//')'") }'; done
@@ -455,7 +455,8 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		var nameSection section.NameSection
 
 		m := Module{
-			EntrySymbol: "test",
+			EntrySymbol:    "test",
+			CallMapEnabled: true,
 			UnknownSectionLoader: section.UnknownLoaders{
 				"name": nameSection.Load,
 			}.Load,
@@ -469,7 +470,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
 		if dumpBin {
-			if err := writeBin(&m, path.Join("testdata", filename)); err != nil {
+			if err := writeBin(&m, path.Join("../testdata", filename)); err != nil {
 				t.Error(err)
 			}
 		}

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package compile
 
 import (
 	"bytes"
@@ -45,7 +45,7 @@ func (*dummyEnv) ImportGlobal(module, field string, t wasm.Type) (valueBits uint
 var loadBenchmarkEnv Env = new(dummyEnv)
 
 const (
-	loadBenchmarkFilename      = "testdata/large.wasm"
+	loadBenchmarkFilename      = "../testdata/large.wasm"
 	loadBenchmarkEntrySymbol   = "run"
 	loadBenchmarkEntryNumArgs  = 2
 	loadBenchmarkMaxTextSize   = 16 * 1024 * 1024
@@ -173,7 +173,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 
 	const (
-		filename = "testdata/nqueens.wasm"
+		filename = "../testdata/nqueens.wasm"
 
 		maxTextSize   = 65536
 		maxRODataSize = 4096
@@ -196,6 +196,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	m := Module{
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
+		CallMapEnabled:  true,
 	}
 	m.load(bytes.NewReader(data), runner.Env, NewFixedBuffer(p.Text[:0]), NewFixedBuffer(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()

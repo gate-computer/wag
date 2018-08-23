@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package compile
 
 import (
 	"encoding/binary"
@@ -75,8 +75,9 @@ type Module struct {
 	EntrySymbol          string
 	EntryArgs            []uint64
 	MemoryAlignment      int // see Data()
-	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+	CallMapEnabled       bool
 	InsnMap              InsnMap
+	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
 	module.Module
 }
@@ -499,6 +500,14 @@ func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
 		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
+	if m.CallMapEnabled || m.InsnMap != nil {
+		m.Module.FuncMap = make([]int32, 0, len(m.FuncSigs))
+	}
+
+	if m.CallMapEnabled {
+		m.Module.CallMap = make([]module.CallSite, 0, len(m.FuncSigs)) // conservative estimate...
+	}
+
 	insnMap := m.InsnMap
 	if insnMap == nil {
 		insnMap = dummyInsnMap{}
@@ -597,12 +606,14 @@ func (m *Module) ROData() (b []byte) {
 	return
 }
 
-// FunctionMap is available after code section has been loaded.
+// FunctionMap is available after code section has been loaded and either
+// CallMapEnabled or InsnMap was set before that.
 func (m *Module) FunctionMap() []int32 {
 	return m.FuncMap
 }
 
-// CallMap is available after code section has been loaded.
+// CallMap is available after code section has been loaded and CallMapEnabled
+// was set before that.
 func (m *Module) CallMap() []CallSite {
 	return m.Module.CallMap
 }

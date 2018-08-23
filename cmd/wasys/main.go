@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/tsavola/wag"
+	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/wasm"
 	"github.com/tsavola/wag/wasm/function"
 )
@@ -105,19 +105,19 @@ func main() {
 		log.Fatal(err)
 	}
 	roDataAddr := memAddr(roDataMem)
-	roDataBuf := wag.NewFixedBuffer(roDataMem[:0])
+	roDataBuf := compile.NewFixedBuffer(roDataMem[:0])
 
 	textMem, err := makeMem(textSize, syscall.PROT_EXEC, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
 	textAddr := memAddr(textMem)
-	textBuf := wag.NewFixedBuffer(textMem[:0])
+	textBuf := compile.NewFixedBuffer(textMem[:0])
 
 	pageSize := os.Getpagesize()
 	pageMask := pageSize - 1
 
-	m := wag.Module{
+	m := compile.Module{
 		EntrySymbol:     entrySymbol,
 		EntryArgs:       make([]uint64, 2),
 		MemoryAlignment: pageSize,
@@ -139,7 +139,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dataBuf := wag.NewFixedBuffer(globalsMemoryMem[:0])
+	dataBuf := compile.NewFixedBuffer(globalsMemoryMem[:0])
 	memoryAddr := memAddr(globalsMemoryMem) + uintptr(memoryOffset)
 	initMemoryEnd := memoryAddr + uintptr(initMemorySize)
 	growMemoryEnd := memoryAddr + uintptr(growMemorySize)

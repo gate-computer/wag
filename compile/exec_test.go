@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package compile
 
 import (
 	"bufio"
@@ -18,7 +18,7 @@ import (
 
 func TestExec(t *testing.T) {
 	const (
-		filename = "testdata/exec.wast"
+		filename = "../testdata/exec.wast"
 
 		maxTextSize   = 65536
 		maxRODataSize = 4096
@@ -37,7 +37,10 @@ func TestExec(t *testing.T) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	m := Module{EntrySymbol: "main"}
+	m := Module{
+		EntrySymbol:    "main",
+		CallMapEnabled: true,
+	}
 	m.loadPreliminarySections(wasm, runner.Env)
 
 	var codeBuf bytes.Buffer

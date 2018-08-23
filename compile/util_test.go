@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package wag
+package compile
 
 import (
 	"io"
@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	binDir = "testdata/wabt/bin"
+	binDir = "../testdata/wabt/bin"
 
 	dumpWAST = false
 	dumpWASM = false

@@ -10,7 +10,7 @@ import (
 
 	"github.com/bnagy/gapstone"
 
-	"github.com/tsavola/wag"
+	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/wasm"
 	"github.com/tsavola/wag/wasm/function"
 )
@@ -20,7 +20,7 @@ const (
 )
 
 func Fuzz(data []byte) int {
-	var m wag.Module
+	var m compile.Module
 
 	err := m.Load(bytes.NewReader(data), env{}, nil, nil, roDataAddr, nil)
 	if err != nil {
