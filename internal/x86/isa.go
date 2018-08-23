@@ -39,8 +39,8 @@ const (
 )
 
 const (
-	FunctionAlignment = 16
-	PaddingByte       = 0xcc // int3 instruction
+	FuncAlignment = 16
+	PaddingByte   = 0xcc // int3 instruction
 )
 
 var paramRegs [2][]regs.R
@@ -196,10 +196,10 @@ func (ISA) UpdateCalls(text []byte, l *links.L) {
 	}
 }
 
-func (ISA) AlignFunction(code gen.Buffer) { alignFunction(code) }
+func (ISA) AlignFunc(code gen.Buffer) { alignFunc(code) }
 
-func alignFunction(code gen.Buffer) {
-	n := (FunctionAlignment - code.Pos()) & (FunctionAlignment - 1)
+func alignFunc(code gen.Buffer) {
+	n := (FuncAlignment - code.Pos()) & (FuncAlignment - 1)
 	buf := code.Extend(int(n))
 	for i := range buf {
 		buf[i] = PaddingByte
@@ -230,10 +230,10 @@ func opMoveIntImm(code gen.Buffer, reg regs.R, value int64) {
 }
 
 func (ISA) OpInit(code gen.Buffer) {
-	if code.Pos() == 0 || code.Pos() > FunctionAlignment {
+	if code.Pos() == 0 || code.Pos() > FuncAlignment {
 		panic("inconsistency")
 	}
-	alignFunction(code)
+	alignFunc(code)
 	add.opImm(code, abi.I64, RegStackLimit, gen.StackReserve)
 
 	var notResume links.L
@@ -249,11 +249,11 @@ func (ISA) OpInit(code gen.Buffer) {
 
 func (ISA) OpInitCall(code gen.Buffer) (retAddr int32) {
 	// no alignment since initial calls are always generated before execution
-	callRel.opMissingFunction(code)
+	callRel.opMissingFunc(code)
 	return code.Pos()
 }
 
-func (ISA) OpEnterImportFunction(code gen.Buffer, absAddr uint64, variadic bool, argCount, sigIndex int) {
+func (ISA) OpEnterImportFunc(code gen.Buffer, absAddr uint64, variadic bool, argCount, sigIndex int) {
 	if variadic {
 		opMoveIntImm(code, RegImportArgCount, int64(argCount))
 		opMoveIntImm(code, RegImportSigIndex, int64(sigIndex))
@@ -282,7 +282,7 @@ func (ISA) OpCall(code gen.Buffer, addr int32) (retAddr int32) {
 			padSize := 4 - relPos
 			code.PutBytes(nopSequences[padSize-1])
 		}
-		callRel.opMissingFunction(code)
+		callRel.opMissingFunc(code)
 	} else {
 		callRel.op(code, addr)
 	}
@@ -416,7 +416,7 @@ func updateLocalAddr(code gen.Buffer, addr, value int32) {
 	code.Bytes()[addr-1] = uint8(value)
 }
 
-func (ISA) OpEnterFunction(code gen.Coder) {
+func (ISA) OpEnterFunc(code gen.Coder) {
 	var skip links.L
 
 	test.opFromReg(code, abi.I64, RegSuspendFlag, RegSuspendFlag)

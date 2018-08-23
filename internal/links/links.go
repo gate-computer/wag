@@ -39,11 +39,11 @@ func (l *L) FinalAddr() int32 {
 	return l.Addr
 }
 
-type FunctionL struct {
+type FuncL struct {
 	L
 	TableIndexes []int
 }
 
-func (fl *FunctionL) AddTableIndex(index int) {
+func (fl *FuncL) AddTableIndex(index int) {
 	fl.TableIndexes = append(fl.TableIndexes, index)
 }

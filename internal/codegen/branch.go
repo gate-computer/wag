@@ -21,7 +21,7 @@ type branchTarget struct {
 	label       links.L
 	stackOffset int32
 	valueType   abi.Type
-	functionEnd bool
+	funcEnd     bool
 }
 
 type branchTable struct {
@@ -30,7 +30,7 @@ type branchTable struct {
 	codeStackOffset int32 // -1 indicates common offset
 }
 
-func pushBranchTarget(f *function, valueType abi.Type, functionEnd bool) {
+func pushBranchTarget(f *function, valueType abi.Type, funcEnd bool) {
 	stackOffset := f.stackOffset
 
 	if int(f.numInitedVars) < len(f.vars) {
@@ -43,7 +43,7 @@ func pushBranchTarget(f *function, valueType abi.Type, functionEnd bool) {
 	f.branchTargets = append(f.branchTargets, &branchTarget{
 		stackOffset: stackOffset,
 		valueType:   valueType,
-		functionEnd: functionEnd,
+		funcEnd:     funcEnd,
 	})
 }
 
@@ -144,7 +144,7 @@ func genBr(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 		opMove(f, regs.Result, value, false)
 	}
 
-	if target.functionEnd {
+	if target.funcEnd {
 		isa.OpAddImmToStackPtr(f, f.stackOffset)
 		isa.OpReturn(f)
 	} else {

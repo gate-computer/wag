@@ -19,7 +19,7 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-type Module = module.Module
+type Module = module.M
 
 func offsetOfGlobal(m *Module, index uint32) int32 {
 	return (int32(index) - int32(len(m.Globals))) * gen.WordSize
@@ -38,7 +38,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
-	m.FuncLinks = make([]links.FunctionL, len(m.FuncSigs))
+	m.FuncLinks = make([]links.FuncL, len(m.FuncSigs))
 	insnMap.Init(int(funcCodeCount))
 
 	roTableSize := len(m.TableFuncs) * 8
@@ -174,7 +174,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 }
 
-func opInitCall(m *Module, l *links.FunctionL) {
+func opInitCall(m *Module, l *links.FuncL) {
 	retAddr := isa.OpInitCall(m.Text)
 	mapCallAddr(m, retAddr, 0) // initial stack frame
 	l.AddSite(retAddr)
@@ -190,15 +190,15 @@ func mapCallAddr(m *Module, retAddr, stackOffset int32) {
 	}
 }
 
-func genImportEntry(m *Module, imp module.ImportFunction) (addr int32) {
+func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 	if debug {
 		debugf("import function")
 		debugDepth++
 	}
 
-	isa.AlignFunction(m.Text)
+	isa.AlignFunc(m.Text)
 	addr = m.Text.Pos()
-	mapFunctionAddr(m, addr)
+	mapFuncAddr(m, addr)
 
 	sigIndex := m.FuncSigs[imp.FuncIndex]
 	sig := m.Sigs[sigIndex]
@@ -217,7 +217,7 @@ func genImportEntry(m *Module, imp module.ImportFunction) (addr int32) {
 		}
 	}
 
-	isa.OpEnterImportFunction(m.Text, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
+	isa.OpEnterImportFunc(m.Text, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
 
 	if debug {
 		debugDepth--
@@ -227,7 +227,7 @@ func genImportEntry(m *Module, imp module.ImportFunction) (addr int32) {
 	return
 }
 
-func mapFunctionAddr(m *Module, addr int32) {
+func mapFuncAddr(m *Module, addr int32) {
 	if m.FuncMap != nil {
 		debugf("map function: addr=0x%x", addr)
 		m.FuncMap = append(m.FuncMap, meta.TextAddr(addr))

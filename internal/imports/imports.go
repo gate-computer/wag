@@ -10,21 +10,21 @@ import (
 	"github.com/tsavola/wag/abi"
 )
 
-type Function struct {
-	abi.FunctionType
+type Func struct {
+	abi.Sig
 	Variadic bool
 	AbsAddr  uint64
 }
 
-func (impl Function) Implements(signature abi.FunctionType) bool {
+func (impl Func) Implements(signature abi.Sig) bool {
 	if impl.Variadic {
-		return equalTypesVariadic(impl.FunctionType, signature)
+		return equalTypesVariadic(impl.Sig, signature)
 	} else {
-		return equalTypes(impl.FunctionType, signature)
+		return equalTypes(impl.Sig, signature)
 	}
 }
 
-func (f Function) String() (s string) {
+func (f Func) String() (s string) {
 	s = fmt.Sprintf("0x%x (", f.AbsAddr)
 	for i, t := range f.Args {
 		if i > 0 {
@@ -39,7 +39,7 @@ func (f Function) String() (s string) {
 	return
 }
 
-func compareTypes(sig1, sig2 abi.FunctionType) int {
+func compareTypes(sig1, sig2 abi.Sig) int {
 	len1 := len(sig1.Args)
 	len2 := len(sig2.Args)
 
@@ -53,11 +53,11 @@ func compareTypes(sig1, sig2 abi.FunctionType) int {
 	return compareTypePrefixes(sig1, sig2, len1)
 }
 
-func equalTypes(sig1, sig2 abi.FunctionType) bool {
+func equalTypes(sig1, sig2 abi.Sig) bool {
 	return compareTypes(sig1, sig2) == 0
 }
 
-func equalTypesVariadic(partial, complete abi.FunctionType) bool {
+func equalTypesVariadic(partial, complete abi.Sig) bool {
 	minLen := len(partial.Args)
 
 	if len(complete.Args) < minLen {
@@ -67,7 +67,7 @@ func equalTypesVariadic(partial, complete abi.FunctionType) bool {
 	return compareTypePrefixes(partial, complete, minLen) == 0
 }
 
-func compareTypePrefixes(sig1, sig2 abi.FunctionType, numArgs int) int {
+func compareTypePrefixes(sig1, sig2 abi.Sig, numArgs int) int {
 	for i := 0; i < numArgs; i++ {
 		arg1 := sig1.Args[i]
 		arg2 := sig2.Args[i]

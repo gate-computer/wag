@@ -24,7 +24,7 @@ import (
 )
 
 type Env interface {
-	ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error)
+	ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error)
 	ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error)
 }
 
@@ -78,7 +78,7 @@ type Module struct {
 	InsnMap              meta.InsnMap
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
-	module.Module
+	module.M
 }
 
 // LoadPreliminarySections, excluding the code and data sections.
@@ -116,10 +116,10 @@ func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roD
 		data = new(defaultBuffer)
 	}
 
-	m.Module.Text = text
-	m.Module.ROData = roData
-	m.Module.RODataAddr = roDataAddr
-	m.Module.Data = data
+	m.M.Text = text
+	m.M.ROData = roData
+	m.M.RODataAddr = roDataAddr
+	m.M.Data = data
 
 	load(m, loader.L{Reader: r}, env)
 }
@@ -221,10 +221,10 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 				panic(fmt.Errorf("unsupported function type form: %d", form))
 			}
 
-			var sig abi.FunctionType
+			var sig abi.Sig
 
 			paramCount := load.Varuint32()
-			if paramCount > codegen.MaxFunctionParams {
+			if paramCount > codegen.MaxFuncParams {
 				panic(fmt.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 			}
 
@@ -237,7 +237,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 				sig.Result = typeutil.ValueTypeByEncoding(load.Varint7())
 			}
 
-			m.Sigs = append(m.Sigs, sig)
+			m.M.Sigs = append(m.M.Sigs, sig)
 		}
 	},
 
@@ -262,24 +262,24 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 			switch kind {
 			case module.ExternalKindFunction:
 				sigIndex := load.Varuint32()
-				if sigIndex >= uint32(len(m.Sigs)) {
+				if sigIndex >= uint32(len(m.M.Sigs)) {
 					panic(fmt.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
 				}
 
-				sig := m.Sigs[sigIndex]
+				sig := m.M.Sigs[sigIndex]
 				if n := len(sig.Args); n > codegen.MaxImportParams {
 					panic(fmt.Errorf("import function #%d has too many parameters: %d", i, n))
 				}
 
-				funcIndex := len(m.FuncSigs)
-				m.FuncSigs = append(m.FuncSigs, sigIndex)
+				funcIndex := len(m.M.FuncSigs)
+				m.M.FuncSigs = append(m.M.FuncSigs, sigIndex)
 
-				variadic, absAddr, err := env.ImportFunction(moduleStr, fieldStr, sig)
+				variadic, absAddr, err := env.ImportFunc(moduleStr, fieldStr, sig)
 				if err != nil {
 					panic(err)
 				}
 
-				m.ImportFuncs = append(m.ImportFuncs, module.ImportFunction{
+				m.ImportFuncs = append(m.ImportFuncs, module.ImportFunc{
 					FuncIndex: funcIndex,
 					Variadic:  variadic,
 					AbsAddr:   absAddr,
@@ -325,11 +325,11 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 	module.SectionFunction: func(m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			sigIndex := load.Varuint32()
-			if sigIndex >= uint32(len(m.Sigs)) {
+			if sigIndex >= uint32(len(m.M.Sigs)) {
 				panic(fmt.Errorf("function type index out of bounds: %d", sigIndex))
 			}
 
-			m.FuncSigs = append(m.FuncSigs, sigIndex)
+			m.M.FuncSigs = append(m.M.FuncSigs, sigIndex)
 		}
 	},
 
@@ -377,12 +377,12 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 			switch kind {
 			case module.ExternalKindFunction:
 				if fieldLen > 0 && string(fieldStr) == m.EntrySymbol {
-					if index >= uint32(len(m.FuncSigs)) {
+					if index >= uint32(len(m.M.FuncSigs)) {
 						panic(fmt.Errorf("export function index out of bounds: %d", index))
 					}
 
-					sigIndex := m.FuncSigs[index]
-					sig := m.Sigs[sigIndex]
+					sigIndex := m.M.FuncSigs[index]
+					sig := m.M.Sigs[sigIndex]
 					if len(sig.Args) > codegen.MaxEntryParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == abi.Void || sig.Result == abi.I32) {
 						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
 					}
@@ -401,12 +401,12 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 	module.SectionStart: func(m *Module, load loader.L, env Env) {
 		index := load.Varuint32()
-		if index >= uint32(len(m.FuncSigs)) {
+		if index >= uint32(len(m.M.FuncSigs)) {
 			panic(fmt.Errorf("start function index out of bounds: %d", index))
 		}
 
-		sigIndex := m.FuncSigs[index]
-		sig := m.Sigs[sigIndex]
+		sigIndex := m.M.FuncSigs[index]
+		sig := m.M.Sigs[sigIndex]
 		if len(sig.Args) > 0 || sig.Result != abi.Void {
 			panic(fmt.Errorf("invalid start function signature: %s", sig))
 		}
@@ -442,7 +442,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 			for j := int(offset); j < int(needSize); j++ {
 				elem := load.Varuint32()
-				if elem >= uint32(len(m.FuncSigs)) {
+				if elem >= uint32(len(m.M.FuncSigs)) {
 					panic(fmt.Errorf("table element index out of bounds: %d", elem))
 				}
 
@@ -483,9 +483,9 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 		roData = new(defaultBuffer)
 	}
 
-	m.Module.Text = text
-	m.Module.ROData = roData
-	m.Module.RODataAddr = roDataAddr
+	m.M.Text = text
+	m.M.ROData = roData
+	m.M.RODataAddr = roDataAddr
 
 	load := loader.L{Reader: r}
 
@@ -500,11 +500,11 @@ func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
 	}
 
 	if m.Metadata || m.InsnMap != nil {
-		m.Module.FuncMap = make([]meta.TextAddr, 0, len(m.FuncSigs))
+		m.M.FuncMap = make([]meta.TextAddr, 0, len(m.M.FuncSigs))
 	}
 
 	if m.Metadata {
-		m.Module.CallMap = make([]meta.CallSite, 0, len(m.FuncSigs)) // conservative estimate...
+		m.M.CallMap = make([]meta.CallSite, 0, len(m.M.FuncSigs)) // conservative estimate...
 	}
 
 	insnMap := m.InsnMap
@@ -512,7 +512,7 @@ func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
 		insnMap = dummyInsnMap{}
 	}
 
-	codegen.GenProgram(&m.Module, load, m.EntryDefined, m.EntrySymbol, m.EntryArgs, startTrigger, insnMap)
+	codegen.GenProgram(&m.M, load, m.EntryDefined, m.EntrySymbol, m.EntryArgs, startTrigger, insnMap)
 }
 
 // LoadDataSection, after loading the preliminary sections.
@@ -526,14 +526,14 @@ func (m *Module) LoadDataSection(r Reader, data DataBuffer) (err error) {
 }
 
 func (m *Module) loadDataSection(r Reader, data DataBuffer) {
-	if m.Module.Data != nil {
+	if m.M.Data != nil {
 		panic(errors.New("data section has already been loaded"))
 	}
 
 	if data == nil {
 		data = new(defaultBuffer)
 	}
-	m.Module.Data = data
+	m.M.Data = data
 
 	genDataGlobals(m)
 
@@ -563,16 +563,16 @@ func readSectionHeader(load loader.L, expectId byte, idError string) (ok bool) {
 	return
 }
 
-// Signatures are available after preliminary sections have been loaded.
-func (m *Module) Signatures() []abi.FunctionType {
-	return m.Sigs
+// Sigs are available after preliminary sections have been loaded.
+func (m *Module) Sigs() []abi.Sig {
+	return m.M.Sigs
 }
 
-// FunctionSignatures are available after preliminary sections have been loaded.
-func (m *Module) FunctionSignatures() (funcSigs []abi.FunctionType) {
-	funcSigs = make([]abi.FunctionType, len(m.FuncSigs))
-	for i, sigIndex := range m.FuncSigs {
-		funcSigs[i] = m.Sigs[sigIndex]
+// FuncSigs are available after preliminary sections have been loaded.
+func (m *Module) FuncSigs() (funcSigs []abi.Sig) {
+	funcSigs = make([]abi.Sig, len(m.M.FuncSigs))
+	for i, sigIndex := range m.M.FuncSigs {
+		funcSigs[i] = m.M.Sigs[sigIndex]
 	}
 	return
 }
@@ -591,38 +591,38 @@ func (m *Module) GlobalsSize() int {
 
 // Text is available after code section has been loaded.
 func (m *Module) Text() (b []byte) {
-	if m.Module.Text != nil {
-		b = m.Module.Text.Bytes()
+	if m.M.Text != nil {
+		b = m.M.Text.Bytes()
 	}
 	return
 }
 
 // ROData is available after code section has been loaded.
 func (m *Module) ROData() (b []byte) {
-	if m.Module.ROData != nil {
-		b = m.Module.ROData.Bytes()
+	if m.M.ROData != nil {
+		b = m.M.ROData.Bytes()
 	}
 	return
 }
 
-// FunctionMap is available after code section has been loaded and either
-// Metadata or InsnMap was set before that.  The function addresses are in
-// ascending order.
-func (m *Module) FunctionMap() []meta.TextAddr {
-	return m.FuncMap
+// FuncMap is available after code section has been loaded and either Metadata
+// or InsnMap was set before that.  The function addresses are in ascending
+// order.
+func (m *Module) FuncMap() []meta.TextAddr {
+	return m.M.FuncMap
 }
 
 // CallMap is available after code section has been loaded and Metadata was set
 // before that.  The call sites are in ascending order.
 func (m *Module) CallMap() []meta.CallSite {
-	return m.Module.CallMap
+	return m.M.CallMap
 }
 
 // Data is available after data section has been loaded.  memoryOffset is an
 // offset into data.  It will be a multiple of MemoryAlignment.
 func (m *Module) Data() (data []byte, memoryOffset int) {
-	if m.Module.Data == nil {
-		m.Module.Data = new(defaultBuffer)
+	if m.M.Data == nil {
+		m.M.Data = new(defaultBuffer)
 	}
 
 	if len(m.Globals) > 0 && m.MemoryOffset == 0 {
@@ -630,7 +630,7 @@ func (m *Module) Data() (data []byte, memoryOffset int) {
 		genDataGlobals(m)
 	}
 
-	data = m.Module.Data.Bytes()
+	data = m.M.Data.Bytes()
 	memoryOffset = m.MemoryOffset
 	return
 }

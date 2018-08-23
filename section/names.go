@@ -21,14 +21,14 @@ const (
 	subsectionLocalNames
 )
 
-type FunctionName struct { // TODO: rename?
+type FuncName struct { // TODO: rename?
 	FunName    string   // TODO: rename?
 	LocalNames []string // TODO: map?
 }
 
 type NameSection struct {
-	ModuleName    string
-	FunctionNames []FunctionName // TODO: map? rename?
+	ModuleName string
+	FuncNames  []FuncName // TODO: map? rename?
 }
 
 // Load "name" custom section.
@@ -61,11 +61,11 @@ func (ns *NameSection) Load(_ string, r module.Reader) (err error) {
 
 			for range loadContent.Count() {
 				funIndex := loadContent.Varuint32()
-				for uint32(len(ns.FunctionNames)) <= funIndex {
-					ns.FunctionNames = append(ns.FunctionNames, FunctionName{}) // TODO: optimize
+				for uint32(len(ns.FuncNames)) <= funIndex {
+					ns.FuncNames = append(ns.FuncNames, FuncName{}) // TODO: optimize
 				}
 
-				fn := &ns.FunctionNames[funIndex]
+				fn := &ns.FuncNames[funIndex]
 
 				switch id {
 				case subsectionFunctionNames:

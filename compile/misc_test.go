@@ -51,7 +51,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
-	p.SetFunctionMap(m.FunctionMap())
+	p.SetFuncMap(m.FuncMap())
 	p.SetCallMap(m.CallMap())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
@@ -62,7 +62,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), nil)
 	}
 
 	var printBuf bytes.Buffer
@@ -73,7 +73,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 	defer r.Close()
 
-	_, err = r.Run(0, m.Signatures(), &printBuf)
+	_, err = r.Run(0, m.Sigs(), &printBuf)
 	if err != nil {
 		t.Fatal(err)
 	}

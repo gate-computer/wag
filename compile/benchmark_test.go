@@ -34,7 +34,7 @@ func makeTrigger() chan struct{}   { return make(chan struct{}) }
 
 type dummyEnv struct{}
 
-func (*dummyEnv) ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error) {
+func (*dummyEnv) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
 	return
 }
 
@@ -201,7 +201,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
-	p.SetFunctionMap(m.FunctionMap())
+	p.SetFuncMap(m.FuncMap())
 	p.SetCallMap(m.CallMap())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
@@ -215,7 +215,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	defer runtime.UnlockOSThread()
 
 	var printBuf bytes.Buffer
-	result, err := r.Run(0, m.Signatures(), &printBuf)
+	result, err := r.Run(0, m.Sigs(), &printBuf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,6 +226,6 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), nil)
 	}
 }

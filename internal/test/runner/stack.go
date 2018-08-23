@@ -140,7 +140,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 	return
 }
 
-func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns *section.NameSection, stack []byte) (err error) {
+func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection, stack []byte) (err error) {
 	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
@@ -187,9 +187,9 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns
 		var name string
 		var localNames []string
 
-		if ns != nil && funcNum < len(ns.FunctionNames) {
-			name = ns.FunctionNames[funcNum].FunName
-			localNames = ns.FunctionNames[funcNum].LocalNames
+		if ns != nil && funcNum < len(ns.FuncNames) {
+			name = ns.FuncNames[funcNum].FunName
+			localNames = ns.FuncNames[funcNum].LocalNames
 		} else {
 			name = fmt.Sprintf("func-%d", funcNum)
 		}
@@ -197,7 +197,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns
 		var sigStr string
 
 		if funcNum < len(funcSigs) {
-			sigStr = functionSignatureWithNames(funcSigs[funcNum], localNames)
+			sigStr = funcSigWithNames(funcSigs[funcNum], localNames)
 		}
 
 		fmt.Fprintf(w, "#%d  %s%s\n", depth, name, sigStr)
@@ -209,7 +209,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns
 	return
 }
 
-func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns *section.NameSection) (err error) {
+func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection) (err error) {
 	if r.lastTrap != 0 {
 		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
 	}
@@ -228,7 +228,7 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns 
 	return r.prog.writeStacktraceTo(w, funcSigs, ns, r.stack[unused:])
 }
 
-func functionSignatureWithNames(f abi.FunctionType, localNames []string) (s string) {
+func funcSigWithNames(f abi.Sig, localNames []string) (s string) {
 	s = "("
 	for i, t := range f.Args {
 		if i > 0 {

@@ -24,7 +24,7 @@ func genDataGlobals(m *Module) {
 		offset = align - n
 	}
 
-	buf := m.Module.Data.ResizeBytes(offset + size)
+	buf := m.M.Data.ResizeBytes(offset + size)
 
 	ptr := buf[offset:]
 	for _, global := range m.Globals {
@@ -36,7 +36,7 @@ func genDataGlobals(m *Module) {
 }
 
 func genDataMemory(m *Module, load loader.L) {
-	buf := m.Module.Data.Bytes()
+	buf := m.M.Data.Bytes()
 
 	for i := range load.Count() {
 		if index := load.Varuint32(); index != 0 {
@@ -54,7 +54,7 @@ func genDataMemory(m *Module, load loader.L) {
 
 		needDataSize := m.MemoryOffset + int(needMemorySize)
 		if needDataSize > len(buf) {
-			buf = m.Module.Data.ResizeBytes(needDataSize)
+			buf = m.M.Data.ResizeBytes(needDataSize)
 		}
 
 		dataOffset := m.MemoryOffset + int(offset)

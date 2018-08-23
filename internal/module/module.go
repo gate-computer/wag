@@ -82,7 +82,7 @@ type DataBuffer interface {
 	ResizeBytes(n int) []byte
 }
 
-type ImportFunction struct {
+type ImportFunc struct {
 	FuncIndex int
 	Variadic  bool
 	AbsAddr   uint64
@@ -100,10 +100,10 @@ type Global struct {
 	Init    uint64
 }
 
-type Module struct {
-	Sigs              []abi.FunctionType
+type M struct {
+	Sigs              []abi.Sig
 	FuncSigs          []uint32
-	ImportFuncs       []ImportFunction
+	ImportFuncs       []ImportFunc
 	TableLimitValues  ResizableLimits
 	MemoryLimitValues ResizableLimits
 	Globals           []Global
@@ -118,7 +118,7 @@ type Module struct {
 	RODataAddr int32
 	ROData     DataBuffer
 	TrapLinks  [trap.NumTraps]links.L
-	FuncLinks  []links.FunctionL
+	FuncLinks  []links.FuncL
 	FuncMap    []meta.TextAddr
 	CallMap    []meta.CallSite
 	Regs       regalloc.Allocator

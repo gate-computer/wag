@@ -45,7 +45,7 @@ func Fuzz(data []byte) int {
 
 type env struct{}
 
-func (env) ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error) {
+func (env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
 	err = fmt.Errorf("import function %#v%#v %s", module, field, sig)
 	return
 }

@@ -30,7 +30,7 @@ var importFuncs = make(map[string]uint64)
 
 type env struct{}
 
-func (*env) ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error) {
+func (*env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
 	if verbose {
 		log.Printf("import %s%s", field, sig)
 	}

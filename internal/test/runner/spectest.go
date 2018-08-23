@@ -13,7 +13,7 @@ import (
 	"github.com/tsavola/wag/abi"
 )
 
-func spectestPrint(f io.Reader, sigs []abi.FunctionType, sigIndex int64, printer io.Writer) {
+func spectestPrint(f io.Reader, sigs []abi.Sig, sigIndex int64, printer io.Writer) {
 	if sigIndex >= int64(len(sigs)) {
 		panic(fmt.Sprintf("0x%x", sigIndex))
 	}

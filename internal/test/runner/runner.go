@@ -33,49 +33,49 @@ func importBenchmarkBegin() uint64
 func importBenchmarkEnd() uint64
 func importBenchmarkBarrier() uint64
 
-var importFunctions = map[string]map[string]imports.Function{
+var importFuncs = map[string]map[string]imports.Func{
 	"spectest": {
-		"print": imports.Function{
+		"print": imports.Func{
 			Variadic: true,
 			AbsAddr:  importSpectestPrint(),
 		},
 	},
 	"wag": {
-		"get_arg": imports.Function{
-			FunctionType: abi.FunctionType{
+		"get_arg": imports.Func{
+			Sig: abi.Sig{
 				Result: abi.I64,
 			},
 			AbsAddr: importGetArg(),
 		},
-		"snapshot": imports.Function{
-			FunctionType: abi.FunctionType{
+		"snapshot": imports.Func{
+			Sig: abi.Sig{
 				Result: abi.I32,
 			},
 			AbsAddr: importSnapshot(),
 		},
 	},
 	"env": {
-		"putns": imports.Function{
-			FunctionType: abi.FunctionType{
+		"putns": imports.Func{
+			Sig: abi.Sig{
 				Args: []abi.Type{abi.I32, abi.I32},
 			},
 			AbsAddr: importPutns(),
 		},
-		"benchmark_begin": imports.Function{
-			FunctionType: abi.FunctionType{
+		"benchmark_begin": imports.Func{
+			Sig: abi.Sig{
 				Result: abi.I64,
 			},
 			AbsAddr: importBenchmarkBegin(),
 		},
-		"benchmark_end": imports.Function{
-			FunctionType: abi.FunctionType{
+		"benchmark_end": imports.Func{
+			Sig: abi.Sig{
 				Args:   []abi.Type{abi.I64},
 				Result: abi.I32,
 			},
 			AbsAddr: importBenchmarkEnd(),
 		},
-		"benchmark_barrier": imports.Function{
-			FunctionType: abi.FunctionType{
+		"benchmark_barrier": imports.Func{
+			Sig: abi.Sig{
 				Args:   []abi.Type{abi.I64, abi.I64},
 				Result: abi.I64,
 			},
@@ -86,8 +86,8 @@ var importFunctions = map[string]map[string]imports.Function{
 
 type env struct{}
 
-func (env) ImportFunction(module, field string, sig abi.FunctionType) (variadic bool, absAddr uint64, err error) {
-	f, found := importFunctions[module][field]
+func (env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
+	f, found := importFuncs[module][field]
 	if !found {
 		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
 		return
@@ -122,7 +122,7 @@ type runnable interface {
 	getText() []byte
 	getData() ([]byte, int)
 	getStack() []byte
-	writeStacktraceTo(w io.Writer, funcSigs []abi.FunctionType, ns *section.NameSection, stack []byte) error
+	writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
 }
 
@@ -171,7 +171,7 @@ func (p *Program) SetData(data []byte, memoryOffset int) {
 	p.memoryOffset = memoryOffset
 }
 
-func (p *Program) SetFunctionMap(funcMap []meta.TextAddr) {
+func (p *Program) SetFuncMap(funcMap []meta.TextAddr) {
 	p.funcMap = funcMap
 }
 
@@ -314,7 +314,7 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int64, sigs []abi.FunctionType, printer io.Writer) (result int32, err error) {
+func (r *Runner) Run(arg int64, sigs []abi.Sig, printer io.Writer) (result int32, err error) {
 	e := Executor{
 		runner:  r,
 		arg:     arg,
@@ -331,7 +331,7 @@ type Executor struct {
 	runner *Runner
 
 	arg     int64
-	sigs    []abi.FunctionType
+	sigs    []abi.Sig
 	printer io.Writer
 
 	cont chan struct{}
@@ -341,7 +341,7 @@ type Executor struct {
 	err    error
 }
 
-func (r *Runner) NewExecutor(sigs []abi.FunctionType, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
+func (r *Runner) NewExecutor(sigs []abi.Sig, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
 	e = &Executor{
 		runner:  r,
 		sigs:    sigs,

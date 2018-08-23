@@ -72,13 +72,13 @@ func TestExec(t *testing.T) {
 	defer r.Close()
 
 	var printBuf bytes.Buffer
-	e, trigger := r.NewExecutor(m.Signatures(), &printBuf)
+	e, trigger := r.NewExecutor(m.Sigs(), &printBuf)
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
 	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), trigger)
 	p.Seal()
-	p.SetFunctionMap(m.FunctionMap())
+	p.SetFuncMap(m.FuncMap())
 	p.SetCallMap(m.CallMap())
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)
@@ -95,6 +95,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), nil)
 	}
 }

@@ -22,8 +22,8 @@ import (
 
 const (
 	MaxImportParams    = gen.StackReserve/gen.WordSize - 2
-	MaxFunctionParams  = 255   // index+1 must fit in uint8
-	MaxFunctionVars    = 8191  // index must fit in uint16; TODO
+	MaxFuncParams      = 255   // index+1 must fit in uint8
+	MaxFuncVars        = 8191  // index must fit in uint16; TODO
 	MaxEntryParams     = 8     // param registers on x86-64
 	MaxBranchTableSize = 32768 // TODO
 )
@@ -126,7 +126,7 @@ func discard(f *function, x values.Operand) {
 	}
 }
 
-func mapCallAddrInFunction(f *function, retAddr int32) {
+func mapCallAddrInFunc(f *function, retAddr int32) {
 	mapCallAddr(f.Module, retAddr, f.stackOffset+gen.WordSize)
 }
 
@@ -228,12 +228,12 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	load.Varuint32() // body size
 
-	isa.AlignFunction(f)
+	isa.AlignFunc(f)
 	addr := f.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
-	mapFunctionAddr(f.Module, addr)
+	mapFuncAddr(f.Module, addr)
 	f.insnMap.PutFunc(meta.TextAddr(f.Pos()))
-	isa.OpEnterFunction(f)
+	isa.OpEnterFunc(f)
 
 	f.resultType = sig.Result
 
@@ -260,7 +260,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	for range load.Count() {
 		params := load.Count()
-		if uint64(len(f.vars))+uint64(len(params)) >= MaxFunctionVars {
+		if uint64(len(f.vars))+uint64(len(params)) >= MaxFuncVars {
 			panic(fmt.Errorf("function #%d has too many variables: %d params, %d locals", funcIndex, len(params), len(f.vars)))
 		}
 

@@ -4,12 +4,12 @@
 
 package abi
 
-type FunctionType struct {
+type Sig struct {
 	Args   []Type
 	Result Type
 }
 
-func (f1 FunctionType) Equal(f2 FunctionType) bool {
+func (f1 Sig) Equal(f2 Sig) bool {
 	if f1.Result != f2.Result {
 		return false
 	}
@@ -27,7 +27,7 @@ func (f1 FunctionType) Equal(f2 FunctionType) bool {
 	return true
 }
 
-func (f FunctionType) String() (s string) {
+func (f Sig) String() (s string) {
 	s = "("
 	for i, t := range f.Args {
 		if i > 0 {

@@ -56,12 +56,12 @@ func genCallIndirect(f *function, load loader.L, op Opcode, info opInfo) (deaden
 	}
 
 	retAddr := isa.OpCallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
-	mapCallAddrInFunction(f, retAddr)
+	mapCallAddrInFunc(f, retAddr)
 	opBackoffStackPtr(f, numStackParams*gen.WordSize)
 	return
 }
 
-func setupCallOperands(f *function, op Opcode, sig abi.FunctionType, indirect values.Operand) (numStackParams int32) {
+func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Operand) (numStackParams int32) {
 	opStackCheck(f)
 
 	args := popOperands(f, len(sig.Args))
@@ -252,7 +252,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.FunctionType, indirect va
 
 func opCall(f *function, l *links.L) {
 	retAddr := isa.OpCall(f, l.Addr)
-	mapCallAddrInFunction(f, retAddr)
+	mapCallAddrInFunc(f, retAddr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}

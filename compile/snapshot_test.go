@@ -50,7 +50,7 @@ func TestSnapshot(t *testing.T) {
 	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()
 	p.SetData(m.Data())
-	p.SetFunctionMap(m.FunctionMap())
+	p.SetFuncMap(m.FuncMap())
 	p.SetCallMap(m.CallMap())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
@@ -61,7 +61,7 @@ func TestSnapshot(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), nil)
 	}
 
 	var printBuf bytes.Buffer
@@ -70,7 +70,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r1.Run(0, m.Signatures(), &printBuf)
+	_, err = r1.Run(0, m.Sigs(), &printBuf)
 	r1.Close()
 
 	if printBuf.Len() > 0 {
@@ -90,7 +90,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r2.Run(0, m.Signatures(), &printBuf)
+	_, err = r2.Run(0, m.Sigs(), &printBuf)
 	r2.Close()
 
 	if printBuf.Len() > 0 {

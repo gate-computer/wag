@@ -466,7 +466,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 		p.Seal()
 		p.SetData(m.Data())
-		p.SetFunctionMap(m.FunctionMap())
+		p.SetFuncMap(m.FuncMap())
 		p.SetCallMap(m.CallMap())
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
@@ -477,7 +477,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 
 		if dumpText && testing.Verbose() {
-			disasm.Fprint(os.Stdout, m.Text(), m.FunctionMap(), &nameSection)
+			disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), &nameSection)
 		}
 
 		if dumpROData {
@@ -529,7 +529,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 
 		if realStartName != "" {
 			var printBuf bytes.Buffer
-			result, err := r.Run(0, m.Signatures(), &printBuf)
+			result, err := r.Run(0, m.Sigs(), &printBuf)
 			if printBuf.Len() > 0 {
 				t.Logf("run: module %s: print:\n%s", filename, string(printBuf.Bytes()))
 			}
@@ -559,7 +559,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				defer func() {
 					panicked = recover()
 				}()
-				result, err = r.Run(int64(id), m.Signatures(), &printBuf)
+				result, err = r.Run(int64(id), m.Sigs(), &printBuf)
 			}()
 
 			timer := time.NewTimer(timeout)
@@ -582,7 +582,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 
 			var stackBuf bytes.Buffer
-			if err := r.WriteStacktraceTo(&stackBuf, m.FunctionSignatures(), &nameSection); err == nil {
+			if err := r.WriteStacktraceTo(&stackBuf, m.FuncSigs(), &nameSection); err == nil {
 				if stackBuf.Len() > 0 {
 					t.Logf("run: module %s: test #%d: stacktrace:\n%s", filename, id, string(stackBuf.Bytes()))
 				}

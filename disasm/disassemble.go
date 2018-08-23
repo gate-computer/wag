@@ -18,9 +18,9 @@ import (
 )
 
 func Fprint(w io.Writer, text []byte, funcMap []meta.TextAddr, ns *section.NameSection) (err error) {
-	var names []section.FunctionName
+	var names []section.FuncName
 	if ns != nil {
-		names = ns.FunctionNames
+		names = ns.FuncNames
 	}
 
 	engine, err := gapstone.New(gapstone.CS_ARCH_X86, gapstone.CS_MODE_64)

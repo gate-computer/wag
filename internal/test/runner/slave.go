@@ -13,7 +13,7 @@ import (
 	"github.com/tsavola/wag/abi"
 )
 
-func (e *Executor) slave(fd int, sigs []abi.FunctionType, printer io.Writer, cont <-chan struct{}) {
+func (e *Executor) slave(fd int, sigs []abi.Sig, printer io.Writer, cont <-chan struct{}) {
 	f := os.NewFile(uintptr(fd), "socket")
 	defer f.Close()
 

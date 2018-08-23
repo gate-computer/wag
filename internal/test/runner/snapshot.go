@@ -120,7 +120,7 @@ func (s *Snapshot) getStack() []byte {
 	return s.nativeStack
 }
 
-func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []abi.FunctionType, ns *section.NameSection, stack []byte) (err error) {
+func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []abi.Sig, ns *section.NameSection, stack []byte) (err error) {
 	return s.prog.writeStacktraceTo(w, sigs, ns, stack)
 }
 

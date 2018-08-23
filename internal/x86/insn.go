@@ -197,7 +197,7 @@ func (i insnAddr32) op(code gen.Buffer, addr int32) {
 	i.put(code, offset)
 }
 
-func (i insnAddr32) opMissingFunction(code gen.Buffer) {
+func (i insnAddr32) opMissingFunc(code gen.Buffer) {
 	siteAddr := code.Pos() + i.size()
 	i.put(code, -siteAddr)
 }
