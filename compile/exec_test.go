@@ -39,8 +39,8 @@ func TestExec(t *testing.T) {
 	wasm := bufio.NewReader(wasmReadCloser)
 
 	m := Module{
-		EntrySymbol:    "main",
-		CallMapEnabled: true,
+		EntrySymbol: "main",
+		Metadata:    true,
 	}
 	m.loadPreliminarySections(wasm, runner.Env)
 

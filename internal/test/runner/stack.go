@@ -22,7 +22,7 @@ func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {
 	}
 
 	firstFuncAddr := p.funcMap[0]
-	if retAddr > 0 && retAddr < firstFuncAddr {
+	if retAddr > 0 && retAddr < int32(firstFuncAddr) {
 		initial = true
 		ok = true
 		return
@@ -35,7 +35,7 @@ func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {
 		if i == len(p.funcMap) {
 			funcEndAddr = int32(len(p.Text))
 		} else {
-			funcEndAddr = p.funcMap[i]
+			funcEndAddr = int32(p.funcMap[i])
 		}
 
 		return retAddr <= funcEndAddr

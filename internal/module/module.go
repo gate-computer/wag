@@ -12,6 +12,7 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/regalloc"
+	"github.com/tsavola/wag/meta"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -99,11 +100,6 @@ type Global struct {
 	Init    uint64
 }
 
-type CallSite struct {
-	ReturnAddr  int32
-	StackOffset int32
-}
-
 type Module struct {
 	Sigs              []abi.FunctionType
 	FuncSigs          []uint32
@@ -123,8 +119,8 @@ type Module struct {
 	ROData     DataBuffer
 	TrapLinks  [trap.NumTraps]links.L
 	FuncLinks  []links.FunctionL
-	FuncMap    []int32
-	CallMap    []CallSite
+	FuncMap    []meta.TextAddr
+	CallMap    []meta.CallSite
 	Regs       regalloc.Allocator
 
 	Data         DataBuffer

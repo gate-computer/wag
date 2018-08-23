@@ -196,7 +196,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	m := Module{
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
-		CallMapEnabled:  true,
+		Metadata:        true,
 	}
 	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()

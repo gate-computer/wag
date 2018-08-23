@@ -19,6 +19,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/typeutil"
+	"github.com/tsavola/wag/meta"
 	"github.com/tsavola/wag/wasm"
 )
 
@@ -29,8 +30,6 @@ type Env interface {
 
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
 type Reader = module.Reader
-
-type CallSite = module.CallSite
 
 const (
 	DefaultMemoryAlignment = 16 // see Module.MemoryAlignment
@@ -75,7 +74,7 @@ type Module struct {
 	EntrySymbol          string
 	EntryArgs            []uint64
 	MemoryAlignment      int // see Data()
-	CallMapEnabled       bool
+	Metadata             bool
 	InsnMap              InsnMap
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
@@ -500,12 +499,12 @@ func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
 		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
-	if m.CallMapEnabled || m.InsnMap != nil {
-		m.Module.FuncMap = make([]int32, 0, len(m.FuncSigs))
+	if m.Metadata || m.InsnMap != nil {
+		m.Module.FuncMap = make([]meta.TextAddr, 0, len(m.FuncSigs))
 	}
 
-	if m.CallMapEnabled {
-		m.Module.CallMap = make([]module.CallSite, 0, len(m.FuncSigs)) // conservative estimate...
+	if m.Metadata {
+		m.Module.CallMap = make([]meta.CallSite, 0, len(m.FuncSigs)) // conservative estimate...
 	}
 
 	insnMap := m.InsnMap
@@ -607,14 +606,14 @@ func (m *Module) ROData() (b []byte) {
 }
 
 // FunctionMap is available after code section has been loaded and either
-// CallMapEnabled or InsnMap was set before that.
-func (m *Module) FunctionMap() []int32 {
+// Metadata or InsnMap was set before that.
+func (m *Module) FunctionMap() []meta.TextAddr {
 	return m.FuncMap
 }
 
-// CallMap is available after code section has been loaded and CallMapEnabled
-// was set before that.
-func (m *Module) CallMap() []CallSite {
+// CallMap is available after code section has been loaded and Metadata was set
+// before that.
+func (m *Module) CallMap() []meta.CallSite {
 	return m.Module.CallMap
 }
 

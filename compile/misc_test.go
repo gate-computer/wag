@@ -46,7 +46,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	defer p.Close()
 
 	m := Module{
-		CallMapEnabled: true,
+		Metadata: true,
 	}
 	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
 	p.Seal()

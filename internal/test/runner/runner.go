@@ -15,7 +15,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/imports"
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/meta"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
@@ -133,8 +133,8 @@ type Program struct {
 	data         []byte
 	memoryOffset int
 
-	funcMap []int32
-	callMap []module.CallSite
+	funcMap []meta.TextAddr
+	callMap []meta.CallSite
 
 	funcAddrs map[int]int
 	callSites map[int]callSite
@@ -171,11 +171,11 @@ func (p *Program) SetData(data []byte, memoryOffset int) {
 	p.memoryOffset = memoryOffset
 }
 
-func (p *Program) SetFunctionMap(funcMap []int32) {
+func (p *Program) SetFunctionMap(funcMap []meta.TextAddr) {
 	p.funcMap = funcMap
 }
 
-func (p *Program) SetCallMap(callMap []module.CallSite) {
+func (p *Program) SetCallMap(callMap []meta.CallSite) {
 	p.callMap = callMap
 }
 

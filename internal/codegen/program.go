@@ -15,6 +15,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regalloc"
+	"github.com/tsavola/wag/meta"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -182,8 +183,8 @@ func opInitCall(m *Module, l *links.FunctionL) {
 func mapCallAddr(m *Module, retAddr, stackOffset int32) {
 	if m.CallMap != nil {
 		debugf("map call: retAddr=0x%x stackOffset=%d", retAddr, stackOffset)
-		m.CallMap = append(m.CallMap, module.CallSite{
-			ReturnAddr:  retAddr,
+		m.CallMap = append(m.CallMap, meta.CallSite{
+			ReturnAddr:  meta.TextAddr(retAddr),
 			StackOffset: stackOffset,
 		})
 	}
@@ -229,6 +230,6 @@ func genImportEntry(m *Module, imp module.ImportFunction) (addr int32) {
 func mapFunctionAddr(m *Module, addr int32) {
 	if m.FuncMap != nil {
 		debugf("map function: addr=0x%x", addr)
-		m.FuncMap = append(m.FuncMap, addr)
+		m.FuncMap = append(m.FuncMap, meta.TextAddr(addr))
 	}
 }
