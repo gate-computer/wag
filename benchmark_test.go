@@ -6,8 +6,7 @@ package wag
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"hash/crc32"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -53,8 +52,8 @@ const (
 	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxRODataSize = 16 * 1024 * 1024
 	loadBenchmarkRODataAddr    = 0x10000
-	loadBenchmarkTextSum       = "dea5d76345f70be24fc3f28b3baf52b5c03401c4009c87cdc6d1f609e525b35e"
-	loadBenchmarkRODataSum     = "d67a7105e3f2136b04bd4f5e6c3dace936b71c057dd1009300bf36061ec2388e"
+	loadBenchmarkTextCRC32     = 0xbb8d1b04
+	loadBenchmarkRODataCRC32   = 0xd63dcf14
 )
 
 func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b) }
@@ -157,16 +156,14 @@ func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *FixedBuffer) {
 		b.Errorf("loadBenchmarkMaxTextSize is too small (text size is %d)", textBuf.Pos())
 	}
 
-	sum := sha256.Sum256(textBuf.Bytes())
-	textSum := hex.EncodeToString(sum[:])
-	if textSum != loadBenchmarkTextSum {
-		b.Errorf("text checksum changed: %s", textSum)
+	sum := crc32.ChecksumIEEE(textBuf.Bytes())
+	if sum != loadBenchmarkTextCRC32 {
+		b.Errorf("text checksum changed: 0x%x", sum)
 	}
 
-	sum = sha256.Sum256(roDataBuf.Bytes())
-	roDataSum := hex.EncodeToString(sum[:])
-	if roDataSum != loadBenchmarkRODataSum {
-		b.Errorf("read-only data checksum changed: %s", roDataSum)
+	sum = crc32.ChecksumIEEE(roDataBuf.Bytes())
+	if sum != loadBenchmarkRODataCRC32 {
+		b.Errorf("read-only data checksum changed: 0x%x", sum)
 	}
 }
 
