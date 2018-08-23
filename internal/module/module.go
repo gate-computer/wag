@@ -100,6 +100,16 @@ type Global struct {
 	Init    uint64
 }
 
+// Mapper accepts information about positions of (WebAssembly) functions,
+// function calls and instructions within the text (machine code) section.
+type Mapper interface {
+	InitModule(numImportFuncs, numOtherFuncs int)
+	PutImportFunc(meta.TextAddr)
+	PutFunc(meta.TextAddr)
+	PutCall(returnAddr meta.TextAddr, stackOffset int32)
+	PutInsn(meta.TextAddr)
+}
+
 type M struct {
 	Sigs              []abi.Sig
 	FuncSigs          []uint32
@@ -119,8 +129,7 @@ type M struct {
 	ROData     DataBuffer
 	TrapLinks  [trap.NumTraps]links.L
 	FuncLinks  []links.FuncL
-	FuncMap    []meta.TextAddr
-	CallMap    []meta.CallSite
+	Mapper     Mapper
 	Regs       regalloc.Allocator
 
 	Data         DataBuffer

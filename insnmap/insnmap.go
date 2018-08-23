@@ -5,6 +5,7 @@
 package insnmap
 
 import (
+	"github.com/tsavola/wag/callmap"
 	"github.com/tsavola/wag/meta"
 )
 
@@ -14,34 +15,38 @@ type Mapping struct {
 	SourceIndex  int32 // WebAssembly instruction count within a function
 }
 
-type InsnMap struct {
-	Funcs [][]Mapping
+// Map implements Mapper.  It stores everything.
+type Map struct {
+	callmap.Map
+	FuncInsns [][]Mapping
 
 	fun  int
 	base meta.TextAddr
 	ins  int32
 }
 
-func (im *InsnMap) Init(numFuncs int) {
-	im.Funcs = make([][]Mapping, numFuncs)
-	im.fun = -1
+func (m *Map) InitModule(numImportFuncs, numOtherFuncs int) {
+	m.Map.InitModule(numImportFuncs, numOtherFuncs)
+	m.FuncInsns = make([][]Mapping, numOtherFuncs)
+	m.fun = -1
 }
 
-func (im *InsnMap) PutFunc(pos meta.TextAddr) {
-	im.fun++
-	im.base = pos
-	im.ins = -1
+func (m *Map) PutFunc(pos meta.TextAddr) {
+	m.Map.PutFunc(pos)
+	m.fun++
+	m.base = pos
+	m.ins = -1
 }
 
-func (im *InsnMap) PutInsn(absPos meta.TextAddr) {
-	im.ins++
-	relPos := int32(absPos - im.base)
+func (m *Map) PutInsn(absPos meta.TextAddr) {
+	m.ins++
+	relPos := int32(absPos - m.base)
 
-	prev := len(im.Funcs[im.fun]) - 1
-	if prev >= 0 && im.Funcs[im.fun][prev].ObjectOffset == relPos {
+	prev := len(m.FuncInsns[m.fun]) - 1
+	if prev >= 0 && m.FuncInsns[m.fun][prev].ObjectOffset == relPos {
 		// Replace previous mapping because no machine code was generated
-		im.Funcs[im.fun][prev].SourceIndex = im.ins
+		m.FuncInsns[m.fun][prev].SourceIndex = m.ins
 	} else {
-		im.Funcs[im.fun] = append(im.Funcs[im.fun], Mapping{relPos, im.ins})
+		m.FuncInsns[m.fun] = append(m.FuncInsns[m.fun], Mapping{relPos, m.ins})
 	}
 }

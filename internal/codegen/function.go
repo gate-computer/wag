@@ -48,7 +48,6 @@ func (v *varState) trimBoundsStack(size int) {
 
 type function struct {
 	*Module
-	insnMap meta.InsnMap
 
 	resultType abi.Type
 
@@ -124,10 +123,6 @@ func discard(f *function, x values.Operand) {
 	case values.Stack:
 		opBackoffStackPtr(f, gen.WordSize)
 	}
-}
-
-func mapCallAddrInFunc(f *function, retAddr int32) {
-	mapCallAddr(f.Module, retAddr, f.stackOffset+gen.WordSize)
 }
 
 func effectiveOperand(f *function, x values.Operand) values.Operand {
@@ -231,8 +226,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	isa.AlignFunc(f)
 	addr := f.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
-	mapFuncAddr(f.Module, addr)
-	f.insnMap.PutFunc(meta.TextAddr(f.Pos()))
+	f.Mapper.PutFunc(meta.TextAddr(addr))
 	isa.OpEnterFunc(f)
 
 	f.resultType = sig.Result

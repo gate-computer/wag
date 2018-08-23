@@ -14,7 +14,12 @@ import (
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/meta"
 )
+
+func mapCallAddr(f *function, retAddr int32) {
+	f.Mapper.PutCall(meta.TextAddr(retAddr), f.stackOffset+gen.WordSize)
+}
 
 func genCall(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	funcIndex := load.Varuint32()
@@ -56,7 +61,7 @@ func genCallIndirect(f *function, load loader.L, op Opcode, info opInfo) (deaden
 	}
 
 	retAddr := isa.OpCallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
-	mapCallAddrInFunc(f, retAddr)
+	mapCallAddr(f, retAddr)
 	opBackoffStackPtr(f, numStackParams*gen.WordSize)
 	return
 }
@@ -252,7 +257,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 
 func opCall(f *function, l *links.L) {
 	retAddr := isa.OpCall(f, l.Addr)
-	mapCallAddrInFunc(f, retAddr)
+	mapCallAddr(f, retAddr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/tsavola/wag/buffer"
+	"github.com/tsavola/wag/callmap"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
@@ -453,21 +454,23 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 		}()
 
-		var nameSection section.NameSection
+		var (
+			nameSection section.NameSection
+			mapping     callmap.Map
+		)
 
 		m := Module{
 			EntrySymbol: "test",
-			Metadata:    true,
 			UnknownSectionLoader: section.UnknownLoaders{
 				"name": nameSection.Load,
 			}.Load,
 		}
 
-		m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
+		m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, &mapping)
 		p.Seal()
 		p.SetData(m.Data())
-		p.SetFuncMap(m.FuncMap())
-		p.SetCallMap(m.CallMap())
+		p.SetFuncMap(mapping.FuncAddrs)
+		p.SetCallMap(mapping.CallSites)
 		minMemorySize, maxMemorySize := m.MemoryLimits()
 
 		if dumpBin {
@@ -477,7 +480,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 
 		if dumpText && testing.Verbose() {
-			disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), &nameSection)
+			disasm.Fprint(os.Stdout, m.Text(), mapping.FuncAddrs, &nameSection)
 		}
 
 		if dumpROData {

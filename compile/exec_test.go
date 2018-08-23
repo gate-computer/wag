@@ -13,6 +13,7 @@ import (
 
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
+	"github.com/tsavola/wag/insnmap"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/section"
 )
@@ -38,10 +39,7 @@ func TestExec(t *testing.T) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	m := Module{
-		EntrySymbol: "main",
-		Metadata:    true,
-	}
+	m := Module{EntrySymbol: "main"}
 	m.loadPreliminarySections(wasm, runner.Env)
 
 	var codeBuf bytes.Buffer
@@ -71,15 +69,17 @@ func TestExec(t *testing.T) {
 	}
 	defer r.Close()
 
+	mapping := new(insnmap.Map)
+
 	var printBuf bytes.Buffer
 	e, trigger := r.NewExecutor(m.Sigs(), &printBuf)
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), trigger)
+	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), mapping, trigger)
 	p.Seal()
-	p.SetFuncMap(m.FuncMap())
-	p.SetCallMap(m.CallMap())
+	p.SetFuncMap(mapping.FuncAddrs)
+	p.SetCallMap(mapping.CallSites)
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +95,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), mapping.FuncAddrs, nil)
 	}
 }

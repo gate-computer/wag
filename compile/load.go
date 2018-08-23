@@ -19,7 +19,6 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/typeutil"
-	"github.com/tsavola/wag/meta"
 	"github.com/tsavola/wag/wasm"
 )
 
@@ -74,8 +73,6 @@ type Module struct {
 	EntrySymbol          string
 	EntryArgs            []uint64
 	MemoryAlignment      int // see Data()
-	Metadata             bool
-	InsnMap              meta.InsnMap
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
 	module.M
@@ -96,16 +93,16 @@ func (m *Module) loadPreliminarySections(r Reader, env Env) {
 }
 
 // Load all (remaining) sections.
-func (m *Module) Load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer) (err error) {
+func (m *Module) Load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, mapper Mapper) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.load(r, env, text, roData, roDataAddr, data)
+	m.load(r, env, text, roData, roDataAddr, data, mapper)
 	return
 }
 
-func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer) {
+func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, mapper Mapper) {
 	if text == nil {
 		text = new(defaultBuffer)
 	}
@@ -115,11 +112,15 @@ func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roD
 	if data == nil {
 		data = new(defaultBuffer)
 	}
+	if mapper == nil {
+		mapper = dummyMapper{}
+	}
 
 	m.M.Text = text
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
 	m.M.Data = data
+	m.M.Mapper = mapper
 
 	load(m, loader.L{Reader: r}, env)
 }
@@ -462,16 +463,16 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 }
 
 // LoadCodeSection, after loading the preliminary sections.
-func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, startTrigger chan<- struct{}) (err error) {
+func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, mapper Mapper, startTrigger chan<- struct{}) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	m.loadCodeSection(r, text, roData, roDataAddr, startTrigger)
+	m.loadCodeSection(r, text, roData, roDataAddr, mapper, startTrigger)
 	return
 }
 
-func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, startTrigger chan<- struct{}) {
+func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, mapper Mapper, startTrigger chan<- struct{}) {
 	if m.FuncLinks != nil {
 		panic(errors.New("code section has already been loaded"))
 	}
@@ -482,10 +483,14 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 	if roData == nil {
 		roData = new(defaultBuffer)
 	}
+	if mapper == nil {
+		mapper = dummyMapper{}
+	}
 
 	m.M.Text = text
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
+	m.M.Mapper = mapper
 
 	load := loader.L{Reader: r}
 
@@ -499,20 +504,7 @@ func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
 		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
-	if m.Metadata || m.InsnMap != nil {
-		m.M.FuncMap = make([]meta.TextAddr, 0, len(m.M.FuncSigs))
-	}
-
-	if m.Metadata {
-		m.M.CallMap = make([]meta.CallSite, 0, len(m.M.FuncSigs)) // conservative estimate...
-	}
-
-	insnMap := m.InsnMap
-	if insnMap == nil {
-		insnMap = dummyInsnMap{}
-	}
-
-	codegen.GenProgram(&m.M, load, m.EntryDefined, m.EntrySymbol, m.EntryArgs, startTrigger, insnMap)
+	codegen.GenProgram(&m.M, load, m.EntryDefined, m.EntrySymbol, m.EntryArgs, startTrigger)
 }
 
 // LoadDataSection, after loading the preliminary sections.
@@ -603,19 +595,6 @@ func (m *Module) ROData() (b []byte) {
 		b = m.M.ROData.Bytes()
 	}
 	return
-}
-
-// FuncMap is available after code section has been loaded and either Metadata
-// or InsnMap was set before that.  The function addresses are in ascending
-// order.
-func (m *Module) FuncMap() []meta.TextAddr {
-	return m.M.FuncMap
-}
-
-// CallMap is available after code section has been loaded and Metadata was set
-// before that.  The call sites are in ascending order.
-func (m *Module) CallMap() []meta.CallSite {
-	return m.M.CallMap
 }
 
 // Data is available after data section has been loaded.  memoryOffset is an

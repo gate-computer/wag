@@ -128,7 +128,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), nil)
+	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), nil, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

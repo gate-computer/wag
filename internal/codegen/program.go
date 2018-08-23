@@ -25,7 +25,7 @@ func offsetOfGlobal(m *Module, index uint32) int32 {
 	return (int32(index) - int32(len(m.Globals))) * gen.WordSize
 }
 
-func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}, insnMap meta.InsnMap) {
+func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
 	if debug {
 		if debugDepth != 0 {
 			debugf("")
@@ -39,7 +39,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 
 	m.FuncLinks = make([]links.FuncL, len(m.FuncSigs))
-	insnMap.Init(int(funcCodeCount))
+	m.Mapper.InitModule(len(m.ImportFuncs), int(funcCodeCount))
 
 	roTableSize := len(m.TableFuncs) * 8
 	buf := m.ROData.ResizeBytes(gen.ROTableAddr + roTableSize)
@@ -116,7 +116,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 
 	for i := len(m.ImportFuncs); i < midpoint; i++ {
-		genFunction(&function{Module: m, insnMap: insnMap}, load, i)
+		genFunction(&function{Module: m}, load, i)
 		isa.UpdateCalls(m.Text.Bytes(), &m.FuncLinks[i].L)
 	}
 
@@ -151,7 +151,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 
 	if midpoint < len(m.FuncSigs) {
 		for i := midpoint; i < len(m.FuncSigs); i++ {
-			genFunction(&function{Module: m, insnMap: insnMap}, load, i)
+			genFunction(&function{Module: m}, load, i)
 		}
 
 		isa.ClearInsnCache()
@@ -176,18 +176,8 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 
 func opInitCall(m *Module, l *links.FuncL) {
 	retAddr := isa.OpInitCall(m.Text)
-	mapCallAddr(m, retAddr, 0) // initial stack frame
+	m.Mapper.PutCall(meta.TextAddr(retAddr), 0) // initial stack frame
 	l.AddSite(retAddr)
-}
-
-func mapCallAddr(m *Module, retAddr, stackOffset int32) {
-	if m.CallMap != nil {
-		debugf("map call: retAddr=0x%x stackOffset=%d", retAddr, stackOffset)
-		m.CallMap = append(m.CallMap, meta.CallSite{
-			ReturnAddr:  meta.TextAddr(retAddr),
-			StackOffset: stackOffset,
-		})
-	}
 }
 
 func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
@@ -198,7 +188,7 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 
 	isa.AlignFunc(m.Text)
 	addr = m.Text.Pos()
-	mapFuncAddr(m, addr)
+	m.Mapper.PutImportFunc(meta.TextAddr(addr))
 
 	sigIndex := m.FuncSigs[imp.FuncIndex]
 	sig := m.Sigs[sigIndex]
@@ -225,11 +215,4 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 	}
 
 	return
-}
-
-func mapFuncAddr(m *Module, addr int32) {
-	if m.FuncMap != nil {
-		debugf("map function: addr=0x%x", addr)
-		m.FuncMap = append(m.FuncMap, meta.TextAddr(addr))
-	}
 }

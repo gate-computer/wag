@@ -14,11 +14,3 @@ type CallSite struct {
 	ReturnAddr  TextAddr // The address immediately after the call instruction
 	StackOffset int32    // Calling function's stack usage at time of call
 }
-
-// InsnMap accepts information about positions of functions and instructions
-// (WebAssembly) within the text section (machine code).
-type InsnMap interface {
-	Init(numFuncs int)
-	PutFunc(TextAddr)
-	PutInsn(TextAddr)
-}

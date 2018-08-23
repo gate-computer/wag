@@ -21,7 +21,7 @@ const (
 func Fuzz(data []byte) int {
 	var m compile.Module
 
-	err := m.Load(bytes.NewReader(data), env{}, nil, nil, roDataAddr, nil)
+	err := m.Load(bytes.NewReader(data), env{}, nil, nil, roDataAddr, nil, nil)
 	if err != nil {
 		return 0
 	}

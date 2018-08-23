@@ -81,7 +81,7 @@ func genOp(f *function, load loader.L, op Opcode) (deadend bool) {
 		debugDepth++
 	}
 
-	f.insnMap.PutInsn(meta.TextAddr(f.Pos()))
+	f.Mapper.PutInsn(meta.TextAddr(f.Pos()))
 
 	impl := opcodeImpls[op]
 	deadend = impl.gen(f, load, op, impl.info)

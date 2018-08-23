@@ -15,6 +15,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/buffer"
+	"github.com/tsavola/wag/callmap"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 )
@@ -85,7 +86,7 @@ func benchmarkLoad(b *testing.B) {
 		roDataBuf := buffer.NewFixed(roData)
 
 		b.StartTimer()
-		m.load(r, loadBenchmarkEnv, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil)
+		m.load(r, loadBenchmarkEnv, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, nil)
 		b.StopTimer()
 
 		checkLoadBenchmarkOutput(b, textBuf, roDataBuf)
@@ -130,7 +131,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		t0 := time.Now()
 		m.loadPreliminarySections(r, loadBenchmarkEnv)
 		t1 := time.Now()
-		m.loadCodeSection(r, textBuf, roDataBuf, loadBenchmarkRODataAddr, trigger)
+		m.loadCodeSection(r, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, trigger)
 		t2 := time.Now()
 		m.loadDataSection(r, dataBuf)
 		t3 := time.Now()
@@ -193,16 +194,17 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 	defer p.Close()
 
+	mapping := new(callmap.Map)
+
 	m := Module{
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
-		Metadata:        true,
 	}
-	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil)
+	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, mapping)
 	p.Seal()
 	p.SetData(m.Data())
-	p.SetFuncMap(m.FuncMap())
-	p.SetCallMap(m.CallMap())
+	p.SetFuncMap(mapping.FuncAddrs)
+	p.SetCallMap(mapping.CallSites)
 	minMemorySize, maxMemorySize := m.MemoryLimits()
 
 	r, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
@@ -226,6 +228,6 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), m.FuncMap(), nil)
+		disasm.Fprint(os.Stdout, m.Text(), mapping.FuncAddrs, nil)
 	}
 }
