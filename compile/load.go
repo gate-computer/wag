@@ -75,7 +75,7 @@ type Module struct {
 	EntryArgs            []uint64
 	MemoryAlignment      int // see Data()
 	Metadata             bool
-	InsnMap              InsnMap
+	InsnMap              meta.InsnMap
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
 	module.Module
@@ -606,13 +606,14 @@ func (m *Module) ROData() (b []byte) {
 }
 
 // FunctionMap is available after code section has been loaded and either
-// Metadata or InsnMap was set before that.
+// Metadata or InsnMap was set before that.  The function addresses are in
+// ascending order.
 func (m *Module) FunctionMap() []meta.TextAddr {
 	return m.FuncMap
 }
 
 // CallMap is available after code section has been loaded and Metadata was set
-// before that.
+// before that.  The call sites are in ascending order.
 func (m *Module) CallMap() []meta.CallSite {
 	return m.Module.CallMap
 }

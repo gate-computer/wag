@@ -16,6 +16,7 @@ import (
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/meta"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -47,7 +48,7 @@ func (v *varState) trimBoundsStack(size int) {
 
 type function struct {
 	*Module
-	insnMap InsnMap
+	insnMap meta.InsnMap
 
 	resultType abi.Type
 
@@ -231,7 +232,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	addr := f.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
 	mapFunctionAddr(f.Module, addr)
-	f.insnMap.PutFunc(f.Pos())
+	f.insnMap.PutFunc(meta.TextAddr(f.Pos()))
 	isa.OpEnterFunction(f)
 
 	f.resultType = sig.Result

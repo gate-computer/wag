@@ -25,7 +25,7 @@ func offsetOfGlobal(m *Module, index uint32) int32 {
 	return (int32(index) - int32(len(m.Globals))) * gen.WordSize
 }
 
-func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}, insnMap InsnMap) {
+func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}, insnMap meta.InsnMap) {
 	if debug {
 		if debugDepth != 0 {
 			debugf("")

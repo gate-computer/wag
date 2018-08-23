@@ -4,6 +4,10 @@
 
 package insnmap
 
+import (
+	"github.com/tsavola/wag/meta"
+)
+
 // Mapping from machine code instruction to WebAssembly instruction.
 type Mapping struct {
 	ObjectOffset int32 // Machine code byte position within a function
@@ -14,7 +18,7 @@ type InsnMap struct {
 	Funcs [][]Mapping
 
 	fun  int
-	base int32
+	base meta.TextAddr
 	ins  int32
 }
 
@@ -23,15 +27,15 @@ func (im *InsnMap) Init(numFuncs int) {
 	im.fun = -1
 }
 
-func (im *InsnMap) PutFunc(pos int32) {
+func (im *InsnMap) PutFunc(pos meta.TextAddr) {
 	im.fun++
 	im.base = pos
 	im.ins = -1
 }
 
-func (im *InsnMap) PutInsn(absPos int32) {
+func (im *InsnMap) PutInsn(absPos meta.TextAddr) {
 	im.ins++
-	relPos := absPos - im.base
+	relPos := int32(absPos - im.base)
 
 	prev := len(im.Funcs[im.fun]) - 1
 	if prev >= 0 && im.Funcs[im.fun][prev].ObjectOffset == relPos {

@@ -5,13 +5,11 @@
 package compile
 
 import (
-	"github.com/tsavola/wag/internal/codegen"
+	"github.com/tsavola/wag/meta"
 )
-
-type InsnMap = codegen.InsnMap
 
 type dummyInsnMap struct{}
 
-func (dummyInsnMap) Init(numFuncs int) {}
-func (dummyInsnMap) PutFunc(pos int32) {}
-func (dummyInsnMap) PutInsn(pos int32) {}
+func (dummyInsnMap) Init(numFuncs int)     {}
+func (dummyInsnMap) PutFunc(meta.TextAddr) {}
+func (dummyInsnMap) PutInsn(meta.TextAddr) {}
