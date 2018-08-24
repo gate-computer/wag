@@ -12,7 +12,7 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-func (ISA) UnaryOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
+func (ISA) UnaryOp(m *Module, code gen.Coder, oper uint16, x values.Operand) values.Operand {
 	if (oper & opers.UnaryFloat) == 0 {
 		return unaryIntOp(m, code, oper, x)
 	} else {
@@ -20,7 +20,7 @@ func (ISA) UnaryOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) 
 	}
 }
 
-func unaryIntOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) values.Operand {
+func unaryIntOp(m *Module, code gen.Coder, oper uint16, x values.Operand) values.Operand {
 	switch index := uint8(oper); index {
 	case opers.IndexIntEqz:
 		return opIntEqz(m, code, x)
@@ -33,14 +33,14 @@ func unaryIntOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) val
 func opIntEqz(m *Module, code gen.Coder, x values.Operand) values.Operand {
 	reg, _, own := opBorrowMaybeScratchReg(m, code, x, false)
 	if own {
-		defer code.FreeReg(x.Type, reg)
+		defer m.Regs.Free(x.Type, reg)
 	}
 
 	test.opFromReg(&m.Text, x.Type, reg, reg)
 	return values.ConditionFlagsOperand(values.Eq)
 }
 
-func commonUnaryIntOp(m *Module, code gen.RegCoder, index uint8, x values.Operand) (result values.Operand) {
+func commonUnaryIntOp(m *Module, code gen.Coder, index uint8, x values.Operand) (result values.Operand) {
 	var ok bool
 	var targetReg regs.R
 
@@ -48,7 +48,7 @@ func commonUnaryIntOp(m *Module, code gen.RegCoder, index uint8, x values.Operan
 	if own {
 		targetReg = sourceReg
 	} else {
-		targetReg, ok = code.TryAllocReg(x.Type)
+		targetReg, ok = m.Regs.Alloc(x.Type)
 		if !ok {
 			targetReg = RegResult
 		}
@@ -79,7 +79,7 @@ func commonUnaryIntOp(m *Module, code gen.RegCoder, index uint8, x values.Operan
 	panic("unknown unary int op")
 }
 
-func unaryFloatOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) (result values.Operand) {
+func unaryFloatOp(m *Module, code gen.Coder, oper uint16, x values.Operand) (result values.Operand) {
 	// TODO: support memory source operands
 
 	reg, _ := opMaybeResultReg(m, code, x, false)

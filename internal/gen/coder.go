@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
@@ -66,20 +65,10 @@ func (text *Text) PutBytes(x []byte) {
 }
 
 type Coder interface {
-	TrapTrampolineAddr(id trap.Id) int32
-	OpTrapCall(id trap.Id)
-
-	Discard(values.Operand)
 	Consumed(values.Operand)
-	RegAllocated(abi.Type, regs.R) bool
-	FreeReg(abi.Type, regs.R)
-}
-
-type RegCoder interface {
-	Coder
-
-	TryAllocReg(t abi.Type) (reg regs.R, ok bool)
-	AllocSpecificReg(t abi.Type, reg regs.R)
+	Discard(values.Operand)
+	OpTrapCall(id trap.Id)
+	TrapTrampolineAddr(id trap.Id) int32
 }
 
 type MaskBaseAddr int32

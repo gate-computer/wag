@@ -14,7 +14,7 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func (ISA) BinaryOp(m *Module, code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
+func (ISA) BinaryOp(m *Module, code gen.Coder, oper uint16, a, b values.Operand) values.Operand {
 	if (oper & opers.BinaryFloat) == 0 {
 		switch {
 		case (oper & opers.BinaryCompare) != 0:
@@ -54,7 +54,7 @@ var commonBinaryIntInsns = []binaryInsn{
 	opers.IndexIntXor: xor,
 }
 
-func commonBinaryIntOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+func commonBinaryIntOp(m *Module, code gen.Coder, index uint8, a, b values.Operand) (result values.Operand) {
 	if index == opers.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
 		return inplaceIntOp(m, code, neg, b)
 	}
@@ -103,10 +103,10 @@ func commonBinaryIntOp(m *Module, code gen.RegCoder, index uint8, a, b values.Op
 	}
 }
 
-func binaryIntCompareOp(m *Module, code gen.RegCoder, cond uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntCompareOp(m *Module, code gen.Coder, cond uint8, a, b values.Operand) (result values.Operand) {
 	targetReg, _, own := opBorrowMaybeResultReg(m, code, a, false)
 	if own {
-		defer code.FreeReg(a.Type, targetReg)
+		defer m.Regs.Free(a.Type, targetReg)
 	}
 
 	result = values.ConditionFlagsOperand(values.Condition(cond))
@@ -143,7 +143,7 @@ var binaryDivmulInsns = []struct {
 	opers.IndexDivmulMul:  {mul, shlImm},
 }
 
-func binaryIntDivmulOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func binaryIntDivmulOp(m *Module, code gen.Coder, index uint8, a, b values.Operand) values.Operand {
 	insn := binaryDivmulInsns[index]
 	t := a.Type
 
@@ -170,7 +170,7 @@ func binaryIntDivmulOp(m *Module, code gen.RegCoder, index uint8, a, b values.Op
 				var ok bool
 
 				// can't use scratch reg as divisor since it contains the dividend high bits
-				newReg, ok = code.TryAllocReg(t)
+				newReg, ok = m.Regs.Alloc(t)
 				if !ok {
 					// borrow a register which we don't need in this function
 					movMMX.opFromReg(&m.Text, abi.I64, RegScratchMMX, RegTextBase)
@@ -194,7 +194,7 @@ func binaryIntDivmulOp(m *Module, code gen.RegCoder, index uint8, a, b values.Op
 			}
 		}
 
-		reg, ok := code.TryAllocReg(t)
+		reg, ok := m.Regs.Alloc(t)
 		if !ok {
 			// borrow a register which we don't need in this function
 			movMMX.opFromReg(&m.Text, abi.I64, RegScratchMMX, RegTextBase)
@@ -314,7 +314,7 @@ var binaryShiftInsns = []struct {
 	opers.IndexShiftShrU: {shr, shrImm},
 }
 
-func binaryIntShiftOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntShiftOp(m *Module, code gen.Coder, index uint8, a, b values.Operand) (result values.Operand) {
 	insn := binaryShiftInsns[index]
 
 	switch {
@@ -329,12 +329,12 @@ func binaryIntShiftOp(m *Module, code gen.RegCoder, index uint8, a, b values.Ope
 		code.Discard(b)
 		result = values.TempRegOperand(a.Type, reg, true)
 
-	case code.RegAllocated(abi.I32, RegShiftCount):
+	case m.Regs.Allocated(abi.I32, RegShiftCount):
 		reg, _ := opMaybeResultReg(m, code, a, true)
 		if reg == RegShiftCount {
 			mov.opFromReg(&m.Text, a.Type, RegResult, RegShiftCount)
 			result = subtleShiftOp(m, code, insn.reg, a.Type, RegResult, b)
-			code.FreeReg(abi.I32, RegShiftCount)
+			m.Regs.Free(abi.I32, RegShiftCount)
 		} else {
 			// unknown operand in RegShiftCount
 			mov.opFromReg(&m.Text, abi.I64, RegScratch, RegShiftCount) // save
@@ -343,10 +343,10 @@ func binaryIntShiftOp(m *Module, code gen.RegCoder, index uint8, a, b values.Ope
 		}
 
 	default:
-		code.AllocSpecificReg(abi.I32, RegShiftCount)
+		m.Regs.AllocSpecific(abi.I32, RegShiftCount)
 		reg, _ := opMaybeResultReg(m, code, a, true)
 		result = subtleShiftOp(m, code, insn.reg, a.Type, reg, b)
-		code.FreeReg(abi.I32, RegShiftCount)
+		m.Regs.Free(abi.I32, RegShiftCount)
 	}
 
 	return
@@ -369,12 +369,12 @@ var commonBinaryFloatInsns = []insnPrefix{
 
 // TODO: support memory source operands
 
-func commonBinaryFloatOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func commonBinaryFloatOp(m *Module, code gen.Coder, index uint8, a, b values.Operand) values.Operand {
 	targetReg, _ := opMaybeResultReg(m, code, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
-		defer code.FreeReg(b.Type, sourceReg)
+		defer m.Regs.Free(b.Type, sourceReg)
 	}
 
 	commonBinaryFloatInsns[index].opFromReg(&m.Text, a.Type, targetReg, sourceReg)
@@ -389,12 +389,12 @@ var binaryFloatMinmaxInsns = []struct {
 	opers.IndexMinmaxMax: {maxsSSE, andpSSE},
 }
 
-func binaryFloatMinmaxOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func binaryFloatMinmaxOp(m *Module, code gen.Coder, index uint8, a, b values.Operand) values.Operand {
 	targetReg, _ := opMaybeResultReg(m, code, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
-		defer code.FreeReg(b.Type, sourceReg)
+		defer m.Regs.Free(b.Type, sourceReg)
 	}
 
 	var common links.L
@@ -419,27 +419,27 @@ func binaryFloatMinmaxOp(m *Module, code gen.RegCoder, index uint8, a, b values.
 	return values.TempRegOperand(a.Type, targetReg, false)
 }
 
-func binaryFloatCompareOp(m *Module, code gen.RegCoder, cond uint8, a, b values.Operand) values.Operand {
+func binaryFloatCompareOp(m *Module, code gen.Coder, cond uint8, a, b values.Operand) values.Operand {
 	aReg, _, own := opBorrowMaybeResultReg(m, code, a, true)
 	if own {
-		defer code.FreeReg(a.Type, aReg)
+		defer m.Regs.Free(a.Type, aReg)
 	}
 
 	bReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
-		defer code.FreeReg(b.Type, bReg)
+		defer m.Regs.Free(b.Type, bReg)
 	}
 
 	ucomisSSE.opFromReg(&m.Text, a.Type, aReg, bReg)
 	return values.ConditionFlagsOperand(values.Condition(cond))
 }
 
-func binaryFloatCopysignOp(m *Module, code gen.RegCoder, a, b values.Operand) values.Operand {
+func binaryFloatCopysignOp(m *Module, code gen.Coder, a, b values.Operand) values.Operand {
 	targetReg, _ := opMaybeResultReg(m, code, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
-		defer code.FreeReg(b.Type, sourceReg)
+		defer m.Regs.Free(b.Type, sourceReg)
 	}
 
 	var done links.L

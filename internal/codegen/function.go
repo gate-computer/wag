@@ -70,36 +70,15 @@ type function struct {
 	trapTrampolines [trap.NumTraps]trampoline
 }
 
-func (f *function) AllocSpecificReg(t abi.Type, reg regs.R)  { allocSpecificReg(f, t, reg) }
-func (f *function) Consumed(x values.Operand)                { consumed(f, x) }
-func (f *function) Discard(x values.Operand)                 { discard(f, x) }
-func (f *function) FreeReg(t abi.Type, reg regs.R)           { freeReg(f, t, reg) }
-func (f *function) OpTrapCall(id trap.Id)                    { opTrapCall(f, id) }
-func (f *function) RegAllocated(t abi.Type, reg regs.R) bool { return regAllocated(f, t, reg) }
-func (f *function) TrapTrampolineAddr(id trap.Id) int32      { return trapTrampolineAddr(f, id) }
-func (f *function) TryAllocReg(t abi.Type) (regs.R, bool)    { return tryAllocReg(f, t) }
-
-func tryAllocReg(f *function, t abi.Type) (reg regs.R, ok bool) {
-	return f.Regs.Alloc(t.Category())
-}
-
-func allocSpecificReg(f *function, t abi.Type, reg regs.R) {
-	f.Regs.AllocSpecific(t.Category(), reg)
-}
-
-func freeReg(f *function, t abi.Type, reg regs.R) {
-	f.Regs.Free(t.Category(), reg)
-}
-
-// regAllocated indicates if we can hang onto a register returned by mach ops.
-func regAllocated(f *function, t abi.Type, reg regs.R) bool {
-	return f.Regs.Allocated(t.Category(), reg)
-}
+func (f *function) Consumed(x values.Operand)           { consumed(f, x) }
+func (f *function) Discard(x values.Operand)            { discard(f, x) }
+func (f *function) OpTrapCall(id trap.Id)               { opTrapCall(f, id) }
+func (f *function) TrapTrampolineAddr(id trap.Id) int32 { return trapTrampolineAddr(f, id) }
 
 func consumed(f *function, x values.Operand) {
 	switch x.Storage {
 	case values.TempReg:
-		freeReg(f, x.Type, x.Reg())
+		f.Regs.Free(x.Type, x.Reg())
 
 	case values.Stack:
 		f.stackOffset -= gen.WordSize
@@ -111,7 +90,7 @@ func consumed(f *function, x values.Operand) {
 func discard(f *function, x values.Operand) {
 	switch x.Storage {
 	case values.TempReg:
-		freeReg(f, x.Type, x.Reg())
+		f.Regs.Free(x.Type, x.Reg())
 
 	case values.Stack:
 		opBackoffStackPtr(f, gen.WordSize)
@@ -236,9 +215,8 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	for i := f.numStackParams; i < int32(len(sig.Args)); i++ {
 		t := sig.Args[i]
-		cat := t.Category()
-		reg := paramRegs.IterForward(cat)
-		f.Regs.AllocSpecific(cat, reg)
+		reg := paramRegs.IterForward(t.Category())
+		f.Regs.AllocSpecific(t, reg)
 		f.vars[i] = varState{
 			cache: values.VarRegOperand(t, i, reg, false),
 			dirty: true,
@@ -306,7 +284,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 	for i := range f.vars {
 		v := f.vars[i]
 		if v.cache.Storage == values.VarReg {
-			freeReg(f, v.cache.Type, v.cache.Reg())
+			f.Regs.Free(v.cache.Type, v.cache.Reg())
 		}
 	}
 
@@ -351,7 +329,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 }
 
 func opAllocReg(f *function, t abi.Type) (reg regs.R) {
-	reg, ok := tryAllocReg(f, t)
+	reg, ok := f.Regs.Alloc(t)
 	if !ok {
 		reg = opStealReg(f, t)
 	}
@@ -359,7 +337,7 @@ func opAllocReg(f *function, t abi.Type) (reg regs.R) {
 }
 
 func opTryAllocVarReg(f *function, t abi.Type) (reg regs.R, ok bool) {
-	reg, ok = tryAllocReg(f, t)
+	reg, ok = f.Regs.Alloc(t)
 	if !ok {
 		reg, ok = opTryStealVarReg(f, t)
 	}
@@ -519,7 +497,7 @@ func opStabilizeOperandStack(f *function) {
 
 		switch x.Storage {
 		case values.TempReg:
-			if regAllocated(f, x.Type, x.Reg()) {
+			if f.Regs.Allocated(x.Type, x.Reg()) {
 				continue
 			}
 			// do it
@@ -601,8 +579,8 @@ func opStealReg(f *function, needType abi.Type) (reg regs.R) {
 
 			case values.TempReg:
 				reg = x.Reg()
-				if regAllocated(f, x.Type, reg) {
-					defer allocSpecificReg(f, x.Type, reg)
+				if f.Regs.Allocated(x.Type, reg) {
+					defer f.Regs.AllocSpecific(x.Type, reg)
 					ok = true
 				}
 			}
@@ -705,7 +683,7 @@ func opStoreVars(f *function, forget bool) {
 
 		if forget {
 			if v.cache.Storage == values.VarReg {
-				freeReg(f, v.cache.Type, v.cache.Reg())
+				f.Regs.Free(v.cache.Type, v.cache.Reg())
 			}
 			v.resetCache()
 		}

@@ -41,17 +41,17 @@ var memoryStores = []memoryAccess{
 }
 
 // LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) LoadOp(m *Module, code gen.RegCoder, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
+func (ISA) LoadOp(m *Module, code gen.Coder, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
 	size := oper >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(m, code, size, index, offset)
 	if ownIndexReg {
-		defer code.FreeReg(abi.I64, indexReg)
+		defer m.Regs.Free(abi.I64, indexReg)
 	}
 
 	load := memoryLoads[uint8(oper)]
 
-	targetReg, ok := code.TryAllocReg(resultType)
+	targetReg, ok := m.Regs.Alloc(resultType)
 	if !ok {
 		targetReg = RegResult
 	}
@@ -68,12 +68,12 @@ func (ISA) LoadOp(m *Module, code gen.RegCoder, oper uint16, index values.Operan
 }
 
 // StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) StoreOp(m *Module, code gen.RegCoder, oper uint16, index, x values.Operand, offset uint32) {
+func (ISA) StoreOp(m *Module, code gen.Coder, oper uint16, index, x values.Operand, offset uint32) {
 	size := oper >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(m, code, size, index, offset)
 	if ownIndexReg {
-		defer code.FreeReg(abi.I64, indexReg)
+		defer m.Regs.Free(abi.I64, indexReg)
 	}
 
 	store := memoryStores[uint8(oper)]
@@ -108,7 +108,7 @@ func (ISA) StoreOp(m *Module, code gen.RegCoder, oper uint16, index, x values.Op
 
 	valueReg, _, own := opBorrowMaybeResultReg(m, code, x, false)
 	if own {
-		defer code.FreeReg(x.Type, valueReg)
+		defer m.Regs.Free(x.Type, valueReg)
 	}
 
 	store.insn.opToIndirect(&m.Text, insnType, valueReg, 0, indexReg, baseReg, disp)
@@ -170,7 +170,7 @@ func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operan
 		lea.opFromIndirect(&m.Text, abi.I64, RegScratch, 0, reg, RegMemoryBase, int32(reachOffset))
 
 		if own {
-			code.FreeReg(abi.I32, reg)
+			m.Regs.Free(abi.I32, reg)
 		}
 	}
 
@@ -204,7 +204,7 @@ func (ISA) OpCurrentMemory(m *Module) values.Operand {
 	return values.TempRegOperand(abi.I32, RegResult, true)
 }
 
-func (ISA) OpGrowMemory(m *Module, code gen.RegCoder, x values.Operand) values.Operand {
+func (ISA) OpGrowMemory(m *Module, code gen.Coder, x values.Operand) values.Operand {
 	var out links.L
 	var fail links.L
 

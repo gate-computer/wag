@@ -101,10 +101,8 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 		}
 
 		if ok {
-			cat := value.Type.Category()
-
-			f.Regs.SetAllocated(cat, reg)
-			regArgs.Set(cat, reg, i)
+			f.Regs.SetAllocated(value.Type, reg)
+			regArgs.Set(value.Type.Category(), reg, i)
 		}
 	}
 
@@ -177,7 +175,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 			cat := value.Type.Category()
 
 			if regArgs.Get(cat, value.Reg()) != i {
-				reg, ok := tryAllocReg(f, value.Type)
+				reg, ok := f.Regs.Alloc(value.Type)
 				if !ok {
 					panic("not enough registers for all register args")
 				}

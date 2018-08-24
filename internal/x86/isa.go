@@ -646,7 +646,7 @@ func (ISA) OpPush(m *Module, code gen.Coder, x values.Operand) {
 	}
 
 	if x.Storage == values.TempReg {
-		code.FreeReg(x.Type, reg)
+		m.Regs.Free(x.Type, reg)
 	}
 }
 
@@ -664,7 +664,7 @@ func (ISA) OpStoreStack(m *Module, code gen.Coder, offset int32, x values.Operan
 	opStoreStackReg(m, x.Type, offset, reg)
 
 	if x.Storage == values.TempReg {
-		code.FreeReg(x.Type, reg)
+		m.Regs.Free(x.Type, reg)
 	}
 }
 
@@ -676,7 +676,7 @@ func (ISA) OpBranchIf(m *Module, code gen.Coder, x values.Operand, yes bool, add
 	} else {
 		reg, _, own := opBorrowMaybeScratchReg(m, code, x, false)
 		if own {
-			defer code.FreeReg(abi.I32, reg)
+			defer m.Regs.Free(abi.I32, reg)
 		}
 
 		test.opFromReg(&m.Text, abi.I32, reg, reg)
@@ -745,8 +745,8 @@ func opBorrowMaybeScratchRegOperand(m *Module, code gen.Coder, x values.Operand,
 }
 
 // OpGetGlobal must not update CPU's condition flags.
-func (ISA) OpGetGlobal(m *Module, code gen.RegCoder, t abi.Type, offset int32) values.Operand {
-	reg, ok := code.TryAllocReg(t)
+func (ISA) OpGetGlobal(m *Module, code gen.Coder, t abi.Type, offset int32) values.Operand {
+	reg, ok := m.Regs.Alloc(t)
 	if !ok {
 		reg = RegResult
 	}
@@ -760,7 +760,7 @@ func (ISA) OpGetGlobal(m *Module, code gen.RegCoder, t abi.Type, offset int32) v
 	return values.TempRegOperand(t, reg, true)
 }
 
-func (ISA) OpSelect(m *Module, code gen.RegCoder, a, b, condOperand values.Operand) values.Operand {
+func (ISA) OpSelect(m *Module, code gen.Coder, a, b, condOperand values.Operand) values.Operand {
 	defer code.Consumed(condOperand)
 
 	var cond values.Condition
@@ -810,7 +810,7 @@ func (ISA) OpSelect(m *Module, code gen.RegCoder, a, b, condOperand values.Opera
 		default:
 			aReg, _, own := opBorrowMaybeScratchReg(m, code, a, true)
 			if own {
-				defer code.FreeReg(t, aReg)
+				defer m.Regs.Free(t, aReg)
 			}
 
 			cmov.opFromReg(&m.Text, t, targetReg, aReg)
@@ -861,7 +861,7 @@ func (ISA) OpSelect(m *Module, code gen.RegCoder, a, b, condOperand values.Opera
 
 // opBorrowMaybeResultReg returns either the register of the given operand, or
 // the reserved result register with the value of the operand.
-func opBorrowMaybeResultReg(m *Module, code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
+func opBorrowMaybeResultReg(m *Module, code gen.Coder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
 	if x.Storage == values.VarReg {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
@@ -875,14 +875,14 @@ func opBorrowMaybeResultReg(m *Module, code gen.RegCoder, x values.Operand, pres
 // opMaybeResultReg returns either the register of the given operand, or the
 // reserved result register with the value of the operand.  The caller has
 // exclusive ownership of the register.
-func opMaybeResultReg(m *Module, code gen.RegCoder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
+func opMaybeResultReg(m *Module, code gen.Coder, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
 	if x.Storage == values.TempReg {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
 	} else {
 		var ok bool
 
-		reg, ok = code.TryAllocReg(x.Type)
+		reg, ok = m.Regs.Alloc(x.Type)
 		if !ok {
 			reg = RegResult
 		}

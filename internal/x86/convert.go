@@ -13,7 +13,7 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-func (ISA) ConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType abi.Type, source values.Operand) (result values.Operand) {
+func (ISA) ConversionOp(m *Module, code gen.Coder, oper uint16, resultType abi.Type, source values.Operand) (result values.Operand) {
 	switch oper {
 	case opers.Wrap:
 		return opWrap(m, code, resultType, source)
@@ -23,13 +23,13 @@ func (ISA) ConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType ab
 	}
 }
 
-func opWrap(m *Module, code gen.RegCoder, resultType abi.Type, source values.Operand) values.Operand {
+func opWrap(m *Module, code gen.Coder, resultType abi.Type, source values.Operand) values.Operand {
 	source.Type = abi.I32 // short mov; useful zeroExt flag
 	reg, zeroExt := opMaybeResultReg(m, code, source, false)
 	return values.TempRegOperand(resultType, reg, zeroExt)
 }
 
-func commonConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType abi.Type, source values.Operand) values.Operand {
+func commonConversionOp(m *Module, code gen.Coder, oper uint16, resultType abi.Type, source values.Operand) values.Operand {
 	reg, zeroExt := opMaybeResultReg(m, code, source, false)
 	// TODO: for int<->float ops: borrow source reg, allocate target reg
 
@@ -50,7 +50,7 @@ func commonConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType ab
 
 	case opers.TruncS:
 		cvttsSSE2si.opReg(&m.Text, source.Type, resultType, RegResult, reg)
-		code.FreeReg(source.Type, reg)
+		m.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, true)
 
 	case opers.TruncU:
@@ -59,12 +59,12 @@ func commonConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType ab
 		} else {
 			opTruncFloatToUnsignedI64(m, code, source.Type, reg)
 		}
-		code.FreeReg(source.Type, reg)
+		m.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, false)
 
 	case opers.ConvertS:
 		cvtsi2sSSE.opReg(&m.Text, resultType, source.Type, RegResult, reg)
-		code.FreeReg(source.Type, reg)
+		m.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, false)
 
 	case opers.ConvertU:
@@ -76,7 +76,7 @@ func commonConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType ab
 		} else {
 			opConvertUnsignedI64ToFloat(m, code, resultType, reg)
 		}
-		code.FreeReg(source.Type, reg)
+		m.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, false)
 
 	case opers.Reinterpret:
@@ -85,7 +85,7 @@ func commonConversionOp(m *Module, code gen.RegCoder, oper uint16, resultType ab
 		} else {
 			movSSE.opToReg(&m.Text, source.Type, RegResult, reg)
 		}
-		code.FreeReg(source.Type, reg)
+		m.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, true)
 	}
 

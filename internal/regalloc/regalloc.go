@@ -29,7 +29,9 @@ func (a *Allocator) Init(avail uint64) {
 	a.freed = avail
 }
 
-func (a *Allocator) Alloc(cat abi.Category) (reg regs.R, ok bool) {
+func (a *Allocator) Alloc(t abi.Type) (reg regs.R, ok bool) {
+	cat := t.Category()
+
 	for bits := a.freed >> uint8(cat); bits != 0; bits >>= 2 {
 		if (bits & 1) != 0 {
 			a.freed &^= regMask(cat, reg)
@@ -43,8 +45,8 @@ func (a *Allocator) Alloc(cat abi.Category) (reg regs.R, ok bool) {
 	return
 }
 
-func (a *Allocator) AllocSpecific(cat abi.Category, reg regs.R) {
-	mask := regMask(cat, reg)
+func (a *Allocator) AllocSpecific(t abi.Type, reg regs.R) {
+	mask := regMask(t.Category(), reg)
 
 	if (a.freed & mask) == 0 {
 		panic(reg)
@@ -53,14 +55,14 @@ func (a *Allocator) AllocSpecific(cat abi.Category, reg regs.R) {
 	a.freed &^= mask
 }
 
-func (a *Allocator) SetAllocated(cat abi.Category, reg regs.R) {
-	mask := regMask(cat, reg)
+func (a *Allocator) SetAllocated(t abi.Type, reg regs.R) {
+	mask := regMask(t.Category(), reg)
 
 	a.freed &^= mask
 }
 
-func (a *Allocator) Free(cat abi.Category, reg regs.R) {
-	mask := regMask(cat, reg)
+func (a *Allocator) Free(t abi.Type, reg regs.R) {
+	mask := regMask(t.Category(), reg)
 
 	if (a.freed & mask) != 0 {
 		panic(reg)
@@ -77,8 +79,9 @@ func (a *Allocator) FreeAll() {
 	a.freed = a.avail
 }
 
-func (a *Allocator) Allocated(cat abi.Category, reg regs.R) bool {
-	mask := regMask(cat, reg)
+// Allocated indicates if we can hang onto a register returned by ISA ops.
+func (a *Allocator) Allocated(t abi.Type, reg regs.R) bool {
+	mask := regMask(t.Category(), reg)
 
 	return ((a.avail &^ a.freed) & mask) != 0
 }

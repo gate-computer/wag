@@ -79,7 +79,7 @@ func opSetLocal(f *function, op Opcode, index int32) {
 				x := f.operands[i]
 
 				if x.Storage == values.VarReference && x.VarIndex() == index {
-					reg, ok := tryAllocReg(f, t)
+					reg, ok := f.Regs.Alloc(t)
 					if !ok {
 						spillUntil = i
 						goto spill
@@ -162,7 +162,7 @@ func opSetLocal(f *function, op Opcode, index int32) {
 		var zeroExt bool
 		var ok bool
 
-		if valueReg := newValue.Reg(); regAllocated(f, t, valueReg) {
+		if valueReg := newValue.Reg(); f.Regs.Allocated(t, valueReg) {
 			// repurposing the register which already contains the value
 			reg = valueReg
 			zeroExt = newValue.RegZeroExt()
@@ -197,6 +197,6 @@ func opSetLocal(f *function, op Opcode, index int32) {
 	}
 
 	if oldCache.Storage == values.VarReg {
-		freeReg(f, t, oldCache.Reg())
+		f.Regs.Free(t, oldCache.Reg())
 	}
 }
