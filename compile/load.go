@@ -15,7 +15,7 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/datalayout"
-	"github.com/tsavola/wag/internal/errutil"
+	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/gen/codegen"
 	"github.com/tsavola/wag/internal/initexpr"
 	"github.com/tsavola/wag/internal/loader"
@@ -124,7 +124,7 @@ type Module struct {
 // LoadPreliminarySections, excluding the code and data sections.
 func (m *Module) LoadPreliminarySections(r Reader, env Env) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	m.loadPreliminarySections(r, env)
@@ -138,7 +138,7 @@ func (m *Module) loadPreliminarySections(r Reader, env Env) {
 // Load all (remaining) sections.
 func (m *Module) Load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, objMap ObjectMap) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	m.load(r, env, text, roData, roDataAddr, data, objMap)
@@ -488,7 +488,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 // LoadCodeSection, after loading the preliminary sections.
 func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, startTrigger chan<- struct{}) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	m.loadCodeSection(r, text, roData, roDataAddr, objMap, startTrigger)
@@ -521,7 +521,7 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 // LoadDataSection, after loading the preliminary sections.
 func (m *Module) LoadDataSection(r Reader, data DataBuffer) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	m.loadDataSection(r, data)

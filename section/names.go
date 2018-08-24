@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/tsavola/wag/internal/errutil"
+	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/reader"
 )
@@ -34,7 +34,7 @@ type NameSection struct {
 // Load "name" custom section.
 func (ns *NameSection) Load(_ string, r reader.R) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	load := loader.L{R: r}

@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package errutil
+package errorpanic
 
 import (
 	"runtime"
 )
 
-func ErrorOrPanic(x interface{}) (err error) {
+func Handle(x interface{}) (err error) {
 	if x != nil {
 		err, _ = x.(error)
 		if err == nil {

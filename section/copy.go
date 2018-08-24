@@ -8,7 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/tsavola/wag/internal/errutil"
+	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/reader"
@@ -19,7 +19,7 @@ import (
 // is left untouched (the reader will be backed up before the section id).
 func CopyCodeSection(w io.Writer, r reader.R) (ok bool, err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	ok = copySection(w, r, module.SectionCode)
@@ -28,7 +28,7 @@ func CopyCodeSection(w io.Writer, r reader.R) (ok bool, err error) {
 
 func DiscardUnknownSections(r reader.R) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	copySection(ioutil.Discard, r, module.SectionUnknown)

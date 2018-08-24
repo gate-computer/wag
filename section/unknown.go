@@ -10,7 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/tsavola/wag/internal/errutil"
+	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/reader"
 )
@@ -25,7 +25,7 @@ type UnknownLoaders map[string]UnknownLoader
 
 func (uls UnknownLoaders) Load(r reader.R, payloadLen uint32) (err error) {
 	defer func() {
-		err = errutil.ErrorOrPanic(recover())
+		err = errorpanic.Handle(recover())
 	}()
 
 	// io.LimitedReader doesn't implement reader.R, so do this instead
