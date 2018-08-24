@@ -19,7 +19,7 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func GenProgram(m *module.M, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
+func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
 	p := &gen.Prog{
 		FuncLinks: make([]links.FuncL, len(m.FuncSigs)),
 	}
