@@ -5,7 +5,7 @@
 package gen
 
 import (
-	"github.com/tsavola/wag/internal/link"
+	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/trap"
 )
 

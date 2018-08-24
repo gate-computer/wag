@@ -9,9 +9,9 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/rodata"
 )
 
 func (ISA) UnaryOp(f *gen.Func, props uint16, x val.Operand) val.Operand {

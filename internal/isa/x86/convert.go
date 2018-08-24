@@ -7,11 +7,11 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/val"
-	"github.com/tsavola/wag/internal/link"
-	"github.com/tsavola/wag/internal/rodata"
 )
 
 func (ISA) ConversionOp(f *gen.Func, props uint16, resultType abi.Type, source val.Operand) (result val.Operand) {
