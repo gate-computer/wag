@@ -7,24 +7,24 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/internal/values"
 )
 
-func (ISA) UnaryOp(f *gen.Func, oper uint16, x values.Operand) values.Operand {
-	if (oper & opers.UnaryFloat) == 0 {
-		return unaryIntOp(f, oper, x)
+func (ISA) UnaryOp(f *gen.Func, props uint16, x values.Operand) values.Operand {
+	if (props & prop.UnaryFloat) == 0 {
+		return unaryIntOp(f, props, x)
 	} else {
-		return unaryFloatOp(f, oper, x)
+		return unaryFloatOp(f, props, x)
 	}
 }
 
-func unaryIntOp(f *gen.Func, oper uint16, x values.Operand) values.Operand {
-	switch index := uint8(oper); index {
-	case opers.IndexIntEqz:
+func unaryIntOp(f *gen.Func, props uint16, x values.Operand) values.Operand {
+	switch index := uint8(props); index {
+	case prop.IndexIntEqz:
 		return opIntEqz(f, x)
 
 	default:
@@ -59,7 +59,7 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x values.Operand) (result values
 	result = values.TempRegOperand(x.Type, targetReg, true)
 
 	switch index {
-	case opers.IndexIntClz:
+	case prop.IndexIntClz:
 		bsr.opFromReg(&f.Text, x.Type, RegScratch, sourceReg)
 		movImm.opImm(&f.Text, x.Type, targetReg, -1)
 		cmove.opFromReg(&f.Text, x.Type, RegScratch, targetReg)
@@ -67,13 +67,13 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x values.Operand) (result values
 		sub.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
 		return
 
-	case opers.IndexIntCtz:
+	case prop.IndexIntCtz:
 		bsf.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
 		movImm.opImm(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
 		cmove.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
 		return
 
-	case opers.IndexIntPopcnt:
+	case prop.IndexIntPopcnt:
 		popcnt.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
 		return
 	}
@@ -81,27 +81,27 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x values.Operand) (result values
 	panic("unknown unary int op")
 }
 
-func unaryFloatOp(f *gen.Func, oper uint16, x values.Operand) (result values.Operand) {
+func unaryFloatOp(f *gen.Func, props uint16, x values.Operand) (result values.Operand) {
 	// TODO: support memory source operands
 
 	reg, _ := opMaybeResultReg(f, x, false)
 	result = values.TempRegOperand(x.Type, reg, false)
 
-	if (oper & opers.UnaryRound) != 0 {
-		roundMode := uint8(oper)
+	if (props & prop.UnaryRound) != 0 {
+		roundMode := uint8(props)
 		roundsSSE.opReg(&f.Text, x.Type, reg, reg, int8(roundMode))
 		return
 	} else {
-		switch index := uint8(oper); index {
-		case opers.IndexFloatAbs:
+		switch index := uint8(props); index {
+		case prop.IndexFloatAbs:
 			opAbsFloatReg(f.M, x.Type, reg)
 			return
 
-		case opers.IndexFloatNeg:
+		case prop.IndexFloatNeg:
 			opNegFloatReg(f.M, x.Type, reg)
 			return
 
-		case opers.IndexFloatSqrt:
+		case prop.IndexFloatSqrt:
 			sqrtsSSE.opFromReg(&f.Text, x.Type, reg, reg)
 			return
 		}

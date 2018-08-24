@@ -72,7 +72,7 @@ func effectiveVarStackOffset(f *gen.Func, index int32) (offset int32) {
 	return
 }
 
-func updateMemoryIndex(f *gen.Func, index values.Operand, offset uint32, oper uint16) {
+func updateMemoryIndex(f *gen.Func, index values.Operand, offset uint32, props uint16) {
 	if index.Storage.IsVar() {
 		v := &f.Vars[index.VarIndex()]
 
@@ -81,7 +81,7 @@ func updateMemoryIndex(f *gen.Func, index values.Operand, offset uint32, oper ui
 			v.Cache = values.VarRegOperand(v.Cache.Type, v.Cache.VarIndex(), v.Cache.Reg(), true)
 		}
 
-		size := oper >> 8
+		size := props >> 8
 		upper := uint64(offset) + uint64(size)
 
 		if upper <= 0x80000000 {

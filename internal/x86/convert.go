@@ -7,20 +7,20 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/link"
-	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/internal/values"
 )
 
-func (ISA) ConversionOp(f *gen.Func, oper uint16, resultType abi.Type, source values.Operand) (result values.Operand) {
-	switch oper {
-	case opers.Wrap:
+func (ISA) ConversionOp(f *gen.Func, props uint16, resultType abi.Type, source values.Operand) (result values.Operand) {
+	switch props {
+	case prop.Wrap:
 		return opWrap(f, resultType, source)
 
 	default:
-		return commonConversionOp(f, oper, resultType, source)
+		return commonConversionOp(f, props, resultType, source)
 	}
 }
 
@@ -30,31 +30,31 @@ func opWrap(f *gen.Func, resultType abi.Type, source values.Operand) values.Oper
 	return values.TempRegOperand(resultType, reg, zeroExt)
 }
 
-func commonConversionOp(f *gen.Func, oper uint16, resultType abi.Type, source values.Operand) values.Operand {
+func commonConversionOp(f *gen.Func, props uint16, resultType abi.Type, source values.Operand) values.Operand {
 	reg, zeroExt := opMaybeResultReg(f, source, false)
 	// TODO: for int<->float ops: borrow source reg, allocate target reg
 
-	switch oper {
-	case opers.ExtendS:
+	switch props {
+	case prop.ExtendS:
 		movsxd.opFromReg(&f.Text, 0, reg, reg)
 		return values.TempRegOperand(resultType, reg, false)
 
-	case opers.ExtendU:
+	case prop.ExtendU:
 		if !zeroExt {
 			mov.opFromReg(&f.Text, abi.I32, reg, reg)
 		}
 		return values.TempRegOperand(resultType, reg, false)
 
-	case opers.Mote:
+	case prop.Mote:
 		cvts2sSSE.opFromReg(&f.Text, source.Type, reg, reg)
 		return values.TempRegOperand(resultType, reg, false)
 
-	case opers.TruncS:
+	case prop.TruncS:
 		cvttsSSE2si.opReg(&f.Text, source.Type, resultType, RegResult, reg)
 		f.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, true)
 
-	case opers.TruncU:
+	case prop.TruncU:
 		if resultType == abi.I32 {
 			cvttsSSE2si.opReg(&f.Text, source.Type, abi.I64, RegResult, reg)
 		} else {
@@ -63,12 +63,12 @@ func commonConversionOp(f *gen.Func, oper uint16, resultType abi.Type, source va
 		f.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, false)
 
-	case opers.ConvertS:
+	case prop.ConvertS:
 		cvtsi2sSSE.opReg(&f.Text, resultType, source.Type, RegResult, reg)
 		f.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, false)
 
-	case opers.ConvertU:
+	case prop.ConvertU:
 		if source.Type == abi.I32 {
 			if !zeroExt {
 				mov.opFromReg(&f.Text, abi.I32, reg, reg)
@@ -80,7 +80,7 @@ func commonConversionOp(f *gen.Func, oper uint16, resultType abi.Type, source va
 		f.Regs.Free(source.Type, reg)
 		return values.TempRegOperand(resultType, RegResult, false)
 
-	case opers.Reinterpret:
+	case prop.Reinterpret:
 		if source.Type.Category() == abi.Int {
 			movSSE.opFromReg(&f.Text, source.Type, RegResult, reg)
 		} else {

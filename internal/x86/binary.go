@@ -7,56 +7,56 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/link"
-	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
 
-func (ISA) BinaryOp(f *gen.Func, oper uint16, a, b values.Operand) values.Operand {
-	if (oper & opers.BinaryFloat) == 0 {
+func (ISA) BinaryOp(f *gen.Func, props uint16, a, b values.Operand) values.Operand {
+	if (props & prop.BinaryFloat) == 0 {
 		switch {
-		case (oper & opers.BinaryCompare) != 0:
-			return binaryIntCompareOp(f, uint8(oper), a, b)
+		case (props & prop.BinaryCompare) != 0:
+			return binaryIntCompareOp(f, uint8(props), a, b)
 
-		case (oper & opers.BinaryIntShift) != 0:
-			return binaryIntShiftOp(f, uint8(oper), a, b)
+		case (props & prop.BinaryIntShift) != 0:
+			return binaryIntShiftOp(f, uint8(props), a, b)
 
-		case (oper & opers.BinaryIntDivmul) != 0:
-			return binaryIntDivmulOp(f, uint8(oper), a, b)
+		case (props & prop.BinaryIntDivmul) != 0:
+			return binaryIntDivmulOp(f, uint8(props), a, b)
 
 		default:
-			return commonBinaryIntOp(f, uint8(oper), a, b)
+			return commonBinaryIntOp(f, uint8(props), a, b)
 		}
 	} else {
 		switch {
-		case (oper & opers.BinaryCompare) != 0:
-			return binaryFloatCompareOp(f, uint8(oper), a, b)
+		case (props & prop.BinaryCompare) != 0:
+			return binaryFloatCompareOp(f, uint8(props), a, b)
 
-		case (oper & opers.BinaryFloatMinmax) != 0:
-			return binaryFloatMinmaxOp(f, uint8(oper), a, b)
+		case (props & prop.BinaryFloatMinmax) != 0:
+			return binaryFloatMinmaxOp(f, uint8(props), a, b)
 
-		case (oper & opers.BinaryFloatCopysign) != 0:
+		case (props & prop.BinaryFloatCopysign) != 0:
 			return binaryFloatCopysignOp(f, a, b)
 
 		default:
-			return commonBinaryFloatOp(f, uint8(oper), a, b)
+			return commonBinaryFloatOp(f, uint8(props), a, b)
 		}
 	}
 }
 
 var commonBinaryIntInsns = []binaryInsn{
-	opers.IndexIntAdd: add,
-	opers.IndexIntSub: sub,
-	opers.IndexIntAnd: and,
-	opers.IndexIntOr:  or,
-	opers.IndexIntXor: xor,
+	prop.IndexIntAdd: add,
+	prop.IndexIntSub: sub,
+	prop.IndexIntAnd: and,
+	prop.IndexIntOr:  or,
+	prop.IndexIntXor: xor,
 }
 
 func commonBinaryIntOp(f *gen.Func, index uint8, a, b values.Operand) (result values.Operand) {
-	if index == opers.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
+	if index == prop.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
 		return inplaceIntOp(f, neg, b)
 	}
 
@@ -65,10 +65,10 @@ func commonBinaryIntOp(f *gen.Func, index uint8, a, b values.Operand) (result va
 		switch {
 		case b.ImmValue() == 1:
 			switch index {
-			case opers.IndexIntAdd:
+			case prop.IndexIntAdd:
 				return inplaceIntOp(f, inc, a)
 
-			case opers.IndexIntSub:
+			case prop.IndexIntSub:
 				return inplaceIntOp(f, dec, a)
 			}
 
@@ -141,11 +141,11 @@ var binaryDivmulInsns = []struct {
 	insnRexM
 	shiftImm shiftImmInsn
 }{
-	opers.IndexDivmulDivS: {idiv, noShiftImmInsn},
-	opers.IndexDivmulDivU: {div, shrImm},
-	opers.IndexDivmulRemS: {idiv, noShiftImmInsn},
-	opers.IndexDivmulRemU: {div, noShiftImmInsn}, // TODO: use AND for 2^n divisors
-	opers.IndexDivmulMul:  {mul, shlImm},
+	prop.IndexDivmulDivS: {idiv, noShiftImmInsn},
+	prop.IndexDivmulDivU: {div, shrImm},
+	prop.IndexDivmulRemS: {idiv, noShiftImmInsn},
+	prop.IndexDivmulRemU: {div, noShiftImmInsn}, // TODO: use AND for 2^n divisors
+	prop.IndexDivmulMul:  {mul, shlImm},
 }
 
 func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Operand {
@@ -163,7 +163,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 		}
 	}
 
-	division := (index & opers.DivmulMul) == 0
+	division := (index & prop.DivmulMul) == 0
 	checkZero := true
 	checkOverflow := true
 
@@ -214,7 +214,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 
 	opMove(f, RegResult, a, false)
 
-	remainder := (index & opers.DivmulRem) != 0
+	remainder := (index & prop.DivmulRem) != 0
 
 	var doNot link.L
 
@@ -236,7 +236,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 			}
 		}
 
-		signed := (index & opers.DivmulSign) != 0
+		signed := (index & prop.DivmulSign) != 0
 
 		if signed && checkOverflow {
 			var do link.L
@@ -314,11 +314,11 @@ var binaryShiftInsns = []struct {
 	reg insnRexM
 	imm shiftImmInsn
 }{
-	opers.IndexShiftRotl: {rol, rolImm},
-	opers.IndexShiftRotr: {ror, rorImm},
-	opers.IndexShiftShl:  {shl, shlImm},
-	opers.IndexShiftShrS: {sar, sarImm},
-	opers.IndexShiftShrU: {shr, shrImm},
+	prop.IndexShiftRotl: {rol, rolImm},
+	prop.IndexShiftRotr: {ror, rorImm},
+	prop.IndexShiftShl:  {shl, shlImm},
+	prop.IndexShiftShrS: {sar, sarImm},
+	prop.IndexShiftShrU: {shr, shrImm},
 }
 
 func binaryIntShiftOp(f *gen.Func, index uint8, a, b values.Operand) (result values.Operand) {
@@ -370,10 +370,10 @@ func subtleShiftOp(f *gen.Func, insn insnRexM, t abi.Type, reg regs.R, count val
 }
 
 var commonBinaryFloatInsns = []insnPrefix{
-	opers.IndexFloatAdd: addsSSE,
-	opers.IndexFloatSub: subsSSE,
-	opers.IndexFloatDiv: divsSSE,
-	opers.IndexFloatMul: mulsSSE,
+	prop.IndexFloatAdd: addsSSE,
+	prop.IndexFloatSub: subsSSE,
+	prop.IndexFloatDiv: divsSSE,
+	prop.IndexFloatMul: mulsSSE,
 }
 
 // TODO: support memory source operands
@@ -394,8 +394,8 @@ var binaryFloatMinmaxInsns = []struct {
 	commonInsn insnPrefix
 	zeroInsn   insnPrefix
 }{
-	opers.IndexMinmaxMin: {minsSSE, orpSSE},
-	opers.IndexMinmaxMax: {maxsSSE, andpSSE},
+	prop.IndexMinmaxMin: {minsSSE, orpSSE},
+	prop.IndexMinmaxMax: {maxsSSE, andpSSE},
 }
 
 func binaryFloatMinmaxOp(f *gen.Func, index uint8, a, b values.Operand) values.Operand {

@@ -32,7 +32,7 @@ func (info opInfo) secondaryType() abi.Type {
 	return abi.Type(info >> 8)
 }
 
-func (info opInfo) oper() uint16 {
+func (info opInfo) props() uint16 {
 	return uint16(info >> 16)
 }
 

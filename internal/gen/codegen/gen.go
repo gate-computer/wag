@@ -134,7 +134,7 @@ func binaryOp(f *gen.Func, op Opcode, left, right values.Operand, info opInfo) {
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.BinaryOp(f, info.oper(), left, right)
+	result := isa.BinaryOp(f, info.props(), left, right)
 	pushOperand(f, result)
 }
 
@@ -165,7 +165,7 @@ func genConversionOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.ConversionOp(f, info.oper(), info.primaryType(), x)
+	result := isa.ConversionOp(f, info.props(), info.primaryType(), x)
 	pushOperand(f, result)
 	return
 }
@@ -182,8 +182,8 @@ func genLoadOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	result := isa.LoadOp(f, info.oper(), index, info.primaryType(), offset)
-	updateMemoryIndex(f, virtualIndex, offset, info.oper())
+	result := isa.LoadOp(f, info.props(), index, info.primaryType(), offset)
+	updateMemoryIndex(f, virtualIndex, offset, info.props())
 	pushOperand(f, result)
 	return
 }
@@ -205,8 +205,8 @@ func genStoreOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	isa.StoreOp(f, info.oper(), index, value, offset)
-	updateMemoryIndex(f, virtualIndex, offset, info.oper())
+	isa.StoreOp(f, info.props(), index, value, offset)
+	updateMemoryIndex(f, virtualIndex, offset, info.props())
 	return
 }
 
@@ -222,7 +222,7 @@ func genUnaryOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.UnaryOp(f, info.oper(), x)
+	result := isa.UnaryOp(f, info.props(), x)
 	pushOperand(f, result)
 	return
 }

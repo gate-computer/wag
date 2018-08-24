@@ -100,8 +100,8 @@ func generatePanic(w io.Writer, input string) {
 
 	out(`import (`)
 	out(`    "github.com/tsavola/wag/abi"`)
+	out(`    "github.com/tsavola/wag/internal/gen/prop"`)
 	out(`    "github.com/tsavola/wag/internal/loader"`)
-	out(`    "github.com/tsavola/wag/internal/opers"`)
 	out(`)`)
 
 	out(`const (`)
@@ -147,33 +147,33 @@ func generatePanic(w io.Writer, input string) {
 				var (
 					impl  = "genConversionOp"
 					type1 = "abi." + strings.ToUpper(m[1])
-					oper  = "opers." + symbol(m[2])
+					props = "prop." + symbol(m[2])
 					type2 = "abi." + strings.ToUpper(m[3])
 				)
 
-				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, oper)
+				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, props)
 			} else if m := regexp.MustCompile("^(.)(..)\\.(load|store)(.*)$").FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "gen" + symbol(m[3]) + "Op"
 					type1 = "abi." + strings.ToUpper(m[1]+m[2])
-					oper  string
+					props string
 				)
 
 				if m[4] == "" {
-					oper = "opers." + strings.ToUpper(m[1]+m[2]) + symbol(m[3])
+					props = "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3])
 				} else {
-					oper = "opers." + typeCategory(m[1]) + symbol(m[3]+m[4])
+					props = "prop." + typeCategory(m[1]) + symbol(m[3]+m[4])
 				}
 
-				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, oper)
+				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
 			} else if m := regexp.MustCompile("^(.)(..)\\.(.+)$").FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = operGen(m[3])
 					type1 = "abi." + strings.ToUpper(m[1]+m[2])
-					oper  = "opers." + typeCategory(m[1]) + symbol(m[3])
+					props = "prop." + typeCategory(m[1]) + symbol(m[3])
 				)
 
-				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, oper)
+				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
 			} else {
 				var (
 					impl = "gen" + op.sym
@@ -234,8 +234,8 @@ func typeCategory(letter string) string {
 	panic(errors.New(letter))
 }
 
-func operGen(oper string) string {
-	switch oper {
+func operGen(props string) string {
+	switch props {
 	case "abs", "ceil", "clz", "ctz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
 		return "genUnaryOp"
 
@@ -255,5 +255,5 @@ func operGen(oper string) string {
 		return "genBinaryConditionOp"
 	}
 
-	panic(errors.New(oper))
+	panic(errors.New(props))
 }

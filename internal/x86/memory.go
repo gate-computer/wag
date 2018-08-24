@@ -7,9 +7,9 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
@@ -23,34 +23,34 @@ type memoryAccess struct {
 }
 
 var memoryLoads = []memoryAccess{
-	opers.IndexIntLoad:    {mov, 0, true},
-	opers.IndexIntLoad8S:  {binaryInsn{movsx8, noPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad8U:  {binaryInsn{movzx8, noPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad16S: {binaryInsn{movsx16, noPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad16U: {binaryInsn{movzx16, noPrefixMIInsn}, 0, false},
-	opers.IndexIntLoad32S: {binaryInsn{movsxd, noPrefixMIInsn}, 0, false}, // type is ignored
-	opers.IndexIntLoad32U: {mov, abi.I32, true},
-	opers.IndexFloatLoad:  {binaryInsn{movsSSE, noPrefixMIInsn}, 0, false},
+	prop.IndexIntLoad:    {mov, 0, true},
+	prop.IndexIntLoad8S:  {binaryInsn{movsx8, noPrefixMIInsn}, 0, false},
+	prop.IndexIntLoad8U:  {binaryInsn{movzx8, noPrefixMIInsn}, 0, false},
+	prop.IndexIntLoad16S: {binaryInsn{movsx16, noPrefixMIInsn}, 0, false},
+	prop.IndexIntLoad16U: {binaryInsn{movzx16, noPrefixMIInsn}, 0, false},
+	prop.IndexIntLoad32S: {binaryInsn{movsxd, noPrefixMIInsn}, 0, false}, // type is ignored
+	prop.IndexIntLoad32U: {mov, abi.I32, true},
+	prop.IndexFloatLoad:  {binaryInsn{movsSSE, noPrefixMIInsn}, 0, false},
 }
 
 var memoryStores = []memoryAccess{
-	opers.IndexIntStore:   {mov, 0, false},
-	opers.IndexIntStore8:  {mov8, abi.I32, false},
-	opers.IndexIntStore16: {mov16, abi.I32, false},
-	opers.IndexIntStore32: {mov, abi.I32, false},
-	opers.IndexFloatStore: {binaryInsn{movsSSE, movImm}, 0, false}, // integer immediate works
+	prop.IndexIntStore:   {mov, 0, false},
+	prop.IndexIntStore8:  {mov8, abi.I32, false},
+	prop.IndexIntStore16: {mov16, abi.I32, false},
+	prop.IndexIntStore32: {mov, abi.I32, false},
+	prop.IndexFloatStore: {binaryInsn{movsSSE, movImm}, 0, false}, // integer immediate works
 }
 
 // LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) LoadOp(f *gen.Func, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
-	size := oper >> 8
+func (ISA) LoadOp(f *gen.Func, props uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
+	size := props >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
 	if ownIndexReg {
 		defer f.Regs.Free(abi.I64, indexReg)
 	}
 
-	load := memoryLoads[uint8(oper)]
+	load := memoryLoads[uint8(props)]
 
 	targetReg, ok := f.Regs.Alloc(resultType)
 	if !ok {
@@ -69,15 +69,15 @@ func (ISA) LoadOp(f *gen.Func, oper uint16, index values.Operand, resultType abi
 }
 
 // StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) StoreOp(f *gen.Func, oper uint16, index, x values.Operand, offset uint32) {
-	size := oper >> 8
+func (ISA) StoreOp(f *gen.Func, props uint16, index, x values.Operand, offset uint32) {
+	size := props >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
 	if ownIndexReg {
 		defer f.Regs.Free(abi.I64, indexReg)
 	}
 
-	store := memoryStores[uint8(oper)]
+	store := memoryStores[uint8(props)]
 
 	insnType := store.insnType
 	if insnType == 0 {
