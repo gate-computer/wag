@@ -14,34 +14,34 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func (ISA) BinaryOp(text *gen.Text, code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
+func (ISA) BinaryOp(m *Module, code gen.RegCoder, oper uint16, a, b values.Operand) values.Operand {
 	if (oper & opers.BinaryFloat) == 0 {
 		switch {
 		case (oper & opers.BinaryCompare) != 0:
-			return binaryIntCompareOp(text, code, uint8(oper), a, b)
+			return binaryIntCompareOp(m, code, uint8(oper), a, b)
 
 		case (oper & opers.BinaryIntShift) != 0:
-			return binaryIntShiftOp(text, code, uint8(oper), a, b)
+			return binaryIntShiftOp(m, code, uint8(oper), a, b)
 
 		case (oper & opers.BinaryIntDivmul) != 0:
-			return binaryIntDivmulOp(text, code, uint8(oper), a, b)
+			return binaryIntDivmulOp(m, code, uint8(oper), a, b)
 
 		default:
-			return commonBinaryIntOp(text, code, uint8(oper), a, b)
+			return commonBinaryIntOp(m, code, uint8(oper), a, b)
 		}
 	} else {
 		switch {
 		case (oper & opers.BinaryCompare) != 0:
-			return binaryFloatCompareOp(text, code, uint8(oper), a, b)
+			return binaryFloatCompareOp(m, code, uint8(oper), a, b)
 
 		case (oper & opers.BinaryFloatMinmax) != 0:
-			return binaryFloatMinmaxOp(text, code, uint8(oper), a, b)
+			return binaryFloatMinmaxOp(m, code, uint8(oper), a, b)
 
 		case (oper & opers.BinaryFloatCopysign) != 0:
-			return binaryFloatCopysignOp(text, code, a, b)
+			return binaryFloatCopysignOp(m, code, a, b)
 
 		default:
-			return commonBinaryFloatOp(text, code, uint8(oper), a, b)
+			return commonBinaryFloatOp(m, code, uint8(oper), a, b)
 		}
 	}
 }
@@ -54,9 +54,9 @@ var commonBinaryIntInsns = []binaryInsn{
 	opers.IndexIntXor: xor,
 }
 
-func commonBinaryIntOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+func commonBinaryIntOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
 	if index == opers.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
-		return inplaceIntOp(text, code, neg, b)
+		return inplaceIntOp(m, code, neg, b)
 	}
 
 	switch b.Storage {
@@ -65,37 +65,37 @@ func commonBinaryIntOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 		case b.ImmValue() == 1:
 			switch index {
 			case opers.IndexIntAdd:
-				return inplaceIntOp(text, code, inc, a)
+				return inplaceIntOp(m, code, inc, a)
 
 			case opers.IndexIntSub:
-				return inplaceIntOp(text, code, dec, a)
+				return inplaceIntOp(m, code, dec, a)
 			}
 
 		case b.ImmValue() < -0x80000000 || b.ImmValue() >= 0x80000000:
-			b = opBorrowMaybeScratchRegOperand(text, code, b, true)
+			b = opBorrowMaybeScratchRegOperand(m, code, b, true)
 		}
 
 	case values.VarReference, values.Stack, values.ConditionFlags:
-		b = opBorrowMaybeScratchRegOperand(text, code, b, true)
+		b = opBorrowMaybeScratchRegOperand(m, code, b, true)
 	}
 
 	insn := commonBinaryIntInsns[index]
 
-	targetReg, _ := opMaybeResultReg(text, code, a, false)
+	targetReg, _ := opMaybeResultReg(m, code, a, false)
 	result = values.TempRegOperand(a.Type, targetReg, true)
 
 	switch {
 	case b.Storage.IsReg():
-		insn.opFromReg(text, a.Type, targetReg, b.Reg())
+		insn.opFromReg(&m.Text, a.Type, targetReg, b.Reg())
 		code.Consumed(b)
 		return
 
 	case b.Storage == values.VarMem:
-		insn.opFromStack(text, a.Type, targetReg, b.VarMemOffset())
+		insn.opFromStack(&m.Text, a.Type, targetReg, b.VarMemOffset())
 		return
 
 	case b.Storage == values.Imm: // large values moved to registers earlier
-		insn.opImm(text, a.Type, targetReg, int32(b.ImmValue()))
+		insn.opImm(&m.Text, a.Type, targetReg, int32(b.ImmValue()))
 		return
 
 	default:
@@ -103,8 +103,8 @@ func commonBinaryIntOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 	}
 }
 
-func binaryIntCompareOp(text *gen.Text, code gen.RegCoder, cond uint8, a, b values.Operand) (result values.Operand) {
-	targetReg, _, own := opBorrowMaybeResultReg(text, code, a, false)
+func binaryIntCompareOp(m *Module, code gen.RegCoder, cond uint8, a, b values.Operand) (result values.Operand) {
+	targetReg, _, own := opBorrowMaybeResultReg(m, code, a, false)
 	if own {
 		defer code.FreeReg(a.Type, targetReg)
 	}
@@ -113,21 +113,21 @@ func binaryIntCompareOp(text *gen.Text, code gen.RegCoder, cond uint8, a, b valu
 
 	switch {
 	case b.Storage.IsReg():
-		cmp.opFromReg(text, a.Type, targetReg, b.Reg())
+		cmp.opFromReg(&m.Text, a.Type, targetReg, b.Reg())
 		code.Consumed(b)
 		return
 
 	case b.Storage == values.VarMem:
-		cmp.opFromStack(text, a.Type, targetReg, b.VarMemOffset())
+		cmp.opFromStack(&m.Text, a.Type, targetReg, b.VarMemOffset())
 		return
 
 	case b.Storage == values.Imm && b.ImmValue() >= -0x80000000 && b.ImmValue() < 0x80000000:
-		cmp.opImm(text, a.Type, targetReg, int32(b.ImmValue()))
+		cmp.opImm(&m.Text, a.Type, targetReg, int32(b.ImmValue()))
 		return
 
 	default:
-		opMove(text, code, RegScratch, b, false)
-		cmp.opFromReg(text, a.Type, targetReg, RegScratch)
+		opMove(m, code, RegScratch, b, false)
+		cmp.opFromReg(&m.Text, a.Type, targetReg, RegScratch)
 		return
 	}
 }
@@ -143,7 +143,7 @@ var binaryDivmulInsns = []struct {
 	opers.IndexDivmulMul:  {mul, shlImm},
 }
 
-func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+func binaryIntDivmulOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
 	insn := binaryDivmulInsns[index]
 	t := a.Type
 
@@ -152,8 +152,8 @@ func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 
 		switch {
 		case insn.shiftImm.defined() && value > 0 && isPowerOfTwo(uint64(value)):
-			reg, _ := opMaybeResultReg(text, code, a, false)
-			insn.shiftImm.op(text, t, reg, log2(uint64(value)))
+			reg, _ := opMaybeResultReg(m, code, a, false)
+			insn.shiftImm.op(&m.Text, t, reg, log2(uint64(value)))
 			return values.TempRegOperand(t, reg, true)
 		}
 	}
@@ -173,14 +173,14 @@ func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 				newReg, ok = code.TryAllocReg(t)
 				if !ok {
 					// borrow a register which we don't need in this function
-					movMMX.opFromReg(text, abi.I64, RegScratchMMX, RegTextBase)
-					defer movMMX.opToReg(text, abi.I64, RegTextBase, RegScratchMMX)
+					movMMX.opFromReg(&m.Text, abi.I64, RegScratchMMX, RegTextBase)
+					defer movMMX.opToReg(&m.Text, abi.I64, RegTextBase, RegScratchMMX)
 
 					newReg = RegTextBase
 				}
 			}
 
-			mov.opFromReg(text, t, newReg, RegResult)
+			mov.opFromReg(&m.Text, t, newReg, RegResult)
 			b = values.RegOperand(true, t, newReg)
 		}
 	} else {
@@ -197,17 +197,17 @@ func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 		reg, ok := code.TryAllocReg(t)
 		if !ok {
 			// borrow a register which we don't need in this function
-			movMMX.opFromReg(text, abi.I64, RegScratchMMX, RegTextBase)
-			defer movMMX.opToReg(text, abi.I64, RegTextBase, RegScratchMMX)
+			movMMX.opFromReg(&m.Text, abi.I64, RegScratchMMX, RegTextBase)
+			defer movMMX.opToReg(&m.Text, abi.I64, RegTextBase, RegScratchMMX)
 
 			reg = RegTextBase
 		}
 
-		opMove(text, code, reg, b, true)
+		opMove(m, code, reg, b, true)
 		b = values.RegOperand(true, t, reg)
 	}
 
-	opMove(text, code, RegResult, a, false)
+	opMove(m, code, RegResult, a, false)
 
 	remainder := (index & opers.DivmulRem) != 0
 
@@ -215,7 +215,7 @@ func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 
 	if division {
 		if checkZero {
-			opCheckDivideByZero(text, code, t, b.Reg())
+			opCheckDivideByZero(m, code, t, b.Reg())
 		}
 
 		if a.Storage == values.Imm {
@@ -237,70 +237,70 @@ func binaryIntDivmulOp(text *gen.Text, code gen.RegCoder, index uint8, a, b valu
 			var do links.L
 
 			if remainder {
-				xor.opFromReg(text, abi.I32, RegScratch, RegScratch) // moved to result at the end
+				xor.opFromReg(&m.Text, abi.I32, RegScratch, RegScratch) // moved to result at the end
 
-				cmp.opImm(text, t, b.Reg(), -1)
-				je.rel8.opStub(text)
-				doNot.AddSite(text.Pos())
+				cmp.opImm(&m.Text, t, b.Reg(), -1)
+				je.rel8.opStub(&m.Text)
+				doNot.AddSite(m.Text.Pos())
 			} else {
 				switch t.Size() {
 				case abi.Size32:
-					cmp.opImm(text, t, RegResult, -0x80000000)
+					cmp.opImm(&m.Text, t, RegResult, -0x80000000)
 
 				case abi.Size64:
-					cmp.opFromAddr(text, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr64)
+					cmp.opFromAddr(&m.Text, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr64)
 
 				default:
 					panic(a)
 				}
 
-				jne.rel8.opStub(text)
-				do.AddSite(text.Pos())
+				jne.rel8.opStub(&m.Text)
+				do.AddSite(m.Text.Pos())
 
-				cmp.opImm(text, t, b.Reg(), -1)
-				jne.rel8.opStub(text)
-				do.AddSite(text.Pos())
+				cmp.opImm(&m.Text, t, b.Reg(), -1)
+				jne.rel8.opStub(&m.Text)
+				do.AddSite(m.Text.Pos())
 
 				code.OpTrapCall(trap.IntegerOverflow)
 			}
 
-			do.Addr = text.Pos()
-			updateLocalBranches(text, &do)
+			do.Addr = m.Text.Pos()
+			updateLocalBranches(m, &do)
 		}
 
 		if signed {
 			// sign-extend dividend low bits to high bits
-			cdqCqo.op(text, t)
+			cdqCqo.op(&m.Text, t)
 		} else {
 			// zero-extend dividend high bits
-			xor.opFromReg(text, abi.I32, RegScratch, RegScratch)
+			xor.opFromReg(&m.Text, abi.I32, RegScratch, RegScratch)
 		}
 	}
 
-	insn.opReg(text, t, b.Reg())
+	insn.opReg(&m.Text, t, b.Reg())
 	code.Consumed(b)
 
-	doNot.Addr = text.Pos()
-	updateLocalBranches(text, &doNot)
+	doNot.Addr = m.Text.Pos()
+	updateLocalBranches(m, &doNot)
 
 	if remainder {
-		mov.opFromReg(text, t, RegResult, RegScratch)
+		mov.opFromReg(&m.Text, t, RegResult, RegScratch)
 	}
 
 	return values.TempRegOperand(t, RegResult, true)
 }
 
-func opCheckDivideByZero(text *gen.Text, code gen.Coder, t abi.Type, reg regs.R) {
+func opCheckDivideByZero(m *Module, code gen.Coder, t abi.Type, reg regs.R) {
 	var end links.L
 
-	test.opFromReg(text, t, reg, reg)
-	jne.rel8.opStub(text)
-	end.AddSite(text.Pos())
+	test.opFromReg(&m.Text, t, reg, reg)
+	jne.rel8.opStub(&m.Text)
+	end.AddSite(m.Text.Pos())
 
 	code.OpTrapCall(trap.IntegerDivideByZero)
 
-	end.Addr = text.Pos()
-	updateLocalBranches(text, &end)
+	end.Addr = m.Text.Pos()
+	updateLocalBranches(m, &end)
 }
 
 var binaryShiftInsns = []struct {
@@ -314,38 +314,38 @@ var binaryShiftInsns = []struct {
 	opers.IndexShiftShrU: {shr, shrImm},
 }
 
-func binaryIntShiftOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntShiftOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) (result values.Operand) {
 	insn := binaryShiftInsns[index]
 
 	switch {
 	case b.Storage == values.Imm:
-		reg, _ := opMaybeResultReg(text, code, a, true)
-		insn.imm.op(text, b.Type, reg, uint8(b.ImmValue()))
+		reg, _ := opMaybeResultReg(m, code, a, true)
+		insn.imm.op(&m.Text, b.Type, reg, uint8(b.ImmValue()))
 		result = values.TempRegOperand(a.Type, reg, true)
 
 	case b.Storage.IsReg() && b.Reg() == RegShiftCount:
-		reg, _ := opMaybeResultReg(text, code, a, false)
-		insn.reg.opReg(text, a.Type, reg)
+		reg, _ := opMaybeResultReg(m, code, a, false)
+		insn.reg.opReg(&m.Text, a.Type, reg)
 		code.Discard(b)
 		result = values.TempRegOperand(a.Type, reg, true)
 
 	case code.RegAllocated(abi.I32, RegShiftCount):
-		reg, _ := opMaybeResultReg(text, code, a, true)
+		reg, _ := opMaybeResultReg(m, code, a, true)
 		if reg == RegShiftCount {
-			mov.opFromReg(text, a.Type, RegResult, RegShiftCount)
-			result = subtleShiftOp(text, code, insn.reg, a.Type, RegResult, b)
+			mov.opFromReg(&m.Text, a.Type, RegResult, RegShiftCount)
+			result = subtleShiftOp(m, code, insn.reg, a.Type, RegResult, b)
 			code.FreeReg(abi.I32, RegShiftCount)
 		} else {
 			// unknown operand in RegShiftCount
-			mov.opFromReg(text, abi.I64, RegScratch, RegShiftCount) // save
-			result = subtleShiftOp(text, code, insn.reg, a.Type, reg, b)
-			mov.opFromReg(text, abi.I64, RegShiftCount, RegScratch) // restore
+			mov.opFromReg(&m.Text, abi.I64, RegScratch, RegShiftCount) // save
+			result = subtleShiftOp(m, code, insn.reg, a.Type, reg, b)
+			mov.opFromReg(&m.Text, abi.I64, RegShiftCount, RegScratch) // restore
 		}
 
 	default:
 		code.AllocSpecificReg(abi.I32, RegShiftCount)
-		reg, _ := opMaybeResultReg(text, code, a, true)
-		result = subtleShiftOp(text, code, insn.reg, a.Type, reg, b)
+		reg, _ := opMaybeResultReg(m, code, a, true)
+		result = subtleShiftOp(m, code, insn.reg, a.Type, reg, b)
 		code.FreeReg(abi.I32, RegShiftCount)
 	}
 
@@ -353,10 +353,10 @@ func binaryIntShiftOp(text *gen.Text, code gen.RegCoder, index uint8, a, b value
 }
 
 // subtleShiftOp trashes RegShiftCount.
-func subtleShiftOp(text *gen.Text, code gen.Coder, insn insnRexM, t abi.Type, reg regs.R, count values.Operand) values.Operand {
-	count.Type = abi.I32                            // TODO: 8-bit mov
-	opMove(text, code, RegShiftCount, count, false) //
-	insn.opReg(text, t, reg)
+func subtleShiftOp(m *Module, code gen.Coder, insn insnRexM, t abi.Type, reg regs.R, count values.Operand) values.Operand {
+	count.Type = abi.I32                         // TODO: 8-bit mov
+	opMove(m, code, RegShiftCount, count, false) //
+	insn.opReg(&m.Text, t, reg)
 	return values.TempRegOperand(t, reg, true)
 }
 
@@ -369,15 +369,15 @@ var commonBinaryFloatInsns = []insnPrefix{
 
 // TODO: support memory source operands
 
-func commonBinaryFloatOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
-	targetReg, _ := opMaybeResultReg(text, code, a, false)
+func commonBinaryFloatOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+	targetReg, _ := opMaybeResultReg(m, code, a, false)
 
-	sourceReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)
+	sourceReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
 		defer code.FreeReg(b.Type, sourceReg)
 	}
 
-	commonBinaryFloatInsns[index].opFromReg(text, a.Type, targetReg, sourceReg)
+	commonBinaryFloatInsns[index].opFromReg(&m.Text, a.Type, targetReg, sourceReg)
 	return values.TempRegOperand(a.Type, targetReg, false)
 }
 
@@ -389,10 +389,10 @@ var binaryFloatMinmaxInsns = []struct {
 	opers.IndexMinmaxMax: {maxsSSE, andpSSE},
 }
 
-func binaryFloatMinmaxOp(text *gen.Text, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
-	targetReg, _ := opMaybeResultReg(text, code, a, false)
+func binaryFloatMinmaxOp(m *Module, code gen.RegCoder, index uint8, a, b values.Operand) values.Operand {
+	targetReg, _ := opMaybeResultReg(m, code, a, false)
 
-	sourceReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)
+	sourceReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
 		defer code.FreeReg(b.Type, sourceReg)
 	}
@@ -400,44 +400,44 @@ func binaryFloatMinmaxOp(text *gen.Text, code gen.RegCoder, index uint8, a, b va
 	var common links.L
 	var end links.L
 
-	ucomisSSE.opFromReg(text, a.Type, targetReg, sourceReg)
-	jne.rel8.opStub(text)
-	common.AddSite(text.Pos())
+	ucomisSSE.opFromReg(&m.Text, a.Type, targetReg, sourceReg)
+	jne.rel8.opStub(&m.Text)
+	common.AddSite(m.Text.Pos())
 
-	binaryFloatMinmaxInsns[index].zeroInsn.opFromReg(text, a.Type, targetReg, sourceReg)
-	jmpRel.rel8.opStub(text)
-	end.AddSite(text.Pos())
+	binaryFloatMinmaxInsns[index].zeroInsn.opFromReg(&m.Text, a.Type, targetReg, sourceReg)
+	jmpRel.rel8.opStub(&m.Text)
+	end.AddSite(m.Text.Pos())
 
-	common.Addr = text.Pos()
-	updateLocalBranches(text, &common)
+	common.Addr = m.Text.Pos()
+	updateLocalBranches(m, &common)
 
-	binaryFloatMinmaxInsns[index].commonInsn.opFromReg(text, a.Type, targetReg, sourceReg)
+	binaryFloatMinmaxInsns[index].commonInsn.opFromReg(&m.Text, a.Type, targetReg, sourceReg)
 
-	end.Addr = text.Pos()
-	updateLocalBranches(text, &end)
+	end.Addr = m.Text.Pos()
+	updateLocalBranches(m, &end)
 
 	return values.TempRegOperand(a.Type, targetReg, false)
 }
 
-func binaryFloatCompareOp(text *gen.Text, code gen.RegCoder, cond uint8, a, b values.Operand) values.Operand {
-	aReg, _, own := opBorrowMaybeResultReg(text, code, a, true)
+func binaryFloatCompareOp(m *Module, code gen.RegCoder, cond uint8, a, b values.Operand) values.Operand {
+	aReg, _, own := opBorrowMaybeResultReg(m, code, a, true)
 	if own {
 		defer code.FreeReg(a.Type, aReg)
 	}
 
-	bReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)
+	bReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
 		defer code.FreeReg(b.Type, bReg)
 	}
 
-	ucomisSSE.opFromReg(text, a.Type, aReg, bReg)
+	ucomisSSE.opFromReg(&m.Text, a.Type, aReg, bReg)
 	return values.ConditionFlagsOperand(values.Condition(cond))
 }
 
-func binaryFloatCopysignOp(text *gen.Text, code gen.RegCoder, a, b values.Operand) values.Operand {
-	targetReg, _ := opMaybeResultReg(text, code, a, false)
+func binaryFloatCopysignOp(m *Module, code gen.RegCoder, a, b values.Operand) values.Operand {
+	targetReg, _ := opMaybeResultReg(m, code, a, false)
 
-	sourceReg, _, own := opBorrowMaybeScratchReg(text, code, b, false)
+	sourceReg, _, own := opBorrowMaybeScratchReg(m, code, b, false)
 	if own {
 		defer code.FreeReg(b.Type, sourceReg)
 	}
@@ -446,18 +446,18 @@ func binaryFloatCopysignOp(text *gen.Text, code gen.RegCoder, a, b values.Operan
 
 	signMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask80Base, a.Type)
 
-	movSSE.opToReg(text, a.Type, RegScratch, sourceReg) // int <- float
-	and.opFromAddr(text, a.Type, RegScratch, 0, NoIndex, signMaskAddr)
-	movSSE.opToReg(text, a.Type, RegResult, targetReg) // int <- float
-	and.opFromAddr(text, a.Type, RegResult, 0, NoIndex, signMaskAddr)
-	cmp.opFromReg(text, a.Type, RegResult, RegScratch)
-	je.rel8.opStub(text)
-	done.AddSite(text.Pos())
+	movSSE.opToReg(&m.Text, a.Type, RegScratch, sourceReg) // int <- float
+	and.opFromAddr(&m.Text, a.Type, RegScratch, 0, NoIndex, signMaskAddr)
+	movSSE.opToReg(&m.Text, a.Type, RegResult, targetReg) // int <- float
+	and.opFromAddr(&m.Text, a.Type, RegResult, 0, NoIndex, signMaskAddr)
+	cmp.opFromReg(&m.Text, a.Type, RegResult, RegScratch)
+	je.rel8.opStub(&m.Text)
+	done.AddSite(m.Text.Pos())
 
-	opNegFloatReg(text, code, a.Type, targetReg)
+	opNegFloatReg(m, code, a.Type, targetReg)
 
-	done.Addr = text.Pos()
-	updateLocalBranches(text, &done)
+	done.Addr = m.Text.Pos()
+	updateLocalBranches(m, &done)
 
 	return values.TempRegOperand(a.Type, targetReg, false)
 }

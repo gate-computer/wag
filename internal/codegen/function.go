@@ -218,11 +218,11 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	load.Varuint32() // body size
 
-	isa.AlignFunc(&f.Text)
+	isa.AlignFunc(f.Module)
 	addr := f.Text.Pos()
 	f.FuncLinks[funcIndex].Addr = addr
 	f.Map.PutFuncAddr(object.TextAddr(addr))
-	isa.OpEnterFunc(&f.Text, f)
+	isa.OpEnterFunc(f.Module, f)
 
 	f.resultType = sig.Result
 
@@ -293,7 +293,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	if !deadend {
 		opBackoffStackPtr(f, f.stackOffset)
-		isa.OpReturn(&f.Text)
+		isa.OpReturn(f.Module)
 	}
 
 	if len(f.operands) != 0 {
@@ -371,7 +371,7 @@ func opTryAllocVarReg(f *function, t abi.Type) (reg regs.R, ok bool) {
 func opStackCheck(f *function) {
 	if f.stackCheckAddr == 0 {
 		debugf("stack check")
-		f.stackCheckAddr = isa.OpTrapIfStackExhausted(&f.Text, f)
+		f.stackCheckAddr = isa.OpTrapIfStackExhausted(f.Module, f)
 	}
 }
 
@@ -388,11 +388,11 @@ func opReserveStack(f *function, offset int32) {
 
 func opAdvanceStackPtr(f *function, offset int32) {
 	opReserveStack(f, offset)
-	isa.OpAddImmToStackPtr(&f.Text, -offset)
+	isa.OpAddImmToStackPtr(f.Module, -offset)
 }
 
 func opBackoffStackPtr(f *function, offset int32) {
-	isa.OpAddImmToStackPtr(&f.Text, offset)
+	isa.OpAddImmToStackPtr(f.Module, offset)
 	f.stackOffset -= offset
 
 	debugf("stack offset: %d", f.stackOffset)
@@ -401,7 +401,7 @@ func opBackoffStackPtr(f *function, offset int32) {
 func opPush(f *function, x values.Operand) {
 	x = effectiveOperand(f, x)
 	opReserveStack(f, gen.WordSize)
-	isa.OpPush(&f.Text, f, x)
+	isa.OpPush(f.Module, f, x)
 }
 
 func opInitVars(f *function) {
@@ -441,7 +441,7 @@ func opInitVarsUntil(f *function, lastIndex int32, lastValue values.Operand) {
 // opMove must not allocate registers.
 func opMove(f *function, target regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
 	x = effectiveOperand(f, x)
-	return isa.OpMove(&f.Text, f, target, x, preserveFlags)
+	return isa.OpMove(f.Module, f, target, x, preserveFlags)
 }
 
 func opMaterializeOperand(f *function, x values.Operand) values.Operand {
@@ -735,6 +735,6 @@ func opStoreVar(f *function, index int32, x values.Operand) {
 		opInitVarsUntil(f, index, x)
 	} else {
 		offset := effectiveVarStackOffset(f, index)
-		isa.OpStoreStack(&f.Text, f, offset, x)
+		isa.OpStoreStack(f.Module, f, offset, x)
 	}
 }

@@ -20,7 +20,7 @@ func genGetGlobal(f *function, load loader.L, op Opcode, info opInfo) (deadend b
 	offset := offsetOfGlobal(f.Module, globalIndex)
 
 	opStabilizeOperandStack(f)
-	result := isa.OpGetGlobal(&f.Text, f, global.Type, offset)
+	result := isa.OpGetGlobal(f.Module, f, global.Type, offset)
 	pushOperand(f, result)
 	return
 }
@@ -43,6 +43,6 @@ func genSetGlobal(f *function, load loader.L, op Opcode, info opInfo) (deadend b
 		panic(fmt.Errorf("%s operand type is %s, but type of global %d is %s", op, x.Type, globalIndex, global.Type))
 	}
 
-	isa.OpSetGlobal(&f.Text, f, offset, x)
+	isa.OpSetGlobal(f.Module, f, offset, x)
 	return
 }

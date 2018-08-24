@@ -145,13 +145,13 @@ func genBr(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	}
 
 	if target.funcEnd {
-		isa.OpAddImmToStackPtr(&f.Text, f.stackOffset)
-		isa.OpReturn(&f.Text)
+		isa.OpAddImmToStackPtr(f.Module, f.stackOffset)
+		isa.OpReturn(f.Module)
 	} else {
 		opSaveTemporaryOperands(f) // TODO: avoid saving operands which we are going to skip over
 		opInitVars(f)
 		opStoreVars(f, true)
-		isa.OpAddImmToStackPtr(&f.Text, f.stackOffset-target.stackOffset)
+		isa.OpAddImmToStackPtr(f.Module, f.stackOffset-target.stackOffset)
 		opBranch(f, &target.label)
 	}
 
@@ -193,9 +193,9 @@ func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	stackDelta := f.stackOffset - target.stackOffset
 
-	isa.OpAddImmToStackPtr(&f.Text, stackDelta)
+	isa.OpAddImmToStackPtr(f.Module, stackDelta)
 	opBranchIf(f, cond, true, &target.label)
-	isa.OpAddImmToStackPtr(&f.Text, -stackDelta)
+	isa.OpAddImmToStackPtr(f.Module, -stackDelta)
 
 	if target.valueType != abi.Void {
 		pushResultRegOperand(f, target.valueType)
@@ -293,7 +293,7 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 		regZeroExt = index.RegZeroExt()
 	} else {
 		reg = opAllocReg(f, abi.I32)
-		regZeroExt = isa.OpMove(&f.Text, f, reg, index, false)
+		regZeroExt = isa.OpMove(f.Module, f, reg, index, false)
 	}
 
 	f.Regs.FreeAll()
@@ -309,22 +309,22 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 
 	defaultDelta := f.stackOffset - defaultTarget.stackOffset
 
-	isa.OpAddImmToStackPtr(&f.Text, defaultDelta)
+	isa.OpAddImmToStackPtr(f.Module, defaultDelta)
 	tableStackOffset := f.stackOffset - defaultDelta
 	opBranchIfOutOfBounds(f, reg, int32(len(targetTable)), &defaultTarget.label)
-	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(&f.Text, f, tableType, reg, regZeroExt, tableScale, int32(tableAddr))
+	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f.Module, f, tableType, reg, regZeroExt, tableScale, int32(tableAddr))
 
 	if commonStackOffset >= 0 {
-		isa.OpAddImmToStackPtr(&f.Text, tableStackOffset-commonStackOffset)
+		isa.OpAddImmToStackPtr(f.Module, tableStackOffset-commonStackOffset)
 	} else {
-		isa.OpMoveReg(&f.Text, abi.I64, reg2, reg)
-		isa.OpShiftRightLogical32Bits(&f.Text, reg2)
-		isa.OpAddToStackPtr(&f.Text, reg2)
+		isa.OpMoveReg(f.Module, abi.I64, reg2, reg)
+		isa.OpShiftRightLogical32Bits(f.Module, reg2)
+		isa.OpAddToStackPtr(f.Module, reg2)
 
 		regZeroExt = false
 	}
 
-	isa.OpBranchIndirect32(&f.Text, reg, regZeroExt)
+	isa.OpBranchIndirect32(f.Module, reg, regZeroExt)
 
 	// end of critical section.
 
@@ -459,7 +459,7 @@ func opLabel(f *function, l *links.L) {
 }
 
 func opBranch(f *function, l *links.L) {
-	retAddr := isa.OpBranch(&f.Text, l.Addr)
+	retAddr := isa.OpBranch(f.Module, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}
@@ -467,14 +467,14 @@ func opBranch(f *function, l *links.L) {
 
 func opBranchIf(f *function, x values.Operand, yes bool, l *links.L) {
 	x = effectiveOperand(f, x)
-	retAddrs := isa.OpBranchIf(&f.Text, f, x, yes, l.Addr)
+	retAddrs := isa.OpBranchIf(f.Module, f, x, yes, l.Addr)
 	if l.Addr == 0 {
 		l.AddSites(retAddrs)
 	}
 }
 
 func opBranchIfOutOfBounds(f *function, indexReg regs.R, upperBound int32, l *links.L) {
-	site := isa.OpBranchIfOutOfBounds(&f.Text, indexReg, upperBound, l.Addr)
+	site := isa.OpBranchIfOutOfBounds(f.Module, indexReg, upperBound, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(site)
 	}

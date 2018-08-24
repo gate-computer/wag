@@ -168,8 +168,8 @@ func log2(value uint64) (count uint8) {
 	}
 }
 
-func inplaceIntOp(text *gen.Text, code gen.RegCoder, insn insnRexM, x values.Operand) values.Operand {
-	reg, _ := opMaybeResultReg(text, code, x, false)
-	insn.opReg(text, x.Type, reg)
+func inplaceIntOp(m *Module, code gen.RegCoder, insn insnRexM, x values.Operand) values.Operand {
+	reg, _ := opMaybeResultReg(m, code, x, false)
+	insn.opReg(&m.Text, x.Type, reg)
 	return values.TempRegOperand(x.Type, reg, true)
 }
