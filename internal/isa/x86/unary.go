@@ -7,10 +7,10 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/prop"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/val"
+	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/module"
 )
 

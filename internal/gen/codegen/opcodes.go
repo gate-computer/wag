@@ -4,7 +4,7 @@ package codegen
 
 import (
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/loader"
 )
 

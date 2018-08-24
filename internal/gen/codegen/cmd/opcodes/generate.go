@@ -100,7 +100,7 @@ func generatePanic(w io.Writer, input string) {
 
 	out(`import (`)
 	out(`    "github.com/tsavola/wag/abi"`)
-	out(`    "github.com/tsavola/wag/internal/gen/prop"`)
+	out(`    "github.com/tsavola/wag/internal/isa/prop"`)
 	out(`    "github.com/tsavola/wag/internal/loader"`)
 	out(`)`)
 
