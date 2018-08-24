@@ -11,9 +11,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/static"
 )
 
 func TestSnapshot(t *testing.T) {
@@ -44,7 +44,7 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	m := Module{EntrySymbol: "main"}
-	m.load(wasm, runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, &p.ObjInfo)
+	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
 	minMemorySize, maxMemorySize := m.MemoryLimits()

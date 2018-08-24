@@ -12,6 +12,7 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/internal/values"
@@ -24,7 +25,7 @@ func pushBranchTarget(f *gen.Func, valueType abi.Type, funcEnd bool) {
 		// init still in progress, but any branch expressions will have
 		// initialized all vars before we reach the target
 		numRegParams := int32(len(f.Vars)) - f.NumStackParams
-		stackOffset = numRegParams * gen.WordSize
+		stackOffset = numRegParams * obj.Word
 	}
 
 	f.BranchTargets = append(f.BranchTargets, &gen.BranchTarget{
@@ -440,7 +441,7 @@ func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 func opLabel(f *gen.Func, l *links.L) {
 	opSaveTemporaryOperands(f)
 	opStoreVars(f, true)
-	l.Addr = f.Text.Pos()
+	l.Addr = f.Text.Addr
 
 	debugf("label")
 }

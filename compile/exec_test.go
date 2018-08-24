@@ -11,10 +11,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/section"
+	"github.com/tsavola/wag/static"
 )
 
 func TestExec(t *testing.T) {
@@ -73,7 +73,7 @@ func TestExec(t *testing.T) {
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), &p.ObjInfo, trigger)
+	m.loadCodeSection(&codeBuf, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), &p.ObjInfo, trigger)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)

@@ -12,16 +12,15 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/object"
 )
 
 const (
-	MaxImportParams    = gen.StackReserve/gen.WordSize - 2
 	MaxFuncParams      = 255   // index+1 must fit in uint8
 	MaxFuncVars        = 8191  // index must fit in uint16; TODO
 	MaxEntryParams     = 8     // param registers on x86-64
@@ -34,7 +33,7 @@ func discard(f *gen.Func, x values.Operand) {
 		f.Regs.Free(x.Type, x.Reg())
 
 	case values.Stack:
-		opBackoffStackPtr(f, gen.WordSize)
+		opBackoffStackPtr(f, obj.Word)
 	}
 }
 
@@ -61,10 +60,10 @@ func effectiveVarStackOffset(f *gen.Func, index int32) (offset int32) {
 	if index < f.NumStackParams {
 		paramPos := f.NumStackParams - index - 1
 		// account for the function return address
-		offset = f.StackOffset + gen.WordSize + paramPos*gen.WordSize
+		offset = f.StackOffset + obj.Word + paramPos*obj.Word
 	} else {
 		regParamIndex := index - f.NumStackParams
-		offset = f.StackOffset - (regParamIndex+1)*gen.WordSize
+		offset = f.StackOffset - (regParamIndex+1)*obj.Word
 	}
 
 	if offset < 0 {
@@ -125,9 +124,10 @@ func updateMemoryIndex(f *gen.Func, index values.Operand, offset uint32, oper ui
 	}
 }
 
-func genFunc(m *mod.M, load loader.L, funcIndex int) {
+func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 	f := &gen.Func{
 		M:    m,
+		Prog: p,
 		Regs: regalloc.MakeAllocator(isa.AvailRegs()),
 	}
 
@@ -142,9 +142,9 @@ func genFunc(m *mod.M, load loader.L, funcIndex int) {
 	load.Varuint32() // body size
 
 	isa.AlignFunc(m)
-	addr := f.Text.Pos()
+	addr := f.Text.Addr
 	f.FuncLinks[funcIndex].Addr = addr
-	f.Map.PutFuncAddr(object.TextAddr(addr))
+	f.Map.PutFuncAddr(addr)
 	isa.OpEnterFunc(f)
 
 	f.ResultType = sig.Result
@@ -215,7 +215,7 @@ func genFunc(m *mod.M, load loader.L, funcIndex int) {
 
 	if !deadend {
 		opBackoffStackPtr(f, f.StackOffset)
-		isa.OpReturn(f.M)
+		isa.OpReturn(m)
 	}
 
 	if len(f.Operands) != 0 {
@@ -322,7 +322,7 @@ func opBackoffStackPtr(f *gen.Func, offset int32) {
 
 func opPush(f *gen.Func, x values.Operand) {
 	x = effectiveOperand(f, x)
-	opReserveStack(f, gen.WordSize)
+	opReserveStack(f, obj.Word)
 	isa.OpPush(f, x)
 }
 

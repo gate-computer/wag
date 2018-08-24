@@ -8,7 +8,7 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
@@ -183,11 +183,11 @@ func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint
 		var checked links.L
 
 		jl.rel8.opStub(&f.Text)
-		checked.AddSite(f.Text.Pos())
+		checked.AddSite(f.Text.Addr)
 
 		opTrapCall(f, trap.MemoryOutOfBounds)
 
-		checked.Addr = f.Text.Pos()
+		checked.Addr = f.Text.Addr
 		updateLocalBranches(f.M, &checked)
 	}
 
@@ -197,7 +197,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint
 	return
 }
 
-func (ISA) OpCurrentMemory(m *mod.M) values.Operand {
+func (ISA) OpCurrentMemory(m *module.M) values.Operand {
 	mov.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryLimit)
 	sub.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryBase)
 	shrImm.op(&m.Text, abi.I64, RegResult, wasm.PageBits)
@@ -221,7 +221,7 @@ func (ISA) OpGrowMemory(f *gen.Func, x values.Operand) values.Operand {
 	cmp.opFromReg(&f.Text, abi.I64, targetReg, RegScratch)
 
 	jg.rel8.opStub(&f.Text)
-	fail.AddSite(f.Text.Pos())
+	fail.AddSite(f.Text.Addr)
 
 	mov.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
 	mov.opFromReg(&f.Text, abi.I64, RegMemoryLimit, targetReg)
@@ -230,14 +230,14 @@ func (ISA) OpGrowMemory(f *gen.Func, x values.Operand) values.Operand {
 	mov.opFromReg(&f.Text, abi.I32, targetReg, RegScratch)
 
 	jmpRel.rel8.opStub(&f.Text)
-	out.AddSite(f.Text.Pos())
+	out.AddSite(f.Text.Addr)
 
-	fail.Addr = f.Text.Pos()
+	fail.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &fail)
 
 	movImm.opImm(&f.Text, abi.I32, targetReg, -1) // value on failure
 
-	out.Addr = f.Text.Pos()
+	out.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &out)
 
 	return values.TempRegOperand(abi.I32, targetReg, true)

@@ -10,6 +10,7 @@ import (
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
@@ -245,30 +246,30 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 
 				cmp.opImm(&f.Text, t, b.Reg(), -1)
 				je.rel8.opStub(&f.Text)
-				doNot.AddSite(f.Text.Pos())
+				doNot.AddSite(f.Text.Addr)
 			} else {
 				switch t.Size() {
 				case abi.Size32:
 					cmp.opImm(&f.Text, t, RegResult, -0x80000000)
 
 				case abi.Size64:
-					cmp.opFromAddr(&f.Text, t, RegResult, 0, NoIndex, f.RODataAddr+gen.ROMask80Addr64)
+					cmp.opFromAddr(&f.Text, t, RegResult, 0, NoIndex, f.RODataAddr+rodata.Mask80Addr64)
 
 				default:
 					panic(a)
 				}
 
 				jne.rel8.opStub(&f.Text)
-				do.AddSite(f.Text.Pos())
+				do.AddSite(f.Text.Addr)
 
 				cmp.opImm(&f.Text, t, b.Reg(), -1)
 				jne.rel8.opStub(&f.Text)
-				do.AddSite(f.Text.Pos())
+				do.AddSite(f.Text.Addr)
 
 				opTrapCall(f, trap.IntegerOverflow)
 			}
 
-			do.Addr = f.Text.Pos()
+			do.Addr = f.Text.Addr
 			updateLocalBranches(f.M, &do)
 		}
 
@@ -286,7 +287,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 		f.Regs.Free(b.Type, b.Reg())
 	}
 
-	doNot.Addr = f.Text.Pos()
+	doNot.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &doNot)
 
 	if remainder {
@@ -301,11 +302,11 @@ func opCheckDivideByZero(f *gen.Func, t abi.Type, reg regs.R) {
 
 	test.opFromReg(&f.Text, t, reg, reg)
 	jne.rel8.opStub(&f.Text)
-	end.AddSite(f.Text.Pos())
+	end.AddSite(f.Text.Addr)
 
 	opTrapCall(f, trap.IntegerDivideByZero)
 
-	end.Addr = f.Text.Pos()
+	end.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &end)
 }
 
@@ -410,18 +411,18 @@ func binaryFloatMinmaxOp(f *gen.Func, index uint8, a, b values.Operand) values.O
 
 	ucomisSSE.opFromReg(&f.Text, a.Type, targetReg, sourceReg)
 	jne.rel8.opStub(&f.Text)
-	common.AddSite(f.Text.Pos())
+	common.AddSite(f.Text.Addr)
 
 	binaryFloatMinmaxInsns[index].zeroInsn.opFromReg(&f.Text, a.Type, targetReg, sourceReg)
 	jmpRel.rel8.opStub(&f.Text)
-	end.AddSite(f.Text.Pos())
+	end.AddSite(f.Text.Addr)
 
-	common.Addr = f.Text.Pos()
+	common.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &common)
 
 	binaryFloatMinmaxInsns[index].commonInsn.opFromReg(&f.Text, a.Type, targetReg, sourceReg)
 
-	end.Addr = f.Text.Pos()
+	end.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &end)
 
 	return values.TempRegOperand(a.Type, targetReg, false)
@@ -452,7 +453,7 @@ func binaryFloatCopysignOp(f *gen.Func, a, b values.Operand) values.Operand {
 
 	var done links.L
 
-	signMaskAddr := gen.MaskAddr(f.RODataAddr, gen.Mask80Base, a.Type)
+	signMaskAddr := rodata.MaskAddr(f.RODataAddr, rodata.Mask80Base, a.Type)
 
 	movSSE.opToReg(&f.Text, a.Type, RegScratch, sourceReg) // int <- float
 	and.opFromAddr(&f.Text, a.Type, RegScratch, 0, NoIndex, signMaskAddr)
@@ -460,11 +461,11 @@ func binaryFloatCopysignOp(f *gen.Func, a, b values.Operand) values.Operand {
 	and.opFromAddr(&f.Text, a.Type, RegResult, 0, NoIndex, signMaskAddr)
 	cmp.opFromReg(&f.Text, a.Type, RegResult, RegScratch)
 	je.rel8.opStub(&f.Text)
-	done.AddSite(f.Text.Pos())
+	done.AddSite(f.Text.Addr)
 
 	opNegFloatReg(f.M, a.Type, targetReg)
 
-	done.Addr = f.Text.Pos()
+	done.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &done)
 
 	return values.TempRegOperand(a.Type, targetReg, false)

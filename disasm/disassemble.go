@@ -12,12 +12,11 @@ import (
 
 	"github.com/bnagy/gapstone"
 
-	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
 )
 
-func Fprint(w io.Writer, text []byte, funcMap []object.TextAddr, ns *section.NameSection) (err error) {
+func Fprint(w io.Writer, text []byte, funcMap []int32, ns *section.NameSection) (err error) {
 	var names []section.FuncName
 	if ns != nil {
 		names = ns.FuncNames

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/object"
+	"github.com/tsavola/wag/static"
 )
 
 const (
@@ -69,7 +69,7 @@ func fuzz(t *testing.T, filename string) {
 
 	dummy := new(object.FuncMap)
 
-	err = m.Load(bufio.NewReader(f), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, dummy)
+	err = m.Load(bufio.NewReader(f), runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, dummy)
 	if err == nil {
 		t.Logf("%s: no error", filename)
 	} else {

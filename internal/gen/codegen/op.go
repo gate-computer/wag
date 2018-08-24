@@ -41,7 +41,7 @@ type opImpl struct {
 	info opInfo
 }
 
-//go:generate go run ../cmd/opcodes/generate.go ../design/BinaryEncoding.md opcodes.go
+//go:generate go run cmd/opcodes/generate.go ../../design/BinaryEncoding.md opcodes.go
 
 func init() {
 	// avoid reference cycles by initializing some entries lazily:

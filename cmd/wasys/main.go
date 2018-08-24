@@ -4,7 +4,7 @@
 
 package main
 
-//go:generate go run ../../internal/cmd/syscalls/generate.go
+//go:generate go run internal/cmd/syscalls/generate.go
 
 import (
 	"bytes"
@@ -18,8 +18,8 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/compile"
+	"github.com/tsavola/wag/static"
 )
 
 var (
@@ -105,14 +105,14 @@ func main() {
 		log.Fatal(err)
 	}
 	roDataAddr := memAddr(roDataMem)
-	roDataBuf := buffer.NewFixed(roDataMem[:0])
+	roDataBuf := static.Buf(roDataMem)
 
 	textMem, err := makeMem(textSize, syscall.PROT_EXEC, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
 	textAddr := memAddr(textMem)
-	textBuf := buffer.NewFixed(textMem[:0])
+	textBuf := static.Buf(textMem)
 
 	pageSize := os.Getpagesize()
 	pageMask := pageSize - 1
@@ -139,7 +139,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	dataBuf := buffer.NewFixed(globalsMemoryMem[:0])
+	dataBuf := static.Buf(globalsMemoryMem)
 	memoryAddr := memAddr(globalsMemoryMem) + uintptr(memoryOffset)
 	initMemoryEnd := memoryAddr + uintptr(initMemorySize)
 	growMemoryEnd := memoryAddr + uintptr(growMemorySize)

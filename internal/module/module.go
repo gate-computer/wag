@@ -2,16 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mod
+package module
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/links"
-	"github.com/tsavola/wag/object"
-	"github.com/tsavola/wag/trap"
+	"github.com/tsavola/wag/internal/code"
+	"github.com/tsavola/wag/internal/data"
+	"github.com/tsavola/wag/internal/obj"
 )
 
 const (
@@ -66,26 +65,6 @@ func (kind ExternalKind) String() (s string) {
 	return
 }
 
-type Reader interface {
-	io.Reader
-	io.ByteScanner
-}
-
-type DataBuffer interface {
-	Bytes() []byte
-	ResizeBytes(n int) []byte
-}
-
-// ObjectMap gathers information about positions of (WebAssembly) functions,
-// function calls and instructions within the text (machine code) section.
-type ObjectMap interface {
-	InitObjectMap(numImportFuncs, numOtherFuncs int)
-	PutImportFuncAddr(object.TextAddr)
-	PutFuncAddr(object.TextAddr)
-	PutCallSite(returnAddr object.TextAddr, stackOffset int32)
-	PutInsnAddr(object.TextAddr)
-}
-
 type ImportFunc struct {
 	FuncIndex int
 	Variadic  bool
@@ -118,13 +97,11 @@ type M struct {
 	StartDefined      bool
 	TableFuncs        []uint32
 
-	Text       Text
+	Text       code.Buf
 	RODataAddr int32
-	ROData     DataBuffer
-	Map        ObjectMap
-	FuncLinks  []links.FuncL
-	TrapLinks  [trap.NumTraps]links.L
+	ROData     data.Buffer
+	Map        obj.Map
 
-	Data         DataBuffer
+	Data         data.Buffer
 	MemoryOffset int
 }

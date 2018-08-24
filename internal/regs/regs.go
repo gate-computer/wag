@@ -6,6 +6,8 @@ package regs
 
 import (
 	"fmt"
+
+	"github.com/tsavola/wag/abi"
 )
 
 type R byte
@@ -17,3 +19,13 @@ func (reg R) String() string {
 const (
 	Result = R(0)
 )
+
+func Bitmap(cat abi.Category, regs *[]R, available ...bool) (mask uint64) {
+	for i, set := range available {
+		if set {
+			mask |= uint64(1) << (uint8(i<<1) + uint8(cat))
+			*regs = append(*regs, R(i))
+		}
+	}
+	return
+}

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gen
+package rodata
 
 import (
 	"github.com/tsavola/wag/abi"
@@ -10,21 +10,21 @@ import (
 
 const (
 	// Masks are 16-byte aligned for x86-64 SSE.
-	ROMask7fAddr32 = iota * 16
-	ROMask7fAddr64
-	ROMask80Addr32
-	ROMask80Addr64
-	ROMask5f00Addr32 // 01011111000000000000000000000000
-	ROMask43e0Addr64 // 0100001111100000000000000000000000000000000000000000000000000000
-	ROTableAddr
+	Mask7fAddr32 = iota * 16
+	Mask7fAddr64
+	Mask80Addr32
+	Mask80Addr64
+	Mask5f00Addr32 // 01011111000000000000000000000000
+	Mask43e0Addr64 // 0100001111100000000000000000000000000000000000000000000000000000
+	TableAddr
 )
 
 type MaskBaseAddr int32
 
 const (
-	Mask7fBase    = MaskBaseAddr(ROMask7fAddr32)
-	Mask80Base    = MaskBaseAddr(ROMask80Addr32)
-	MaskTruncBase = MaskBaseAddr(ROMask5f00Addr32)
+	Mask7fBase    = MaskBaseAddr(Mask7fAddr32)
+	Mask80Base    = MaskBaseAddr(Mask80Addr32)
+	MaskTruncBase = MaskBaseAddr(Mask5f00Addr32)
 )
 
 // MaskAddr calculates the absolute read-only data address for reading a mask

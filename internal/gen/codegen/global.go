@@ -9,10 +9,11 @@ import (
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/obj"
 )
 
 func offsetOfGlobal(f *gen.Func, index uint32) int32 {
-	return (int32(index) - int32(len(f.Globals))) * gen.WordSize
+	return (int32(index) - int32(len(f.Globals))) * obj.Word
 }
 
 func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {

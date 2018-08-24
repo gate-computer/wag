@@ -13,13 +13,17 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regalloc"
-	"github.com/tsavola/wag/object"
+	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/trap"
 )
 
-func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
+func GenProgram(m *module.M, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
+	p := &gen.Prog{
+		FuncLinks: make([]links.FuncL, len(m.FuncSigs)),
+	}
+
 	if debug {
 		if debugDepth != 0 {
 			debugf("")
@@ -33,16 +37,15 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 	}
 
 	m.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
-	m.FuncLinks = make([]links.FuncL, len(m.FuncSigs))
 
 	roTableSize := len(m.TableFuncs) * 8
-	buf := m.ROData.ResizeBytes(gen.ROTableAddr + roTableSize)
-	binary.LittleEndian.PutUint32(buf[gen.ROMask7fAddr32:], 0x7fffffff)
-	binary.LittleEndian.PutUint64(buf[gen.ROMask7fAddr64:], 0x7fffffffffffffff)
-	binary.LittleEndian.PutUint32(buf[gen.ROMask80Addr32:], 0x80000000)
-	binary.LittleEndian.PutUint64(buf[gen.ROMask80Addr64:], 0x8000000000000000)
-	binary.LittleEndian.PutUint32(buf[gen.ROMask5f00Addr32:], 0x5f000000)
-	binary.LittleEndian.PutUint64(buf[gen.ROMask43e0Addr64:], 0x43e0000000000000)
+	buf := m.ROData.ResizeBytes(rodata.TableAddr + roTableSize)
+	binary.LittleEndian.PutUint32(buf[rodata.Mask7fAddr32:], 0x7fffffff)
+	binary.LittleEndian.PutUint64(buf[rodata.Mask7fAddr64:], 0x7fffffffffffffff)
+	binary.LittleEndian.PutUint32(buf[rodata.Mask80Addr32:], 0x80000000)
+	binary.LittleEndian.PutUint64(buf[rodata.Mask80Addr64:], 0x8000000000000000)
+	binary.LittleEndian.PutUint32(buf[rodata.Mask5f00Addr32:], 0x5f000000)
+	binary.LittleEndian.PutUint64(buf[rodata.Mask43e0Addr64:], 0x43e0000000000000)
 
 	isa.OpEnterTrapHandler(m, trap.MissingFunction) // at zero address
 
@@ -55,7 +58,7 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 	if m.StartDefined {
 		maxInitIndex = int(m.StartIndex)
 
-		opInitCall(m, &m.FuncLinks[m.StartIndex])
+		opInitCall(m, &p.FuncLinks[m.StartIndex])
 		// start func returns here; execution proceeds to main func or exit trap
 	}
 
@@ -77,7 +80,7 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 			}
 		}
 
-		opInitCall(m, &m.FuncLinks[m.EntryIndex])
+		opInitCall(m, &p.FuncLinks[m.EntryIndex])
 		// main func returns here; execution proceeds to exit trap
 
 		mainResultType = sig.Result
@@ -90,13 +93,13 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 	isa.OpEnterExitTrapHandler(m)
 
 	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
-		m.TrapLinks[id].Addr = m.Text.Pos()
+		p.TrapLinks[id].Addr = m.Text.Addr
 		isa.OpEnterTrapHandler(m, id)
 	}
 
 	for i, imp := range m.ImportFuncs {
 		addr := genImportEntry(m, imp)
-		m.FuncLinks[i].Addr = addr
+		p.FuncLinks[i].Addr = addr
 	}
 
 	var midpoint int
@@ -108,17 +111,17 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 	}
 
 	for i := len(m.ImportFuncs); i < midpoint; i++ {
-		genFunc(m, load, i)
-		isa.UpdateCalls(m.Text.Bytes(), &m.FuncLinks[i].L)
+		genFunction(m, p, load, i)
+		isa.UpdateCalls(m.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
-	ptr := m.ROData.Bytes()[gen.ROTableAddr:]
+	ptr := m.ROData.Bytes()[rodata.TableAddr:]
 
 	for i, funcIndex := range m.TableFuncs {
 		var funcAddr uint32 // missing function trap by default
 
-		if funcIndex < uint32(len(m.FuncLinks)) {
-			link := &m.FuncLinks[funcIndex]
+		if funcIndex < uint32(len(p.FuncLinks)) {
+			link := &p.FuncLinks[funcIndex]
 			funcAddr = uint32(link.Addr) // missing if not generated yet
 			if funcAddr == 0 {
 				link.AddTableIndex(i)
@@ -143,7 +146,7 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 
 	if midpoint < len(m.FuncSigs) {
 		for i := midpoint; i < len(m.FuncSigs); i++ {
-			genFunc(m, load, i)
+			genFunction(m, p, load, i)
 		}
 
 		isa.ClearInsnCache()
@@ -151,11 +154,11 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 		roDataBuf := m.ROData.Bytes()
 
 		for i := midpoint; i < len(m.FuncSigs); i++ {
-			link := &m.FuncLinks[i]
+			link := &p.FuncLinks[i]
 			addr := uint32(link.Addr)
 
 			for _, tableIndex := range link.TableIndexes {
-				offset := gen.ROTableAddr + tableIndex*8
+				offset := rodata.TableAddr + tableIndex*8
 				isa.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
 			}
 
@@ -166,45 +169,8 @@ func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryAr
 	}
 }
 
-func opInitCall(m *mod.M, l *links.FuncL) {
+func opInitCall(m *module.M, l *links.FuncL) {
 	retAddr := isa.OpInitCall(m)
-	m.Map.PutCallSite(object.TextAddr(retAddr), 0) // initial stack frame
+	m.Map.PutCallSite(retAddr, 0) // initial stack frame
 	l.AddSite(retAddr)
-}
-
-func genImportEntry(m *mod.M, imp mod.ImportFunc) (addr int32) {
-	if debug {
-		debugf("import function")
-		debugDepth++
-	}
-
-	isa.AlignFunc(m)
-	addr = m.Text.Pos()
-	m.Map.PutImportFuncAddr(object.TextAddr(addr))
-
-	sigIndex := m.FuncSigs[imp.FuncIndex]
-	sig := m.Sigs[sigIndex]
-
-	if imp.Variadic {
-		var paramRegs regalloc.Iterator
-		numStackParams := paramRegs.Init(isa.ParamRegs(), sig.Args)
-		if numStackParams > 0 {
-			panic("import function has stack parameters")
-		}
-
-		for i := range sig.Args {
-			t := sig.Args[i]
-			reg := paramRegs.IterForward(t.Category())
-			isa.OpStoreStackReg(m, t, -(int32(i)+1)*gen.WordSize, reg)
-		}
-	}
-
-	isa.OpEnterImportFunc(m, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
-
-	if debug {
-		debugDepth--
-		debugf("imported function")
-	}
-
-	return
 }

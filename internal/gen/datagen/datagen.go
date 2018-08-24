@@ -2,48 +2,53 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package compile
+package datagen
 
 import (
 	"encoding/binary"
 	"fmt"
 
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/obj"
 )
 
-func genDataGlobals(m *Module) {
-	align := m.MemoryAlignment
+const (
+	DefaultAlignment = 16 // for x86-64 SSE
+)
+
+func GenGlobals(m *module.M, align int) {
 	if align == 0 {
-		align = DefaultMemoryAlignment
+		align = DefaultAlignment
 	}
 
-	size := m.GlobalsSize()
+	size := len(m.Globals) * obj.Word
 
 	offset := 0
 	if n := size & (align - 1); n > 0 {
 		offset = align - n
 	}
 
-	buf := m.M.Data.ResizeBytes(offset + size)
+	buf := m.Data.ResizeBytes(offset + size)
 
 	ptr := buf[offset:]
 	for _, global := range m.Globals {
 		binary.LittleEndian.PutUint64(ptr, global.Init)
-		ptr = ptr[8:]
+		ptr = ptr[obj.Word:]
 	}
 
 	m.MemoryOffset = len(buf)
 }
 
-func genDataMemory(m *Module, load loader.L) {
-	buf := m.M.Data.Bytes()
+func GenMemory(m *module.M, load loader.L) {
+	buf := m.Data.Bytes()
 
 	for i := range load.Count() {
 		if index := load.Varuint32(); index != 0 {
 			panic(fmt.Errorf("unsupported memory index: %d", index))
 		}
 
-		offset := readOffsetInitExpr(m, load)
+		offset := ReadOffsetInitExpr(m, load)
 
 		size := load.Varuint32()
 
@@ -54,7 +59,7 @@ func genDataMemory(m *Module, load loader.L) {
 
 		needDataSize := m.MemoryOffset + int(needMemorySize)
 		if needDataSize > len(buf) {
-			buf = m.M.Data.ResizeBytes(needDataSize)
+			buf = m.Data.ResizeBytes(needDataSize)
 		}
 
 		dataOffset := m.MemoryOffset + int(offset)

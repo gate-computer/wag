@@ -7,15 +7,11 @@ package gen
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/links"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
-)
-
-const (
-	WordSize     = 8              // stack entry size
-	StackReserve = WordSize + 128 // trap/import call return address + red zone
 )
 
 type BranchTarget struct {
@@ -37,7 +33,8 @@ type TrapTrampoline struct {
 }
 
 type Func struct {
-	*mod.M
+	*module.M
+	*Prog
 
 	Regs regalloc.Allocator
 
@@ -68,7 +65,7 @@ func (f *Func) Consumed(x values.Operand) {
 		f.Regs.Free(x.Type, x.Reg())
 
 	case values.Stack:
-		f.StackOffset -= WordSize
+		f.StackOffset -= obj.Word
 	}
 }
 
@@ -78,4 +75,14 @@ func (f *Func) TrapTrampolineAddr(id trap.Id) (addr int32) {
 		addr = t.Link.Addr
 	}
 	return
+}
+
+func (f *Func) InitTrapTrampoline(id trap.Id) {
+	t := &f.TrapTrampolines[id]
+	t.StackOffset = f.StackOffset
+	t.Link.Addr = f.Text.Addr
+}
+
+func (f *Func) MapCallAddr(retAddr int32) {
+	f.Map.PutCallSite(retAddr, f.StackOffset+obj.Word)
 }

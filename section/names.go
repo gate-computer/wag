@@ -10,7 +10,7 @@ import (
 
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/reader"
 )
 
 type subsectionId byte
@@ -32,12 +32,12 @@ type NameSection struct {
 }
 
 // Load "name" custom section.
-func (ns *NameSection) Load(_ string, r mod.Reader) (err error) {
+func (ns *NameSection) Load(_ string, r reader.R) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	load := loader.L{Reader: r}
+	load := loader.L{R: r}
 
 	for {
 		idByte, err := load.ReadByte()
@@ -57,7 +57,7 @@ func (ns *NameSection) Load(_ string, r mod.Reader) (err error) {
 			ns.ModuleName = string(content)
 
 		case subsectionFunctionNames, subsectionLocalNames:
-			loadContent := loader.L{Reader: bytes.NewReader(content)}
+			loadContent := loader.L{R: bytes.NewReader(content)}
 
 			for range loadContent.Count() {
 				funIndex := loadContent.Varuint32()

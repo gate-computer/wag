@@ -11,15 +11,11 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/object"
 )
-
-func mapCallAddr(f *gen.Func, retAddr int32) {
-	f.Map.PutCallSite(object.TextAddr(retAddr), f.StackOffset+gen.WordSize)
-}
 
 func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	funcIndex := load.Varuint32()
@@ -33,7 +29,7 @@ func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	numStackParams := setupCallOperands(f, op, sig, values.Operand{})
 
 	opCall(f, &f.FuncLinks[funcIndex].L)
-	opBackoffStackPtr(f, numStackParams*gen.WordSize)
+	opBackoffStackPtr(f, numStackParams*obj.Word)
 	return
 }
 
@@ -61,8 +57,8 @@ func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 	}
 
 	retAddr := isa.OpCallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
-	mapCallAddr(f, retAddr)
-	opBackoffStackPtr(f, numStackParams*gen.WordSize)
+	f.MapCallAddr(retAddr)
+	opBackoffStackPtr(f, numStackParams*obj.Word)
 	return
 }
 
@@ -133,7 +129,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 	}
 
 	if numMissingStackArgs > 0 {
-		opAdvanceStackPtr(f, numMissingStackArgs*gen.WordSize)
+		opAdvanceStackPtr(f, numMissingStackArgs*obj.Word)
 
 		sourceIndex := numMissingStackArgs
 		targetIndex := int32(0)
@@ -142,7 +138,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 		for i := int32(len(args)) - 1; i >= numStackParams; i-- {
 			if args[i].Storage == values.Stack {
 				debugf("call param #%d: stack (temporary) <- %s", i, args[i])
-				isa.OpCopyStack(f.M, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
+				isa.OpCopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
 				sourceIndex++
 				targetIndex++
 			}
@@ -156,13 +152,13 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 			switch x.Storage {
 			case values.Stack:
 				debugf("call param #%d: stack <- %s", i, x)
-				isa.OpCopyStack(f.M, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
+				isa.OpCopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
 				sourceIndex++
 
 			default:
 				x = effectiveOperand(f, x)
 				debugf("call param #%d: stack <- %s", i, x)
-				isa.OpStoreStack(f, targetIndex*gen.WordSize, x)
+				isa.OpStoreStack(f, targetIndex*obj.Word, x)
 			}
 
 			targetIndex++
@@ -242,7 +238,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 	}
 
 	// account for the return address
-	if n := f.StackOffset + gen.WordSize; n > f.MaxStackOffset {
+	if n := f.StackOffset + obj.Word; n > f.MaxStackOffset {
 		f.MaxStackOffset = n
 	}
 
@@ -255,7 +251,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 
 func opCall(f *gen.Func, l *links.L) {
 	retAddr := isa.OpCall(f.M, l.Addr)
-	mapCallAddr(f, retAddr)
+	f.MapCallAddr(retAddr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}

@@ -10,10 +10,11 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/internal/values"
-	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -45,9 +46,9 @@ const (
 	PaddingByte   = 0xcc // int3 instruction
 )
 
-var paramRegs [2][]regs.R
-var availRegs = gen.RegMask(
-	gen.RegCategoryMask(abi.Int, &paramRegs[abi.Int],
+var (
+	paramRegs [2][]regs.R
+	availRegs = regs.Bitmap(abi.Int, &paramRegs[abi.Int],
 		false, // rax
 		true,  // rcx
 		false, // rdx
@@ -64,8 +65,7 @@ var availRegs = gen.RegMask(
 		false, // r13
 		false, // r14
 		false, // r15
-	),
-	gen.RegCategoryMask(abi.Float, &paramRegs[abi.Float],
+	) | regs.Bitmap(abi.Float, &paramRegs[abi.Float],
 		false, // xmm0
 		true,  // xmm1
 		false, // xmm2
@@ -82,7 +82,7 @@ var availRegs = gen.RegMask(
 		true,  // xmm13
 		true,  // xmm14
 		true,  // xmm15
-	),
+	)
 )
 
 var (
@@ -198,34 +198,33 @@ func (ISA) UpdateCalls(text []byte, l *links.L) {
 	}
 }
 
-func (ISA) AlignFunc(m *mod.M) {
+func (ISA) AlignFunc(m *module.M) {
 	alignFunc(m)
 }
 
-func alignFunc(m *mod.M) {
-	n := (FuncAlignment - m.Text.Pos()) & (FuncAlignment - 1)
-	buf := m.Text.Extend(int(n))
-	for i := range buf {
-		buf[i] = PaddingByte
+func alignFunc(m *module.M) {
+	gap := m.Text.Extend((FuncAlignment - int(m.Text.Addr)) & (FuncAlignment - 1))
+	for i := range gap {
+		gap[i] = PaddingByte
 	}
 }
 
-func (ISA) OpAddImmToStackPtr(m *mod.M, offset int32) {
+func (ISA) OpAddImmToStackPtr(m *module.M, offset int32) {
 	if offset != 0 {
 		add.opImm(&m.Text, abi.I64, RegStackPtr, offset)
 	}
 }
 
-func (ISA) OpAddToStackPtr(m *mod.M, source regs.R) {
+func (ISA) OpAddToStackPtr(m *module.M, source regs.R) {
 	add.opFromReg(&m.Text, abi.I64, RegStackPtr, source)
 }
 
 // OpMoveIntImm may update CPU's condition flags.
-func (ISA) OpMoveIntImm(m *mod.M, reg regs.R, value uint64) {
+func (ISA) OpMoveIntImm(m *module.M, reg regs.R, value uint64) {
 	opMoveIntImm(m, reg, int64(value))
 }
 
-func opMoveIntImm(m *mod.M, reg regs.R, value int64) {
+func opMoveIntImm(m *module.M, reg regs.R, value int64) {
 	if value == 0 {
 		xor.opFromReg(&m.Text, abi.I32, reg, reg)
 	} else {
@@ -233,31 +232,31 @@ func opMoveIntImm(m *mod.M, reg regs.R, value int64) {
 	}
 }
 
-func (ISA) OpInit(m *mod.M) {
-	if m.Text.Pos() == 0 || m.Text.Pos() > FuncAlignment {
+func (ISA) OpInit(m *module.M) {
+	if m.Text.Addr == 0 || m.Text.Addr > FuncAlignment {
 		panic("inconsistency")
 	}
 	alignFunc(m)
-	add.opImm(&m.Text, abi.I64, RegStackLimit, gen.StackReserve)
+	add.opImm(&m.Text, abi.I64, RegStackLimit, obj.StackReserve)
 
 	var notResume links.L
 
 	test.opFromReg(&m.Text, abi.I64, RegResult, RegResult)
 	je.rel8.opStub(&m.Text)
-	notResume.AddSite(m.Text.Pos())
+	notResume.AddSite(m.Text.Addr)
 	ret.op(&m.Text) // simulate return from snapshot function call
 
-	notResume.Addr = m.Text.Pos()
+	notResume.Addr = m.Text.Addr
 	updateLocalBranches(m, &notResume)
 }
 
-func (ISA) OpInitCall(m *mod.M) (retAddr int32) {
+func (ISA) OpInitCall(m *module.M) (retAddr int32) {
 	// no alignment since initial calls are always generated before execution
 	callRel.opMissingFunc(&m.Text)
-	return m.Text.Pos()
+	return m.Text.Addr
 }
 
-func (ISA) OpEnterImportFunc(m *mod.M, absAddr uint64, variadic bool, argCount, sigIndex int) {
+func (ISA) OpEnterImportFunc(m *module.M, absAddr uint64, variadic bool, argCount, sigIndex int) {
 	if variadic {
 		opMoveIntImm(m, RegImportArgCount, int64(argCount))
 		opMoveIntImm(m, RegImportSigIndex, int64(sigIndex))
@@ -270,7 +269,7 @@ func (ISA) OpEnterImportFunc(m *mod.M, absAddr uint64, variadic bool, argCount, 
 
 // OpBranchIndirect32 must not allocate registers.  The supplied register is
 // trashed.
-func (ISA) OpBranchIndirect32(m *mod.M, reg regs.R, regZeroExt bool) {
+func (ISA) OpBranchIndirect32(m *module.M, reg regs.R, regZeroExt bool) {
 	if !regZeroExt {
 		mov.opFromReg(&m.Text, abi.I32, reg, reg)
 	}
@@ -279,10 +278,10 @@ func (ISA) OpBranchIndirect32(m *mod.M, reg regs.R, regZeroExt bool) {
 	jmp.opReg(&m.Text, reg)
 }
 
-func (ISA) OpCall(m *mod.M, addr int32) (retAddr int32) {
+func (ISA) OpCall(m *module.M, addr int32) (retAddr int32) {
 	if addr == 0 {
 		// address slot must be aligned
-		if relPos := (m.Text.Pos() + callRel.size()) & 3; relPos > 0 {
+		if relPos := (m.Text.Addr + callRel.size()) & 3; relPos > 0 {
 			padSize := 4 - relPos
 			m.Text.PutBytes(nopSequences[padSize-1])
 		}
@@ -290,26 +289,26 @@ func (ISA) OpCall(m *mod.M, addr int32) (retAddr int32) {
 	} else {
 		callRel.op(&m.Text, addr)
 	}
-	return m.Text.Pos()
+	return m.Text.Addr
 }
 
 // OpClearIntResultReg may update CPU's condition flags.
-func (ISA) OpClearIntResultReg(m *mod.M) {
+func (ISA) OpClearIntResultReg(m *module.M) {
 	xor.opFromReg(&m.Text, abi.I32, RegResult, RegResult)
 }
 
-func (ISA) OpReturn(m *mod.M) {
+func (ISA) OpReturn(m *module.M) {
 	ret.op(&m.Text)
 }
 
-func (ISA) OpEnterExitTrapHandler(m *mod.M) {
+func (ISA) OpEnterExitTrapHandler(m *module.M) {
 	shlImm.op(&m.Text, abi.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
 	movMMX.opToReg(&m.Text, abi.I64, RegScratch, RegTrapHandlerMMX)
 	jmp.opReg(&m.Text, RegScratch)
 }
 
 // OpMoveReg must not allocate registers.
-func (ISA) OpMoveReg(m *mod.M, t abi.Type, targetReg, sourceReg regs.R) {
+func (ISA) OpMoveReg(m *module.M, t abi.Type, targetReg, sourceReg regs.R) {
 	if targetReg == sourceReg {
 		panic("target and source registers are the same")
 	}
@@ -327,17 +326,17 @@ func (ISA) OpMoveReg(m *mod.M, t abi.Type, targetReg, sourceReg regs.R) {
 }
 
 // OpShiftRightLogical32Bits must not allocate registers.
-func (ISA) OpShiftRightLogical32Bits(m *mod.M, subject regs.R) {
+func (ISA) OpShiftRightLogical32Bits(m *module.M, subject regs.R) {
 	shrImm.op(&m.Text, abi.I64, subject, 32)
 }
 
 // OpStoreStackReg must not allocate registers.
-func (ISA) OpStoreStackReg(m *mod.M, t abi.Type, offset int32, reg regs.R) {
+func (ISA) OpStoreStackReg(m *module.M, t abi.Type, offset int32, reg regs.R) {
 	opStoreStackReg(m, t, offset, reg)
 }
 
 // opStoreStackReg has same restrictions as OpStoreStackReg.
-func opStoreStackReg(m *mod.M, t abi.Type, offset int32, reg regs.R) {
+func opStoreStackReg(m *module.M, t abi.Type, offset int32, reg regs.R) {
 	switch t.Category() {
 	case abi.Int:
 		mov.opToStack(&m.Text, t, reg, offset)
@@ -351,13 +350,13 @@ func opStoreStackReg(m *mod.M, t abi.Type, offset int32, reg regs.R) {
 }
 
 // OpCopyStack must not allocate registers.
-func (ISA) OpCopyStack(m *mod.M, targetOffset, sourceOffset int32) {
+func (ISA) OpCopyStack(m *module.M, targetOffset, sourceOffset int32) {
 	mov.opFromStack(&m.Text, abi.I64, RegScratch, sourceOffset)
 	mov.opToStack(&m.Text, abi.I64, RegScratch, targetOffset)
 }
 
 // OpSwap must not allocate registers, or update CPU's condition flags.
-func (ISA) OpSwap(m *mod.M, cat abi.Category, a, b regs.R) {
+func (ISA) OpSwap(m *module.M, cat abi.Category, a, b regs.R) {
 	if cat == abi.Int {
 		xchg.opFromReg(&m.Text, abi.I64, a, b)
 	} else {
@@ -368,26 +367,26 @@ func (ISA) OpSwap(m *mod.M, cat abi.Category, a, b regs.R) {
 }
 
 // OpEnterTrapHandler must not generate over 16 bytes of m.Text.
-func (ISA) OpEnterTrapHandler(m *mod.M, id trap.Id) {
+func (ISA) OpEnterTrapHandler(m *module.M, id trap.Id) {
 	mov.opImm(&m.Text, abi.I32, RegResult, int32(id)) // automatic zero-extension
 	movMMX.opToReg(&m.Text, abi.I64, RegScratch, RegTrapHandlerMMX)
 	jmp.opReg(&m.Text, RegScratch)
 }
 
-func (ISA) OpBranch(m *mod.M, addr int32) int32 {
+func (ISA) OpBranch(m *module.M, addr int32) int32 {
 	jmpRel.op(&m.Text, addr)
-	return m.Text.Pos()
+	return m.Text.Addr
 }
 
 // OpBranchIfOutOfBounds must not allocate registers.  indexReg will be
 // zero-extended.
-func (ISA) OpBranchIfOutOfBounds(m *mod.M, indexReg regs.R, upperBound, addr int32) int32 {
+func (ISA) OpBranchIfOutOfBounds(m *module.M, indexReg regs.R, upperBound, addr int32) int32 {
 	opCompareBounds(m, indexReg, upperBound)
 	jle.op(&m.Text, addr) // TODO: is this the correct comparison?
-	return m.Text.Pos()
+	return m.Text.Addr
 }
 
-func opCompareBounds(m *mod.M, indexReg regs.R, upperBound int32) {
+func opCompareBounds(m *module.M, indexReg regs.R, upperBound int32) {
 	movImm.opImm(&m.Text, abi.I32, RegScratch, upperBound)
 	test.opFromReg(&m.Text, abi.I32, indexReg, indexReg)
 	cmovl.opFromReg(&m.Text, abi.I32, indexReg, RegScratch) // negative index -> upper bound
@@ -395,14 +394,14 @@ func opCompareBounds(m *mod.M, indexReg regs.R, upperBound int32) {
 }
 
 // updateLocalBranches modifies 8-bit relocations of Jmp and Jcc instructions.
-func updateLocalBranches(m *mod.M, l *links.L) {
+func updateLocalBranches(m *module.M, l *links.L) {
 	labelAddr := l.FinalAddr()
 	for _, retAddr := range l.Sites {
 		updateLocalAddr(m, retAddr, labelAddr-retAddr)
 	}
 }
 
-func updateLocalAddr(m *mod.M, addr, value int32) {
+func updateLocalAddr(m *module.M, addr, value int32) {
 	if value < -0x80 || value >= 0x80 {
 		panic(value)
 	}
@@ -414,11 +413,11 @@ func (ISA) OpEnterFunc(f *gen.Func) {
 
 	test.opFromReg(&f.Text, abi.I64, RegSuspendFlag, RegSuspendFlag)
 	je.rel8.opStub(&f.Text)
-	skip.AddSite(f.Text.Pos())
+	skip.AddSite(f.Text.Addr)
 
 	opTrapCall(f, trap.Suspended)
 
-	skip.Addr = f.Text.Pos()
+	skip.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &skip)
 }
 
@@ -429,28 +428,28 @@ func (ISA) OpCallIndirect(f *gen.Func, tableLen, sigIndex int32) int32 {
 
 	opCompareBounds(f.M, RegResult, tableLen)
 	jle.rel8.opStub(&f.Text)
-	outOfBounds.AddSite(f.Text.Pos())
+	outOfBounds.AddSite(f.Text.Addr)
 
-	mov.opFromAddr(&f.Text, abi.I64, RegResult, 3, RegResult, f.RODataAddr+gen.ROTableAddr)
+	mov.opFromAddr(&f.Text, abi.I64, RegResult, 3, RegResult, f.RODataAddr+rodata.TableAddr)
 	mov.opFromReg(&f.Text, abi.I32, RegScratch, RegResult) // zero-extended function address
 	shrImm.op(&f.Text, abi.I64, RegResult, 32)             // signature index
 	cmp.opImm(&f.Text, abi.I32, RegResult, sigIndex)
 	je.rel8.opStub(&f.Text)
-	checksOut.AddSite(f.Text.Pos())
+	checksOut.AddSite(f.Text.Addr)
 
 	opTrapCall(f, trap.IndirectCallSignature)
 
-	outOfBounds.Addr = f.Text.Pos()
+	outOfBounds.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &outOfBounds)
 
 	opTrapCall(f, trap.IndirectCallIndex)
 
-	checksOut.Addr = f.Text.Pos()
+	checksOut.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &checksOut)
 
 	add.opFromReg(&f.Text, abi.I64, RegScratch, RegTextBase)
 	call.opReg(&f.Text, RegScratch)
-	return f.Text.Pos()
+	return f.Text.Addr
 }
 
 // OpLoadROIntIndex32ScaleDisp must not allocate registers.
@@ -542,13 +541,13 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 			case cond >= values.MinUnorderedOrCondition:
 				movImm.opImm(&f.Text, x.Type, targetReg, 1) // true
 				jp.rel8.opStub(&f.Text)                     // if unordered, else
-				end.AddSite(f.Text.Pos())                   //
+				end.AddSite(f.Text.Addr)                    //
 				setcc.opReg(&f.Text, targetReg)             // cond
 
 			case cond >= values.MinOrderedAndCondition:
 				movImm.opImm(&f.Text, x.Type, targetReg, 0) // false
 				jp.rel8.opStub(&f.Text)                     // if unordered, else
-				end.AddSite(f.Text.Pos())                   //
+				end.AddSite(f.Text.Addr)                    //
 				setcc.opReg(&f.Text, targetReg)             // cond
 
 			default:
@@ -556,7 +555,7 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 				movzx8.opFromReg(&f.Text, x.Type, targetReg, targetReg)
 			}
 
-			end.Addr = f.Text.Pos()
+			end.Addr = f.Text.Addr
 			updateLocalBranches(f.M, &end)
 
 			zeroExt = true
@@ -693,17 +692,17 @@ func (ISA) OpBranchIf(f *gen.Func, x values.Operand, yes bool, addr int32) (site
 	switch {
 	case cond >= values.MinUnorderedOrCondition:
 		jp.op(&f.Text, addr)
-		sites = append(sites, f.Text.Pos())
+		sites = append(sites, f.Text.Addr)
 
 	case cond >= values.MinOrderedAndCondition:
 		jp.rel8.opStub(&f.Text)
-		end.AddSite(f.Text.Pos())
+		end.AddSite(f.Text.Addr)
 	}
 
 	conditionInsns[cond].jcc.op(&f.Text, addr)
-	sites = append(sites, f.Text.Pos())
+	sites = append(sites, f.Text.Addr)
 
-	end.Addr = f.Text.Pos()
+	end.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &end)
 	return
 }
@@ -713,30 +712,25 @@ func (ISA) OpTrapCall(f *gen.Func, id trap.Id) {
 }
 
 func opTrapCall(f *gen.Func, id trap.Id) {
-	t := &f.TrapTrampolines[id]
-	t.StackOffset = f.StackOffset
-	t.Link.Addr = f.Text.Pos()
-
+	f.InitTrapTrampoline(id)
 	callRel.op(&f.Text, f.TrapLinks[id].Addr)
-
-	retAddr := f.Text.Pos()
-	f.Map.PutCallSite(object.TextAddr(retAddr), f.StackOffset+gen.WordSize)
+	f.MapCallAddr(f.Text.Addr)
 }
 
 func (ISA) OpTrapIfStackExhausted(f *gen.Func) (stackCheckAddr int32) {
 	var checked links.L
 
 	lea.opFromStack(&f.Text, abi.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
-	stackCheckAddr = f.Text.Pos()
+	stackCheckAddr = f.Text.Addr
 
 	cmp.opFromReg(&f.Text, abi.I64, RegScratch, RegStackLimit)
 
 	jge.rel8.opStub(&f.Text)
-	checked.AddSite(f.Text.Pos())
+	checked.AddSite(f.Text.Addr)
 
 	opTrapCall(f, trap.CallStackExhausted)
 
-	checked.Addr = f.Text.Pos()
+	checked.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &checked)
 	return
 }
@@ -792,8 +786,8 @@ func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operan
 		cond = values.Ne
 
 	case values.Stack:
-		add.opImm(&f.Text, abi.I64, RegStackPtr, 8) // do before cmp to avoid overwriting flags
-		cmp.opImmToStack(&f.Text, abi.I32, -8, 0)
+		add.opImm(&f.Text, abi.I64, RegStackPtr, obj.Word) // do before cmp to avoid overwriting flags
+		cmp.opImmToStack(&f.Text, abi.I32, -obj.Word, 0)
 		cond = values.Ne
 
 	case values.ConditionFlags:
@@ -842,29 +836,29 @@ func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operan
 		switch {
 		case cond >= values.MinUnorderedOrCondition:
 			jp.rel8.opStub(&f.Text) // move it if unordered
-			moveIt.AddSite(f.Text.Pos())
+			moveIt.AddSite(f.Text.Addr)
 
 			notCondJump.rel8.opStub(&f.Text) // break if not cond
-			end.AddSite(f.Text.Pos())
+			end.AddSite(f.Text.Addr)
 
 		case cond >= values.MinOrderedAndCondition:
 			jp.rel8.opStub(&f.Text) // break if unordered
-			end.AddSite(f.Text.Pos())
+			end.AddSite(f.Text.Addr)
 
 			notCondJump.rel8.opStub(&f.Text) // break if not cond
-			end.AddSite(f.Text.Pos())
+			end.AddSite(f.Text.Addr)
 
 		default:
 			notCondJump.rel8.opStub(&f.Text) // break if not cond
-			end.AddSite(f.Text.Pos())
+			end.AddSite(f.Text.Addr)
 		}
 
-		moveIt.Addr = f.Text.Pos()
+		moveIt.Addr = f.Text.Addr
 		updateLocalBranches(f.M, &moveIt)
 
 		opMove(f, targetReg, a, false)
 
-		end.Addr = f.Text.Pos()
+		end.Addr = f.Text.Addr
 		updateLocalBranches(f.M, &end)
 
 	default:

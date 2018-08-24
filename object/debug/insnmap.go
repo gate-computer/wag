@@ -20,7 +20,7 @@ type InsnMap struct {
 	FuncInsns [][]InsnMapping
 
 	fun  int
-	base object.TextAddr
+	base int32
 	ins  int32
 }
 
@@ -30,16 +30,16 @@ func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
 	m.fun = -1
 }
 
-func (m *InsnMap) PutFuncAddr(pos object.TextAddr) {
+func (m *InsnMap) PutFuncAddr(pos int32) {
 	m.CallMap.PutFuncAddr(pos)
 	m.fun++
 	m.base = pos
 	m.ins = -1
 }
 
-func (m *InsnMap) PutInsnAddr(absPos object.TextAddr) {
+func (m *InsnMap) PutInsnAddr(absPos int32) {
 	m.ins++
-	relPos := int32(absPos - m.base)
+	relPos := absPos - m.base
 
 	prev := len(m.FuncInsns[m.fun]) - 1
 	if prev >= 0 && m.FuncInsns[m.fun][prev].ObjectOffset == relPos {

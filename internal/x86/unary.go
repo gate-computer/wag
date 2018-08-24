@@ -7,9 +7,10 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/internal/values"
 )
 
@@ -110,13 +111,13 @@ func unaryFloatOp(f *gen.Func, oper uint16, x values.Operand) (result values.Ope
 }
 
 // opAbsFloatReg in-place.
-func opAbsFloatReg(m *mod.M, t abi.Type, reg regs.R) {
-	absMaskAddr := gen.MaskAddr(m.RODataAddr, gen.Mask7fBase, t)
+func opAbsFloatReg(m *module.M, t abi.Type, reg regs.R) {
+	absMaskAddr := rodata.MaskAddr(m.RODataAddr, rodata.Mask7fBase, t)
 	andpSSE.opFromAddr(&m.Text, t, reg, 0, NoIndex, absMaskAddr)
 }
 
 // opNegFloatReg in-place.
-func opNegFloatReg(m *mod.M, t abi.Type, reg regs.R) {
-	signMaskAddr := gen.MaskAddr(m.RODataAddr, gen.Mask80Base, t)
+func opNegFloatReg(m *module.M, t abi.Type, reg regs.R) {
+	signMaskAddr := rodata.MaskAddr(m.RODataAddr, rodata.Mask80Base, t)
 	xorpSSE.opFromAddr(&m.Text, t, reg, 0, NoIndex, signMaskAddr)
 }

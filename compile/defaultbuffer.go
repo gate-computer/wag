@@ -5,11 +5,12 @@
 package compile
 
 import (
-	"github.com/tsavola/wag/internal/mod"
+	"github.com/tsavola/wag/internal/code"
+	"github.com/tsavola/wag/internal/data"
 )
 
-type TextBuffer = mod.TextBuffer
-type DataBuffer = mod.DataBuffer
+type TextBuffer = code.Buffer
+type DataBuffer = data.Buffer
 
 // defaultBuffer is a variable-capacity implementation of TextBuffer and
 // DataBuffer.

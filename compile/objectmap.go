@@ -5,16 +5,15 @@
 package compile
 
 import (
-	"github.com/tsavola/wag/internal/mod"
-	"github.com/tsavola/wag/object"
+	"github.com/tsavola/wag/internal/obj"
 )
 
-type ObjectMap = mod.ObjectMap
+type ObjectMap = obj.Map
 
 type dummyMap struct{}
 
-func (dummyMap) InitObjectMap(int, int)             {}
-func (dummyMap) PutImportFuncAddr(object.TextAddr)  {}
-func (dummyMap) PutFuncAddr(object.TextAddr)        {}
-func (dummyMap) PutCallSite(object.TextAddr, int32) {}
-func (dummyMap) PutInsnAddr(object.TextAddr)        {}
+func (dummyMap) InitObjectMap(int, int)   {}
+func (dummyMap) PutImportFuncAddr(int32)  {}
+func (dummyMap) PutFuncAddr(int32)        {}
+func (dummyMap) PutCallSite(int32, int32) {}
+func (dummyMap) PutInsnAddr(int32)        {}

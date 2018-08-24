@@ -14,7 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/imports"
+	"github.com/tsavola/wag/internal/test/runner/imports"
 	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"

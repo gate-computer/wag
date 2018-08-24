@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/static"
 )
 
 type testDuration struct {
@@ -68,8 +68,8 @@ func benchmarkLoad(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	text := make([]byte, 0, loadBenchmarkMaxTextSize)
-	roData := make([]byte, 0, loadBenchmarkMaxRODataSize)
+	text := make([]byte, loadBenchmarkMaxTextSize)
+	roData := make([]byte, loadBenchmarkMaxRODataSize)
 
 	b.StopTimer()
 	b.ResetTimer()
@@ -81,8 +81,8 @@ func benchmarkLoad(b *testing.B) {
 		}
 
 		r := bytes.NewReader(wasm)
-		textBuf := buffer.NewFixed(text)
-		roDataBuf := buffer.NewFixed(roData)
+		textBuf := static.Buf(text)
+		roDataBuf := static.Buf(roData)
 
 		b.StartTimer()
 		m.load(r, loadBenchmarkEnv, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, nil)
@@ -100,9 +100,9 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		b.Fatal(err)
 	}
 
-	text := make([]byte, 0, loadBenchmarkMaxTextSize)
-	roData := make([]byte, 0, loadBenchmarkMaxRODataSize)
-	data := make([]byte, 0, loadBenchmarkMaxDataSize)
+	text := make([]byte, loadBenchmarkMaxTextSize)
+	roData := make([]byte, loadBenchmarkMaxRODataSize)
+	data := make([]byte, loadBenchmarkMaxDataSize)
 
 	var (
 		elapPre  testDuration
@@ -120,9 +120,9 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		}
 
 		r := bytes.NewReader(wasm)
-		textBuf := buffer.NewFixed(text)
-		roDataBuf := buffer.NewFixed(roData)
-		dataBuf := buffer.NewFixed(data)
+		textBuf := static.Buf(text)
+		roDataBuf := static.Buf(roData)
+		dataBuf := static.Buf(data)
 		trigger := makeOptionalTrigger()
 
 		b.StartTimer()
@@ -149,7 +149,7 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 	b.Logf("data: %v", elapData)
 }
 
-func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *buffer.Fixed) {
+func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *static.Buffer) {
 	b.Helper()
 
 	sum := crc32.ChecksumIEEE(textBuf.Bytes())
@@ -193,7 +193,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
 	}
-	m.load(bytes.NewReader(data), runner.Env, buffer.NewFixed(p.Text[:0]), buffer.NewFixed(p.ROData[:0]), p.RODataAddr(), nil, &p.ObjInfo)
+	m.load(bytes.NewReader(data), runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
 	minMemorySize, maxMemorySize := m.MemoryLimits()
