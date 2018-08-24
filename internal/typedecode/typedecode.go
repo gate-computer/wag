@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package typeutil
+package typedecode
 
 import (
 	"fmt"
@@ -17,14 +17,14 @@ var valueTypes = []abi.Type{
 	abi.F64,
 }
 
-func ValueTypeByEncoding(x int8) abi.Type {
+func Value(x int8) abi.Type {
 	if i := uint(-1 - x); i < uint(len(valueTypes)) {
 		return valueTypes[i]
 	}
 	panic(fmt.Errorf("unknown value type %d", x))
 }
 
-func BlockTypeByEncoding(x int8) (t abi.Type) {
+func Block(x int8) (t abi.Type) {
 	if x == -0x40 { // empty block type
 		return
 	}

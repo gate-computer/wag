@@ -17,7 +17,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/typeutil"
+	"github.com/tsavola/wag/internal/typedecode"
 )
 
 const (
@@ -175,7 +175,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 			panic(fmt.Errorf("function #%d has too many variables: %d params, %d locals", funcIndex, len(params), len(f.Vars)))
 		}
 
-		t := typeutil.ValueTypeByEncoding(load.Varint7())
+		t := typedecode.Value(load.Varint7())
 
 		for range params {
 			f.Vars = append(f.Vars, gen.VarState{

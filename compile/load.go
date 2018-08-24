@@ -22,7 +22,7 @@ import (
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/internal/typeutil"
+	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wasm"
 )
 
@@ -254,11 +254,11 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 			sig.Args = make([]abi.Type, paramCount)
 			for j := range sig.Args {
-				sig.Args[j] = typeutil.ValueTypeByEncoding(load.Varint7())
+				sig.Args[j] = typedecode.Value(load.Varint7())
 			}
 
 			if returnCount1 := load.Varuint1(); returnCount1 {
-				sig.Result = typeutil.ValueTypeByEncoding(load.Varint7())
+				sig.Result = typedecode.Value(load.Varint7())
 			}
 
 			m.m.Sigs = append(m.m.Sigs, sig)
@@ -320,7 +320,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 					panic(errors.New("too many imported globals"))
 				}
 
-				t := typeutil.ValueTypeByEncoding(load.Varint7())
+				t := typedecode.Value(load.Varint7())
 
 				mutable := load.Varuint1()
 				if mutable {
@@ -375,7 +375,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 				panic(errors.New("too many globals"))
 			}
 
-			t := typeutil.ValueTypeByEncoding(load.Varint7())
+			t := typedecode.Value(load.Varint7())
 			mutable := load.Varuint1()
 			init, _ := initexpr.Read(&m.m, load)
 

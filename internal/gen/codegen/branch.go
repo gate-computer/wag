@@ -15,7 +15,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/typeutil"
+	"github.com/tsavola/wag/internal/typedecode"
 )
 
 func pushBranchTarget(f *gen.Func, valueType abi.Type, funcEnd bool) {
@@ -63,7 +63,7 @@ func trimBoundsStacks(f *gen.Func) {
 }
 
 func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	t := typeutil.BlockTypeByEncoding(load.Varint7())
+	t := typedecode.Block(load.Varint7())
 
 	opSaveTemporaryOperands(f)
 	opInitVars(f)
@@ -333,7 +333,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 }
 
 func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	t := typeutil.BlockTypeByEncoding(load.Varint7())
+	t := typedecode.Block(load.Varint7())
 
 	pushBranchTarget(f, t, false) // end
 	var afterThen link.L
