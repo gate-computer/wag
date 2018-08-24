@@ -5,11 +5,11 @@
 package gen
 
 import (
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/trap"
 )
 
 type Prog struct {
-	FuncLinks []links.FuncL
-	TrapLinks [trap.NumTraps]links.L
+	FuncLinks []link.FuncL
+	TrapLinks [trap.NumTraps]link.L
 }

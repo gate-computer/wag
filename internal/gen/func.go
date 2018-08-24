@@ -6,7 +6,7 @@ package gen
 
 import (
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regalloc"
@@ -15,7 +15,7 @@ import (
 )
 
 type BranchTarget struct {
-	Label       links.L
+	Label       link.L
 	StackOffset int32
 	ValueType   abi.Type
 	FuncEnd     bool
@@ -29,7 +29,7 @@ type BranchTable struct {
 
 type TrapTrampoline struct {
 	StackOffset int32
-	Link        links.L
+	Link        link.L
 }
 
 type Func struct {

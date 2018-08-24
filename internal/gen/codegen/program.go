@@ -11,7 +11,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regalloc"
@@ -21,7 +21,7 @@ import (
 
 func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
 	p := &gen.Prog{
-		FuncLinks: make([]links.FuncL, len(m.FuncSigs)),
+		FuncLinks: make([]link.FuncL, len(m.FuncSigs)),
 	}
 
 	if debug {
@@ -121,10 +121,10 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		var funcAddr uint32 // missing function trap by default
 
 		if funcIndex < uint32(len(p.FuncLinks)) {
-			link := &p.FuncLinks[funcIndex]
-			funcAddr = uint32(link.Addr) // missing if not generated yet
+			ln := &p.FuncLinks[funcIndex]
+			funcAddr = uint32(ln.Addr) // missing if not generated yet
 			if funcAddr == 0 {
-				link.AddTableIndex(i)
+				ln.AddTableIndex(i)
 			}
 		}
 
@@ -154,22 +154,22 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		roDataBuf := m.ROData.Bytes()
 
 		for i := midpoint; i < len(m.FuncSigs); i++ {
-			link := &p.FuncLinks[i]
-			addr := uint32(link.Addr)
+			ln := &p.FuncLinks[i]
+			addr := uint32(ln.Addr)
 
-			for _, tableIndex := range link.TableIndexes {
+			for _, tableIndex := range ln.TableIndexes {
 				offset := rodata.TableAddr + tableIndex*8
 				isa.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
 			}
 
-			isa.UpdateCalls(m.Text.Bytes(), &link.L)
+			isa.UpdateCalls(m.Text.Bytes(), &ln.L)
 		}
 
 		isa.ClearInsnCache()
 	}
 }
 
-func opInitCall(m *module.M, l *links.FuncL) {
+func opInitCall(m *module.M, l *link.FuncL) {
 	retAddr := isa.OpInitCall(m)
 	m.Map.PutCallSite(retAddr, 0) // initial stack frame
 	l.AddSite(retAddr)

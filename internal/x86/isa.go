@@ -9,7 +9,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regs"
@@ -173,7 +173,7 @@ func (ISA) ParamRegs() [2][]regs.R { return paramRegs }
 func (ISA) ClearInsnCache()        {}
 
 // UpdateBranches modifies 32-bit relocations of Jmp and Jcc instructions.
-func (ISA) UpdateBranches(text []byte, l *links.L) {
+func (ISA) UpdateBranches(text []byte, l *link.L) {
 	labelAddr := l.FinalAddr()
 	for _, retAddr := range l.Sites {
 		updateTextAddr(text, retAddr, labelAddr-retAddr)
@@ -191,7 +191,7 @@ func updateTextAddr(text []byte, addr, value int32) {
 
 // UpdateCalls modifies CallRel instructions, possibly while they are being
 // executed.
-func (ISA) UpdateCalls(text []byte, l *links.L) {
+func (ISA) UpdateCalls(text []byte, l *link.L) {
 	funcAddr := l.FinalAddr()
 	for _, retAddr := range l.Sites {
 		atomicPutUint32(text[retAddr-4:retAddr], uint32(funcAddr-retAddr))
@@ -239,7 +239,7 @@ func (ISA) OpInit(m *module.M) {
 	alignFunc(m)
 	add.opImm(&m.Text, abi.I64, RegStackLimit, obj.StackReserve)
 
-	var notResume links.L
+	var notResume link.L
 
 	test.opFromReg(&m.Text, abi.I64, RegResult, RegResult)
 	je.rel8.opStub(&m.Text)
@@ -394,7 +394,7 @@ func opCompareBounds(m *module.M, indexReg regs.R, upperBound int32) {
 }
 
 // updateLocalBranches modifies 8-bit relocations of Jmp and Jcc instructions.
-func updateLocalBranches(m *module.M, l *links.L) {
+func updateLocalBranches(m *module.M, l *link.L) {
 	labelAddr := l.FinalAddr()
 	for _, retAddr := range l.Sites {
 		updateLocalAddr(m, retAddr, labelAddr-retAddr)
@@ -409,7 +409,7 @@ func updateLocalAddr(m *module.M, addr, value int32) {
 }
 
 func (ISA) OpEnterFunc(f *gen.Func) {
-	var skip links.L
+	var skip link.L
 
 	test.opFromReg(&f.Text, abi.I64, RegSuspendFlag, RegSuspendFlag)
 	je.rel8.opStub(&f.Text)
@@ -423,8 +423,8 @@ func (ISA) OpEnterFunc(f *gen.Func) {
 
 // OpCallIndirect using table index located in result register.
 func (ISA) OpCallIndirect(f *gen.Func, tableLen, sigIndex int32) int32 {
-	var outOfBounds links.L
-	var checksOut links.L
+	var outOfBounds link.L
+	var checksOut link.L
 
 	opCompareBounds(f.M, RegResult, tableLen)
 	jle.rel8.opStub(&f.Text)
@@ -532,7 +532,7 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 				panic(x)
 			}
 
-			var end links.L
+			var end link.L
 
 			cond := x.Condition()
 			setcc := conditionInsns[cond].setcc
@@ -687,7 +687,7 @@ func (ISA) OpBranchIf(f *gen.Func, x values.Operand, yes bool, addr int32) (site
 		cond = values.InvertedConditions[cond]
 	}
 
-	var end links.L
+	var end link.L
 
 	switch {
 	case cond >= values.MinUnorderedOrCondition:
@@ -718,7 +718,7 @@ func opTrapCall(f *gen.Func, id trap.Id) {
 }
 
 func (ISA) OpTrapIfStackExhausted(f *gen.Func) (stackCheckAddr int32) {
-	var checked links.L
+	var checked link.L
 
 	lea.opFromStack(&f.Text, abi.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
 	stackCheckAddr = f.Text.Addr
@@ -827,8 +827,8 @@ func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operan
 		}
 
 	case abi.Float:
-		var moveIt links.L
-		var end links.L
+		var moveIt link.L
+		var end link.L
 
 		cond = values.InvertedConditions[cond]
 		notCondJump := conditionInsns[cond].jcc

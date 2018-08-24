@@ -9,7 +9,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regalloc"
@@ -249,7 +249,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 	return
 }
 
-func opCall(f *gen.Func, l *links.L) {
+func opCall(f *gen.Func, l *link.L) {
 	retAddr := isa.OpCall(f.M, l.Addr)
 	f.MapCallAddr(retAddr)
 	if l.Addr == 0 {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regs"
@@ -35,7 +35,7 @@ func pushBranchTarget(f *gen.Func, valueType abi.Type, funcEnd bool) {
 	})
 }
 
-func popBranchTarget(f *gen.Func) (finalizedLabel *links.L) {
+func popBranchTarget(f *gen.Func) (finalizedLabel *link.L) {
 	n := len(f.BranchTargets) - 1
 	finalizedLabel = &f.BranchTargets[n].Label
 	f.BranchTargets = f.BranchTargets[:n]
@@ -336,7 +336,7 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	t := typeutil.BlockTypeByEncoding(load.Varint7())
 
 	pushBranchTarget(f, t, false) // end
-	var afterThen links.L
+	var afterThen link.L
 
 	cond := popOperand(f)
 	if cond.Type != abi.I32 {
@@ -438,7 +438,7 @@ func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func opLabel(f *gen.Func, l *links.L) {
+func opLabel(f *gen.Func, l *link.L) {
 	opSaveTemporaryOperands(f)
 	opStoreVars(f, true)
 	l.Addr = f.Text.Addr
@@ -446,14 +446,14 @@ func opLabel(f *gen.Func, l *links.L) {
 	debugf("label")
 }
 
-func opBranch(f *gen.Func, l *links.L) {
+func opBranch(f *gen.Func, l *link.L) {
 	retAddr := isa.OpBranch(f.M, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}
 }
 
-func opBranchIf(f *gen.Func, x values.Operand, yes bool, l *links.L) {
+func opBranchIf(f *gen.Func, x values.Operand, yes bool, l *link.L) {
 	x = effectiveOperand(f, x)
 	retAddrs := isa.OpBranchIf(f, x, yes, l.Addr)
 	if l.Addr == 0 {
@@ -461,7 +461,7 @@ func opBranchIf(f *gen.Func, x values.Operand, yes bool, l *links.L) {
 	}
 }
 
-func opBranchIfOutOfBounds(f *gen.Func, indexReg regs.R, upperBound int32, l *links.L) {
+func opBranchIfOutOfBounds(f *gen.Func, indexReg regs.R, upperBound int32, l *link.L) {
 	site := isa.OpBranchIfOutOfBounds(f.M, indexReg, upperBound, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(site)

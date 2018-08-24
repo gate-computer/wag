@@ -7,7 +7,7 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
@@ -180,7 +180,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint
 	if addr := f.TrapTrampolineAddr(trap.MemoryOutOfBounds); addr != 0 {
 		jge.op(&f.Text, addr)
 	} else {
-		var checked links.L
+		var checked link.L
 
 		jl.rel8.opStub(&f.Text)
 		checked.AddSite(f.Text.Addr)
@@ -206,8 +206,8 @@ func (ISA) OpCurrentMemory(m *module.M) values.Operand {
 }
 
 func (ISA) OpGrowMemory(f *gen.Func, x values.Operand) values.Operand {
-	var out links.L
-	var fail links.L
+	var out link.L
+	var fail link.L
 
 	movMMX.opToReg(&f.Text, abi.I64, RegScratch, RegMemoryGrowLimitMMX)
 

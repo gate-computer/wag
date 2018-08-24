@@ -7,7 +7,7 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
@@ -216,7 +216,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 
 	remainder := (index & opers.DivmulRem) != 0
 
-	var doNot links.L
+	var doNot link.L
 
 	if division {
 		if checkZero {
@@ -239,7 +239,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 		signed := (index & opers.DivmulSign) != 0
 
 		if signed && checkOverflow {
-			var do links.L
+			var do link.L
 
 			if remainder {
 				xor.opFromReg(&f.Text, abi.I32, RegScratch, RegScratch) // moved to result at the end
@@ -298,7 +298,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 }
 
 func opCheckDivideByZero(f *gen.Func, t abi.Type, reg regs.R) {
-	var end links.L
+	var end link.L
 
 	test.opFromReg(&f.Text, t, reg, reg)
 	jne.rel8.opStub(&f.Text)
@@ -406,8 +406,8 @@ func binaryFloatMinmaxOp(f *gen.Func, index uint8, a, b values.Operand) values.O
 		defer f.Regs.Free(b.Type, sourceReg)
 	}
 
-	var common links.L
-	var end links.L
+	var common link.L
+	var end link.L
 
 	ucomisSSE.opFromReg(&f.Text, a.Type, targetReg, sourceReg)
 	jne.rel8.opStub(&f.Text)
@@ -451,7 +451,7 @@ func binaryFloatCopysignOp(f *gen.Func, a, b values.Operand) values.Operand {
 		defer f.Regs.Free(b.Type, sourceReg)
 	}
 
-	var done links.L
+	var done link.L
 
 	signMaskAddr := rodata.MaskAddr(f.RODataAddr, rodata.Mask80Base, a.Type)
 
