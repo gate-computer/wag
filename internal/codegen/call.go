@@ -17,11 +17,11 @@ import (
 	"github.com/tsavola/wag/object"
 )
 
-func mapCallAddr(f *function, retAddr int32) {
-	f.Map.PutCallSite(object.TextAddr(retAddr), f.stackOffset+gen.WordSize)
+func mapCallAddr(f *gen.Func, retAddr int32) {
+	f.Map.PutCallSite(object.TextAddr(retAddr), f.StackOffset+gen.WordSize)
 }
 
-func genCall(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	funcIndex := load.Varuint32()
 	if funcIndex >= uint32(len(f.FuncSigs)) {
 		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
@@ -37,7 +37,7 @@ func genCall(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func genCallIndirect(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(f.Sigs)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
@@ -60,13 +60,13 @@ func genCallIndirect(f *function, load loader.L, op Opcode, info opInfo) (deaden
 		opMove(f, regs.Result, funcIndex, false)
 	}
 
-	retAddr := isa.OpCallIndirect(f.Module, f, int32(len(f.TableFuncs)), int32(sigIndex))
+	retAddr := isa.OpCallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
 	mapCallAddr(f, retAddr)
 	opBackoffStackPtr(f, numStackParams*gen.WordSize)
 	return
 }
 
-func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Operand) (numStackParams int32) {
+func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Operand) (numStackParams int32) {
 	opStackCheck(f)
 
 	args := popOperands(f, len(sig.Args))
@@ -93,7 +93,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 			ok = true
 
 		case values.VarReference:
-			if x := f.vars[value.VarIndex()].cache; x.Storage == values.VarReg {
+			if x := f.Vars[value.VarIndex()].Cache; x.Storage == values.VarReg {
 				reg = x.Reg()
 				ok = true
 				args[i] = x // help the next args loop
@@ -110,14 +110,14 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 	if indirect.Storage.IsReg() && indirect.Reg() != regs.Result {
 		if i := regArgs.Get(abi.Int, regs.Result); i >= 0 {
 			debugf("indirect call index: %s <-> %s", regs.Result, indirect)
-			isa.OpSwap(f.Module, abi.Int, regs.Result, indirect.Reg())
+			isa.OpSwap(f.M, abi.Int, regs.Result, indirect.Reg())
 
 			args[i] = values.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
 			regArgs.Clear(abi.Int, regs.Result)
 			regArgs.Set(abi.Int, indirect.Reg(), i)
 		} else {
 			debugf("indirect call index: %s <- %s", regs.Result, indirect)
-			isa.OpMoveReg(f.Module, abi.I32, regs.Result, indirect.Reg())
+			isa.OpMoveReg(f.M, abi.I32, regs.Result, indirect.Reg())
 		}
 	}
 
@@ -142,7 +142,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 		for i := int32(len(args)) - 1; i >= numStackParams; i-- {
 			if args[i].Storage == values.Stack {
 				debugf("call param #%d: stack (temporary) <- %s", i, args[i])
-				isa.OpCopyStack(f.Module, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
+				isa.OpCopyStack(f.M, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
 				sourceIndex++
 				targetIndex++
 			}
@@ -156,13 +156,13 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 			switch x.Storage {
 			case values.Stack:
 				debugf("call param #%d: stack <- %s", i, x)
-				isa.OpCopyStack(f.Module, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
+				isa.OpCopyStack(f.M, targetIndex*gen.WordSize, sourceIndex*gen.WordSize)
 				sourceIndex++
 
 			default:
 				x = effectiveOperand(f, x)
 				debugf("call param #%d: stack <- %s", i, x)
-				isa.OpStoreStack(f.Module, f, targetIndex*gen.WordSize, x)
+				isa.OpStoreStack(f, targetIndex*gen.WordSize, x)
 			}
 
 			targetIndex++
@@ -181,7 +181,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 				}
 
 				debugf("call param #%d: %s %s <- %s", i, cat, reg, value.Reg())
-				isa.OpMoveReg(f.Module, value.Type, reg, value.Reg())
+				isa.OpMoveReg(f.M, value.Type, reg, value.Reg())
 
 				args[i] = values.RegOperand(false, value.Type, reg)
 				regArgs.Set(cat, reg, i)
@@ -205,13 +205,13 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 			} else {
 				if otherArgIndex := regArgs.Get(cat, posReg); otherArgIndex >= 0 {
 					debugf("call param #%d: %s %s <-> %s", i, cat, posReg, value.Reg())
-					isa.OpSwap(f.Module, cat, posReg, value.Reg())
+					isa.OpSwap(f.M, cat, posReg, value.Reg())
 
 					args[otherArgIndex] = value
 					regArgs.Set(cat, value.Reg(), otherArgIndex)
 				} else {
 					debugf("call param #%d: %s %s <- %s", i, cat, posReg, value.Reg())
-					isa.OpMoveReg(f.Module, value.Type, posReg, value.Reg())
+					isa.OpMoveReg(f.M, value.Type, posReg, value.Reg())
 				}
 			}
 
@@ -233,17 +233,17 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 		}
 	}
 
-	for i := range f.vars {
-		if v := &f.vars[i]; v.cache.Storage == values.VarReg {
+	for i := range f.Vars {
+		if v := &f.Vars[i]; v.Cache.Storage == values.VarReg {
 			debugf("forget register variable #%d", i)
 			// reg was already stored and freed
-			v.resetCache()
+			v.ResetCache()
 		}
 	}
 
 	// account for the return address
-	if n := f.stackOffset + gen.WordSize; n > f.maxStackOffset {
-		f.maxStackOffset = n
+	if n := f.StackOffset + gen.WordSize; n > f.MaxStackOffset {
+		f.MaxStackOffset = n
 	}
 
 	if sig.Result != abi.Void {
@@ -253,8 +253,8 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 	return
 }
 
-func opCall(f *function, l *links.L) {
-	retAddr := isa.OpCall(f.Module, l.Addr)
+func opCall(f *gen.Func, l *links.L) {
+	retAddr := isa.OpCall(f.M, l.Addr)
 	mapCallAddr(f, retAddr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)

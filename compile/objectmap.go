@@ -5,11 +5,11 @@
 package compile
 
 import (
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/object"
 )
 
-type ObjectMap = module.ObjectMap
+type ObjectMap = mod.ObjectMap
 
 type dummyMap struct{}
 

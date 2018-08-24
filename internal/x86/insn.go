@@ -6,23 +6,23 @@ package x86
 
 import (
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/internal/regs"
 )
 
 type prefix interface {
-	put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte)
+	put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte)
 }
 
 type constPrefix []byte
 
-func (bytes constPrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func (bytes constPrefix) put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	text.PutBytes(bytes)
 }
 
 type multiPrefix []prefix
 
-func (array multiPrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func (array multiPrefix) put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	for _, p := range array {
 		p.put(text, t, ro, index, rmOrBase)
 	}
@@ -36,7 +36,7 @@ const (
 	RexB = Rex | (1 << 0)
 )
 
-func putRex(text *gen.Text, rex, ro, index, rmOrBase byte) {
+func putRex(text *mod.Text, rex, ro, index, rmOrBase byte) {
 	if ro >= 8 {
 		rex |= RexR
 	}
@@ -52,7 +52,7 @@ func putRex(text *gen.Text, rex, ro, index, rmOrBase byte) {
 	}
 }
 
-func putRexSize(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func putRexSize(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	var rex byte
 
 	switch t.Size() {
@@ -68,16 +68,16 @@ func putRexSize(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
 	putRex(text, rex, ro, index, rmOrBase)
 }
 
-type mod byte
+type modEnum byte
 
 const (
-	ModMem       = mod(0)
-	ModMemDisp8  = mod((0 << 7) | (1 << 6))
-	ModMemDisp32 = mod((1 << 7) | (0 << 6))
-	ModReg       = mod((1 << 7) | (1 << 6))
+	ModMem       = modEnum(0)
+	ModMemDisp8  = modEnum((0 << 7) | (1 << 6))
+	ModMemDisp32 = modEnum((1 << 7) | (0 << 6))
+	ModReg       = modEnum((1 << 7) | (1 << 6))
 )
 
-func dispMod(t abi.Type, baseReg regs.R, offset int32) mod {
+func dispMod(t abi.Type, baseReg regs.R, offset int32) modEnum {
 	switch {
 	case offset == 0 && (baseReg&7) != 0x5: // rbp and r13 need displacement
 		return ModMem
@@ -90,17 +90,17 @@ func dispMod(t abi.Type, baseReg regs.R, offset int32) mod {
 	}
 }
 
-func putMod(text *gen.Text, mod mod, ro, rm byte) {
+func putMod(text *mod.Text, mod modEnum, ro, rm byte) {
 	text.PutByte(byte(mod) | ((ro & 7) << 3) | (rm & 7))
 }
 
-func putDisp(text *gen.Text, mod mod, offset int32) {
+func putDisp(text *mod.Text, mod modEnum, offset int32) {
 	switch mod {
 	case ModMemDisp8:
-		gen.PutInt8(text, int8(offset))
+		text.PutInt8(int8(offset))
 
 	case ModMemDisp32:
-		gen.PutInt32(text, offset)
+		text.PutInt32(offset)
 	}
 }
 
@@ -114,7 +114,7 @@ const (
 	NoBase  = regs.R((1 << 2) | (1 << 0))
 )
 
-func putSib(text *gen.Text, scale byte, index, base regs.R) {
+func putSib(text *mod.Text, scale byte, index, base regs.R) {
 	if scale >= 4 {
 		panic("scale factor out of bounds")
 	}
@@ -125,7 +125,7 @@ func putSib(text *gen.Text, scale byte, index, base regs.R) {
 //
 type insnConst []byte
 
-func (opcode insnConst) op(text *gen.Text) {
+func (opcode insnConst) op(text *mod.Text) {
 	text.PutBytes(opcode)
 }
 
@@ -134,7 +134,7 @@ type insnO struct {
 	opbase byte
 }
 
-func (i insnO) op(text *gen.Text, reg regs.R) {
+func (i insnO) op(text *mod.Text, reg regs.R) {
 	if reg >= 8 {
 		panic("register not supported by instruction")
 	}
@@ -145,14 +145,14 @@ func (i insnO) op(text *gen.Text, reg regs.R) {
 //
 type insnI []byte
 
-func (opcode insnI) op8(text *gen.Text, value int8) {
+func (opcode insnI) op8(text *mod.Text, value int8) {
 	text.PutBytes(opcode)
-	gen.PutInt8(text, value)
+	text.PutInt8(value)
 }
 
-func (opcode insnI) op32(text *gen.Text, value int32) {
+func (opcode insnI) op32(text *mod.Text, value int32) {
 	text.PutBytes(opcode)
-	gen.PutInt32(text, value)
+	text.PutInt32(value)
 }
 
 //
@@ -162,20 +162,20 @@ func (opcode insnAddr8) size() int32 {
 	return int32(len(opcode)) + 1
 }
 
-func (opcode insnAddr8) op(text *gen.Text, addr int32) (ok bool) {
+func (opcode insnAddr8) op(text *mod.Text, addr int32) (ok bool) {
 	insnSize := int32(len(opcode)) + 1
 	siteAddr := text.Pos() + insnSize
 	offset := addr - siteAddr
 
 	if offset >= -0x80 && offset < 0x80 {
 		text.PutBytes(opcode)
-		gen.PutInt8(text, int8(offset))
+		text.PutInt8(int8(offset))
 		ok = true
 	}
 	return
 }
 
-func (i insnAddr8) opStub(text *gen.Text) {
+func (i insnAddr8) opStub(text *mod.Text) {
 	i.op(text, text.Pos()) // infinite loop as placeholder
 }
 
@@ -186,7 +186,7 @@ func (opcode insnAddr32) size() int32 {
 	return int32(len(opcode)) + 4
 }
 
-func (i insnAddr32) op(text *gen.Text, addr int32) {
+func (i insnAddr32) op(text *mod.Text, addr int32) {
 	var offset int32
 	if addr != 0 {
 		siteAddr := text.Pos() + i.size()
@@ -197,14 +197,14 @@ func (i insnAddr32) op(text *gen.Text, addr int32) {
 	i.put(text, offset)
 }
 
-func (i insnAddr32) opMissingFunc(text *gen.Text) {
+func (i insnAddr32) opMissingFunc(text *mod.Text) {
 	siteAddr := text.Pos() + i.size()
 	i.put(text, -siteAddr)
 }
 
-func (opcode insnAddr32) put(text *gen.Text, offset int32) {
+func (opcode insnAddr32) put(text *mod.Text, offset int32) {
 	text.PutBytes(opcode)
-	gen.PutInt32(text, offset)
+	text.PutInt32(offset)
 }
 
 //
@@ -213,7 +213,7 @@ type insnAddr struct {
 	rel32 insnAddr32
 }
 
-func (i insnAddr) op(text *gen.Text, addr int32) {
+func (i insnAddr) op(text *mod.Text, addr int32) {
 	var ok bool
 	if addr != 0 {
 		ok = i.rel8.op(text, addr)
@@ -226,7 +226,7 @@ func (i insnAddr) op(text *gen.Text, addr int32) {
 //
 type insnRex []byte
 
-func (opcode insnRex) op(text *gen.Text, t abi.Type) {
+func (opcode insnRex) op(text *mod.Text, t abi.Type) {
 	putRexSize(text, t, 0, 0, 0)
 	text.PutBytes(opcode)
 }
@@ -237,7 +237,7 @@ type insnRexOM struct {
 	ro     byte
 }
 
-func (i insnRexOM) opReg(text *gen.Text, reg regs.R) {
+func (i insnRexOM) opReg(text *mod.Text, reg regs.R) {
 	putRex(text, 0, 0, 0, byte(reg))
 	text.PutBytes(i.opcode)
 	putMod(text, ModReg, i.ro, byte(reg))
@@ -248,7 +248,7 @@ type insnRexO struct {
 	opbase byte
 }
 
-func (i insnRexO) op(text *gen.Text, t abi.Type, reg regs.R) {
+func (i insnRexO) op(text *mod.Text, t abi.Type, reg regs.R) {
 	putRexSize(text, t, 0, 0, byte(reg))
 	text.PutByte(i.opbase + (byte(reg) & 7))
 }
@@ -258,16 +258,16 @@ type insnRexOI struct {
 	opbase byte
 }
 
-func (i insnRexOI) op32(text *gen.Text, t abi.Type, reg regs.R, value uint32) {
+func (i insnRexOI) op32(text *mod.Text, t abi.Type, reg regs.R, value uint32) {
 	putRexSize(text, t, 0, 0, byte(reg))
 	text.PutByte(i.opbase + (byte(reg) & 7))
-	gen.PutInt32(text, int32(value))
+	text.PutInt32(int32(value))
 }
 
-func (i insnRexOI) op64(text *gen.Text, t abi.Type, reg regs.R, value int64) {
+func (i insnRexOI) op64(text *mod.Text, t abi.Type, reg regs.R, value int64) {
 	putRexSize(text, t, 0, 0, byte(reg))
 	text.PutByte(i.opbase + (byte(reg) & 7))
-	gen.PutInt64(text, value)
+	text.PutInt64(value)
 }
 
 //
@@ -276,13 +276,13 @@ type insnRexM struct {
 	ro     byte
 }
 
-func (i insnRexM) opReg(text *gen.Text, t abi.Type, reg regs.R) {
+func (i insnRexM) opReg(text *mod.Text, t abi.Type, reg regs.R) {
 	putRexSize(text, t, 0, 0, byte(reg))
 	text.PutBytes(i.opcode)
 	putMod(text, ModReg, i.ro, byte(reg))
 }
 
-func (i insnRexM) opIndirect(text *gen.Text, t abi.Type, reg regs.R, disp int32) {
+func (i insnRexM) opIndirect(text *mod.Text, t abi.Type, reg regs.R, disp int32) {
 	mod := dispMod(t, reg, disp)
 
 	putRexSize(text, t, 0, 0, byte(reg))
@@ -298,7 +298,7 @@ func (i insnRexM) opIndirect(text *gen.Text, t abi.Type, reg regs.R, disp int32)
 	putDisp(text, mod, disp)
 }
 
-func (i insnRexM) opStack(text *gen.Text, t abi.Type, disp int32) {
+func (i insnRexM) opStack(text *mod.Text, t abi.Type, disp int32) {
 	mod := dispMod(t, RegStackPtr, disp)
 
 	putRexSize(text, t, 0, 0, 0)
@@ -319,39 +319,39 @@ type insnPrefix struct {
 	opcodeMR []byte
 }
 
-func (i insnPrefix) opFromReg(text *gen.Text, t abi.Type, target, source regs.R) {
+func (i insnPrefix) opFromReg(text *mod.Text, t abi.Type, target, source regs.R) {
 	putPrefixRegInsn(text, i.prefix, t, i.opcodeRM, byte(target), byte(source))
 }
 
-func (i insnPrefix) opFromAddr(text *gen.Text, t abi.Type, target regs.R, scale uint8, index regs.R, addr int32) {
+func (i insnPrefix) opFromAddr(text *mod.Text, t abi.Type, target regs.R, scale uint8, index regs.R, addr int32) {
 	putPrefixAddrInsn(text, i.prefix, t, i.opcodeRM, target, scale, index, addr)
 }
 
-func (i insnPrefix) opFromIndirect(text *gen.Text, t abi.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
+func (i insnPrefix) opFromIndirect(text *mod.Text, t abi.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
 	putPrefixIndirectInsn(text, i.prefix, t, i.opcodeRM, target, scale, index, base, disp)
 }
 
-func (i insnPrefix) opFromStack(text *gen.Text, t abi.Type, target regs.R, disp int32) {
+func (i insnPrefix) opFromStack(text *mod.Text, t abi.Type, target regs.R, disp int32) {
 	putPrefixStackInsn(text, i.prefix, t, i.opcodeRM, target, disp)
 }
 
-func (i insnPrefix) opToReg(text *gen.Text, t abi.Type, target, source regs.R) {
+func (i insnPrefix) opToReg(text *mod.Text, t abi.Type, target, source regs.R) {
 	putPrefixRegInsn(text, i.prefix, t, i.opcodeMR, byte(source), byte(target))
 }
 
-func (i insnPrefix) opToAddr(text *gen.Text, t abi.Type, source regs.R, scale uint8, index regs.R, addr int32) {
+func (i insnPrefix) opToAddr(text *mod.Text, t abi.Type, source regs.R, scale uint8, index regs.R, addr int32) {
 	putPrefixAddrInsn(text, i.prefix, t, i.opcodeMR, source, scale, index, addr)
 }
 
-func (i insnPrefix) opToIndirect(text *gen.Text, t abi.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
+func (i insnPrefix) opToIndirect(text *mod.Text, t abi.Type, target regs.R, scale uint8, index, base regs.R, disp int32) {
 	putPrefixIndirectInsn(text, i.prefix, t, i.opcodeMR, target, scale, index, base, disp)
 }
 
-func (i insnPrefix) opToStack(text *gen.Text, t abi.Type, source regs.R, disp int32) {
+func (i insnPrefix) opToStack(text *mod.Text, t abi.Type, source regs.R, disp int32) {
 	putPrefixStackInsn(text, i.prefix, t, i.opcodeMR, source, disp)
 }
 
-func putPrefixRegInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, ro, rm byte) {
+func putPrefixRegInsn(text *mod.Text, p prefix, t abi.Type, opcode []byte, ro, rm byte) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
@@ -361,7 +361,7 @@ func putPrefixRegInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, ro, r
 	putMod(text, ModReg, ro, rm)
 }
 
-func putPrefixAddrInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, reg regs.R, scale uint8, index regs.R, addr int32) {
+func putPrefixAddrInsn(text *mod.Text, p prefix, t abi.Type, opcode []byte, reg regs.R, scale uint8, index regs.R, addr int32) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
@@ -370,10 +370,10 @@ func putPrefixAddrInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, reg 
 	text.PutBytes(opcode)
 	putMod(text, ModMem, byte(reg), MemSIB)
 	putSib(text, scale, index, NoBase)
-	gen.PutInt32(text, addr)
+	text.PutInt32(addr)
 }
 
-func putPrefixIndirectInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, reg regs.R, scale uint8, index, base regs.R, disp int32) {
+func putPrefixIndirectInsn(text *mod.Text, p prefix, t abi.Type, opcode []byte, reg regs.R, scale uint8, index, base regs.R, disp int32) {
 	if opcode == nil {
 		panic("instruction not supported")
 	}
@@ -393,7 +393,7 @@ func putPrefixIndirectInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, 
 	putDisp(text, mod, disp)
 }
 
-func putPrefixStackInsn(text *gen.Text, p prefix, t abi.Type, opcode []byte, reg regs.R, disp int32) {
+func putPrefixStackInsn(text *mod.Text, p prefix, t abi.Type, opcode []byte, reg regs.R, disp int32) {
 	mod := dispMod(t, RegStackPtr, disp)
 
 	p.put(text, t, byte(reg), 0, 0)
@@ -409,7 +409,7 @@ type insnPrefixRexRM struct {
 	opcode []byte
 }
 
-func (i insnPrefixRexRM) opReg(text *gen.Text, floatType, intType abi.Type, target, source regs.R) {
+func (i insnPrefixRexRM) opReg(text *mod.Text, floatType, intType abi.Type, target, source regs.R) {
 	i.prefix.put(text, floatType, 0, 0, 0)
 	putRexSize(text, intType, byte(target), 0, byte(source))
 	text.PutBytes(i.opcode)
@@ -425,7 +425,7 @@ type insnPrefixMI struct {
 	ro       byte
 }
 
-func (i insnPrefixMI) opImm(text *gen.Text, t abi.Type, reg regs.R, value int32) {
+func (i insnPrefixMI) opImm(text *mod.Text, t abi.Type, reg regs.R, value int32) {
 	opcode := i.immOpcode(value)
 
 	i.prefix.put(text, t, 0, 0, byte(reg))
@@ -434,14 +434,14 @@ func (i insnPrefixMI) opImm(text *gen.Text, t abi.Type, reg regs.R, value int32)
 	i.putImm(text, opcode, value)
 }
 
-func (i insnPrefixMI) opImm8(text *gen.Text, t abi.Type, reg regs.R, value uint8) {
+func (i insnPrefixMI) opImm8(text *mod.Text, t abi.Type, reg regs.R, value uint8) {
 	i.prefix.put(text, t, 0, 0, byte(reg))
 	text.PutByte(i.opcode8)
 	putMod(text, ModReg, i.ro, byte(reg))
 	text.PutByte(value)
 }
 
-func (i insnPrefixMI) opImmToIndirect(text *gen.Text, t abi.Type, scale uint8, index, base regs.R, disp, value int32) {
+func (i insnPrefixMI) opImmToIndirect(text *mod.Text, t abi.Type, scale uint8, index, base regs.R, disp, value int32) {
 	mod := dispMod(t, base, disp)
 	opcode := i.immOpcode(value)
 
@@ -459,7 +459,7 @@ func (i insnPrefixMI) opImmToIndirect(text *gen.Text, t abi.Type, scale uint8, i
 	i.putImm(text, opcode, value)
 }
 
-func (i insnPrefixMI) opImmToStack(text *gen.Text, t abi.Type, disp, value int32) {
+func (i insnPrefixMI) opImmToStack(text *mod.Text, t abi.Type, disp, value int32) {
 	mod := dispMod(t, RegStackPtr, disp)
 	opcode := i.immOpcode(value)
 
@@ -487,16 +487,16 @@ func (i insnPrefixMI) immOpcode(value int32) byte {
 	}
 }
 
-func (i insnPrefixMI) putImm(text *gen.Text, opcode byte, value int32) {
+func (i insnPrefixMI) putImm(text *mod.Text, opcode byte, value int32) {
 	switch opcode {
 	case i.opcode8:
-		gen.PutInt8(text, int8(value))
+		text.PutInt8(int8(value))
 
 	case i.opcode16:
-		gen.PutInt16(text, int16(value))
+		text.PutInt16(int16(value))
 
 	default: // i.opcode32
-		gen.PutInt32(text, value)
+		text.PutInt32(value)
 	}
 }
 
@@ -510,11 +510,11 @@ type insnSuffixRMI struct {
 	suffix prefix
 }
 
-func (i insnSuffixRMI) opReg(text *gen.Text, t abi.Type, target, source regs.R, value int8) {
+func (i insnSuffixRMI) opReg(text *mod.Text, t abi.Type, target, source regs.R, value int8) {
 	text.PutBytes(i.opcode)
 	i.suffix.put(text, t, byte(target), 0, byte(source))
 	putMod(text, ModReg, byte(target), byte(source))
-	gen.PutInt8(text, value)
+	text.PutInt8(value)
 }
 
 //
@@ -529,7 +529,7 @@ type pushPopInsn struct {
 	regAny insnRexM
 }
 
-func (i pushPopInsn) op(text *gen.Text, reg regs.R) {
+func (i pushPopInsn) op(text *mod.Text, reg regs.R) {
 	if reg < 8 {
 		i.regLow.op(text, reg)
 	} else {
@@ -543,7 +543,7 @@ type xchgInsn struct {
 	insnPrefix
 }
 
-func (i xchgInsn) opFromReg(text *gen.Text, t abi.Type, a, b regs.R) {
+func (i xchgInsn) opFromReg(text *mod.Text, t abi.Type, a, b regs.R) {
 	switch {
 	case a == regs.R(0):
 		i.r0.op(text, t, b)
@@ -566,7 +566,7 @@ func (i shiftImmInsn) defined() bool {
 	return i.one.opcode != nil
 }
 
-func (i shiftImmInsn) op(text *gen.Text, t abi.Type, reg regs.R, value uint8) {
+func (i shiftImmInsn) op(text *mod.Text, t abi.Type, reg regs.R, value uint8) {
 	if value == 1 {
 		i.one.opReg(text, t, reg)
 	} else {
@@ -584,7 +584,7 @@ type movImmInsn struct {
 	imm   insnRexOI
 }
 
-func (i movImmInsn) op(text *gen.Text, t abi.Type, reg regs.R, value int64) {
+func (i movImmInsn) op(text *mod.Text, t abi.Type, reg regs.R, value int64) {
 	switch {
 	case value >= -0x80000000 && value < 0x80000000:
 		i.imm32.opImm(text, t, reg, int32(value))

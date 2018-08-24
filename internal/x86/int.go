@@ -7,24 +7,25 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/internal/values"
 )
 
 type rexPrefix byte
 
-func (rex rexPrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func (rex rexPrefix) put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	putRex(text, byte(rex), ro, index, rmOrBase)
 }
 
 type rexSizePrefix struct{}
 
-func (rexSizePrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func (rexSizePrefix) put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	putRexSize(text, t, ro, index, rmOrBase)
 }
 
 type data16RexSizePrefix struct{}
 
-func (data16RexSizePrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func (data16RexSizePrefix) put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	text.PutByte(0x66)
 	putRexSize(text, t, ro, index, rmOrBase)
 }
@@ -168,8 +169,8 @@ func log2(value uint64) (count uint8) {
 	}
 }
 
-func inplaceIntOp(m *Module, code gen.Coder, insn insnRexM, x values.Operand) values.Operand {
-	reg, _ := opMaybeResultReg(m, code, x, false)
-	insn.opReg(&m.Text, x.Type, reg)
+func inplaceIntOp(f *gen.Func, insn insnRexM, x values.Operand) values.Operand {
+	reg, _ := opMaybeResultReg(f, x, false)
+	insn.opReg(&f.Text, x.Type, reg)
 	return values.TempRegOperand(x.Type, reg, true)
 }

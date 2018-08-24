@@ -12,23 +12,23 @@ import (
 
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/mod"
 )
 
 const (
 	maxSectionNameLen = 255 // TODO
 )
 
-type UnknownLoader func(string, module.Reader) error
+type UnknownLoader func(string, mod.Reader) error
 
 type UnknownLoaders map[string]UnknownLoader
 
-func (uls UnknownLoaders) Load(r module.Reader, payloadLen uint32) (err error) {
+func (uls UnknownLoaders) Load(r mod.Reader, payloadLen uint32) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()
 
-	// io.LimitedReader doesn't implement module.Reader, so do this instead
+	// io.LimitedReader doesn't implement mod.Reader, so do this instead
 	payload := make([]byte, payloadLen)
 	if _, err := io.ReadFull(r, payload); err != nil {
 		panic(err)

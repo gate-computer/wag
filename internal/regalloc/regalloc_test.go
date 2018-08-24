@@ -15,8 +15,7 @@ func TestAllocatorInit(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 0, 123456789} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var a Allocator
-		a.Init(avail)
+		a := MakeAllocator(avail)
 
 		a.AssertNoneAllocated()
 	}
@@ -26,8 +25,7 @@ func TestAlloc(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 0xf} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var a Allocator
-		a.Init(avail)
+		a := MakeAllocator(avail)
 
 		r1, ok := a.Alloc(abi.I32)
 		if !ok {
@@ -67,8 +65,7 @@ func TestAllocSpecific(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 1 << (5 << 1)} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var a Allocator
-		a.Init(avail)
+		a := MakeAllocator(avail)
 
 		t.Logf("cat = %#v", abi.I32)
 		t.Logf("reg = %#v", regs.R(5))
@@ -96,8 +93,7 @@ func TestSetAllocated(t *testing.T) {
 	for _, avail := range []uint64{0xffffffffffffffff, 1 << (5 << 1)} {
 		t.Logf("avail: 0x%016x", avail)
 
-		var a Allocator
-		a.Init(avail)
+		a := MakeAllocator(avail)
 
 		a.SetAllocated(abi.I32, regs.R(5))
 		if !a.Allocated(abi.I32, regs.R(5)) {

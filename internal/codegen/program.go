@@ -13,19 +13,13 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
 
-type Module = module.M
-
-func offsetOfGlobal(m *Module, index uint32) int32 {
-	return (int32(index) - int32(len(m.Globals))) * gen.WordSize
-}
-
-func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
+func Gen(m *mod.M, load loader.L, entryDefined bool, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
 	if debug {
 		if debugDepth != 0 {
 			debugf("")
@@ -38,8 +32,8 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
-	m.FuncLinks = make([]links.FuncL, len(m.FuncSigs))
 	m.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
+	m.FuncLinks = make([]links.FuncL, len(m.FuncSigs))
 
 	roTableSize := len(m.TableFuncs) * 8
 	buf := m.ROData.ResizeBytes(gen.ROTableAddr + roTableSize)
@@ -105,8 +99,6 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 		m.FuncLinks[i].Addr = addr
 	}
 
-	m.Regs.Init(isa.AvailRegs())
-
 	var midpoint int
 
 	if startTrigger != nil {
@@ -116,7 +108,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 
 	for i := len(m.ImportFuncs); i < midpoint; i++ {
-		genFunction(&function{Module: m}, load, i)
+		genFunc(m, load, i)
 		isa.UpdateCalls(m.Text.Bytes(), &m.FuncLinks[i].L)
 	}
 
@@ -151,7 +143,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 
 	if midpoint < len(m.FuncSigs) {
 		for i := midpoint; i < len(m.FuncSigs); i++ {
-			genFunction(&function{Module: m}, load, i)
+			genFunc(m, load, i)
 		}
 
 		isa.ClearInsnCache()
@@ -174,13 +166,13 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 	}
 }
 
-func opInitCall(m *Module, l *links.FuncL) {
+func opInitCall(m *mod.M, l *links.FuncL) {
 	retAddr := isa.OpInitCall(m)
 	m.Map.PutCallSite(object.TextAddr(retAddr), 0) // initial stack frame
 	l.AddSite(retAddr)
 }
 
-func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
+func genImportEntry(m *mod.M, imp mod.ImportFunc) (addr int32) {
 	if debug {
 		debugf("import function")
 		debugDepth++

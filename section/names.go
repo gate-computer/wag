@@ -10,7 +10,7 @@ import (
 
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/mod"
 )
 
 type subsectionId byte
@@ -32,7 +32,7 @@ type NameSection struct {
 }
 
 // Load "name" custom section.
-func (ns *NameSection) Load(_ string, r module.Reader) (err error) {
+func (ns *NameSection) Load(_ string, r mod.Reader) (err error) {
 	defer func() {
 		err = errutil.ErrorOrPanic(recover())
 	}()

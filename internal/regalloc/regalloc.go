@@ -24,9 +24,8 @@ type Allocator struct {
 	freed uint64
 }
 
-func (a *Allocator) Init(avail uint64) {
-	a.avail = avail
-	a.freed = avail
+func MakeAllocator(avail uint64) Allocator {
+	return Allocator{avail, avail}
 }
 
 func (a *Allocator) Alloc(t abi.Type) (reg regs.R, ok bool) {

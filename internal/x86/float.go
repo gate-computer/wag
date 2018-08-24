@@ -7,6 +7,7 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/internal/regs"
 )
 
@@ -15,7 +16,7 @@ type floatSizePrefix struct {
 	size64 []byte
 }
 
-func (p *floatSizePrefix) put(text *gen.Text, t abi.Type, ro, index, rmOrBase byte) {
+func (p *floatSizePrefix) put(text *mod.Text, t abi.Type, ro, index, rmOrBase byte) {
 	switch t.Size() {
 	case abi.Size32:
 		text.PutBytes(p.size32)
@@ -61,12 +62,12 @@ var (
 	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
-func pushFloatOp(m *Module, t abi.Type, source regs.R) {
+func pushFloatOp(m *mod.M, t abi.Type, source regs.R) {
 	sub.opImm(&m.Text, abi.I64, RegStackPtr, gen.WordSize)
 	movsSSE.opToStack(&m.Text, t, source, 0)
 }
 
-func popFloatOp(m *Module, t abi.Type, target regs.R) {
+func popFloatOp(m *mod.M, t abi.Type, target regs.R) {
 	movsSSE.opFromStack(&m.Text, t, target, 0)
 	add.opImm(&m.Text, abi.I64, RegStackPtr, gen.WordSize)
 }

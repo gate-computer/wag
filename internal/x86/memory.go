@@ -8,6 +8,7 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/internal/opers"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
@@ -41,17 +42,17 @@ var memoryStores = []memoryAccess{
 }
 
 // LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) LoadOp(m *Module, code gen.Coder, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
+func (ISA) LoadOp(f *gen.Func, oper uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
 	size := oper >> 8
 
-	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(m, code, size, index, offset)
+	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
 	if ownIndexReg {
-		defer m.Regs.Free(abi.I64, indexReg)
+		defer f.Regs.Free(abi.I64, indexReg)
 	}
 
 	load := memoryLoads[uint8(oper)]
 
-	targetReg, ok := m.Regs.Alloc(resultType)
+	targetReg, ok := f.Regs.Alloc(resultType)
 	if !ok {
 		targetReg = RegResult
 	}
@@ -63,17 +64,17 @@ func (ISA) LoadOp(m *Module, code gen.Coder, oper uint16, index values.Operand, 
 		insnType = resultType
 	}
 
-	load.insn.opFromIndirect(&m.Text, insnType, targetReg, 0, indexReg, baseReg, disp)
+	load.insn.opFromIndirect(&f.Text, insnType, targetReg, 0, indexReg, baseReg, disp)
 	return
 }
 
 // StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) StoreOp(m *Module, code gen.Coder, oper uint16, index, x values.Operand, offset uint32) {
+func (ISA) StoreOp(f *gen.Func, oper uint16, index, x values.Operand, offset uint32) {
 	size := oper >> 8
 
-	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(m, code, size, index, offset)
+	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
 	if ownIndexReg {
-		defer m.Regs.Free(abi.I64, indexReg)
+		defer f.Regs.Free(abi.I64, indexReg)
 	}
 
 	store := memoryStores[uint8(oper)]
@@ -100,27 +101,27 @@ func (ISA) StoreOp(m *Module, code gen.Coder, oper uint16, index, x values.Opera
 			goto large
 		}
 
-		store.insn.opImmToIndirect(&m.Text, insnType, 0, indexReg, baseReg, disp, value32)
+		store.insn.opImmToIndirect(&f.Text, insnType, 0, indexReg, baseReg, disp, value32)
 		return
 
 	large:
 	}
 
-	valueReg, _, own := opBorrowMaybeResultReg(m, code, x, false)
+	valueReg, _, own := opBorrowMaybeResultReg(f, x, false)
 	if own {
-		defer m.Regs.Free(x.Type, valueReg)
+		defer f.Regs.Free(x.Type, valueReg)
 	}
 
-	store.insn.opToIndirect(&m.Text, insnType, valueReg, 0, indexReg, baseReg, disp)
+	store.insn.opToIndirect(&f.Text, insnType, valueReg, 0, indexReg, baseReg, disp)
 }
 
 // opMemoryAddress may return the scratch register as the base.
-func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
+func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
 	sizeReach := uint64(size - 1)
 	reachOffset := uint64(offset) + sizeReach
 
 	if reachOffset >= 0x80000000 {
-		code.OpTrapCall(trap.MemoryOutOfBounds)
+		opTrapCall(f, trap.MemoryOutOfBounds)
 		return
 	}
 
@@ -131,7 +132,7 @@ func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operan
 		value := uint64(index.ImmValue())
 
 		if value >= 0x80000000 {
-			code.OpTrapCall(trap.MemoryOutOfBounds)
+			opTrapCall(f, trap.MemoryOutOfBounds)
 			return
 		}
 
@@ -139,24 +140,24 @@ func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operan
 		reachAddr := addr + sizeReach
 
 		if reachAddr >= 0x80000000 {
-			code.OpTrapCall(trap.MemoryOutOfBounds)
+			opTrapCall(f, trap.MemoryOutOfBounds)
 			return
 		}
 
-		if reachAddr < uint64(m.MemoryLimitValues.Initial) || alreadyChecked {
+		if reachAddr < uint64(f.MemoryLimitValues.Initial) || alreadyChecked {
 			baseReg = RegMemoryBase
 			indexReg = NoIndex
 			disp = int32(addr)
 			return
 		}
 
-		lea.opFromIndirect(&m.Text, abi.I64, RegScratch, 0, NoIndex, RegMemoryBase, int32(reachAddr))
+		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, NoIndex, RegMemoryBase, int32(reachAddr))
 
 	default:
-		reg, zeroExt, own := opBorrowMaybeScratchReg(m, code, index, true)
+		reg, zeroExt, own := opBorrowMaybeScratchReg(f, index, true)
 
 		if !zeroExt {
-			mov.opFromReg(&m.Text, abi.I32, reg, reg) // zero-extend index
+			mov.opFromReg(&f.Text, abi.I32, reg, reg) // zero-extend index
 		}
 
 		if alreadyChecked {
@@ -167,27 +168,27 @@ func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operan
 			return
 		}
 
-		lea.opFromIndirect(&m.Text, abi.I64, RegScratch, 0, reg, RegMemoryBase, int32(reachOffset))
+		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, reg, RegMemoryBase, int32(reachOffset))
 
 		if own {
-			m.Regs.Free(abi.I32, reg)
+			f.Regs.Free(abi.I32, reg)
 		}
 	}
 
-	cmp.opFromReg(&m.Text, abi.I64, RegScratch, RegMemoryLimit)
+	cmp.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
 
-	if addr := code.TrapTrampolineAddr(trap.MemoryOutOfBounds); addr != 0 {
-		jge.op(&m.Text, addr)
+	if addr := f.TrapTrampolineAddr(trap.MemoryOutOfBounds); addr != 0 {
+		jge.op(&f.Text, addr)
 	} else {
 		var checked links.L
 
-		jl.rel8.opStub(&m.Text)
-		checked.AddSite(m.Text.Pos())
+		jl.rel8.opStub(&f.Text)
+		checked.AddSite(f.Text.Pos())
 
-		code.OpTrapCall(trap.MemoryOutOfBounds)
+		opTrapCall(f, trap.MemoryOutOfBounds)
 
-		checked.Addr = m.Text.Pos()
-		updateLocalBranches(m, &checked)
+		checked.Addr = f.Text.Pos()
+		updateLocalBranches(f.M, &checked)
 	}
 
 	baseReg = RegScratch
@@ -196,7 +197,7 @@ func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operan
 	return
 }
 
-func (ISA) OpCurrentMemory(m *Module) values.Operand {
+func (ISA) OpCurrentMemory(m *mod.M) values.Operand {
 	mov.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryLimit)
 	sub.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryBase)
 	shrImm.op(&m.Text, abi.I64, RegResult, wasm.PageBits)
@@ -204,40 +205,40 @@ func (ISA) OpCurrentMemory(m *Module) values.Operand {
 	return values.TempRegOperand(abi.I32, RegResult, true)
 }
 
-func (ISA) OpGrowMemory(m *Module, code gen.Coder, x values.Operand) values.Operand {
+func (ISA) OpGrowMemory(f *gen.Func, x values.Operand) values.Operand {
 	var out links.L
 	var fail links.L
 
-	movMMX.opToReg(&m.Text, abi.I64, RegScratch, RegMemoryGrowLimitMMX)
+	movMMX.opToReg(&f.Text, abi.I64, RegScratch, RegMemoryGrowLimitMMX)
 
-	targetReg, zeroExt := opMaybeResultReg(m, code, x, false)
+	targetReg, zeroExt := opMaybeResultReg(f, x, false)
 	if !zeroExt {
-		mov.opFromReg(&m.Text, abi.I32, targetReg, targetReg)
+		mov.opFromReg(&f.Text, abi.I32, targetReg, targetReg)
 	}
 
-	shlImm.op(&m.Text, abi.I64, targetReg, wasm.PageBits)
-	add.opFromReg(&m.Text, abi.I64, targetReg, RegMemoryLimit) // new memory limit
-	cmp.opFromReg(&m.Text, abi.I64, targetReg, RegScratch)
+	shlImm.op(&f.Text, abi.I64, targetReg, wasm.PageBits)
+	add.opFromReg(&f.Text, abi.I64, targetReg, RegMemoryLimit) // new memory limit
+	cmp.opFromReg(&f.Text, abi.I64, targetReg, RegScratch)
 
-	jg.rel8.opStub(&m.Text)
-	fail.AddSite(m.Text.Pos())
+	jg.rel8.opStub(&f.Text)
+	fail.AddSite(f.Text.Pos())
 
-	mov.opFromReg(&m.Text, abi.I64, RegScratch, RegMemoryLimit)
-	mov.opFromReg(&m.Text, abi.I64, RegMemoryLimit, targetReg)
-	sub.opFromReg(&m.Text, abi.I64, RegScratch, RegMemoryBase)
-	shrImm.op(&m.Text, abi.I64, RegScratch, wasm.PageBits) // value on success
-	mov.opFromReg(&m.Text, abi.I32, targetReg, RegScratch)
+	mov.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
+	mov.opFromReg(&f.Text, abi.I64, RegMemoryLimit, targetReg)
+	sub.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryBase)
+	shrImm.op(&f.Text, abi.I64, RegScratch, wasm.PageBits) // value on success
+	mov.opFromReg(&f.Text, abi.I32, targetReg, RegScratch)
 
-	jmpRel.rel8.opStub(&m.Text)
-	out.AddSite(m.Text.Pos())
+	jmpRel.rel8.opStub(&f.Text)
+	out.AddSite(f.Text.Pos())
 
-	fail.Addr = m.Text.Pos()
-	updateLocalBranches(m, &fail)
+	fail.Addr = f.Text.Pos()
+	updateLocalBranches(f.M, &fail)
 
-	movImm.opImm(&m.Text, abi.I32, targetReg, -1) // value on failure
+	movImm.opImm(&f.Text, abi.I32, targetReg, -1) // value on failure
 
-	out.Addr = m.Text.Pos()
-	updateLocalBranches(m, &out)
+	out.Addr = f.Text.Pos()
+	updateLocalBranches(f.M, &out)
 
 	return values.TempRegOperand(abi.I32, targetReg, true)
 }

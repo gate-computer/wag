@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
 )
 
@@ -36,7 +37,7 @@ func (info opInfo) oper() uint16 {
 }
 
 type opImpl struct {
-	gen  func(*function, loader.L, Opcode, opInfo) bool
+	gen  func(*gen.Func, loader.L, Opcode, opInfo) bool
 	info opInfo
 }
 

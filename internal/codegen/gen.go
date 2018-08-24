@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
@@ -15,7 +16,7 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func genOps(f *function, load loader.L) (deadend bool) {
+func genOps(f *gen.Func, load loader.L) (deadend bool) {
 	if debug {
 		debugf("{")
 		debugDepth++
@@ -42,7 +43,7 @@ func genOps(f *function, load loader.L) (deadend bool) {
 	return
 }
 
-func genThenOps(f *function, load loader.L) (deadend, haveElse bool) {
+func genThenOps(f *gen.Func, load loader.L) (deadend, haveElse bool) {
 	if debug {
 		debugf("{")
 		debugDepth++
@@ -75,7 +76,7 @@ loop:
 	return
 }
 
-func genOp(f *function, load loader.L, op Opcode) (deadend bool) {
+func genOp(f *gen.Func, load loader.L, op Opcode) (deadend bool) {
 	if debug {
 		debugf("%s op", op)
 		debugDepth++
@@ -98,12 +99,12 @@ func genOp(f *function, load loader.L, op Opcode) (deadend bool) {
 	return
 }
 
-func genBinaryConditionOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBinaryConditionOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	opStackCheck(f) // before we create ConditionFlags operand
 	return genBinaryOp(f, load, op, info)
 }
 
-func genBinaryOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBinaryOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	right := opMaterializeOperand(f, popOperand(f))
 	left := opMaterializeOperand(f, popOperand(f))
 
@@ -111,12 +112,12 @@ func genBinaryOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bo
 	return
 }
 
-func genBinaryConditionCommuteOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBinaryConditionCommuteOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	opStackCheck(f) // before we create ConditionFlags operand
 	return genBinaryCommuteOp(f, load, op, info)
 }
 
-func genBinaryCommuteOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBinaryCommuteOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	right := opMaterializeOperand(f, popOperand(f))
 	left := opMaterializeOperand(f, popOperand(f))
 
@@ -128,49 +129,49 @@ func genBinaryCommuteOp(f *function, load loader.L, op Opcode, info opInfo) (dea
 	return
 }
 
-func binaryOp(f *function, op Opcode, left, right values.Operand, info opInfo) {
+func binaryOp(f *gen.Func, op Opcode, left, right values.Operand, info opInfo) {
 	if t := info.primaryType(); left.Type != t || right.Type != t {
 		panic(fmt.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.BinaryOp(f.Module, f, info.oper(), left, right)
+	result := isa.BinaryOp(f, info.oper(), left, right)
 	pushOperand(f, result)
 }
 
-func genConstI32(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstI32(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	pushImmOperand(f, abi.I32, uint64(int64(load.Varint32())))
 	return
 }
 
-func genConstI64(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstI64(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	pushImmOperand(f, abi.I64, uint64(load.Varint64()))
 	return
 }
 
-func genConstF32(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstF32(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	pushImmOperand(f, abi.F32, uint64(load.Uint32()))
 	return
 }
 
-func genConstF64(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstF64(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	pushImmOperand(f, abi.F64, load.Uint64())
 	return
 }
 
-func genConversionOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConversionOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	x := opMaterializeOperand(f, popOperand(f))
 	if x.Type != info.secondaryType() {
 		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.ConversionOp(f.Module, f, info.oper(), info.primaryType(), x)
+	result := isa.ConversionOp(f, info.oper(), info.primaryType(), x)
 	pushOperand(f, result)
 	return
 }
 
-func genLoadOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genLoadOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	virtualIndex := popOperand(f)
 	if virtualIndex.Type != abi.I32 {
 		panic(fmt.Errorf("%s index has wrong type: %s", op, virtualIndex.Type))
@@ -182,13 +183,13 @@ func genLoadOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	result := isa.LoadOp(f.Module, f, info.oper(), index, info.primaryType(), offset)
+	result := isa.LoadOp(f, info.oper(), index, info.primaryType(), offset)
 	updateMemoryIndex(f, virtualIndex, offset, info.oper())
 	pushOperand(f, result)
 	return
 }
 
-func genStoreOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genStoreOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	value := opMaterializeOperand(f, popOperand(f))
 	if value.Type != info.primaryType() {
 		panic(fmt.Errorf("%s value has wrong type: %s", op, value.Type))
@@ -205,43 +206,43 @@ func genStoreOp(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	isa.StoreOp(f.Module, f, info.oper(), index, value, offset)
+	isa.StoreOp(f, info.oper(), index, value, offset)
 	updateMemoryIndex(f, virtualIndex, offset, info.oper())
 	return
 }
 
-func genUnaryConditionOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genUnaryConditionOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	opStackCheck(f) // before we create ConditionFlags operand
 	return genUnaryOp(f, load, op, info)
 }
 
-func genUnaryOp(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genUnaryOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	x := opMaterializeOperand(f, popOperand(f))
 	if x.Type != info.primaryType() {
 		panic(fmt.Errorf("%s operand has wrong type: %s", op, x.Type))
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.UnaryOp(f.Module, f, info.oper(), x)
+	result := isa.UnaryOp(f, info.oper(), x)
 	pushOperand(f, result)
 	return
 }
 
-func genCurrentMemory(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genCurrentMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	load.Byte() // reserved
 
 	opStabilizeOperandStack(f)
-	result := isa.OpCurrentMemory(f.Module)
+	result := isa.OpCurrentMemory(f.M)
 	pushOperand(f, result)
 	return
 }
 
-func genDrop(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genDrop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	discard(f, popOperand(f))
 	return
 }
 
-func genGrowMemory(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genGrowMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	load.Byte() // reserved
 
 	x := opMaterializeOperand(f, popOperand(f))
@@ -250,31 +251,31 @@ func genGrowMemory(f *function, load loader.L, op Opcode, info opInfo) (deadend 
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.OpGrowMemory(f.Module, f, x)
+	result := isa.OpGrowMemory(f, x)
 	pushOperand(f, result)
 	return
 }
 
-func genNop(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genNop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genReturn(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	if f.resultType != abi.Void {
+func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+	if f.ResultType != abi.Void {
 		result := popOperand(f)
-		if result.Type != f.resultType {
-			panic(fmt.Errorf("%s value operand type is %s, but function result type is %s", op, result.Type, f.resultType))
+		if result.Type != f.ResultType {
+			panic(fmt.Errorf("%s value operand type is %s, but function result type is %s", op, result.Type, f.ResultType))
 		}
 		opMove(f, regs.Result, result, false)
 	}
 
-	isa.OpAddImmToStackPtr(f.Module, f.stackOffset)
-	isa.OpReturn(f.Module)
+	isa.OpAddImmToStackPtr(f.M, f.StackOffset)
+	isa.OpReturn(f.M)
 	deadend = true
 	return
 }
 
-func genSelect(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genSelect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	cond := opPreloadOperand(f, popOperand(f))
 	if cond.Type != abi.I32 {
 		panic(fmt.Errorf("%s: condition operand has wrong type: %s", op, cond.Type))
@@ -286,18 +287,18 @@ func genSelect(f *function, load loader.L, op Opcode, info opInfo) (deadend bool
 		panic(fmt.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
 	}
 
-	result := isa.OpSelect(f.Module, f, left, right, cond)
+	result := isa.OpSelect(f, left, right, cond)
 	pushOperand(f, result)
 	return
 }
 
-func genUnreachable(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	opTrapCall(f, trap.Unreachable)
+func genUnreachable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+	isa.OpTrapCall(f, trap.Unreachable)
 	deadend = true
 	return
 }
 
-func badGen(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func badGen(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	badOp(op)
 	return
 }

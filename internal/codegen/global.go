@@ -7,25 +7,30 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
 )
 
-func genGetGlobal(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func offsetOfGlobal(f *gen.Func, index uint32) int32 {
+	return (int32(index) - int32(len(f.Globals))) * gen.WordSize
+}
+
+func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(f.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
 	global := f.Globals[globalIndex]
-	offset := offsetOfGlobal(f.Module, globalIndex)
+	offset := offsetOfGlobal(f, globalIndex)
 
 	opStabilizeOperandStack(f)
-	result := isa.OpGetGlobal(f.Module, f, global.Type, offset)
+	result := isa.OpGetGlobal(f, global.Type, offset)
 	pushOperand(f, result)
 	return
 }
 
-func genSetGlobal(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genSetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(f.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
@@ -36,13 +41,13 @@ func genSetGlobal(f *function, load loader.L, op Opcode, info opInfo) (deadend b
 		panic(fmt.Errorf("%s: global %d is immutable", op, globalIndex))
 	}
 
-	offset := offsetOfGlobal(f.Module, globalIndex)
+	offset := offsetOfGlobal(f, globalIndex)
 
 	x := opMaterializeOperand(f, popOperand(f))
 	if x.Type != global.Type {
 		panic(fmt.Errorf("%s operand type is %s, but type of global %d is %s", op, x.Type, globalIndex, global.Type))
 	}
 
-	isa.OpSetGlobal(f.Module, f, offset, x)
+	isa.OpSetGlobal(f, offset, x)
 	return
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/mod"
 	"github.com/tsavola/wag/internal/typeutil"
 	"github.com/tsavola/wag/wasm"
 )
@@ -28,10 +28,10 @@ type Env interface {
 }
 
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
-type Reader = module.Reader
+type Reader = mod.Reader
 
 const (
-	DefaultMemoryAlignment = 16 // see Module.MemoryAlignment
+	DefaultMemoryAlignment = 16 // see Mod.MemoryAlignment
 )
 
 const (
@@ -42,7 +42,7 @@ const (
 	maxGlobals            = 512 // 4096 bytes
 )
 
-func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int) module.ResizableLimits {
+func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int) mod.ResizableLimits {
 	maximumFieldIsPresent := load.Varuint1()
 
 	initial := load.Varuint32()
@@ -62,7 +62,7 @@ func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int
 		}
 	}
 
-	return module.ResizableLimits{
+	return mod.ResizableLimits{
 		Initial: int(initial) * scale,
 		Maximum: int(maximum) * scale,
 		Defined: true,
@@ -75,7 +75,7 @@ type Module struct {
 	MemoryAlignment      int // see Data()
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
-	module.M
+	mod.M
 }
 
 // LoadPreliminarySections, excluding the code and data sections.
@@ -89,7 +89,7 @@ func (m *Module) LoadPreliminarySections(r Reader, env Env) (err error) {
 }
 
 func (m *Module) loadPreliminarySections(r Reader, env Env) {
-	loadUntil(m, loader.L{Reader: r}, env, module.SectionCode)
+	loadUntil(m, loader.L{Reader: r}, env, mod.SectionCode)
 }
 
 // Load all (remaining) sections.
@@ -116,7 +116,7 @@ func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roD
 		objMap = dummyMap{}
 	}
 
-	m.M.Text = gen.Text{B: text}
+	m.M.Text = mod.Text{B: text}
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
 	m.M.Data = data
@@ -146,21 +146,21 @@ func readMemory(m *Module, load loader.L) {
 }
 
 func load(m *Module, load loader.L, env Env) {
-	nextId := loadUntil(m, load, env, module.NumSections)
+	nextId := loadUntil(m, load, env, mod.NumSections)
 	if nextId != 0 {
 		panic(fmt.Errorf("unknown section id: 0x%x", nextId))
 	}
 }
 
 func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
-	var header module.Header
+	var header mod.Header
 	if err := binary.Read(load, binary.LittleEndian, &header); err != nil {
 		panic(err)
 	}
-	if header.MagicNumber != module.MagicNumber {
+	if header.MagicNumber != mod.MagicNumber {
 		panic(errors.New("not a WebAssembly module"))
 	}
-	if header.Version != module.Version {
+	if header.Version != mod.Version {
 		panic(fmt.Errorf("unsupported module version: %d", header.Version))
 	}
 
@@ -168,7 +168,7 @@ func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
 
 	if m.UnknownSectionLoader != nil {
 		skipSection = func(id byte, payloadLen uint32) (err error) {
-			if id == module.SectionUnknown {
+			if id == mod.SectionUnknown {
 				err = m.UnknownSectionLoader(load, payloadLen)
 			} else {
 				_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
@@ -193,7 +193,7 @@ func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
 			panic(err)
 		}
 
-		if id != module.SectionUnknown {
+		if id != mod.SectionUnknown {
 			if id <= seenId {
 				panic(fmt.Errorf("section 0x%x follows section 0x%x", id, seenId))
 			}
@@ -216,7 +216,7 @@ func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
 }
 
 var sectionLoaders = []func(*Module, loader.L, Env){
-	module.SectionType: func(m *Module, load loader.L, env Env) {
+	mod.SectionType: func(m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			if form := load.Varint7(); form != -0x20 {
 				panic(fmt.Errorf("unsupported function type form: %d", form))
@@ -242,7 +242,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionImport: func(m *Module, load loader.L, env Env) {
+	mod.SectionImport: func(m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			moduleLen := load.Varuint32()
 			if moduleLen > maxStringLen {
@@ -258,10 +258,10 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 			fieldStr := string(load.Bytes(fieldLen))
 
-			kind := module.ExternalKind(load.Byte())
+			kind := mod.ExternalKind(load.Byte())
 
 			switch kind {
-			case module.ExternalKindFunction:
+			case mod.ExternalKindFunction:
 				sigIndex := load.Varuint32()
 				if sigIndex >= uint32(len(m.M.Sigs)) {
 					panic(fmt.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
@@ -280,19 +280,19 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 					panic(err)
 				}
 
-				m.ImportFuncs = append(m.ImportFuncs, module.ImportFunc{
+				m.ImportFuncs = append(m.ImportFuncs, mod.ImportFunc{
 					FuncIndex: funcIndex,
 					Variadic:  variadic,
 					AbsAddr:   absAddr,
 				})
 
-			case module.ExternalKindTable:
+			case mod.ExternalKindTable:
 				readTable(m, load)
 
-			case module.ExternalKindMemory:
+			case mod.ExternalKindMemory:
 				readMemory(m, load)
 
-			case module.ExternalKindGlobal:
+			case mod.ExternalKindGlobal:
 				if len(m.Globals) >= maxGlobals {
 					panic(errors.New("too many imported globals"))
 				}
@@ -309,7 +309,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 					panic(err)
 				}
 
-				m.Globals = append(m.Globals, module.Global{
+				m.Globals = append(m.Globals, mod.Global{
 					Type:    t,
 					Mutable: mutable,
 					Init:    init,
@@ -323,7 +323,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		m.NumImportGlobals = len(m.Globals)
 	},
 
-	module.SectionFunction: func(m *Module, load loader.L, env Env) {
+	mod.SectionFunction: func(m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.M.Sigs)) {
@@ -334,19 +334,19 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionTable: func(m *Module, load loader.L, env Env) {
+	mod.SectionTable: func(m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			readTable(m, load)
 		}
 	},
 
-	module.SectionMemory: func(m *Module, load loader.L, env Env) {
+	mod.SectionMemory: func(m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			readMemory(m, load)
 		}
 	},
 
-	module.SectionGlobal: func(m *Module, load loader.L, env Env) {
+	mod.SectionGlobal: func(m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			if len(m.Globals) >= maxGlobals {
 				panic(errors.New("too many globals"))
@@ -356,7 +356,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 			mutable := load.Varuint1()
 			init, _ := readInitExpr(m, load)
 
-			m.Globals = append(m.Globals, module.Global{
+			m.Globals = append(m.Globals, mod.Global{
 				Type:    t,
 				Mutable: mutable,
 				Init:    init,
@@ -364,7 +364,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionExport: func(m *Module, load loader.L, env Env) {
+	mod.SectionExport: func(m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			fieldLen := load.Varuint32()
 			if fieldLen > maxStringLen {
@@ -372,11 +372,11 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 			}
 
 			fieldStr := load.Bytes(fieldLen)
-			kind := module.ExternalKind(load.Byte())
+			kind := mod.ExternalKind(load.Byte())
 			index := load.Varuint32()
 
 			switch kind {
-			case module.ExternalKindFunction:
+			case mod.ExternalKindFunction:
 				if fieldLen > 0 && string(fieldStr) == m.EntrySymbol {
 					if index >= uint32(len(m.M.FuncSigs)) {
 						panic(fmt.Errorf("export function index out of bounds: %d", index))
@@ -392,7 +392,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 					m.EntryDefined = true
 				}
 
-			case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
+			case mod.ExternalKindTable, mod.ExternalKindMemory, mod.ExternalKindGlobal:
 
 			default:
 				panic(fmt.Errorf("unknown export kind: %s", kind))
@@ -400,7 +400,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionStart: func(m *Module, load loader.L, env Env) {
+	mod.SectionStart: func(m *Module, load loader.L, env Env) {
 		index := load.Varuint32()
 		if index >= uint32(len(m.M.FuncSigs)) {
 			panic(fmt.Errorf("start function index out of bounds: %d", index))
@@ -416,7 +416,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		m.StartDefined = true
 	},
 
-	module.SectionElement: func(m *Module, load loader.L, env Env) {
+	mod.SectionElement: func(m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			if index := load.Varuint32(); index != 0 {
 				panic(fmt.Errorf("unsupported table index: %d", index))
@@ -452,11 +452,11 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionCode: func(m *Module, load loader.L, env Env) {
+	mod.SectionCode: func(m *Module, load loader.L, env Env) {
 		genCode(m, load, nil)
 	},
 
-	module.SectionData: func(m *Module, load loader.L, env Env) {
+	mod.SectionData: func(m *Module, load loader.L, env Env) {
 		genDataGlobals(m)
 		genDataMemory(m, load)
 	},
@@ -487,14 +487,14 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 		objMap = dummyMap{}
 	}
 
-	m.M.Text = gen.Text{B: text}
+	m.M.Text = mod.Text{B: text}
 	m.M.ROData = roData
 	m.M.RODataAddr = roDataAddr
 	m.M.Map = objMap
 
 	load := loader.L{Reader: r}
 
-	if readSectionHeader(load, module.SectionCode, "not a code section") {
+	if readSectionHeader(load, mod.SectionCode, "not a code section") {
 		genCode(m, load, startTrigger)
 	}
 }
@@ -504,7 +504,7 @@ func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
 		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
-	codegen.GenProgram(&m.M, load, m.EntryDefined, m.EntrySymbol, m.EntryArgs, startTrigger)
+	codegen.Gen(&m.M, load, m.EntryDefined, m.EntrySymbol, m.EntryArgs, startTrigger)
 }
 
 // LoadDataSection, after loading the preliminary sections.
@@ -531,7 +531,7 @@ func (m *Module) loadDataSection(r Reader, data DataBuffer) {
 
 	load := loader.L{Reader: r}
 
-	if readSectionHeader(load, module.SectionData, "not a data section") {
+	if readSectionHeader(load, mod.SectionData, "not a data section") {
 		genDataMemory(m, load)
 	}
 }

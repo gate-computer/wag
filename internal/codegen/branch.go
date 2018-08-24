@@ -17,64 +17,51 @@ import (
 	"github.com/tsavola/wag/internal/values"
 )
 
-type branchTarget struct {
-	label       links.L
-	stackOffset int32
-	valueType   abi.Type
-	funcEnd     bool
-}
+func pushBranchTarget(f *gen.Func, valueType abi.Type, funcEnd bool) {
+	stackOffset := f.StackOffset
 
-type branchTable struct {
-	roDataAddr      int32
-	targets         []*branchTarget
-	codeStackOffset int32 // -1 indicates common offset
-}
-
-func pushBranchTarget(f *function, valueType abi.Type, funcEnd bool) {
-	stackOffset := f.stackOffset
-
-	if int(f.numInitedVars) < len(f.vars) {
+	if int(f.NumInitedVars) < len(f.Vars) {
 		// init still in progress, but any branch expressions will have
 		// initialized all vars before we reach the target
-		numRegParams := int32(len(f.vars)) - f.numStackParams
+		numRegParams := int32(len(f.Vars)) - f.NumStackParams
 		stackOffset = numRegParams * gen.WordSize
 	}
 
-	f.branchTargets = append(f.branchTargets, &branchTarget{
-		stackOffset: stackOffset,
-		valueType:   valueType,
-		funcEnd:     funcEnd,
+	f.BranchTargets = append(f.BranchTargets, &gen.BranchTarget{
+		StackOffset: stackOffset,
+		ValueType:   valueType,
+		FuncEnd:     funcEnd,
 	})
 }
 
-func popBranchTarget(f *function) (finalizedLabel *links.L) {
-	n := len(f.branchTargets) - 1
-	finalizedLabel = &f.branchTargets[n].label
-	f.branchTargets = f.branchTargets[:n]
+func popBranchTarget(f *gen.Func) (finalizedLabel *links.L) {
+	n := len(f.BranchTargets) - 1
+	finalizedLabel = &f.BranchTargets[n].Label
+	f.BranchTargets = f.BranchTargets[:n]
 
 	trimBoundsStacks(f)
 	return
 }
 
-func getBranchTarget(f *function, depth uint32) *branchTarget {
-	if depth >= uint32(len(f.branchTargets)) {
+func getBranchTarget(f *gen.Func, depth uint32) *gen.BranchTarget {
+	if depth >= uint32(len(f.BranchTargets)) {
 		panic(fmt.Errorf("relative branch depth out of bounds: %d", depth))
 	}
-	return f.branchTargets[len(f.branchTargets)-int(depth)-1]
+	return f.BranchTargets[len(f.BranchTargets)-int(depth)-1]
 }
 
-func boundsStackLevel(f *function) int {
-	return len(f.branchTargets)
+func boundsStackLevel(f *gen.Func) int {
+	return len(f.BranchTargets)
 }
 
-func trimBoundsStacks(f *function) {
+func trimBoundsStacks(f *gen.Func) {
 	size := boundsStackLevel(f) + 1
-	for i := range f.vars {
-		f.vars[i].trimBoundsStack(size)
+	for i := range f.Vars {
+		f.Vars[i].TrimBoundsStack(size)
 	}
 }
 
-func genBlock(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	t := typeutil.BlockTypeByEncoding(load.Varint7())
 
 	opSaveTemporaryOperands(f)
@@ -83,15 +70,15 @@ func genBlock(f *function, load loader.L, op Opcode, info opInfo) (deadend bool)
 
 	pushBranchTarget(f, t, false) // end
 
-	savedMinBlockOperand := f.minBlockOperand
-	f.minBlockOperand = len(f.operands)
+	savedMinBlockOperand := f.MinBlockOperand
+	f.MinBlockOperand = len(f.Operands)
 
 	deadend = genOps(f, load)
 
 	var result values.Operand
 
 	if deadend {
-		for len(f.operands) > f.minBlockOperand {
+		for len(f.Operands) > f.MinBlockOperand {
 			x := popOperand(f)
 			debugf("discarding operand at end of %s due to deadend: %s", op, x)
 			discard(f, x)
@@ -104,12 +91,12 @@ func genBlock(f *function, load loader.L, op Opcode, info opInfo) (deadend bool)
 			}
 		}
 
-		if len(f.operands) != f.minBlockOperand {
+		if len(f.Operands) != f.MinBlockOperand {
 			panic(fmt.Errorf("operands remain on stack after %s", op))
 		}
 	}
 
-	f.minBlockOperand = savedMinBlockOperand
+	f.MinBlockOperand = savedMinBlockOperand
 
 	if end := popBranchTarget(f); end.Live() {
 		if result.Storage != values.Nowhere {
@@ -132,34 +119,34 @@ func genBlock(f *function, load loader.L, op Opcode, info opInfo) (deadend bool)
 	return
 }
 
-func genBr(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
-	if target.valueType != abi.Void {
+	if target.ValueType != abi.Void {
 		value := popOperand(f)
-		if value.Type != target.valueType {
-			panic(fmt.Errorf("%s value operand type is %s, but target expects %s", op, value.Type, target.valueType))
+		if value.Type != target.ValueType {
+			panic(fmt.Errorf("%s value operand type is %s, but target expects %s", op, value.Type, target.ValueType))
 		}
 		opMove(f, regs.Result, value, false)
 	}
 
-	if target.funcEnd {
-		isa.OpAddImmToStackPtr(f.Module, f.stackOffset)
-		isa.OpReturn(f.Module)
+	if target.FuncEnd {
+		isa.OpAddImmToStackPtr(f.M, f.StackOffset)
+		isa.OpReturn(f.M)
 	} else {
 		opSaveTemporaryOperands(f) // TODO: avoid saving operands which we are going to skip over
 		opInitVars(f)
 		opStoreVars(f, true)
-		isa.OpAddImmToStackPtr(f.Module, f.stackOffset-target.stackOffset)
-		opBranch(f, &target.label)
+		isa.OpAddImmToStackPtr(f.M, f.StackOffset-target.StackOffset)
+		opBranch(f, &target.Label)
 	}
 
 	deadend = true
 	return
 }
 
-func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -170,9 +157,9 @@ func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	var value values.Operand
 
-	if target.valueType != abi.Void {
+	if target.ValueType != abi.Void {
 		value = popOperand(f)
-		if value.Type != target.valueType {
+		if value.Type != target.ValueType {
 			panic(fmt.Errorf("%s: value operand has wrong type: %s", op, value.Type))
 		}
 	}
@@ -191,47 +178,47 @@ func genBrIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 		opMove(f, regs.Result, value, true)
 	}
 
-	stackDelta := f.stackOffset - target.stackOffset
+	stackDelta := f.StackOffset - target.StackOffset
 
-	isa.OpAddImmToStackPtr(f.Module, stackDelta)
-	opBranchIf(f, cond, true, &target.label)
-	isa.OpAddImmToStackPtr(f.Module, -stackDelta)
+	isa.OpAddImmToStackPtr(f.M, stackDelta)
+	opBranchIf(f, cond, true, &target.Label)
+	isa.OpAddImmToStackPtr(f.M, -stackDelta)
 
-	if target.valueType != abi.Void {
-		pushResultRegOperand(f, target.valueType)
+	if target.ValueType != abi.Void {
+		pushResultRegOperand(f, target.ValueType)
 	}
 	return
 }
 
-func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableSize) {
 		panic(fmt.Errorf("%s has too many targets: %d", op, targetCount))
 	}
 
-	targetTable := make([]*branchTarget, targetCount)
+	targetTable := make([]*gen.BranchTarget, targetCount)
 
 	for i := range targetTable {
 		relativeDepth := load.Varuint32()
 		target := getBranchTarget(f, relativeDepth)
-		target.label.SetLive()
+		target.Label.SetLive()
 		targetTable[i] = target
 	}
 
 	relativeDepth := load.Varuint32()
 	defaultTarget := getBranchTarget(f, relativeDepth)
-	defaultTarget.label.SetLive()
+	defaultTarget.Label.SetLive()
 
 	index := opPreloadOperand(f, popOperand(f))
 	if index.Type != abi.I32 {
 		panic(fmt.Errorf("%s: index operand has wrong type: %s", op, index.Type))
 	}
 
-	valueType := defaultTarget.valueType
+	valueType := defaultTarget.ValueType
 
 	for i, target := range targetTable {
-		if target.valueType != valueType {
-			panic(fmt.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, valueType, target.valueType, i))
+		if target.ValueType != valueType {
+			panic(fmt.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, valueType, target.ValueType, i))
 		}
 	}
 
@@ -249,9 +236,9 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 	var tableScale uint8 = 2
 
 	if len(targetTable) > 0 {
-		commonStackOffset = targetTable[0].stackOffset
+		commonStackOffset = targetTable[0].StackOffset
 		for _, target := range targetTable[1:] {
-			if target.stackOffset != commonStackOffset {
+			if target.StackOffset != commonStackOffset {
 				commonStackOffset = -1
 				tableType = abi.I64
 				tableScale = 3
@@ -293,58 +280,58 @@ func genBrTable(f *function, load loader.L, op Opcode, info opInfo) (deadend boo
 		regZeroExt = index.RegZeroExt()
 	} else {
 		reg = opAllocReg(f, abi.I32)
-		regZeroExt = isa.OpMove(f.Module, f, reg, index, false)
+		regZeroExt = isa.OpMove(f, reg, index, false)
 	}
 
 	f.Regs.FreeAll()
 
 	// vars were already stored and regs freed
-	for i := range f.vars {
-		f.vars[i].resetCache()
+	for i := range f.Vars {
+		f.Vars[i].ResetCache()
 	}
 
 	// if index yielded a var register, then it was just freed, but the
 	// register retains its value.  don't call anything that allocates
 	// registers until the critical section ends.
 
-	defaultDelta := f.stackOffset - defaultTarget.stackOffset
+	defaultDelta := f.StackOffset - defaultTarget.StackOffset
 
-	isa.OpAddImmToStackPtr(f.Module, defaultDelta)
-	tableStackOffset := f.stackOffset - defaultDelta
-	opBranchIfOutOfBounds(f, reg, int32(len(targetTable)), &defaultTarget.label)
-	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f.Module, f, tableType, reg, regZeroExt, tableScale, int32(tableAddr))
+	isa.OpAddImmToStackPtr(f.M, defaultDelta)
+	tableStackOffset := f.StackOffset - defaultDelta
+	opBranchIfOutOfBounds(f, reg, int32(len(targetTable)), &defaultTarget.Label)
+	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f, tableType, reg, regZeroExt, tableScale, int32(tableAddr))
 
 	if commonStackOffset >= 0 {
-		isa.OpAddImmToStackPtr(f.Module, tableStackOffset-commonStackOffset)
+		isa.OpAddImmToStackPtr(f.M, tableStackOffset-commonStackOffset)
 	} else {
-		isa.OpMoveReg(f.Module, abi.I64, reg2, reg)
-		isa.OpShiftRightLogical32Bits(f.Module, reg2)
-		isa.OpAddToStackPtr(f.Module, reg2)
+		isa.OpMoveReg(f.M, abi.I64, reg2, reg)
+		isa.OpShiftRightLogical32Bits(f.M, reg2)
+		isa.OpAddToStackPtr(f.M, reg2)
 
 		regZeroExt = false
 	}
 
-	isa.OpBranchIndirect32(f.Module, reg, regZeroExt)
+	isa.OpBranchIndirect32(f.M, reg, regZeroExt)
 
 	// end of critical section.
 
-	t := branchTable{
-		roDataAddr: int32(tableAddr),
-		targets:    targetTable,
+	t := gen.BranchTable{
+		RODataAddr: int32(tableAddr),
+		Targets:    targetTable,
 	}
 	if commonStackOffset >= 0 {
-		t.codeStackOffset = -1
+		t.CodeStackOffset = -1
 	} else {
 		// no common offset
-		t.codeStackOffset = tableStackOffset
+		t.CodeStackOffset = tableStackOffset
 	}
-	f.branchTables = append(f.branchTables, t)
+	f.BranchTables = append(f.BranchTables, t)
 
 	deadend = true
 	return
 }
 
-func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	t := typeutil.BlockTypeByEncoding(load.Varint7())
 
 	pushBranchTarget(f, t, false) // end
@@ -378,7 +365,7 @@ func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 		if haveElse {
 			opSaveTemporaryOperands(f)
 			opStoreVars(f, true)
-			opBranch(f, &getBranchTarget(f, 0).label) // end
+			opBranch(f, &getBranchTarget(f, 0).Label) // end
 		}
 	}
 
@@ -412,7 +399,7 @@ func genIf(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genLoop(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	encodedBlockType := load.Varint7()
 
 	opSaveTemporaryOperands(f)
@@ -420,37 +407,37 @@ func genLoop(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opStoreVars(f, false)
 
 	pushBranchTarget(f, abi.Void, false) // begin
-	opLabel(f, &getBranchTarget(f, 0).label)
+	opLabel(f, &getBranchTarget(f, 0).Label)
 
-	savedMinBlockOperand := f.minBlockOperand
-	f.minBlockOperand = len(f.operands)
+	savedMinBlockOperand := f.MinBlockOperand
+	f.MinBlockOperand = len(f.Operands)
 
 	deadend = genOps(f, load)
 
 	if deadend {
-		for len(f.operands) > f.minBlockOperand {
+		for len(f.Operands) > f.MinBlockOperand {
 			x := popOperand(f)
 			debugf("discarding operand at end of %s due to deadend: %s", op, x)
 			discard(f, x)
 		}
 	} else {
-		need := f.minBlockOperand
+		need := f.MinBlockOperand
 		if encodedBlockType != 0 {
 			need++ // result remains on stack
 		}
-		if len(f.operands) > need { // let the next guy deal with missing operands
+		if len(f.Operands) > need { // let the next guy deal with missing operands
 			panic(fmt.Errorf("operands remain on stack after %s", op))
 		}
 	}
 
-	f.minBlockOperand = savedMinBlockOperand
+	f.MinBlockOperand = savedMinBlockOperand
 
 	begin := popBranchTarget(f)
 	isa.UpdateBranches(f.Text.Bytes(), begin)
 	return
 }
 
-func opLabel(f *function, l *links.L) {
+func opLabel(f *gen.Func, l *links.L) {
 	opSaveTemporaryOperands(f)
 	opStoreVars(f, true)
 	l.Addr = f.Text.Pos()
@@ -458,23 +445,23 @@ func opLabel(f *function, l *links.L) {
 	debugf("label")
 }
 
-func opBranch(f *function, l *links.L) {
-	retAddr := isa.OpBranch(f.Module, l.Addr)
+func opBranch(f *gen.Func, l *links.L) {
+	retAddr := isa.OpBranch(f.M, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}
 }
 
-func opBranchIf(f *function, x values.Operand, yes bool, l *links.L) {
+func opBranchIf(f *gen.Func, x values.Operand, yes bool, l *links.L) {
 	x = effectiveOperand(f, x)
-	retAddrs := isa.OpBranchIf(f.Module, f, x, yes, l.Addr)
+	retAddrs := isa.OpBranchIf(f, x, yes, l.Addr)
 	if l.Addr == 0 {
 		l.AddSites(retAddrs)
 	}
 }
 
-func opBranchIfOutOfBounds(f *function, indexReg regs.R, upperBound int32, l *links.L) {
-	site := isa.OpBranchIfOutOfBounds(f.Module, indexReg, upperBound, l.Addr)
+func opBranchIfOutOfBounds(f *gen.Func, indexReg regs.R, upperBound int32, l *links.L) {
+	site := isa.OpBranchIfOutOfBounds(f.M, indexReg, upperBound, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(site)
 	}

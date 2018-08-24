@@ -7,14 +7,15 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/values"
 )
 
-func genGetLocal(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genGetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	localIndex := load.Varuint32()
-	if localIndex >= uint32(len(f.vars)) {
+	if localIndex >= uint32(len(f.Vars)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
 
@@ -22,9 +23,9 @@ func genGetLocal(f *function, load loader.L, op Opcode, info opInfo) (deadend bo
 	return
 }
 
-func genSetLocal(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genSetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	localIndex := load.Varuint32()
-	if localIndex >= uint32(len(f.vars)) {
+	if localIndex >= uint32(len(f.Vars)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
 
@@ -32,9 +33,9 @@ func genSetLocal(f *function, load loader.L, op Opcode, info opInfo) (deadend bo
 	return
 }
 
-func genTeeLocal(f *function, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genTeeLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	localIndex := load.Varuint32()
-	if localIndex >= uint32(len(f.vars)) {
+	if localIndex >= uint32(len(f.Vars)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, localIndex))
 	}
 
@@ -43,11 +44,11 @@ func genTeeLocal(f *function, load loader.L, op Opcode, info opInfo) (deadend bo
 	return
 }
 
-func opSetLocal(f *function, op Opcode, index int32) {
+func opSetLocal(f *gen.Func, op Opcode, index int32) {
 	debugf("setting variable #%d", index)
 
-	v := &f.vars[index]
-	t := v.cache.Type
+	v := &f.Vars[index]
+	t := v.Cache.Type
 
 	newValue := popOperand(f)
 	if newValue.Type != t {
@@ -56,7 +57,7 @@ func opSetLocal(f *function, op Opcode, index int32) {
 
 	switch newValue.Storage {
 	case values.Imm:
-		if v.cache.Storage == values.Imm && newValue.ImmValue() == v.cache.ImmValue() {
+		if v.Cache.Storage == values.Imm && newValue.ImmValue() == v.Cache.ImmValue() {
 			return // nop
 		}
 
@@ -66,17 +67,17 @@ func opSetLocal(f *function, op Opcode, index int32) {
 		}
 	}
 
-	debugf("variable reference count: %d", v.refCount)
+	debugf("variable reference count: %d", v.RefCount)
 
-	if v.refCount > 0 {
+	if v.RefCount > 0 {
 		// detach all references by copying to temp regs or spilling to stack
 
-		switch v.cache.Storage {
+		switch v.Cache.Storage {
 		case values.Nowhere, values.VarReg:
 			var spillUntil int
 
-			for i := len(f.operands) - 1; i >= 0; i-- {
-				x := f.operands[i]
+			for i := len(f.Operands) - 1; i >= 0; i-- {
+				x := f.Operands[i]
 
 				if x.Storage == values.VarReference && x.VarIndex() == index {
 					reg, ok := f.Regs.Alloc(t)
@@ -86,10 +87,10 @@ func opSetLocal(f *function, op Opcode, index int32) {
 					}
 
 					zeroExt := opMove(f, reg, x, true) // TODO: avoid multiple loads
-					f.operands[i] = values.TempRegOperand(t, reg, zeroExt)
+					f.Operands[i] = values.TempRegOperand(t, reg, zeroExt)
 
-					v.refCount--
-					if v.refCount == 0 {
+					v.RefCount--
+					if v.RefCount == 0 {
 						goto done
 					}
 				}
@@ -101,17 +102,17 @@ func opSetLocal(f *function, op Opcode, index int32) {
 			opInitVars(f)
 
 			for i := 0; i <= spillUntil; i++ {
-				x := f.operands[i]
+				x := f.Operands[i]
 				var done bool
 
 				switch x.Storage {
 				case values.VarReference:
-					f.vars[x.VarIndex()].refCount--
-					done = (x.VarIndex() == index && v.refCount == 0)
+					f.Vars[x.VarIndex()].RefCount--
+					done = (x.VarIndex() == index && v.RefCount == 0)
 					fallthrough
 				case values.TempReg, values.ConditionFlags:
 					opPush(f, x)
-					f.operands[i] = values.StackOperand(x.Type)
+					f.Operands[i] = values.StackOperand(x.Type)
 				}
 
 				if done {
@@ -125,14 +126,14 @@ func opSetLocal(f *function, op Opcode, index int32) {
 		}
 	}
 
-	oldCache := v.cache
+	oldCache := v.Cache
 
 	debugf("old variable cache: %s", oldCache)
 
 	switch {
 	case newValue.Storage == values.Imm:
-		v.cache = newValue
-		v.dirty = true
+		v.Cache = newValue
+		v.Dirty = true
 
 	case newValue.Storage.IsVarOrStackOrConditionFlags():
 		var reg regs.R
@@ -148,13 +149,13 @@ func opSetLocal(f *function, op Opcode, index int32) {
 
 		if ok {
 			zeroExt := opMove(f, reg, newValue, false)
-			v.cache = values.VarRegOperand(t, index, reg, zeroExt)
-			v.dirty = true
+			v.Cache = values.VarRegOperand(t, index, reg, zeroExt)
+			v.Dirty = true
 		} else {
 			// spill to stack
 			opStoreVar(f, index, newValue)
-			v.cache = values.NoOperand(t)
-			v.dirty = false
+			v.Cache = values.NoOperand(t)
+			v.Dirty = false
 		}
 
 	case newValue.Storage == values.TempReg:
@@ -184,12 +185,12 @@ func opSetLocal(f *function, op Opcode, index int32) {
 		}
 
 		if ok {
-			v.cache = values.VarRegOperand(t, index, reg, zeroExt)
-			v.dirty = true
+			v.Cache = values.VarRegOperand(t, index, reg, zeroExt)
+			v.Dirty = true
 		} else {
 			opStoreVar(f, index, newValue)
-			v.cache = values.NoOperand(t)
-			v.dirty = false
+			v.Cache = values.NoOperand(t)
+			v.Dirty = false
 		}
 
 	default:

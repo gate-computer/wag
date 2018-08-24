@@ -2,16 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package module
+package mod
 
 import (
 	"fmt"
 	"io"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/links"
-	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/trap"
 )
@@ -73,10 +71,6 @@ type Reader interface {
 	io.ByteScanner
 }
 
-type TextBuffer interface {
-	gen.Buffer
-}
-
 type DataBuffer interface {
 	Bytes() []byte
 	ResizeBytes(n int) []byte
@@ -124,13 +118,12 @@ type M struct {
 	StartDefined      bool
 	TableFuncs        []uint32
 
-	Text       gen.Text
+	Text       Text
 	RODataAddr int32
 	ROData     DataBuffer
-	TrapLinks  [trap.NumTraps]links.L
-	FuncLinks  []links.FuncL
 	Map        ObjectMap
-	Regs       regalloc.Allocator
+	FuncLinks  []links.FuncL
+	TrapLinks  [trap.NumTraps]links.L
 
 	Data         DataBuffer
 	MemoryOffset int
