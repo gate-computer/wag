@@ -5,9 +5,9 @@
 package codegen
 
 import (
+	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regalloc"
 )
 
 const (

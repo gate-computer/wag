@@ -5,18 +5,18 @@
 package gen
 
 import (
-	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/internal/gen/val"
 )
 
 type VarState struct {
-	Cache       values.Operand
+	Cache       val.Operand
 	RefCount    int
 	Dirty       bool
-	BoundsStack []values.Bounds
+	BoundsStack []val.Bounds
 }
 
 func (v *VarState) ResetCache() {
-	v.Cache = values.NoOperand(v.Cache.Type)
+	v.Cache = val.NoOperand(v.Cache.Type)
 	v.Dirty = false
 }
 

@@ -11,13 +11,13 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/regalloc"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
-	"github.com/tsavola/wag/internal/values"
 )
 
 const (
@@ -27,23 +27,23 @@ const (
 	MaxBranchTableSize = 32768 // TODO
 )
 
-func discard(f *gen.Func, x values.Operand) {
+func discard(f *gen.Func, x val.Operand) {
 	switch x.Storage {
-	case values.TempReg:
+	case val.TempReg:
 		f.Regs.Free(x.Type, x.Reg())
 
-	case values.Stack:
+	case val.Stack:
 		opBackoffStackPtr(f, obj.Word)
 	}
 }
 
-func effectiveOperand(f *gen.Func, x values.Operand) values.Operand {
-	if x.Storage == values.VarReference {
+func effectiveOperand(f *gen.Func, x val.Operand) val.Operand {
+	if x.Storage == val.VarReference {
 		index := x.VarIndex()
 		v := f.Vars[index]
 
-		if v.Cache.Storage == values.Nowhere {
-			x = values.VarMemOperand(x.Type, index, effectiveVarStackOffset(f, index))
+		if v.Cache.Storage == val.Nowhere {
+			x = val.VarMemOperand(x.Type, index, effectiveVarStackOffset(f, index))
 		} else {
 			x = v.Cache
 		}
@@ -72,13 +72,13 @@ func effectiveVarStackOffset(f *gen.Func, index int32) (offset int32) {
 	return
 }
 
-func updateMemoryIndex(f *gen.Func, index values.Operand, offset uint32, props uint16) {
+func updateMemoryIndex(f *gen.Func, index val.Operand, offset uint32, props uint16) {
 	if index.Storage.IsVar() {
 		v := &f.Vars[index.VarIndex()]
 
-		if v.Cache.Storage == values.VarReg && !v.Cache.RegZeroExt() {
+		if v.Cache.Storage == val.VarReg && !v.Cache.RegZeroExt() {
 			// LoadOp and StoreOp make sure that index gets zero-extended if it's a VarReg operand
-			v.Cache = values.VarRegOperand(v.Cache.Type, v.Cache.VarIndex(), v.Cache.Reg(), true)
+			v.Cache = val.VarRegOperand(v.Cache.Type, v.Cache.VarIndex(), v.Cache.Reg(), true)
 		}
 
 		size := props >> 8
@@ -96,12 +96,12 @@ func updateMemoryIndex(f *gen.Func, index values.Operand, offset uint32, props u
 				if cap(v.BoundsStack) >= needSize {
 					v.BoundsStack = v.BoundsStack[:needSize]
 				} else {
-					buf := make([]values.Bounds, needSize)
+					buf := make([]val.Bounds, needSize)
 					copy(buf, v.BoundsStack)
 					v.BoundsStack = buf
 				}
 
-				var lastValue values.Bounds
+				var lastValue val.Bounds
 				if currSize > 0 {
 					lastValue = v.BoundsStack[currSize-1]
 				}
@@ -156,7 +156,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 	f.NumInitedVars = f.NumStackParams // they're already there
 
 	for i := 0; i < int(f.NumStackParams); i++ {
-		f.Vars[i].Cache = values.NoOperand(sig.Args[i])
+		f.Vars[i].Cache = val.NoOperand(sig.Args[i])
 	}
 
 	for i := f.NumStackParams; i < int32(len(sig.Args)); i++ {
@@ -164,7 +164,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 		reg := paramRegs.IterForward(t.Category())
 		f.Regs.AllocSpecific(t, reg)
 		f.Vars[i] = gen.VarState{
-			Cache: values.VarRegOperand(t, i, reg, false),
+			Cache: val.VarRegOperand(t, i, reg, false),
 			Dirty: true,
 		}
 	}
@@ -179,7 +179,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 
 		for range params {
 			f.Vars = append(f.Vars, gen.VarState{
-				Cache: values.ImmOperand(t, 0),
+				Cache: val.ImmOperand(t, 0),
 				Dirty: true,
 			})
 		}
@@ -229,7 +229,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 
 	for i := range f.Vars {
 		v := f.Vars[i]
-		if v.Cache.Storage == values.VarReg {
+		if v.Cache.Storage == val.VarReg {
 			f.Regs.Free(v.Cache.Type, v.Cache.Reg())
 		}
 	}
@@ -320,22 +320,22 @@ func opBackoffStackPtr(f *gen.Func, offset int32) {
 	debugf("stack offset: %d", f.StackOffset)
 }
 
-func opPush(f *gen.Func, x values.Operand) {
+func opPush(f *gen.Func, x val.Operand) {
 	x = effectiveOperand(f, x)
 	opReserveStack(f, obj.Word)
 	isa.OpPush(f, x)
 }
 
 func opInitVars(f *gen.Func) {
-	var nothing values.Operand
+	var nothing val.Operand
 	opInitVarsUntil(f, int32(len(f.Vars)), nothing)
 }
 
-func opInitVarsUntil(f *gen.Func, lastIndex int32, lastValue values.Operand) {
+func opInitVarsUntil(f *gen.Func, lastIndex int32, lastValue val.Operand) {
 	for i := f.NumInitedVars; i <= lastIndex && i < int32(len(f.Vars)); i++ {
 		v := &f.Vars[i]
 		x := v.Cache
-		if x.Storage == values.Nowhere {
+		if x.Storage == val.Nowhere {
 			panic("variable without cached value during locals initialization")
 		}
 		if !v.Dirty {
@@ -347,8 +347,8 @@ func opInitVarsUntil(f *gen.Func, lastIndex int32, lastValue values.Operand) {
 		}
 
 		// float 0 has same bit pattern as int 0
-		if x.Storage == values.Imm && x.ImmValue() == 0 {
-			x = values.ImmOperand(abi.I64, 0)
+		if x.Storage == val.Imm && x.ImmValue() == 0 {
+			x = val.ImmOperand(abi.I64, 0)
 		}
 
 		debugf("initializing variable %d/%d (%s) <- %s", i+1, len(f.Vars), v.Cache.Type, x)
@@ -361,53 +361,53 @@ func opInitVarsUntil(f *gen.Func, lastIndex int32, lastValue values.Operand) {
 }
 
 // opMove must not allocate registers.
-func opMove(f *gen.Func, target regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
+func opMove(f *gen.Func, target regs.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
 	x = effectiveOperand(f, x)
 	return isa.OpMove(f, target, x, preserveFlags)
 }
 
-func opMaterializeOperand(f *gen.Func, x values.Operand) values.Operand {
-	if x.Storage == values.ConditionFlags {
+func opMaterializeOperand(f *gen.Func, x val.Operand) val.Operand {
+	if x.Storage == val.ConditionFlags {
 		reg := opAllocReg(f, x.Type)
 		zeroExt := opMove(f, reg, x, false)
-		return values.TempRegOperand(x.Type, reg, zeroExt)
+		return val.TempRegOperand(x.Type, reg, zeroExt)
 	} else {
 		return opPreloadOperand(f, x) // XXX: should this be effectiveOperand?
 	}
 }
 
-func opPreloadOperand(f *gen.Func, x values.Operand) values.Operand {
+func opPreloadOperand(f *gen.Func, x val.Operand) val.Operand {
 	x = effectiveOperand(f, x)
 
 	switch x.Storage {
-	case values.VarMem:
+	case val.VarMem:
 		index := x.VarIndex()
 		v := &f.Vars[index]
 
 		if reg, ok := opTryAllocVarReg(f, x.Type); ok {
 			zeroExt := opMove(f, reg, x, true)
-			x = values.VarRegOperand(x.Type, index, reg, zeroExt).WithBounds(x.Bounds)
+			x = val.VarRegOperand(x.Type, index, reg, zeroExt).WithBounds(x.Bounds)
 			v.Cache = x
 			v.Dirty = false
 		}
 
-	case values.Stack:
+	case val.Stack:
 		reg := opAllocReg(f, x.Type)
 		zeroExt := opMove(f, reg, x, true)
-		x = values.TempRegOperand(x.Type, reg, zeroExt)
+		x = val.TempRegOperand(x.Type, reg, zeroExt)
 	}
 
 	return x
 }
 
 func pushImmOperand(f *gen.Func, t abi.Type, bits uint64) {
-	x := values.ImmOperand(t, bits)
+	x := val.ImmOperand(t, bits)
 	debugf("push operand: %s", x)
 	f.Operands = append(f.Operands, x)
 }
 
 func pushResultRegOperand(f *gen.Func, t abi.Type) {
-	x := values.TempRegOperand(t, regs.Result, false)
+	x := val.TempRegOperand(t, regs.Result, false)
 	debugf("push operand: %s", x)
 	f.Operands = append(f.Operands, x)
 }
@@ -417,20 +417,20 @@ func pushVarOperand(f *gen.Func, index int32) {
 	x := v.Cache
 
 	switch v.Cache.Storage {
-	case values.Nowhere, values.VarReg: // TODO: nowhere -> ver reference without index?
+	case val.Nowhere, val.VarReg: // TODO: nowhere -> ver reference without index?
 		v.RefCount++
-		x = values.VarReferenceOperand(x.Type, index)
+		x = val.VarReferenceOperand(x.Type, index)
 	}
 
 	debugf("push operand: %s", x)
 	f.Operands = append(f.Operands, x)
 }
 
-func pushOperand(f *gen.Func, x values.Operand) {
+func pushOperand(f *gen.Func, x val.Operand) {
 	if x.Storage.IsVar() {
 		index := x.VarIndex()
 		f.Vars[index].RefCount++
-		x = values.VarReferenceOperand(x.Type, index)
+		x = val.VarReferenceOperand(x.Type, index)
 	}
 
 	debugf("push operand: %s", x)
@@ -442,13 +442,13 @@ func opStabilizeOperandStack(f *gen.Func) {
 		x := f.Operands[i]
 
 		switch x.Storage {
-		case values.TempReg:
+		case val.TempReg:
 			if f.Regs.Allocated(x.Type, x.Reg()) {
 				continue
 			}
 			// do it
 
-		case values.ConditionFlags:
+		case val.ConditionFlags:
 			// do it
 
 		default:
@@ -459,17 +459,17 @@ func opStabilizeOperandStack(f *gen.Func) {
 
 		reg := opAllocReg(f, x.Type)
 		zeroExt := opMove(f, reg, x, false)
-		f.Operands[i] = values.TempRegOperand(x.Type, reg, zeroExt)
+		f.Operands[i] = val.TempRegOperand(x.Type, reg, zeroExt)
 	}
 
 	f.NumStableOperands = len(f.Operands)
 }
 
-func popOperand(f *gen.Func) (x values.Operand) {
+func popOperand(f *gen.Func) (x val.Operand) {
 	return popOperands(f, 1)[0]
 }
 
-func popOperands(f *gen.Func, n int) (xs []values.Operand) {
+func popOperands(f *gen.Func, n int) (xs []val.Operand) {
 	i := len(f.Operands) - n
 	if i < f.MinBlockOperand {
 		panic(errors.New("operand stack of block is empty"))
@@ -487,7 +487,7 @@ func popOperands(f *gen.Func, n int) (xs []values.Operand) {
 	}
 
 	for _, x := range xs {
-		if x.Storage == values.VarReference {
+		if x.Storage == val.VarReference {
 			f.Vars[x.VarIndex()].RefCount--
 		}
 	}
@@ -517,13 +517,13 @@ func opStealReg(f *gen.Func, needType abi.Type) (reg regs.R) {
 
 		if x.Type.Category() == needType.Category() {
 			switch x.Storage {
-			case values.VarReference:
-				if v := f.Vars[x.VarIndex()]; v.Cache.Storage == values.VarReg {
+			case val.VarReference:
+				if v := f.Vars[x.VarIndex()]; v.Cache.Storage == val.VarReg {
 					reg = v.Cache.Reg()
 					ok = true
 				}
 
-			case values.TempReg:
+			case val.TempReg:
 				reg = x.Reg()
 				if f.Regs.Allocated(x.Type, reg) {
 					defer f.Regs.AllocSpecific(x.Type, reg)
@@ -533,12 +533,12 @@ func opStealReg(f *gen.Func, needType abi.Type) (reg regs.R) {
 		}
 
 		switch x.Storage {
-		case values.VarReference:
+		case val.VarReference:
 			f.Vars[x.VarIndex()].RefCount--
 			fallthrough
-		case values.TempReg, values.ConditionFlags:
+		case val.TempReg, val.ConditionFlags:
 			opPush(f, x)
-			f.Operands[i] = values.StackOperand(x.Type)
+			f.Operands[i] = val.StackOperand(x.Type)
 		}
 
 		if ok {
@@ -562,7 +562,7 @@ func opTryStealVarReg(f *gen.Func, needType abi.Type) (reg regs.R, ok bool) {
 	var bestRefCount int
 
 	for i, v := range f.Vars {
-		if v.Cache.Storage == values.VarReg && v.Cache.Type.Category() == needType.Category() {
+		if v.Cache.Storage == val.VarReg && v.Cache.Type.Category() == needType.Category() {
 			if bestIndex < 0 || v.RefCount < bestRefCount {
 				bestIndex = i
 				bestRefCount = v.RefCount
@@ -583,7 +583,7 @@ found:
 	reg = v.Cache.Reg()
 	if v.Dirty {
 		index := int32(bestIndex)
-		opStoreVar(f, index, values.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly
+		opStoreVar(f, index, val.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly
 	}
 	v.ResetCache()
 	ok = true
@@ -597,13 +597,13 @@ func opSaveTemporaryOperands(f *gen.Func) {
 		x := f.Operands[i]
 
 		switch {
-		case x.Storage == values.VarReference:
+		case x.Storage == val.VarReference:
 			f.Vars[x.VarIndex()].RefCount--
 			fallthrough
 		case x.Storage.IsTempRegOrConditionFlags():
 			opInitVars(f)
 			opPush(f, x)
-			f.Operands[i] = values.StackOperand(x.Type)
+			f.Operands[i] = val.StackOperand(x.Type)
 		}
 	}
 
@@ -623,12 +623,12 @@ func opStoreVars(f *gen.Func, forget bool) {
 
 		if v.Dirty {
 			index := int32(i)
-			opStoreVar(f, index, values.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly
+			opStoreVar(f, index, val.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly
 			v.Dirty = false
 		}
 
 		if forget {
-			if v.Cache.Storage == values.VarReg {
+			if v.Cache.Storage == val.VarReg {
 				f.Regs.Free(v.Cache.Type, v.Cache.Reg())
 			}
 			v.ResetCache()
@@ -640,15 +640,15 @@ func opStoreRegVars(f *gen.Func) {
 	debugf("store but remember register variables")
 
 	for i := range f.Vars {
-		if v := &f.Vars[i]; v.Cache.Storage == values.VarReg && v.Dirty {
+		if v := &f.Vars[i]; v.Cache.Storage == val.VarReg && v.Dirty {
 			index := int32(i)
-			opStoreVar(f, index, values.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly
+			opStoreVar(f, index, val.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly
 			v.Dirty = false
 		}
 	}
 }
 
-func opStoreVar(f *gen.Func, index int32, x values.Operand) {
+func opStoreVar(f *gen.Func, index int32, x val.Operand) {
 	x = effectiveOperand(f, x)
 
 	debugf("store variable #%d <- %s", index, x)

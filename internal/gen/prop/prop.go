@@ -4,9 +4,7 @@
 
 package prop
 
-import (
-	"github.com/tsavola/wag/internal/values"
-)
+import "github.com/tsavola/wag/internal/gen/val"
 
 // Unary
 
@@ -104,22 +102,22 @@ const (
 )
 
 const (
-	IntEq         = BinaryCompare | values.Eq
-	IntNe         = BinaryCompare | values.Ne
-	IntLtS        = BinaryCompare | values.LtS
-	IntLtU        = BinaryCompare | values.LtU
-	IntGtS        = BinaryCompare | values.GtS
-	IntGtU        = BinaryCompare | values.GtU
-	IntLeS        = BinaryCompare | values.LeS
-	IntLeU        = BinaryCompare | values.LeU
-	IntGeS        = BinaryCompare | values.GeS
-	IntGeU        = BinaryCompare | values.GeU
-	FloatEq       = BinaryFloat | BinaryCompare | values.OrderedAndEq
-	FloatNe       = BinaryFloat | BinaryCompare | values.UnorderedOrNe
-	FloatLt       = BinaryFloat | BinaryCompare | values.OrderedAndLt
-	FloatGt       = BinaryFloat | BinaryCompare | values.OrderedAndGt
-	FloatLe       = BinaryFloat | BinaryCompare | values.OrderedAndLe
-	FloatGe       = BinaryFloat | BinaryCompare | values.OrderedAndGe
+	IntEq         = BinaryCompare | val.Eq
+	IntNe         = BinaryCompare | val.Ne
+	IntLtS        = BinaryCompare | val.LtS
+	IntLtU        = BinaryCompare | val.LtU
+	IntGtS        = BinaryCompare | val.GtS
+	IntGtU        = BinaryCompare | val.GtU
+	IntLeS        = BinaryCompare | val.LeS
+	IntLeU        = BinaryCompare | val.LeU
+	IntGeS        = BinaryCompare | val.GeS
+	IntGeU        = BinaryCompare | val.GeU
+	FloatEq       = BinaryFloat | BinaryCompare | val.OrderedAndEq
+	FloatNe       = BinaryFloat | BinaryCompare | val.UnorderedOrNe
+	FloatLt       = BinaryFloat | BinaryCompare | val.OrderedAndLt
+	FloatGt       = BinaryFloat | BinaryCompare | val.OrderedAndGt
+	FloatLe       = BinaryFloat | BinaryCompare | val.OrderedAndLe
+	FloatGe       = BinaryFloat | BinaryCompare | val.OrderedAndGe
 	IntAdd        = IndexIntAdd
 	IntSub        = IndexIntSub
 	IntMul        = BinaryIntDivmul | IndexDivmulMul

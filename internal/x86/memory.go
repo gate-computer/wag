@@ -8,10 +8,10 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
 )
@@ -42,7 +42,7 @@ var memoryStores = []memoryAccess{
 }
 
 // LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) LoadOp(f *gen.Func, props uint16, index values.Operand, resultType abi.Type, offset uint32) (result values.Operand) {
+func (ISA) LoadOp(f *gen.Func, props uint16, index val.Operand, resultType abi.Type, offset uint32) (result val.Operand) {
 	size := props >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
@@ -57,7 +57,7 @@ func (ISA) LoadOp(f *gen.Func, props uint16, index values.Operand, resultType ab
 		targetReg = RegResult
 	}
 
-	result = values.TempRegOperand(resultType, targetReg, load.zeroExt)
+	result = val.TempRegOperand(resultType, targetReg, load.zeroExt)
 
 	insnType := load.insnType
 	if insnType == 0 {
@@ -69,7 +69,7 @@ func (ISA) LoadOp(f *gen.Func, props uint16, index values.Operand, resultType ab
 }
 
 // StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) StoreOp(f *gen.Func, props uint16, index, x values.Operand, offset uint32) {
+func (ISA) StoreOp(f *gen.Func, props uint16, index, x val.Operand, offset uint32) {
 	size := props >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
@@ -84,7 +84,7 @@ func (ISA) StoreOp(f *gen.Func, props uint16, index, x values.Operand, offset ui
 		insnType = x.Type
 	}
 
-	if x.Storage == values.Imm {
+	if x.Storage == val.Imm {
 		value := x.ImmValue()
 		value32 := int32(value)
 
@@ -116,7 +116,7 @@ func (ISA) StoreOp(f *gen.Func, props uint16, index, x values.Operand, offset ui
 }
 
 // opMemoryAddress may return the scratch register as the base.
-func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
+func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
 	sizeReach := uint64(size - 1)
 	reachOffset := uint64(offset) + sizeReach
 
@@ -128,7 +128,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint
 	alreadyChecked := reachOffset < uint64(index.Bounds.Upper)
 
 	switch index.Storage {
-	case values.Imm:
+	case val.Imm:
 		value := uint64(index.ImmValue())
 
 		if value >= 0x80000000 {
@@ -197,15 +197,15 @@ func opMemoryAddress(f *gen.Func, size uint16, index values.Operand, offset uint
 	return
 }
 
-func (ISA) OpCurrentMemory(m *module.M) values.Operand {
+func (ISA) OpCurrentMemory(m *module.M) val.Operand {
 	mov.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryLimit)
 	sub.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryBase)
 	shrImm.op(&m.Text, abi.I64, RegResult, wasm.PageBits)
 
-	return values.TempRegOperand(abi.I32, RegResult, true)
+	return val.TempRegOperand(abi.I32, RegResult, true)
 }
 
-func (ISA) OpGrowMemory(f *gen.Func, x values.Operand) values.Operand {
+func (ISA) OpGrowMemory(f *gen.Func, x val.Operand) val.Operand {
 	var out link.L
 	var fail link.L
 
@@ -240,5 +240,5 @@ func (ISA) OpGrowMemory(f *gen.Func, x values.Operand) values.Operand {
 	out.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &out)
 
-	return values.TempRegOperand(abi.I32, targetReg, true)
+	return val.TempRegOperand(abi.I32, targetReg, true)
 }

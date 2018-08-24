@@ -9,12 +9,12 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
-	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -130,28 +130,28 @@ var conditionInsns = []struct {
 	setcc insnRexOM
 	cmov  insnPrefix
 }{
-	values.Eq:            {je, sete, cmove},
-	values.Ne:            {jne, setne, cmovne},
-	values.GeS:           {jge, setge, cmovge},
-	values.GtS:           {jg, setg, cmovg},
-	values.GeU:           {jae, setae, cmovae},
-	values.GtU:           {ja, seta, cmova},
-	values.LeS:           {jle, setle, cmovle},
-	values.LtS:           {jl, setl, cmovl},
-	values.LeU:           {jbe, setbe, cmovbe},
-	values.LtU:           {jb, setb, cmovb},
-	values.OrderedAndEq:  {je, sete, cmove},
-	values.OrderedAndNe:  {jne, setne, cmovne},
-	values.OrderedAndGe:  {jae, setae, cmovae},
-	values.OrderedAndGt:  {ja, seta, cmova},
-	values.OrderedAndLe:  {jbe, setbe, cmovbe},
-	values.OrderedAndLt:  {jb, setb, cmovb},
-	values.UnorderedOrEq: {je, sete, cmove},
-	values.UnorderedOrNe: {jne, setne, cmovne},
-	values.UnorderedOrGe: {jae, setae, cmovae},
-	values.UnorderedOrGt: {ja, seta, cmova},
-	values.UnorderedOrLe: {jbe, setbe, cmovbe},
-	values.UnorderedOrLt: {jb, setb, cmovb},
+	val.Eq:            {je, sete, cmove},
+	val.Ne:            {jne, setne, cmovne},
+	val.GeS:           {jge, setge, cmovge},
+	val.GtS:           {jg, setg, cmovg},
+	val.GeU:           {jae, setae, cmovae},
+	val.GtU:           {ja, seta, cmova},
+	val.LeS:           {jle, setle, cmovle},
+	val.LtS:           {jl, setl, cmovl},
+	val.LeU:           {jbe, setbe, cmovbe},
+	val.LtU:           {jb, setb, cmovb},
+	val.OrderedAndEq:  {je, sete, cmove},
+	val.OrderedAndNe:  {jne, setne, cmovne},
+	val.OrderedAndGe:  {jae, setae, cmovae},
+	val.OrderedAndGt:  {ja, seta, cmova},
+	val.OrderedAndLe:  {jbe, setbe, cmovbe},
+	val.OrderedAndLt:  {jb, setb, cmovb},
+	val.UnorderedOrEq: {je, sete, cmove},
+	val.UnorderedOrNe: {jne, setne, cmovne},
+	val.UnorderedOrGe: {jae, setae, cmovae},
+	val.UnorderedOrGt: {ja, seta, cmova},
+	val.UnorderedOrLe: {jbe, setbe, cmovbe},
+	val.UnorderedOrLt: {jb, setb, cmovb},
 }
 
 var nopSequences = [][]byte{
@@ -464,12 +464,12 @@ func (ISA) OpLoadROIntIndex32ScaleDisp(f *gen.Func, t abi.Type, reg regs.R, regZ
 }
 
 // OpSetGlobal must not update CPU's condition flags.
-func (ISA) OpSetGlobal(f *gen.Func, offset int32, x values.Operand) {
+func (ISA) OpSetGlobal(f *gen.Func, offset int32, x val.Operand) {
 	var reg regs.R
 
 	if x.Storage.IsReg() {
 		reg = x.Reg()
-		if x.Storage == values.TempReg {
+		if x.Storage == val.TempReg {
 			f.Regs.Free(x.Type, reg)
 		}
 	} else {
@@ -485,18 +485,18 @@ func (ISA) OpSetGlobal(f *gen.Func, offset int32, x values.Operand) {
 }
 
 // OpMove must not update CPU's condition flags if preserveFlags is set.
-func (ISA) OpMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
+func (ISA) OpMove(f *gen.Func, targetReg regs.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
 	return opMove(f, targetReg, x, preserveFlags)
 }
 
 // opMove has same restrictions as OpMove.  Additional ISA restriction: opMove
 // must not blindly rely on RegScratch or RegResult in this function because we
 // may be moving to one of them.
-func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool) (zeroExt bool) {
+func opMove(f *gen.Func, targetReg regs.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
 	switch x.Type.Category() {
 	case abi.Int:
 		switch x.Storage {
-		case values.Imm:
+		case val.Imm:
 			if value := x.ImmValue(); value == 0 && !preserveFlags {
 				xor.opFromReg(&f.Text, abi.I32, targetReg, targetReg)
 			} else {
@@ -504,17 +504,17 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 			}
 			zeroExt = true
 
-		case values.VarMem:
+		case val.VarMem:
 			mov.opFromStack(&f.Text, x.Type, targetReg, x.VarMemOffset())
 			zeroExt = true
 
-		case values.VarReg:
+		case val.VarReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
 				mov.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
 				zeroExt = true
 			}
 
-		case values.TempReg:
+		case val.TempReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
 				mov.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
 				zeroExt = true
@@ -524,10 +524,10 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 				panic("moving temporary integer register to itself")
 			}
 
-		case values.Stack:
+		case val.Stack:
 			pop.op(&f.Text, targetReg)
 
-		case values.ConditionFlags:
+		case val.ConditionFlags:
 			if x.Type != abi.I32 {
 				panic(x)
 			}
@@ -538,13 +538,13 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 			setcc := conditionInsns[cond].setcc
 
 			switch {
-			case cond >= values.MinUnorderedOrCondition:
+			case cond >= val.MinUnorderedOrCondition:
 				movImm.opImm(&f.Text, x.Type, targetReg, 1) // true
 				jp.rel8.opStub(&f.Text)                     // if unordered, else
 				end.AddSite(f.Text.Addr)                    //
 				setcc.opReg(&f.Text, targetReg)             // cond
 
-			case cond >= values.MinOrderedAndCondition:
+			case cond >= val.MinOrderedAndCondition:
 				movImm.opImm(&f.Text, x.Type, targetReg, 0) // false
 				jp.rel8.opStub(&f.Text)                     // if unordered, else
 				end.AddSite(f.Text.Addr)                    //
@@ -566,7 +566,7 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 
 	case abi.Float:
 		switch x.Storage {
-		case values.Imm:
+		case val.Imm:
 			if value := x.ImmValue(); value == 0 {
 				pxorSSE.opFromReg(&f.Text, x.Type, targetReg, targetReg)
 			} else {
@@ -574,22 +574,22 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 				movSSE.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
 			}
 
-		case values.VarMem:
+		case val.VarMem:
 			movsSSE.opFromStack(&f.Text, x.Type, targetReg, x.VarMemOffset())
 
-		case values.VarReg:
+		case val.VarReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
 				movapSSE.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
 			}
 
-		case values.TempReg:
+		case val.TempReg:
 			if sourceReg := x.Reg(); sourceReg != targetReg {
 				movapSSE.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
 			} else if targetReg != RegResult {
 				panic("moving temporary float register to itself")
 			}
 
-		case values.Stack:
+		case val.Stack:
 			popFloatOp(f.M, x.Type, targetReg)
 
 		default:
@@ -607,14 +607,14 @@ func opMove(f *gen.Func, targetReg regs.R, x values.Operand, preserveFlags bool)
 
 // OpPush must not allocate registers, and must not update CPU's condition
 // flags unless the operand is the condition flags.
-func (ISA) OpPush(f *gen.Func, x values.Operand) {
+func (ISA) OpPush(f *gen.Func, x val.Operand) {
 	var reg regs.R
 
 	switch {
 	case x.Storage.IsReg():
 		reg = x.Reg()
 
-	case x.Storage == values.Imm:
+	case x.Storage == val.Imm:
 		value := x.ImmValue()
 
 		switch {
@@ -645,13 +645,13 @@ func (ISA) OpPush(f *gen.Func, x values.Operand) {
 		panic(x)
 	}
 
-	if x.Storage == values.TempReg {
+	if x.Storage == val.TempReg {
 		f.Regs.Free(x.Type, reg)
 	}
 }
 
 // OpStoreStack must not allocate registers.
-func (ISA) OpStoreStack(f *gen.Func, offset int32, x values.Operand) {
+func (ISA) OpStoreStack(f *gen.Func, offset int32, x val.Operand) {
 	var reg regs.R
 
 	if x.Storage.IsReg() {
@@ -663,15 +663,15 @@ func (ISA) OpStoreStack(f *gen.Func, offset int32, x values.Operand) {
 
 	opStoreStackReg(f.M, x.Type, offset, reg)
 
-	if x.Storage == values.TempReg {
+	if x.Storage == val.TempReg {
 		f.Regs.Free(x.Type, reg)
 	}
 }
 
-func (ISA) OpBranchIf(f *gen.Func, x values.Operand, yes bool, addr int32) (sites []int32) {
-	var cond values.Condition
+func (ISA) OpBranchIf(f *gen.Func, x val.Operand, yes bool, addr int32) (sites []int32) {
+	var cond val.Condition
 
-	if x.Storage == values.ConditionFlags {
+	if x.Storage == val.ConditionFlags {
 		cond = x.Condition()
 	} else {
 		reg, _, own := opBorrowMaybeScratchReg(f, x, false)
@@ -680,21 +680,21 @@ func (ISA) OpBranchIf(f *gen.Func, x values.Operand, yes bool, addr int32) (site
 		}
 
 		test.opFromReg(&f.Text, abi.I32, reg, reg)
-		cond = values.Ne
+		cond = val.Ne
 	}
 
 	if !yes {
-		cond = values.InvertedConditions[cond]
+		cond = val.InvertedConditions[cond]
 	}
 
 	var end link.L
 
 	switch {
-	case cond >= values.MinUnorderedOrCondition:
+	case cond >= val.MinUnorderedOrCondition:
 		jp.op(&f.Text, addr)
 		sites = append(sites, f.Text.Addr)
 
-	case cond >= values.MinOrderedAndCondition:
+	case cond >= val.MinOrderedAndCondition:
 		jp.rel8.opStub(&f.Text)
 		end.AddSite(f.Text.Addr)
 	}
@@ -737,7 +737,7 @@ func (ISA) OpTrapIfStackExhausted(f *gen.Func) (stackCheckAddr int32) {
 
 // opBorrowMaybeScratchReg returns either the register of the given operand, or
 // the reserved scratch register with the value of the operand.
-func opBorrowMaybeScratchReg(f *gen.Func, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
+func opBorrowMaybeScratchReg(f *gen.Func, x val.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
 	if x.Storage.IsReg() {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
@@ -745,17 +745,17 @@ func opBorrowMaybeScratchReg(f *gen.Func, x values.Operand, preserveFlags bool) 
 		reg = RegScratch
 		zeroExt = opMove(f, reg, x, preserveFlags)
 	}
-	own = (x.Storage == values.TempReg)
+	own = (x.Storage == val.TempReg)
 	return
 }
 
-func opBorrowMaybeScratchRegOperand(f *gen.Func, x values.Operand, preserveFlags bool) values.Operand {
+func opBorrowMaybeScratchRegOperand(f *gen.Func, x val.Operand, preserveFlags bool) val.Operand {
 	reg, _, own := opBorrowMaybeScratchReg(f, x, preserveFlags)
-	return values.RegOperand(own, x.Type, reg)
+	return val.RegOperand(own, x.Type, reg)
 }
 
 // OpGetGlobal must not update CPU's condition flags.
-func (ISA) OpGetGlobal(f *gen.Func, t abi.Type, offset int32) values.Operand {
+func (ISA) OpGetGlobal(f *gen.Func, t abi.Type, offset int32) val.Operand {
 	reg, ok := f.Regs.Alloc(t)
 	if !ok {
 		reg = RegResult
@@ -767,33 +767,33 @@ func (ISA) OpGetGlobal(f *gen.Func, t abi.Type, offset int32) values.Operand {
 		movSSE.opFromIndirect(&f.Text, t, reg, 0, NoIndex, RegMemoryBase, offset)
 	}
 
-	return values.TempRegOperand(t, reg, true)
+	return val.TempRegOperand(t, reg, true)
 }
 
-func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operand {
+func (ISA) OpSelect(f *gen.Func, a, b, condOperand val.Operand) val.Operand {
 	defer f.Consumed(condOperand)
 
-	var cond values.Condition
+	var cond val.Condition
 
 	switch condOperand.Storage {
-	case values.VarMem:
+	case val.VarMem:
 		cmp.opImmToStack(&f.Text, abi.I32, condOperand.VarMemOffset(), 0)
-		cond = values.Ne
+		cond = val.Ne
 
-	case values.VarReg, values.TempReg:
+	case val.VarReg, val.TempReg:
 		reg := condOperand.Reg()
 		test.opFromReg(&f.Text, abi.I32, reg, reg)
-		cond = values.Ne
+		cond = val.Ne
 
-	case values.Stack:
+	case val.Stack:
 		add.opImm(&f.Text, abi.I64, RegStackPtr, obj.Word) // do before cmp to avoid overwriting flags
 		cmp.opImmToStack(&f.Text, abi.I32, -obj.Word, 0)
-		cond = values.Ne
+		cond = val.Ne
 
-	case values.ConditionFlags:
+	case val.ConditionFlags:
 		cond = condOperand.Condition()
 
-	case values.Imm:
+	case val.Imm:
 		if condOperand.ImmValue() != 0 {
 			f.Consumed(b)
 			return a
@@ -814,7 +814,7 @@ func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operan
 		cmov := conditionInsns[cond].cmov
 
 		switch a.Storage {
-		case values.VarMem:
+		case val.VarMem:
 			cmov.opFromStack(&f.Text, t, targetReg, a.VarMemOffset())
 
 		default:
@@ -830,18 +830,18 @@ func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operan
 		var moveIt link.L
 		var end link.L
 
-		cond = values.InvertedConditions[cond]
+		cond = val.InvertedConditions[cond]
 		notCondJump := conditionInsns[cond].jcc
 
 		switch {
-		case cond >= values.MinUnorderedOrCondition:
+		case cond >= val.MinUnorderedOrCondition:
 			jp.rel8.opStub(&f.Text) // move it if unordered
 			moveIt.AddSite(f.Text.Addr)
 
 			notCondJump.rel8.opStub(&f.Text) // break if not cond
 			end.AddSite(f.Text.Addr)
 
-		case cond >= values.MinOrderedAndCondition:
+		case cond >= val.MinOrderedAndCondition:
 			jp.rel8.opStub(&f.Text) // break if unordered
 			end.AddSite(f.Text.Addr)
 
@@ -866,13 +866,13 @@ func (ISA) OpSelect(f *gen.Func, a, b, condOperand values.Operand) values.Operan
 	}
 
 	// cmov zero-extends the target unconditionally
-	return values.TempRegOperand(t, targetReg, true)
+	return val.TempRegOperand(t, targetReg, true)
 }
 
 // opBorrowMaybeResultReg returns either the register of the given operand, or
 // the reserved result register with the value of the operand.
-func opBorrowMaybeResultReg(f *gen.Func, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
-	if x.Storage == values.VarReg {
+func opBorrowMaybeResultReg(f *gen.Func, x val.Operand, preserveFlags bool) (reg regs.R, zeroExt, own bool) {
+	if x.Storage == val.VarReg {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
 	} else {
@@ -885,8 +885,8 @@ func opBorrowMaybeResultReg(f *gen.Func, x values.Operand, preserveFlags bool) (
 // opMaybeResultReg returns either the register of the given operand, or the
 // reserved result register with the value of the operand.  The caller has
 // exclusive ownership of the register.
-func opMaybeResultReg(f *gen.Func, x values.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
-	if x.Storage == values.TempReg {
+func opMaybeResultReg(f *gen.Func, x val.Operand, preserveFlags bool) (reg regs.R, zeroExt bool) {
+	if x.Storage == val.TempReg {
 		reg = x.Reg()
 		zeroExt = x.RegZeroExt()
 	} else {
@@ -897,7 +897,7 @@ func opMaybeResultReg(f *gen.Func, x values.Operand, preserveFlags bool) (reg re
 			reg = RegResult
 		}
 
-		if x.Storage != values.Nowhere {
+		if x.Storage != val.Nowhere {
 			opMove(f, reg, x, preserveFlags)
 			zeroExt = true
 		}

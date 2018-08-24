@@ -9,12 +9,12 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/regalloc"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regalloc"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/values"
 )
 
 func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
@@ -26,7 +26,7 @@ func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	sigIndex := f.FuncSigs[funcIndex]
 	sig := f.Sigs[sigIndex]
 
-	numStackParams := setupCallOperands(f, op, sig, values.Operand{})
+	numStackParams := setupCallOperands(f, op, sig, val.Operand{})
 
 	opCall(f, &f.FuncLinks[funcIndex].L)
 	opBackoffStackPtr(f, numStackParams*obj.Word)
@@ -62,7 +62,7 @@ func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 	return
 }
 
-func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Operand) (numStackParams int32) {
+func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand) (numStackParams int32) {
 	opStackCheck(f)
 
 	args := popOperands(f, len(sig.Args))
@@ -84,12 +84,12 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 		var ok bool
 
 		switch value.Storage {
-		case values.TempReg:
+		case val.TempReg:
 			reg = value.Reg()
 			ok = true
 
-		case values.VarReference:
-			if x := f.Vars[value.VarIndex()].Cache; x.Storage == values.VarReg {
+		case val.VarReference:
+			if x := f.Vars[value.VarIndex()].Cache; x.Storage == val.VarReg {
 				reg = x.Reg()
 				ok = true
 				args[i] = x // help the next args loop
@@ -108,7 +108,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 			debugf("indirect call index: %s <-> %s", regs.Result, indirect)
 			isa.OpSwap(f.M, abi.Int, regs.Result, indirect.Reg())
 
-			args[i] = values.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
+			args[i] = val.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
 			regArgs.Clear(abi.Int, regs.Result)
 			regArgs.Set(abi.Int, indirect.Reg(), i)
 		} else {
@@ -123,7 +123,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 	var numMissingStackArgs int32
 
 	for _, x := range args[:numStackParams] {
-		if x.Storage != values.Stack {
+		if x.Storage != val.Stack {
 			numMissingStackArgs++
 		}
 	}
@@ -136,7 +136,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 
 		// move the register args forward which are currently on stack
 		for i := int32(len(args)) - 1; i >= numStackParams; i-- {
-			if args[i].Storage == values.Stack {
+			if args[i].Storage == val.Stack {
 				debugf("call param #%d: stack (temporary) <- %s", i, args[i])
 				isa.OpCopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
 				sourceIndex++
@@ -150,7 +150,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 			x := args[i]
 
 			switch x.Storage {
-			case values.Stack:
+			case val.Stack:
 				debugf("call param #%d: stack <- %s", i, x)
 				isa.OpCopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
 				sourceIndex++
@@ -167,7 +167,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 
 	// uniquify register operands
 	for i, value := range args {
-		if value.Storage == values.VarReg {
+		if value.Storage == val.VarReg {
 			cat := value.Type.Category()
 
 			if regArgs.Get(cat, value.Reg()) != i {
@@ -179,7 +179,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 				debugf("call param #%d: %s %s <- %s", i, cat, reg, value.Reg())
 				isa.OpMoveReg(f.M, value.Type, reg, value.Reg())
 
-				args[i] = values.RegOperand(false, value.Type, reg)
+				args[i] = val.RegOperand(false, value.Type, reg)
 				regArgs.Set(cat, reg, i)
 			}
 		}
@@ -211,7 +211,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 				}
 			}
 
-		case value.Storage == values.ConditionFlags:
+		case value.Storage == val.ConditionFlags:
 			preserveFlags = true
 		}
 	}
@@ -230,7 +230,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect values.Oper
 	}
 
 	for i := range f.Vars {
-		if v := &f.Vars[i]; v.Cache.Storage == values.VarReg {
+		if v := &f.Vars[i]; v.Cache.Storage == val.VarReg {
 			debugf("forget register variable #%d", i)
 			// reg was already stored and freed
 			v.ResetCache()

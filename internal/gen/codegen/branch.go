@@ -10,12 +10,12 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
-	"github.com/tsavola/wag/internal/values"
 )
 
 func pushBranchTarget(f *gen.Func, valueType abi.Type, funcEnd bool) {
@@ -76,7 +76,7 @@ func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 
 	deadend = genOps(f, load)
 
-	var result values.Operand
+	var result val.Operand
 
 	if deadend {
 		for len(f.Operands) > f.MinBlockOperand {
@@ -100,12 +100,12 @@ func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 	f.MinBlockOperand = savedMinBlockOperand
 
 	if end := popBranchTarget(f); end.Live() {
-		if result.Storage != values.Nowhere {
+		if result.Storage != val.Nowhere {
 			opMove(f, regs.Result, result, false)
 		}
 
 		if t != abi.Void {
-			result = values.TempRegOperand(t, regs.Result, false)
+			result = val.TempRegOperand(t, regs.Result, false)
 		}
 
 		opLabel(f, end)
@@ -113,7 +113,7 @@ func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 		deadend = false
 	}
 
-	if result.Storage != values.Nowhere {
+	if result.Storage != val.Nowhere {
 		pushOperand(f, result)
 	}
 
@@ -156,7 +156,7 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 		panic(fmt.Errorf("%s: condition operand has wrong type: %s", op, cond.Type))
 	}
 
-	var value values.Operand
+	var value val.Operand
 
 	if target.ValueType != abi.Void {
 		value = popOperand(f)
@@ -170,10 +170,10 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opStoreVars(f, false)
 
 	if value.Type != abi.Void {
-		if cond.Storage == values.TempReg && cond.Reg() == regs.Result {
+		if cond.Storage == val.TempReg && cond.Reg() == regs.Result {
 			reg := opAllocReg(f, abi.I32)
 			zeroExt := opMove(f, reg, cond, true)
-			cond = values.TempRegOperand(cond.Type, reg, zeroExt)
+			cond = val.TempRegOperand(cond.Type, reg, zeroExt)
 		}
 
 		opMove(f, regs.Result, value, true)
@@ -223,7 +223,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 		}
 	}
 
-	var value values.Operand
+	var value val.Operand
 
 	if valueType != abi.Void {
 		value = popOperand(f)
@@ -264,10 +264,10 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	if value.Type != abi.Void {
-		if index.Storage == values.TempReg && index.Reg() == regs.Result {
+		if index.Storage == val.TempReg && index.Reg() == regs.Result {
 			reg := opAllocReg(f, abi.I32)
 			zeroExt := opMove(f, reg, index, true)
-			index = values.TempRegOperand(index.Type, reg, zeroExt)
+			index = val.TempRegOperand(index.Type, reg, zeroExt)
 		}
 
 		opMove(f, regs.Result, value, true)
@@ -453,7 +453,7 @@ func opBranch(f *gen.Func, l *link.L) {
 	}
 }
 
-func opBranchIf(f *gen.Func, x values.Operand, yes bool, l *link.L) {
+func opBranchIf(f *gen.Func, x val.Operand, yes bool, l *link.L) {
 	x = effectiveOperand(f, x)
 	retAddrs := isa.OpBranchIf(f, x, yes, l.Addr)
 	if l.Addr == 0 {

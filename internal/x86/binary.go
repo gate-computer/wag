@@ -8,14 +8,14 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
-	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
 
-func (ISA) BinaryOp(f *gen.Func, props uint16, a, b values.Operand) values.Operand {
+func (ISA) BinaryOp(f *gen.Func, props uint16, a, b val.Operand) val.Operand {
 	if (props & prop.BinaryFloat) == 0 {
 		switch {
 		case (props & prop.BinaryCompare) != 0:
@@ -55,13 +55,13 @@ var commonBinaryIntInsns = []binaryInsn{
 	prop.IndexIntXor: xor,
 }
 
-func commonBinaryIntOp(f *gen.Func, index uint8, a, b values.Operand) (result values.Operand) {
-	if index == prop.IndexIntSub && a.Storage == values.Imm && a.ImmValue() == 0 {
+func commonBinaryIntOp(f *gen.Func, index uint8, a, b val.Operand) (result val.Operand) {
+	if index == prop.IndexIntSub && a.Storage == val.Imm && a.ImmValue() == 0 {
 		return inplaceIntOp(f, neg, b)
 	}
 
 	switch b.Storage {
-	case values.Imm:
+	case val.Imm:
 		switch {
 		case b.ImmValue() == 1:
 			switch index {
@@ -76,28 +76,28 @@ func commonBinaryIntOp(f *gen.Func, index uint8, a, b values.Operand) (result va
 			b = opBorrowMaybeScratchRegOperand(f, b, true)
 		}
 
-	case values.VarReference, values.Stack, values.ConditionFlags:
+	case val.VarReference, val.Stack, val.ConditionFlags:
 		b = opBorrowMaybeScratchRegOperand(f, b, true)
 	}
 
 	insn := commonBinaryIntInsns[index]
 
 	targetReg, _ := opMaybeResultReg(f, a, false)
-	result = values.TempRegOperand(a.Type, targetReg, true)
+	result = val.TempRegOperand(a.Type, targetReg, true)
 
 	switch {
 	case b.Storage.IsReg():
 		insn.opFromReg(&f.Text, a.Type, targetReg, b.Reg())
-		if b.Storage == values.TempReg {
+		if b.Storage == val.TempReg {
 			f.Regs.Free(b.Type, b.Reg())
 		}
 		return
 
-	case b.Storage == values.VarMem:
+	case b.Storage == val.VarMem:
 		insn.opFromStack(&f.Text, a.Type, targetReg, b.VarMemOffset())
 		return
 
-	case b.Storage == values.Imm: // large values moved to registers earlier
+	case b.Storage == val.Imm: // large values moved to registers earlier
 		insn.opImm(&f.Text, a.Type, targetReg, int32(b.ImmValue()))
 		return
 
@@ -106,27 +106,27 @@ func commonBinaryIntOp(f *gen.Func, index uint8, a, b values.Operand) (result va
 	}
 }
 
-func binaryIntCompareOp(f *gen.Func, cond uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntCompareOp(f *gen.Func, cond uint8, a, b val.Operand) (result val.Operand) {
 	targetReg, _, own := opBorrowMaybeResultReg(f, a, false)
 	if own {
 		defer f.Regs.Free(a.Type, targetReg)
 	}
 
-	result = values.ConditionFlagsOperand(values.Condition(cond))
+	result = val.ConditionFlagsOperand(val.Condition(cond))
 
 	switch {
 	case b.Storage.IsReg():
 		cmp.opFromReg(&f.Text, a.Type, targetReg, b.Reg())
-		if b.Storage == values.TempReg {
+		if b.Storage == val.TempReg {
 			f.Regs.Free(b.Type, b.Reg())
 		}
 		return
 
-	case b.Storage == values.VarMem:
+	case b.Storage == val.VarMem:
 		cmp.opFromStack(&f.Text, a.Type, targetReg, b.VarMemOffset())
 		return
 
-	case b.Storage == values.Imm && b.ImmValue() >= -0x80000000 && b.ImmValue() < 0x80000000:
+	case b.Storage == val.Imm && b.ImmValue() >= -0x80000000 && b.ImmValue() < 0x80000000:
 		cmp.opImm(&f.Text, a.Type, targetReg, int32(b.ImmValue()))
 		return
 
@@ -148,18 +148,18 @@ var binaryDivmulInsns = []struct {
 	prop.IndexDivmulMul:  {mul, shlImm},
 }
 
-func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Operand {
+func binaryIntDivmulOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 	insn := binaryDivmulInsns[index]
 	t := a.Type
 
-	if b.Storage == values.Imm {
+	if b.Storage == val.Imm {
 		value := b.ImmValue()
 
 		switch {
 		case insn.shiftImm.defined() && value > 0 && isPowerOfTwo(uint64(value)):
 			reg, _ := opMaybeResultReg(f, a, false)
 			insn.shiftImm.op(&f.Text, t, reg, log2(uint64(value)))
-			return values.TempRegOperand(t, reg, true)
+			return val.TempRegOperand(t, reg, true)
 		}
 	}
 
@@ -186,10 +186,10 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 			}
 
 			mov.opFromReg(&f.Text, t, newReg, RegResult)
-			b = values.RegOperand(true, t, newReg)
+			b = val.RegOperand(true, t, newReg)
 		}
 	} else {
-		if division && b.Storage == values.Imm {
+		if division && b.Storage == val.Imm {
 			value := b.ImmValue()
 			if value != 0 {
 				checkZero = false
@@ -209,7 +209,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 		}
 
 		opMove(f, reg, b, true)
-		b = values.RegOperand(true, t, reg)
+		b = val.RegOperand(true, t, reg)
 	}
 
 	opMove(f, RegResult, a, false)
@@ -223,7 +223,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 			opCheckDivideByZero(f, t, b.Reg())
 		}
 
-		if a.Storage == values.Imm {
+		if a.Storage == val.Imm {
 			value := a.ImmValue()
 			if t.Size() == abi.Size32 {
 				if value != -0x80000000 {
@@ -283,7 +283,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 	}
 
 	insn.opReg(&f.Text, t, b.Reg())
-	if b.Storage == values.TempReg {
+	if b.Storage == val.TempReg {
 		f.Regs.Free(b.Type, b.Reg())
 	}
 
@@ -294,7 +294,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b values.Operand) values.Ope
 		mov.opFromReg(&f.Text, t, RegResult, RegScratch)
 	}
 
-	return values.TempRegOperand(t, RegResult, true)
+	return val.TempRegOperand(t, RegResult, true)
 }
 
 func opCheckDivideByZero(f *gen.Func, t abi.Type, reg regs.R) {
@@ -321,22 +321,22 @@ var binaryShiftInsns = []struct {
 	prop.IndexShiftShrU: {shr, shrImm},
 }
 
-func binaryIntShiftOp(f *gen.Func, index uint8, a, b values.Operand) (result values.Operand) {
+func binaryIntShiftOp(f *gen.Func, index uint8, a, b val.Operand) (result val.Operand) {
 	insn := binaryShiftInsns[index]
 
 	switch {
-	case b.Storage == values.Imm:
+	case b.Storage == val.Imm:
 		reg, _ := opMaybeResultReg(f, a, true)
 		insn.imm.op(&f.Text, b.Type, reg, uint8(b.ImmValue()))
-		result = values.TempRegOperand(a.Type, reg, true)
+		result = val.TempRegOperand(a.Type, reg, true)
 
 	case b.Storage.IsReg() && b.Reg() == RegShiftCount:
 		reg, _ := opMaybeResultReg(f, a, false)
 		insn.reg.opReg(&f.Text, a.Type, reg)
-		if b.Storage == values.TempReg {
+		if b.Storage == val.TempReg {
 			f.Regs.Free(abi.I32, RegShiftCount)
 		}
-		result = values.TempRegOperand(a.Type, reg, true)
+		result = val.TempRegOperand(a.Type, reg, true)
 
 	case f.Regs.Allocated(abi.I32, RegShiftCount):
 		reg, _ := opMaybeResultReg(f, a, true)
@@ -362,11 +362,11 @@ func binaryIntShiftOp(f *gen.Func, index uint8, a, b values.Operand) (result val
 }
 
 // subtleShiftOp trashes RegShiftCount.
-func subtleShiftOp(f *gen.Func, insn insnRexM, t abi.Type, reg regs.R, count values.Operand) values.Operand {
+func subtleShiftOp(f *gen.Func, insn insnRexM, t abi.Type, reg regs.R, count val.Operand) val.Operand {
 	count.Type = abi.I32                   // TODO: 8-bit mov
 	opMove(f, RegShiftCount, count, false) //
 	insn.opReg(&f.Text, t, reg)
-	return values.TempRegOperand(t, reg, true)
+	return val.TempRegOperand(t, reg, true)
 }
 
 var commonBinaryFloatInsns = []insnPrefix{
@@ -378,7 +378,7 @@ var commonBinaryFloatInsns = []insnPrefix{
 
 // TODO: support memory source operands
 
-func commonBinaryFloatOp(f *gen.Func, index uint8, a, b values.Operand) values.Operand {
+func commonBinaryFloatOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 	targetReg, _ := opMaybeResultReg(f, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(f, b, false)
@@ -387,7 +387,7 @@ func commonBinaryFloatOp(f *gen.Func, index uint8, a, b values.Operand) values.O
 	}
 
 	commonBinaryFloatInsns[index].opFromReg(&f.Text, a.Type, targetReg, sourceReg)
-	return values.TempRegOperand(a.Type, targetReg, false)
+	return val.TempRegOperand(a.Type, targetReg, false)
 }
 
 var binaryFloatMinmaxInsns = []struct {
@@ -398,7 +398,7 @@ var binaryFloatMinmaxInsns = []struct {
 	prop.IndexMinmaxMax: {maxsSSE, andpSSE},
 }
 
-func binaryFloatMinmaxOp(f *gen.Func, index uint8, a, b values.Operand) values.Operand {
+func binaryFloatMinmaxOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 	targetReg, _ := opMaybeResultReg(f, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(f, b, false)
@@ -425,10 +425,10 @@ func binaryFloatMinmaxOp(f *gen.Func, index uint8, a, b values.Operand) values.O
 	end.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &end)
 
-	return values.TempRegOperand(a.Type, targetReg, false)
+	return val.TempRegOperand(a.Type, targetReg, false)
 }
 
-func binaryFloatCompareOp(f *gen.Func, cond uint8, a, b values.Operand) values.Operand {
+func binaryFloatCompareOp(f *gen.Func, cond uint8, a, b val.Operand) val.Operand {
 	aReg, _, own := opBorrowMaybeResultReg(f, a, true)
 	if own {
 		defer f.Regs.Free(a.Type, aReg)
@@ -440,10 +440,10 @@ func binaryFloatCompareOp(f *gen.Func, cond uint8, a, b values.Operand) values.O
 	}
 
 	ucomisSSE.opFromReg(&f.Text, a.Type, aReg, bReg)
-	return values.ConditionFlagsOperand(values.Condition(cond))
+	return val.ConditionFlagsOperand(val.Condition(cond))
 }
 
-func binaryFloatCopysignOp(f *gen.Func, a, b values.Operand) values.Operand {
+func binaryFloatCopysignOp(f *gen.Func, a, b val.Operand) val.Operand {
 	targetReg, _ := opMaybeResultReg(f, a, false)
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(f, b, false)
@@ -468,5 +468,5 @@ func binaryFloatCopysignOp(f *gen.Func, a, b values.Operand) values.Operand {
 	done.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &done)
 
-	return values.TempRegOperand(a.Type, targetReg, false)
+	return val.TempRegOperand(a.Type, targetReg, false)
 }

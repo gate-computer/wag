@@ -8,13 +8,13 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
-	"github.com/tsavola/wag/internal/values"
 )
 
-func (ISA) UnaryOp(f *gen.Func, props uint16, x values.Operand) values.Operand {
+func (ISA) UnaryOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
 	if (props & prop.UnaryFloat) == 0 {
 		return unaryIntOp(f, props, x)
 	} else {
@@ -22,7 +22,7 @@ func (ISA) UnaryOp(f *gen.Func, props uint16, x values.Operand) values.Operand {
 	}
 }
 
-func unaryIntOp(f *gen.Func, props uint16, x values.Operand) values.Operand {
+func unaryIntOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
 	switch index := uint8(props); index {
 	case prop.IndexIntEqz:
 		return opIntEqz(f, x)
@@ -32,17 +32,17 @@ func unaryIntOp(f *gen.Func, props uint16, x values.Operand) values.Operand {
 	}
 }
 
-func opIntEqz(f *gen.Func, x values.Operand) values.Operand {
+func opIntEqz(f *gen.Func, x val.Operand) val.Operand {
 	reg, _, own := opBorrowMaybeScratchReg(f, x, false)
 	if own {
 		defer f.Regs.Free(x.Type, reg)
 	}
 
 	test.opFromReg(&f.Text, x.Type, reg, reg)
-	return values.ConditionFlagsOperand(values.Eq)
+	return val.ConditionFlagsOperand(val.Eq)
 }
 
-func commonUnaryIntOp(f *gen.Func, index uint8, x values.Operand) (result values.Operand) {
+func commonUnaryIntOp(f *gen.Func, index uint8, x val.Operand) (result val.Operand) {
 	var ok bool
 	var targetReg regs.R
 
@@ -56,7 +56,7 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x values.Operand) (result values
 		}
 	}
 
-	result = values.TempRegOperand(x.Type, targetReg, true)
+	result = val.TempRegOperand(x.Type, targetReg, true)
 
 	switch index {
 	case prop.IndexIntClz:
@@ -81,11 +81,11 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x values.Operand) (result values
 	panic("unknown unary int op")
 }
 
-func unaryFloatOp(f *gen.Func, props uint16, x values.Operand) (result values.Operand) {
+func unaryFloatOp(f *gen.Func, props uint16, x val.Operand) (result val.Operand) {
 	// TODO: support memory source operands
 
 	reg, _ := opMaybeResultReg(f, x, false)
-	result = values.TempRegOperand(x.Type, reg, false)
+	result = val.TempRegOperand(x.Type, reg, false)
 
 	if (props & prop.UnaryRound) != 0 {
 		roundMode := uint8(props)

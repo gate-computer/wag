@@ -9,9 +9,9 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/regs"
-	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -120,7 +120,7 @@ func genBinaryCommuteOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (dea
 	right := opMaterializeOperand(f, popOperand(f))
 	left := opMaterializeOperand(f, popOperand(f))
 
-	if left.Storage == values.Imm {
+	if left.Storage == val.Imm {
 		left, right = right, left
 	}
 
@@ -128,7 +128,7 @@ func genBinaryCommuteOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (dea
 	return
 }
 
-func binaryOp(f *gen.Func, op Opcode, left, right values.Operand, info opInfo) {
+func binaryOp(f *gen.Func, op Opcode, left, right val.Operand, info opInfo) {
 	if t := info.primaryType(); left.Type != t || right.Type != t {
 		panic(fmt.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}

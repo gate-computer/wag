@@ -6,11 +6,11 @@ package gen
 
 import (
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/internal/gen/regalloc"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regalloc"
-	"github.com/tsavola/wag/internal/values"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -48,7 +48,7 @@ type Func struct {
 	MaxStackOffset int32
 	StackCheckAddr int32
 
-	Operands              []values.Operand
+	Operands              []val.Operand
 	MinBlockOperand       int
 	NumStableOperands     int
 	NumPersistentOperands int
@@ -59,12 +59,12 @@ type Func struct {
 	TrapTrampolines [trap.NumTraps]TrapTrampoline
 }
 
-func (f *Func) Consumed(x values.Operand) {
+func (f *Func) Consumed(x val.Operand) {
 	switch x.Storage {
-	case values.TempReg:
+	case val.TempReg:
 		f.Regs.Free(x.Type, x.Reg())
 
-	case values.Stack:
+	case val.Stack:
 		f.StackOffset -= obj.Word
 	}
 }

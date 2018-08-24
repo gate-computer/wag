@@ -8,7 +8,7 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/values"
+	"github.com/tsavola/wag/internal/gen/val"
 )
 
 type rexPrefix byte
@@ -169,8 +169,8 @@ func log2(value uint64) (count uint8) {
 	}
 }
 
-func inplaceIntOp(f *gen.Func, insn insnRexM, x values.Operand) values.Operand {
+func inplaceIntOp(f *gen.Func, insn insnRexM, x val.Operand) val.Operand {
 	reg, _ := opMaybeResultReg(f, x, false)
 	insn.opReg(&f.Text, x.Type, reg)
-	return values.TempRegOperand(x.Type, reg, true)
+	return val.TempRegOperand(x.Type, reg, true)
 }
