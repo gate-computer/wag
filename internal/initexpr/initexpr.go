@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package datagen
+package initexpr
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	"github.com/tsavola/wag/internal/module"
 )
 
-func ReadInitExpr(m *module.M, load loader.L) (valueBits uint64, t abi.Type) {
+func Read(m *module.M, load loader.L) (valueBits uint64, t abi.Type) {
 	op := codegen.Opcode(load.Byte())
 
 	switch op {
@@ -53,8 +53,8 @@ func ReadInitExpr(m *module.M, load loader.L) (valueBits uint64, t abi.Type) {
 	return
 }
 
-func ReadOffsetInitExpr(m *module.M, load loader.L) uint32 {
-	offset, t := ReadInitExpr(m, load)
+func ReadOffset(m *module.M, load loader.L) uint32 {
+	offset, t := Read(m, load)
 	if t != abi.I32 {
 		panic(fmt.Errorf("offset initializer expression has invalid type: %s", t))
 	}

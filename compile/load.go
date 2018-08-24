@@ -14,9 +14,10 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
+	"github.com/tsavola/wag/internal/datalayout"
 	"github.com/tsavola/wag/internal/errutil"
 	"github.com/tsavola/wag/internal/gen/codegen"
-	"github.com/tsavola/wag/internal/gen/datagen"
+	"github.com/tsavola/wag/internal/initexpr"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
@@ -34,7 +35,7 @@ type Env interface {
 type Reader = reader.R
 
 const (
-	DefaultMemoryAlignment = datagen.DefaultAlignment // see Module.MemoryAlignment
+	DefaultMemoryAlignment = datalayout.DefaultAlignment // see Module.MemoryAlignment
 )
 
 const (
@@ -376,7 +377,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 			t := typeutil.ValueTypeByEncoding(load.Varint7())
 			mutable := load.Varuint1()
-			init, _ := datagen.ReadInitExpr(&m.m, load)
+			init, _ := initexpr.Read(&m.m, load)
 
 			m.m.Globals = append(m.m.Globals, module.Global{
 				Type:    t,
@@ -444,7 +445,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 				panic(fmt.Errorf("unsupported table index: %d", index))
 			}
 
-			offset := datagen.ReadOffsetInitExpr(&m.m, load)
+			offset := initexpr.ReadOffset(&m.m, load)
 
 			numElem := load.Varuint32()
 
@@ -479,8 +480,8 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 	},
 
 	module.SectionData: func(m *Module, load loader.L, env Env) {
-		datagen.GenGlobals(&m.m, m.MemoryAlignment)
-		datagen.GenMemory(&m.m, load)
+		datalayout.CopyGlobals(&m.m, m.MemoryAlignment)
+		datalayout.ReadMemory(&m.m, load)
 	},
 }
 
@@ -537,12 +538,12 @@ func (m *Module) loadDataSection(r Reader, data DataBuffer) {
 	}
 	m.m.Data = data
 
-	datagen.GenGlobals(&m.m, m.MemoryAlignment)
+	datalayout.CopyGlobals(&m.m, m.MemoryAlignment)
 
 	load := loader.L{R: r}
 
 	if readSectionHeader(load, module.SectionData, "not a data section") {
-		datagen.GenMemory(&m.m, load)
+		datalayout.ReadMemory(&m.m, load)
 	}
 }
 
@@ -597,7 +598,7 @@ func (m *Module) Data() (data []byte, memoryOffset int) {
 
 	if len(m.m.Globals) > 0 && m.m.MemoryOffset == 0 {
 		// simple program without data section, but has globals
-		datagen.GenGlobals(&m.m, m.MemoryAlignment)
+		datalayout.CopyGlobals(&m.m, m.MemoryAlignment)
 	}
 
 	data = m.m.Data.Bytes()

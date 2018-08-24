@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package datagen
+package datalayout
 
 import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/tsavola/wag/internal/initexpr"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
@@ -17,7 +18,7 @@ const (
 	DefaultAlignment = 16 // for x86-64 SSE
 )
 
-func GenGlobals(m *module.M, align int) {
+func CopyGlobals(m *module.M, align int) {
 	if align == 0 {
 		align = DefaultAlignment
 	}
@@ -40,7 +41,7 @@ func GenGlobals(m *module.M, align int) {
 	m.MemoryOffset = len(buf)
 }
 
-func GenMemory(m *module.M, load loader.L) {
+func ReadMemory(m *module.M, load loader.L) {
 	buf := m.Data.Bytes()
 
 	for i := range load.Count() {
@@ -48,7 +49,7 @@ func GenMemory(m *module.M, load loader.L) {
 			panic(fmt.Errorf("unsupported memory index: %d", index))
 		}
 
-		offset := ReadOffsetInitExpr(m, load)
+		offset := initexpr.ReadOffset(m, load)
 
 		size := load.Varuint32()
 
