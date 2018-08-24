@@ -101,7 +101,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 		}
 
 		if ok {
-			cat := gen.TypeRegCategory(value.Type)
+			cat := value.Type.Category()
 
 			f.Regs.SetAllocated(cat, reg)
 			regArgs.Set(cat, reg, i)
@@ -110,13 +110,13 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 
 	// relocate indirect index to result reg if it already occupies some reg
 	if indirect.Storage.IsReg() && indirect.Reg() != regs.Result {
-		if i := regArgs.Get(gen.RegCategoryInt, regs.Result); i >= 0 {
+		if i := regArgs.Get(abi.Int, regs.Result); i >= 0 {
 			debugf("indirect call index: %s <-> %s", regs.Result, indirect)
-			isa.OpSwap(f.Module, gen.RegCategoryInt, regs.Result, indirect.Reg())
+			isa.OpSwap(f.Module, abi.Int, regs.Result, indirect.Reg())
 
 			args[i] = values.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
-			regArgs.Clear(gen.RegCategoryInt, regs.Result)
-			regArgs.Set(gen.RegCategoryInt, indirect.Reg(), i)
+			regArgs.Clear(abi.Int, regs.Result)
+			regArgs.Set(abi.Int, indirect.Reg(), i)
 		} else {
 			debugf("indirect call index: %s <- %s", regs.Result, indirect)
 			isa.OpMoveReg(f.Module, abi.I32, regs.Result, indirect.Reg())
@@ -174,7 +174,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 	// uniquify register operands
 	for i, value := range args {
 		if value.Storage == values.VarReg {
-			cat := gen.TypeRegCategory(value.Type)
+			cat := value.Type.Category()
 
 			if regArgs.Get(cat, value.Reg()) != i {
 				reg, ok := tryAllocReg(f, value.Type)
@@ -197,7 +197,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 
 	for i := numStackParams; i < int32(len(args)); i++ {
 		value := args[i]
-		cat := gen.TypeRegCategory(value.Type)
+		cat := value.Type.Category()
 		posReg := paramRegs.IterForward(cat)
 
 		switch {
@@ -226,7 +226,7 @@ func setupCallOperands(f *function, op Opcode, sig abi.Sig, indirect values.Oper
 
 	for i := int32(len(args)) - 1; i >= numStackParams; i-- {
 		value := args[i]
-		cat := gen.TypeRegCategory(value.Type)
+		cat := value.Type.Category()
 		posReg := paramRegs.IterBackward(cat)
 
 		if !value.Storage.IsReg() {

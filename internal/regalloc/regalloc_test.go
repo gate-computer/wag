@@ -7,7 +7,7 @@ package regalloc
 import (
 	"testing"
 
-	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/regs"
 )
 
@@ -29,30 +29,30 @@ func TestAlloc(t *testing.T) {
 		var a Allocator
 		a.Init(avail)
 
-		r1, ok := a.Alloc(gen.RegCategoryInt)
+		r1, ok := a.Alloc(abi.Int)
 		if !ok {
 			t.Fatal("1")
 		}
-		if !a.Allocated(gen.RegCategoryInt, r1) {
+		if !a.Allocated(abi.Int, r1) {
 			t.Fatal("2")
 		}
 
-		r2, ok := a.Alloc(gen.RegCategoryInt)
+		r2, ok := a.Alloc(abi.Int)
 		if !ok {
 			t.Fatal("3")
 		}
-		if !a.Allocated(gen.RegCategoryInt, r2) {
+		if !a.Allocated(abi.Int, r2) {
 			t.Fatal("4")
 		}
 		if r1 == r2 {
 			t.Fatal("5")
 		}
 
-		r1f, ok := a.Alloc(gen.RegCategoryFloat)
+		r1f, ok := a.Alloc(abi.Float)
 		if !ok {
 			t.Fatal("6")
 		}
-		if !a.Allocated(gen.RegCategoryFloat, r1f) {
+		if !a.Allocated(abi.Float, r1f) {
 			t.Fatal("7")
 		}
 		t.Logf("r1  = %v", r1)
@@ -70,14 +70,14 @@ func TestAllocSpecific(t *testing.T) {
 		var a Allocator
 		a.Init(avail)
 
-		t.Logf("cat = %#v", gen.RegCategoryInt)
+		t.Logf("cat = %#v", abi.Int)
 		t.Logf("reg = %#v", regs.R(5))
 		t.Logf("a = %#v", a)
-		t.Logf("reg index = %v", regIndex(gen.RegCategoryInt, regs.R(5)))
-		t.Logf("reg mask = %v", regMask(gen.RegCategoryInt, regs.R(5)))
+		t.Logf("reg index = %v", regIndex(abi.Int, regs.R(5)))
+		t.Logf("reg mask = %v", regMask(abi.Int, regs.R(5)))
 
-		a.AllocSpecific(gen.RegCategoryInt, regs.R(5))
-		if !a.Allocated(gen.RegCategoryInt, regs.R(5)) {
+		a.AllocSpecific(abi.Int, regs.R(5))
+		if !a.Allocated(abi.Int, regs.R(5)) {
 			t.Fatal("1")
 		}
 
@@ -87,7 +87,7 @@ func TestAllocSpecific(t *testing.T) {
 					t.Fatal("2")
 				}
 			}()
-			a.AllocSpecific(gen.RegCategoryInt, regs.R(5))
+			a.AllocSpecific(abi.Int, regs.R(5))
 		}()
 	}
 }
@@ -99,13 +99,13 @@ func TestSetAllocated(t *testing.T) {
 		var a Allocator
 		a.Init(avail)
 
-		a.SetAllocated(gen.RegCategoryInt, regs.R(5))
-		if !a.Allocated(gen.RegCategoryInt, regs.R(5)) {
+		a.SetAllocated(abi.Int, regs.R(5))
+		if !a.Allocated(abi.Int, regs.R(5)) {
 			t.Fatal("1")
 		}
 
-		a.SetAllocated(gen.RegCategoryInt, regs.R(5))
-		if !a.Allocated(gen.RegCategoryInt, regs.R(5)) {
+		a.SetAllocated(abi.Int, regs.R(5))
+		if !a.Allocated(abi.Int, regs.R(5)) {
 			t.Fatal("2")
 		}
 
@@ -115,7 +115,7 @@ func TestSetAllocated(t *testing.T) {
 					t.Fatal("3")
 				}
 			}()
-			a.AllocSpecific(gen.RegCategoryInt, regs.R(5))
+			a.AllocSpecific(abi.Int, regs.R(5))
 		}()
 	}
 }

@@ -8,15 +8,14 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/regs"
 )
 
-func regIndex(cat gen.RegCategory, reg regs.R) uint8 {
+func regIndex(cat abi.Category, reg regs.R) uint8 {
 	return uint8(reg<<1) + uint8(cat)
 }
 
-func regMask(cat gen.RegCategory, reg regs.R) uint64 {
+func regMask(cat abi.Category, reg regs.R) uint64 {
 	return uint64(1) << regIndex(cat, reg)
 }
 
@@ -30,7 +29,7 @@ func (a *Allocator) Init(avail uint64) {
 	a.freed = avail
 }
 
-func (a *Allocator) Alloc(cat gen.RegCategory) (reg regs.R, ok bool) {
+func (a *Allocator) Alloc(cat abi.Category) (reg regs.R, ok bool) {
 	for bits := a.freed >> uint8(cat); bits != 0; bits >>= 2 {
 		if (bits & 1) != 0 {
 			a.freed &^= regMask(cat, reg)
@@ -44,7 +43,7 @@ func (a *Allocator) Alloc(cat gen.RegCategory) (reg regs.R, ok bool) {
 	return
 }
 
-func (a *Allocator) AllocSpecific(cat gen.RegCategory, reg regs.R) {
+func (a *Allocator) AllocSpecific(cat abi.Category, reg regs.R) {
 	mask := regMask(cat, reg)
 
 	if (a.freed & mask) == 0 {
@@ -54,13 +53,13 @@ func (a *Allocator) AllocSpecific(cat gen.RegCategory, reg regs.R) {
 	a.freed &^= mask
 }
 
-func (a *Allocator) SetAllocated(cat gen.RegCategory, reg regs.R) {
+func (a *Allocator) SetAllocated(cat abi.Category, reg regs.R) {
 	mask := regMask(cat, reg)
 
 	a.freed &^= mask
 }
 
-func (a *Allocator) Free(cat gen.RegCategory, reg regs.R) {
+func (a *Allocator) Free(cat abi.Category, reg regs.R) {
 	mask := regMask(cat, reg)
 
 	if (a.freed & mask) != 0 {
@@ -78,7 +77,7 @@ func (a *Allocator) FreeAll() {
 	a.freed = a.avail
 }
 
-func (a *Allocator) Allocated(cat gen.RegCategory, reg regs.R) bool {
+func (a *Allocator) Allocated(cat abi.Category, reg regs.R) bool {
 	mask := regMask(cat, reg)
 
 	return ((a.avail &^ a.freed) & mask) != 0
@@ -92,15 +91,15 @@ func (a *Allocator) AssertNoneAllocated() {
 
 type Map [64]uint8
 
-func (m *Map) Set(cat gen.RegCategory, reg regs.R, index int) {
+func (m *Map) Set(cat abi.Category, reg regs.R, index int) {
 	m[regIndex(cat, reg)] = uint8(index) + 1
 }
 
-func (m *Map) Clear(cat gen.RegCategory, reg regs.R) {
+func (m *Map) Clear(cat abi.Category, reg regs.R) {
 	m[regIndex(cat, reg)] = 0
 }
 
-func (m *Map) Get(cat gen.RegCategory, reg regs.R) (index int) {
+func (m *Map) Get(cat abi.Category, reg regs.R) (index int) {
 	return int(m[regIndex(cat, reg)]) - 1
 }
 
@@ -111,7 +110,7 @@ type Iterator struct {
 
 func (iter *Iterator) Init(paramRegs [2][]regs.R, paramTypes []abi.Type) (stackCount int32) {
 	for i := int32(len(paramTypes)) - 1; i >= 0; i-- {
-		cat := gen.TypeRegCategory(paramTypes[i])
+		cat := paramTypes[i].Category()
 		if iter.counts[cat] == len(paramRegs[cat]) {
 			stackCount = i + 1
 			break
@@ -128,13 +127,13 @@ func (iter *Iterator) InitRegs(paramRegs [2][]regs.R) {
 	}
 }
 
-func (iter *Iterator) IterForward(cat gen.RegCategory) (reg regs.R) {
+func (iter *Iterator) IterForward(cat abi.Category) (reg regs.R) {
 	reg = iter.regs[cat][0]
 	iter.regs[cat] = iter.regs[cat][1:]
 	return
 }
 
-func (iter *Iterator) IterBackward(cat gen.RegCategory) (reg regs.R) {
+func (iter *Iterator) IterBackward(cat abi.Category) (reg regs.R) {
 	n := len(iter.regs[cat]) - 1
 	reg = iter.regs[cat][n]
 	iter.regs[cat] = iter.regs[cat][:n]

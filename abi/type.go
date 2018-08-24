@@ -9,34 +9,29 @@ type Category uint8
 type Size uint8
 
 const (
-	maskInt   = 1
-	maskFloat = 2
-	mask32    = 4 // value is significant
-	mask64    = 8 // value is significant
+	Int   = Category(0)
+	Float = Category(1)
 
-	maskCategory = maskInt | maskFloat
-	maskSize     = mask32 | mask64
+	Size32 = Size(4)
+	Size64 = Size(8)
 
 	Void = Type(0)
-	I32  = Type(maskInt | mask32)
-	I64  = Type(maskInt | mask64)
-	F32  = Type(maskFloat | mask32)
-	F64  = Type(maskFloat | mask64)
+	I32  = Type(Int) | Type(Size32)
+	I64  = Type(Int) | Type(Size64)
+	F32  = Type(Float) | Type(Size32)
+	F64  = Type(Float) | Type(Size64)
 
-	Int   = Category(maskInt)
-	Float = Category(maskFloat)
-
-	Size32 = Size(mask32)
-	Size64 = Size(mask64)
+	maskCategory = Int | Float
+	maskSize     = Size32 | Size64
 )
 
 func (t Type) Category() Category {
-	return Category(t & maskCategory)
+	return Category(t) & maskCategory
 }
 
 // Size in bytes.
 func (t Type) Size() Size {
-	return Size(t & maskSize)
+	return Size(t) & maskSize
 }
 
 func (t Type) String() string {
@@ -57,6 +52,19 @@ func (t Type) String() string {
 		return "f64"
 
 	default:
-		return "corrupted"
+		return "<invalid type>"
+	}
+}
+
+func (cat Category) String() string {
+	switch cat {
+	case Int:
+		return "int"
+
+	case Float:
+		return "float"
+
+	default:
+		return "<invalid category>"
 	}
 }

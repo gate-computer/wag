@@ -92,11 +92,11 @@ func unaryFloatOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) (
 	} else {
 		switch index := uint8(oper); index {
 		case opers.IndexFloatAbs:
-			opAbsFloatReg(m, code, x.Type, reg)
+			opAbsFloatReg(m, x.Type, reg)
 			return
 
 		case opers.IndexFloatNeg:
-			opNegFloatReg(m, code, x.Type, reg)
+			opNegFloatReg(m, x.Type, reg)
 			return
 
 		case opers.IndexFloatSqrt:
@@ -109,13 +109,13 @@ func unaryFloatOp(m *Module, code gen.RegCoder, oper uint16, x values.Operand) (
 }
 
 // opAbsFloatReg in-place.
-func opAbsFloatReg(m *Module, code gen.Coder, t abi.Type, reg regs.R) {
-	absMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask7fBase, t)
+func opAbsFloatReg(m *Module, t abi.Type, reg regs.R) {
+	absMaskAddr := gen.MaskAddr(m.RODataAddr, gen.Mask7fBase, t)
 	andpSSE.opFromAddr(&m.Text, t, reg, 0, NoIndex, absMaskAddr)
 }
 
 // opNegFloatReg in-place.
-func opNegFloatReg(m *Module, code gen.Coder, t abi.Type, reg regs.R) {
-	signMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask80Base, t)
+func opNegFloatReg(m *Module, t abi.Type, reg regs.R) {
+	signMaskAddr := gen.MaskAddr(m.RODataAddr, gen.Mask80Base, t)
 	xorpSSE.opFromAddr(&m.Text, t, reg, 0, NoIndex, signMaskAddr)
 }

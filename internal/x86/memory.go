@@ -143,7 +143,7 @@ func opMemoryAddress(m *Module, code gen.Coder, size uint16, index values.Operan
 			return
 		}
 
-		if reachAddr < uint64(code.MinMemorySize()) || alreadyChecked {
+		if reachAddr < uint64(m.MemoryLimitValues.Initial) || alreadyChecked {
 			baseReg = RegMemoryBase
 			indexReg = NoIndex
 			disp = int32(addr)

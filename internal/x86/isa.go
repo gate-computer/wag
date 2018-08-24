@@ -48,7 +48,7 @@ const (
 
 var paramRegs [2][]regs.R
 var availRegs = gen.RegMask(
-	gen.RegCategoryMask(gen.RegCategoryInt, &paramRegs[gen.RegCategoryInt],
+	gen.RegCategoryMask(abi.Int, &paramRegs[abi.Int],
 		false, // rax
 		true,  // rcx
 		false, // rdx
@@ -66,7 +66,7 @@ var availRegs = gen.RegMask(
 		false, // r14
 		false, // r15
 	),
-	gen.RegCategoryMask(gen.RegCategoryFloat, &paramRegs[gen.RegCategoryFloat],
+	gen.RegCategoryMask(abi.Float, &paramRegs[abi.Float],
 		false, // xmm0
 		true,  // xmm1
 		false, // xmm2
@@ -358,8 +358,8 @@ func (ISA) OpCopyStack(m *Module, targetOffset, sourceOffset int32) {
 }
 
 // OpSwap must not allocate registers, or update CPU's condition flags.
-func (ISA) OpSwap(m *Module, cat gen.RegCategory, a, b regs.R) {
-	if cat == gen.RegCategoryInt {
+func (ISA) OpSwap(m *Module, cat abi.Category, a, b regs.R) {
+	if cat == abi.Int {
 		xchg.opFromReg(&m.Text, abi.I64, a, b)
 	} else {
 		movSSE.opFromReg(&m.Text, abi.F64, RegScratch, a)
@@ -432,7 +432,7 @@ func (ISA) OpCallIndirect(m *Module, code gen.Coder, tableLen, sigIndex int32) i
 	jle.rel8.opStub(&m.Text)
 	outOfBounds.AddSite(m.Text.Pos())
 
-	mov.opFromAddr(&m.Text, abi.I64, RegResult, 3, RegResult, code.RODataAddr()+gen.ROTableAddr)
+	mov.opFromAddr(&m.Text, abi.I64, RegResult, 3, RegResult, m.RODataAddr+gen.ROTableAddr)
 	mov.opFromReg(&m.Text, abi.I32, RegScratch, RegResult) // zero-extended function address
 	shrImm.op(&m.Text, abi.I64, RegResult, 32)             // signature index
 	cmp.opImm(&m.Text, abi.I32, RegResult, sigIndex)
@@ -460,7 +460,7 @@ func (ISA) OpLoadROIntIndex32ScaleDisp(m *Module, code gen.Coder, t abi.Type, re
 		mov.opFromReg(&m.Text, abi.I32, reg, reg)
 	}
 
-	mov.opFromAddr(&m.Text, t, reg, scale, reg, code.RODataAddr()+addr)
+	mov.opFromAddr(&m.Text, t, reg, scale, reg, m.RODataAddr+addr)
 	resultZeroExt = true
 	return
 }

@@ -66,8 +66,6 @@ func (text *Text) PutBytes(x []byte) {
 }
 
 type Coder interface {
-	MinMemorySize() int
-	RODataAddr() int32
 	TrapTrampolineAddr(id trap.Id) int32
 	OpTrapCall(id trap.Id)
 

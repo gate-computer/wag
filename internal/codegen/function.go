@@ -74,28 +74,26 @@ func (f *function) AllocSpecificReg(t abi.Type, reg regs.R)  { allocSpecificReg(
 func (f *function) Consumed(x values.Operand)                { consumed(f, x) }
 func (f *function) Discard(x values.Operand)                 { discard(f, x) }
 func (f *function) FreeReg(t abi.Type, reg regs.R)           { freeReg(f, t, reg) }
-func (f *function) MinMemorySize() int                       { return f.MemoryLimitValues.Initial }
 func (f *function) OpTrapCall(id trap.Id)                    { opTrapCall(f, id) }
-func (f *function) RODataAddr() int32                        { return f.Module.RODataAddr }
 func (f *function) RegAllocated(t abi.Type, reg regs.R) bool { return regAllocated(f, t, reg) }
 func (f *function) TrapTrampolineAddr(id trap.Id) int32      { return trapTrampolineAddr(f, id) }
 func (f *function) TryAllocReg(t abi.Type) (regs.R, bool)    { return tryAllocReg(f, t) }
 
 func tryAllocReg(f *function, t abi.Type) (reg regs.R, ok bool) {
-	return f.Regs.Alloc(gen.TypeRegCategory(t))
+	return f.Regs.Alloc(t.Category())
 }
 
 func allocSpecificReg(f *function, t abi.Type, reg regs.R) {
-	f.Regs.AllocSpecific(gen.TypeRegCategory(t), reg)
+	f.Regs.AllocSpecific(t.Category(), reg)
 }
 
 func freeReg(f *function, t abi.Type, reg regs.R) {
-	f.Regs.Free(gen.TypeRegCategory(t), reg)
+	f.Regs.Free(t.Category(), reg)
 }
 
 // regAllocated indicates if we can hang onto a register returned by mach ops.
 func regAllocated(f *function, t abi.Type, reg regs.R) bool {
-	return f.Regs.Allocated(gen.TypeRegCategory(t), reg)
+	return f.Regs.Allocated(t.Category(), reg)
 }
 
 func consumed(f *function, x values.Operand) {
@@ -238,7 +236,7 @@ func genFunction(f *function, load loader.L, funcIndex int) {
 
 	for i := f.numStackParams; i < int32(len(sig.Args)); i++ {
 		t := sig.Args[i]
-		cat := gen.TypeRegCategory(t)
+		cat := t.Category()
 		reg := paramRegs.IterForward(cat)
 		f.Regs.AllocSpecific(cat, reg)
 		f.vars[i] = varState{

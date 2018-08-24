@@ -248,7 +248,7 @@ func binaryIntDivmulOp(m *Module, code gen.RegCoder, index uint8, a, b values.Op
 					cmp.opImm(&m.Text, t, RegResult, -0x80000000)
 
 				case abi.Size64:
-					cmp.opFromAddr(&m.Text, t, RegResult, 0, NoIndex, code.RODataAddr()+gen.ROMask80Addr64)
+					cmp.opFromAddr(&m.Text, t, RegResult, 0, NoIndex, m.RODataAddr+gen.ROMask80Addr64)
 
 				default:
 					panic(a)
@@ -444,7 +444,7 @@ func binaryFloatCopysignOp(m *Module, code gen.RegCoder, a, b values.Operand) va
 
 	var done links.L
 
-	signMaskAddr := gen.MaskAddr(code.RODataAddr(), gen.Mask80Base, a.Type)
+	signMaskAddr := gen.MaskAddr(m.RODataAddr, gen.Mask80Base, a.Type)
 
 	movSSE.opToReg(&m.Text, a.Type, RegScratch, sourceReg) // int <- float
 	and.opFromAddr(&m.Text, a.Type, RegScratch, 0, NoIndex, signMaskAddr)
@@ -454,7 +454,7 @@ func binaryFloatCopysignOp(m *Module, code gen.RegCoder, a, b values.Operand) va
 	je.rel8.opStub(&m.Text)
 	done.AddSite(m.Text.Pos())
 
-	opNegFloatReg(m, code, a.Type, targetReg)
+	opNegFloatReg(m, a.Type, targetReg)
 
 	done.Addr = m.Text.Pos()
 	updateLocalBranches(m, &done)

@@ -78,7 +78,7 @@ func GenProgram(m *Module, load loader.L, entryDefined bool, entrySymbol string,
 			paramRegs.Init(isa.ParamRegs(), sig.Args)
 
 			for i, t := range sig.Args {
-				reg := paramRegs.IterForward(gen.TypeRegCategory(t))
+				reg := paramRegs.IterForward(t.Category())
 				isa.OpMoveIntImm(m, reg, entryArgs[i])
 			}
 		}
@@ -202,7 +202,7 @@ func genImportEntry(m *Module, imp module.ImportFunc) (addr int32) {
 
 		for i := range sig.Args {
 			t := sig.Args[i]
-			reg := paramRegs.IterForward(gen.TypeRegCategory(t))
+			reg := paramRegs.IterForward(t.Category())
 			isa.OpStoreStackReg(m, t, -(int32(i)+1)*gen.WordSize, reg)
 		}
 	}
