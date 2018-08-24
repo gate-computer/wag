@@ -8,10 +8,10 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
 )
@@ -116,7 +116,7 @@ func (ISA) StoreOp(f *gen.Func, props uint16, index, x val.Operand, offset uint3
 }
 
 // opMemoryAddress may return the scratch register as the base.
-func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32) (baseReg, indexReg regs.R, ownIndexReg bool, disp int32) {
+func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32) (baseReg, indexReg reg.R, ownIndexReg bool, disp int32) {
 	sizeReach := uint64(size - 1)
 	reachOffset := uint64(offset) + sizeReach
 
@@ -154,24 +154,24 @@ func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32)
 		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, NoIndex, RegMemoryBase, int32(reachAddr))
 
 	default:
-		reg, zeroExt, own := opBorrowMaybeScratchReg(f, index, true)
+		r, zeroExt, own := opBorrowMaybeScratchReg(f, index, true)
 
 		if !zeroExt {
-			mov.opFromReg(&f.Text, abi.I32, reg, reg) // zero-extend index
+			mov.opFromReg(&f.Text, abi.I32, r, r) // zero-extend index
 		}
 
 		if alreadyChecked {
 			baseReg = RegMemoryBase
-			indexReg = reg
+			indexReg = r
 			ownIndexReg = own
 			disp = int32(offset)
 			return
 		}
 
-		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, reg, RegMemoryBase, int32(reachOffset))
+		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, r, RegMemoryBase, int32(reachOffset))
 
 		if own {
-			f.Regs.Free(abi.I32, reg)
+			f.Regs.Free(abi.I32, r)
 		}
 	}
 

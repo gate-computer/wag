@@ -9,12 +9,12 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regs"
 )
 
 func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
@@ -50,10 +50,10 @@ func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 
 	numStackParams := setupCallOperands(f, op, sig, funcIndex)
 
-	// if funcIndex is a reg, it was already relocated to result reg.
+	// if funcIndex is a r, it was already relocated to result r.
 	// otherwise it wasn't touched.
 	if !funcIndex.Storage.IsReg() {
-		opMove(f, regs.Result, funcIndex, false)
+		opMove(f, reg.Result, funcIndex, false)
 	}
 
 	retAddr := isa.OpCallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
@@ -80,40 +80,40 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 			panic(fmt.Errorf("%s argument #%d has wrong type: %s", op, i, value.Type))
 		}
 
-		var reg regs.R
+		var r reg.R
 		var ok bool
 
 		switch value.Storage {
 		case val.TempReg:
-			reg = value.Reg()
+			r = value.Reg()
 			ok = true
 
 		case val.VarReference:
 			if x := f.Vars[value.VarIndex()].Cache; x.Storage == val.VarReg {
-				reg = x.Reg()
+				r = x.Reg()
 				ok = true
 				args[i] = x // help the next args loop
 			}
 		}
 
 		if ok {
-			f.Regs.SetAllocated(value.Type, reg)
-			regArgs.Set(value.Type.Category(), reg, i)
+			f.Regs.SetAllocated(value.Type, r)
+			regArgs.Set(value.Type.Category(), r, i)
 		}
 	}
 
-	// relocate indirect index to result reg if it already occupies some reg
-	if indirect.Storage.IsReg() && indirect.Reg() != regs.Result {
-		if i := regArgs.Get(abi.Int, regs.Result); i >= 0 {
-			debugf("indirect call index: %s <-> %s", regs.Result, indirect)
-			isa.OpSwap(f.M, abi.Int, regs.Result, indirect.Reg())
+	// relocate indirect index to result r if it already occupies some r
+	if indirect.Storage.IsReg() && indirect.Reg() != reg.Result {
+		if i := regArgs.Get(abi.Int, reg.Result); i >= 0 {
+			debugf("indirect call index: %s <-> %s", reg.Result, indirect)
+			isa.OpSwap(f.M, abi.Int, reg.Result, indirect.Reg())
 
 			args[i] = val.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
-			regArgs.Clear(abi.Int, regs.Result)
+			regArgs.Clear(abi.Int, reg.Result)
 			regArgs.Set(abi.Int, indirect.Reg(), i)
 		} else {
-			debugf("indirect call index: %s <- %s", regs.Result, indirect)
-			isa.OpMoveReg(f.M, abi.I32, regs.Result, indirect.Reg())
+			debugf("indirect call index: %s <- %s", reg.Result, indirect)
+			isa.OpMoveReg(f.M, abi.I32, reg.Result, indirect.Reg())
 		}
 	}
 
@@ -171,16 +171,16 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 			cat := value.Type.Category()
 
 			if regArgs.Get(cat, value.Reg()) != i {
-				reg, ok := f.Regs.Alloc(value.Type)
+				r, ok := f.Regs.Alloc(value.Type)
 				if !ok {
 					panic("not enough registers for all register args")
 				}
 
-				debugf("call param #%d: %s %s <- %s", i, cat, reg, value.Reg())
-				isa.OpMoveReg(f.M, value.Type, reg, value.Reg())
+				debugf("call param #%d: %s %s <- %s", i, cat, r, value.Reg())
+				isa.OpMoveReg(f.M, value.Type, r, value.Reg())
 
-				args[i] = val.RegOperand(false, value.Type, reg)
-				regArgs.Set(cat, reg, i)
+				args[i] = val.RegOperand(false, value.Type, r)
+				regArgs.Set(cat, r, i)
 			}
 		}
 	}
@@ -232,7 +232,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 	for i := range f.Vars {
 		if v := &f.Vars[i]; v.Cache.Storage == val.VarReg {
 			debugf("forget register variable #%d", i)
-			// reg was already stored and freed
+			// r was already stored and freed
 			v.ResetCache()
 		}
 	}

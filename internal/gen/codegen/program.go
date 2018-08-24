@@ -75,8 +75,8 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 			paramRegs.Init(isa.ParamRegs(), sig.Args)
 
 			for i, t := range sig.Args {
-				reg := paramRegs.IterForward(t.Category())
-				isa.OpMoveIntImm(m, reg, entryArgs[i])
+				r := paramRegs.IterForward(t.Category())
+				isa.OpMoveIntImm(m, r, entryArgs[i])
 			}
 		}
 

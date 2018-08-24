@@ -10,11 +10,11 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 )
 
@@ -101,11 +101,11 @@ func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 
 	if end := popBranchTarget(f); end.Live() {
 		if result.Storage != val.Nowhere {
-			opMove(f, regs.Result, result, false)
+			opMove(f, reg.Result, result, false)
 		}
 
 		if t != abi.Void {
-			result = val.TempRegOperand(t, regs.Result, false)
+			result = val.TempRegOperand(t, reg.Result, false)
 		}
 
 		opLabel(f, end)
@@ -129,7 +129,7 @@ func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 		if value.Type != target.ValueType {
 			panic(fmt.Errorf("%s value operand type is %s, but target expects %s", op, value.Type, target.ValueType))
 		}
-		opMove(f, regs.Result, value, false)
+		opMove(f, reg.Result, value, false)
 	}
 
 	if target.FuncEnd {
@@ -170,13 +170,13 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opStoreVars(f, false)
 
 	if value.Type != abi.Void {
-		if cond.Storage == val.TempReg && cond.Reg() == regs.Result {
-			reg := opAllocReg(f, abi.I32)
-			zeroExt := opMove(f, reg, cond, true)
-			cond = val.TempRegOperand(cond.Type, reg, zeroExt)
+		if cond.Storage == val.TempReg && cond.Reg() == reg.Result {
+			r := opAllocReg(f, abi.I32)
+			zeroExt := opMove(f, r, cond, true)
+			cond = val.TempRegOperand(cond.Type, r, zeroExt)
 		}
 
-		opMove(f, regs.Result, value, true)
+		opMove(f, reg.Result, value, true)
 	}
 
 	stackDelta := f.StackOffset - target.StackOffset
@@ -257,36 +257,36 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	opInitVars(f)
 	opStoreVars(f, false)
 
-	var reg2 regs.R
+	var reg2 reg.R
 
 	if commonStackOffset < 0 {
 		reg2 = opAllocReg(f, abi.I32)
 	}
 
 	if value.Type != abi.Void {
-		if index.Storage == val.TempReg && index.Reg() == regs.Result {
-			reg := opAllocReg(f, abi.I32)
-			zeroExt := opMove(f, reg, index, true)
-			index = val.TempRegOperand(index.Type, reg, zeroExt)
+		if index.Storage == val.TempReg && index.Reg() == reg.Result {
+			r := opAllocReg(f, abi.I32)
+			zeroExt := opMove(f, r, index, true)
+			index = val.TempRegOperand(index.Type, r, zeroExt)
 		}
 
-		opMove(f, regs.Result, value, true)
+		opMove(f, reg.Result, value, true)
 	}
 
-	var reg regs.R
+	var r reg.R
 	var regZeroExt bool
 
 	if index.Storage.IsReg() {
-		reg = index.Reg()
+		r = index.Reg()
 		regZeroExt = index.RegZeroExt()
 	} else {
-		reg = opAllocReg(f, abi.I32)
-		regZeroExt = isa.OpMove(f, reg, index, false)
+		r = opAllocReg(f, abi.I32)
+		regZeroExt = isa.OpMove(f, r, index, false)
 	}
 
 	f.Regs.FreeAll()
 
-	// vars were already stored and regs freed
+	// vars were already stored and reg freed
 	for i := range f.Vars {
 		f.Vars[i].ResetCache()
 	}
@@ -299,20 +299,20 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 
 	isa.OpAddImmToStackPtr(f.M, defaultDelta)
 	tableStackOffset := f.StackOffset - defaultDelta
-	opBranchIfOutOfBounds(f, reg, int32(len(targetTable)), &defaultTarget.Label)
-	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f, tableType, reg, regZeroExt, tableScale, int32(tableAddr))
+	opBranchIfOutOfBounds(f, r, int32(len(targetTable)), &defaultTarget.Label)
+	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f, tableType, r, regZeroExt, tableScale, int32(tableAddr))
 
 	if commonStackOffset >= 0 {
 		isa.OpAddImmToStackPtr(f.M, tableStackOffset-commonStackOffset)
 	} else {
-		isa.OpMoveReg(f.M, abi.I64, reg2, reg)
+		isa.OpMoveReg(f.M, abi.I64, reg2, r)
 		isa.OpShiftRightLogical32Bits(f.M, reg2)
 		isa.OpAddToStackPtr(f.M, reg2)
 
 		regZeroExt = false
 	}
 
-	isa.OpBranchIndirect32(f.M, reg, regZeroExt)
+	isa.OpBranchIndirect32(f.M, r, regZeroExt)
 
 	// end of critical section.
 
@@ -360,7 +360,7 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 			if value.Type != t {
 				panic(fmt.Errorf("%s value operand has type %s, but target expects %s", op, value.Type, t))
 			}
-			opMove(f, regs.Result, value, false)
+			opMove(f, reg.Result, value, false)
 		}
 
 		if haveElse {
@@ -381,7 +381,7 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 			if value.Type != t {
 				panic(fmt.Errorf("%s value operand has type %s, but target expects %s", op, value.Type, t))
 			}
-			opMove(f, regs.Result, value, false)
+			opMove(f, reg.Result, value, false)
 		}
 	}
 
@@ -461,7 +461,7 @@ func opBranchIf(f *gen.Func, x val.Operand, yes bool, l *link.L) {
 	}
 }
 
-func opBranchIfOutOfBounds(f *gen.Func, indexReg regs.R, upperBound int32, l *link.L) {
+func opBranchIfOutOfBounds(f *gen.Func, indexReg reg.R, upperBound int32, l *link.L) {
 	site := isa.OpBranchIfOutOfBounds(f.M, indexReg, upperBound, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(site)

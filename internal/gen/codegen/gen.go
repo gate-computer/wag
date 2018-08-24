@@ -9,9 +9,9 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -265,7 +265,7 @@ func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 		if result.Type != f.ResultType {
 			panic(fmt.Errorf("%s value operand type is %s, but function result type is %s", op, result.Type, f.ResultType))
 		}
-		opMove(f, regs.Result, result, false)
+		opMove(f, reg.Result, result, false)
 	}
 
 	isa.OpAddImmToStackPtr(f.M, f.StackOffset)

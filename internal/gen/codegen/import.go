@@ -36,8 +36,8 @@ func genImportEntry(m *module.M, imp module.ImportFunc) (addr int32) {
 
 		for i := range sig.Args {
 			t := sig.Args[i]
-			reg := paramRegs.IterForward(t.Category())
-			isa.OpStoreStackReg(m, t, -(int32(i)+1)*obj.Word, reg)
+			r := paramRegs.IterForward(t.Category())
+			isa.OpStoreStackReg(m, t, -(int32(i)+1)*obj.Word, r)
 		}
 	}
 

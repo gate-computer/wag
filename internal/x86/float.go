@@ -7,9 +7,9 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regs"
 )
 
 type floatSizePrefix struct {
@@ -63,12 +63,12 @@ var (
 	roundsSSE = insnSuffixRMI{[]byte{0x66, 0x0f, 0x3a}, roundSize}
 )
 
-func pushFloatOp(m *module.M, t abi.Type, source regs.R) {
+func pushFloatOp(m *module.M, t abi.Type, source reg.R) {
 	sub.opImm(&m.Text, abi.I64, RegStackPtr, obj.Word)
 	movsSSE.opToStack(&m.Text, t, source, 0)
 }
 
-func popFloatOp(m *module.M, t abi.Type, target regs.R) {
+func popFloatOp(m *module.M, t abi.Type, target reg.R) {
 	movsSSE.opFromStack(&m.Text, t, target, 0)
 	add.opImm(&m.Text, abi.I64, RegStackPtr, obj.Word)
 }

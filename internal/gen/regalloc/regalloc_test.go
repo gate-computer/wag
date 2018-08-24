@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/gen/reg"
 )
 
 func TestAllocatorInit(t *testing.T) {
@@ -68,13 +68,13 @@ func TestAllocSpecific(t *testing.T) {
 		a := MakeAllocator(avail)
 
 		t.Logf("cat = %#v", abi.I32)
-		t.Logf("reg = %#v", regs.R(5))
+		t.Logf("r = %#v", reg.R(5))
 		t.Logf("a = %#v", a)
-		t.Logf("reg index = %v", regIndex(abi.Int, regs.R(5)))
-		t.Logf("reg mask = %v", regMask(abi.Int, regs.R(5)))
+		t.Logf("r index = %v", regIndex(abi.Int, reg.R(5)))
+		t.Logf("r mask = %v", regMask(abi.Int, reg.R(5)))
 
-		a.AllocSpecific(abi.I32, regs.R(5))
-		if !a.Allocated(abi.I32, regs.R(5)) {
+		a.AllocSpecific(abi.I32, reg.R(5))
+		if !a.Allocated(abi.I32, reg.R(5)) {
 			t.Fatal("1")
 		}
 
@@ -84,7 +84,7 @@ func TestAllocSpecific(t *testing.T) {
 					t.Fatal("2")
 				}
 			}()
-			a.AllocSpecific(abi.I32, regs.R(5))
+			a.AllocSpecific(abi.I32, reg.R(5))
 		}()
 	}
 }
@@ -95,13 +95,13 @@ func TestSetAllocated(t *testing.T) {
 
 		a := MakeAllocator(avail)
 
-		a.SetAllocated(abi.I32, regs.R(5))
-		if !a.Allocated(abi.I32, regs.R(5)) {
+		a.SetAllocated(abi.I32, reg.R(5))
+		if !a.Allocated(abi.I32, reg.R(5)) {
 			t.Fatal("1")
 		}
 
-		a.SetAllocated(abi.I32, regs.R(5))
-		if !a.Allocated(abi.I32, regs.R(5)) {
+		a.SetAllocated(abi.I32, reg.R(5))
+		if !a.Allocated(abi.I32, reg.R(5)) {
 			t.Fatal("2")
 		}
 
@@ -111,7 +111,7 @@ func TestSetAllocated(t *testing.T) {
 					t.Fatal("3")
 				}
 			}()
-			a.AllocSpecific(abi.I32, regs.R(5))
+			a.AllocSpecific(abi.I32, reg.R(5))
 		}()
 	}
 }

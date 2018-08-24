@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/regs"
+	"github.com/tsavola/wag/internal/gen/reg"
 )
 
 type Storage uint8
@@ -161,30 +161,30 @@ func VarMemOperand(t abi.Type, index, offset int32) Operand {
 	return Operand{payload, Bounds{}, t, VarMem}
 }
 
-func VarRegOperand(t abi.Type, index int32, reg regs.R, zeroExt bool) Operand {
-	payload := (uint64(index) << 32) | uint64(byte(reg))
+func VarRegOperand(t abi.Type, index int32, r reg.R, zeroExt bool) Operand {
+	payload := (uint64(index) << 32) | uint64(byte(r))
 	if zeroExt {
 		payload |= payloadZeroExt
 	}
 	return Operand{payload, Bounds{}, t, VarReg}
 }
 
-func TempRegOperand(t abi.Type, reg regs.R, zeroExt bool) Operand {
-	payload := uint64(byte(reg))
+func TempRegOperand(t abi.Type, r reg.R, zeroExt bool) Operand {
+	payload := uint64(byte(r))
 	if zeroExt {
 		payload |= payloadZeroExt
 	}
 	return Operand{payload, Bounds{}, t, TempReg}
 }
 
-func RegOperand(own bool, t abi.Type, reg regs.R) Operand {
+func RegOperand(own bool, t abi.Type, r reg.R) Operand {
 	var s Storage
 	if own {
 		s = TempReg
 	} else {
 		s = BorrowedReg
 	}
-	payload := uint64(byte(reg))
+	payload := uint64(byte(r))
 	return Operand{payload, Bounds{}, t, s}
 }
 
@@ -210,8 +210,8 @@ func (o Operand) ImmValue() int64 {
 	}
 }
 
-func (o Operand) Reg() regs.R {
-	return regs.R(byte(o.payload))
+func (o Operand) Reg() reg.R {
+	return reg.R(byte(o.payload))
 }
 
 func (o Operand) RegZeroExt() bool {

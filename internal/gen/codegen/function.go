@@ -11,12 +11,12 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/typeutil"
 )
 
@@ -161,10 +161,10 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 
 	for i := f.NumStackParams; i < int32(len(sig.Args)); i++ {
 		t := sig.Args[i]
-		reg := paramRegs.IterForward(t.Category())
-		f.Regs.AllocSpecific(t, reg)
+		r := paramRegs.IterForward(t.Category())
+		f.Regs.AllocSpecific(t, r)
 		f.Vars[i] = gen.VarState{
-			Cache: val.VarRegOperand(t, i, reg, false),
+			Cache: val.VarRegOperand(t, i, r, false),
 			Dirty: true,
 		}
 	}
@@ -204,7 +204,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 		if result.Type != f.ResultType {
 			panic(fmt.Errorf("function result operand type is %s, but function result type is %s", result.Type, f.ResultType))
 		}
-		opMove(f, regs.Result, result, false)
+		opMove(f, reg.Result, result, false)
 	}
 
 	if end := popBranchTarget(f); end.Live() {
@@ -274,18 +274,18 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 	return
 }
 
-func opAllocReg(f *gen.Func, t abi.Type) (reg regs.R) {
-	reg, ok := f.Regs.Alloc(t)
+func opAllocReg(f *gen.Func, t abi.Type) (r reg.R) {
+	r, ok := f.Regs.Alloc(t)
 	if !ok {
-		reg = opStealReg(f, t)
+		r = opStealReg(f, t)
 	}
 	return
 }
 
-func opTryAllocVarReg(f *gen.Func, t abi.Type) (reg regs.R, ok bool) {
-	reg, ok = f.Regs.Alloc(t)
+func opTryAllocVarReg(f *gen.Func, t abi.Type) (r reg.R, ok bool) {
+	r, ok = f.Regs.Alloc(t)
 	if !ok {
-		reg, ok = opTryStealVarReg(f, t)
+		r, ok = opTryStealVarReg(f, t)
 	}
 	return
 }
@@ -361,16 +361,16 @@ func opInitVarsUntil(f *gen.Func, lastIndex int32, lastValue val.Operand) {
 }
 
 // opMove must not allocate registers.
-func opMove(f *gen.Func, target regs.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
+func opMove(f *gen.Func, target reg.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
 	x = effectiveOperand(f, x)
 	return isa.OpMove(f, target, x, preserveFlags)
 }
 
 func opMaterializeOperand(f *gen.Func, x val.Operand) val.Operand {
 	if x.Storage == val.ConditionFlags {
-		reg := opAllocReg(f, x.Type)
-		zeroExt := opMove(f, reg, x, false)
-		return val.TempRegOperand(x.Type, reg, zeroExt)
+		r := opAllocReg(f, x.Type)
+		zeroExt := opMove(f, r, x, false)
+		return val.TempRegOperand(x.Type, r, zeroExt)
 	} else {
 		return opPreloadOperand(f, x) // XXX: should this be effectiveOperand?
 	}
@@ -384,17 +384,17 @@ func opPreloadOperand(f *gen.Func, x val.Operand) val.Operand {
 		index := x.VarIndex()
 		v := &f.Vars[index]
 
-		if reg, ok := opTryAllocVarReg(f, x.Type); ok {
-			zeroExt := opMove(f, reg, x, true)
-			x = val.VarRegOperand(x.Type, index, reg, zeroExt).WithBounds(x.Bounds)
+		if r, ok := opTryAllocVarReg(f, x.Type); ok {
+			zeroExt := opMove(f, r, x, true)
+			x = val.VarRegOperand(x.Type, index, r, zeroExt).WithBounds(x.Bounds)
 			v.Cache = x
 			v.Dirty = false
 		}
 
 	case val.Stack:
-		reg := opAllocReg(f, x.Type)
-		zeroExt := opMove(f, reg, x, true)
-		x = val.TempRegOperand(x.Type, reg, zeroExt)
+		r := opAllocReg(f, x.Type)
+		zeroExt := opMove(f, r, x, true)
+		x = val.TempRegOperand(x.Type, r, zeroExt)
 	}
 
 	return x
@@ -407,7 +407,7 @@ func pushImmOperand(f *gen.Func, t abi.Type, bits uint64) {
 }
 
 func pushResultRegOperand(f *gen.Func, t abi.Type) {
-	x := val.TempRegOperand(t, regs.Result, false)
+	x := val.TempRegOperand(t, reg.Result, false)
 	debugf("push operand: %s", x)
 	f.Operands = append(f.Operands, x)
 }
@@ -457,9 +457,9 @@ func opStabilizeOperandStack(f *gen.Func) {
 
 		debugf("stabilizing operand: %v", x)
 
-		reg := opAllocReg(f, x.Type)
-		zeroExt := opMove(f, reg, x, false)
-		f.Operands[i] = val.TempRegOperand(x.Type, reg, zeroExt)
+		r := opAllocReg(f, x.Type)
+		zeroExt := opMove(f, r, x, false)
+		f.Operands[i] = val.TempRegOperand(x.Type, r, zeroExt)
 	}
 
 	f.NumStableOperands = len(f.Operands)
@@ -502,10 +502,10 @@ func popOperands(f *gen.Func, n int) (xs []val.Operand) {
 }
 
 // opStealReg doesn't change the allocation state of the register.
-func opStealReg(f *gen.Func, needType abi.Type) (reg regs.R) {
+func opStealReg(f *gen.Func, needType abi.Type) (r reg.R) {
 	debugf("steal %s register", needType)
 
-	reg, ok := opTryStealVarReg(f, needType)
+	r, ok := opTryStealVarReg(f, needType)
 	if ok {
 		return
 	}
@@ -519,14 +519,14 @@ func opStealReg(f *gen.Func, needType abi.Type) (reg regs.R) {
 			switch x.Storage {
 			case val.VarReference:
 				if v := f.Vars[x.VarIndex()]; v.Cache.Storage == val.VarReg {
-					reg = v.Cache.Reg()
+					r = v.Cache.Reg()
 					ok = true
 				}
 
 			case val.TempReg:
-				reg = x.Reg()
-				if f.Regs.Allocated(x.Type, reg) {
-					defer f.Regs.AllocSpecific(x.Type, reg)
+				r = x.Reg()
+				if f.Regs.Allocated(x.Type, r) {
+					defer f.Regs.AllocSpecific(x.Type, r)
 					ok = true
 				}
 			}
@@ -553,7 +553,7 @@ func opStealReg(f *gen.Func, needType abi.Type) (reg regs.R) {
 }
 
 // opTryStealVarReg doesn't change the allocation state of the register.
-func opTryStealVarReg(f *gen.Func, needType abi.Type) (reg regs.R, ok bool) {
+func opTryStealVarReg(f *gen.Func, needType abi.Type) (r reg.R, ok bool) {
 	debugf("try steal %s variable register", needType)
 
 	opInitVars(f)
@@ -580,7 +580,7 @@ func opTryStealVarReg(f *gen.Func, needType abi.Type) (reg regs.R, ok bool) {
 
 found:
 	v := &f.Vars[bestIndex]
-	reg = v.Cache.Reg()
+	r = v.Cache.Reg()
 	if v.Dirty {
 		index := int32(bestIndex)
 		opStoreVar(f, index, val.VarReferenceOperand(v.Cache.Type, index)) // XXX: this is ugly

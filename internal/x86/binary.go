@@ -8,9 +8,9 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/link"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
 	"github.com/tsavola/wag/trap"
 )
@@ -157,9 +157,9 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 
 		switch {
 		case insn.shiftImm.defined() && value > 0 && isPowerOfTwo(uint64(value)):
-			reg, _ := opMaybeResultReg(f, a, false)
-			insn.shiftImm.op(&f.Text, t, reg, log2(uint64(value)))
-			return val.TempRegOperand(t, reg, true)
+			r, _ := opMaybeResultReg(f, a, false)
+			insn.shiftImm.op(&f.Text, t, r, log2(uint64(value)))
+			return val.TempRegOperand(t, r, true)
 		}
 	}
 
@@ -174,7 +174,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 			if division {
 				var ok bool
 
-				// can't use scratch reg as divisor since it contains the dividend high bits
+				// can't use scratch r as divisor since it contains the dividend high bits
 				newReg, ok = f.Regs.Alloc(t)
 				if !ok {
 					// borrow a register which we don't need in this function
@@ -199,17 +199,17 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 			}
 		}
 
-		reg, ok := f.Regs.Alloc(t)
+		r, ok := f.Regs.Alloc(t)
 		if !ok {
 			// borrow a register which we don't need in this function
 			movMMX.opFromReg(&f.Text, abi.I64, RegScratchMMX, RegTextBase)
 			defer movMMX.opToReg(&f.Text, abi.I64, RegTextBase, RegScratchMMX)
 
-			reg = RegTextBase
+			r = RegTextBase
 		}
 
-		opMove(f, reg, b, true)
-		b = val.RegOperand(true, t, reg)
+		opMove(f, r, b, true)
+		b = val.RegOperand(true, t, r)
 	}
 
 	opMove(f, RegResult, a, false)
@@ -297,10 +297,10 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 	return val.TempRegOperand(t, RegResult, true)
 }
 
-func opCheckDivideByZero(f *gen.Func, t abi.Type, reg regs.R) {
+func opCheckDivideByZero(f *gen.Func, t abi.Type, r reg.R) {
 	var end link.L
 
-	test.opFromReg(&f.Text, t, reg, reg)
+	test.opFromReg(&f.Text, t, r, r)
 	jne.rel8.opStub(&f.Text)
 	end.AddSite(f.Text.Addr)
 
@@ -311,7 +311,7 @@ func opCheckDivideByZero(f *gen.Func, t abi.Type, reg regs.R) {
 }
 
 var binaryShiftInsns = []struct {
-	reg insnRexM
+	r   insnRexM
 	imm shiftImmInsn
 }{
 	prop.IndexShiftRotl: {rol, rolImm},
@@ -326,35 +326,35 @@ func binaryIntShiftOp(f *gen.Func, index uint8, a, b val.Operand) (result val.Op
 
 	switch {
 	case b.Storage == val.Imm:
-		reg, _ := opMaybeResultReg(f, a, true)
-		insn.imm.op(&f.Text, b.Type, reg, uint8(b.ImmValue()))
-		result = val.TempRegOperand(a.Type, reg, true)
+		r, _ := opMaybeResultReg(f, a, true)
+		insn.imm.op(&f.Text, b.Type, r, uint8(b.ImmValue()))
+		result = val.TempRegOperand(a.Type, r, true)
 
 	case b.Storage.IsReg() && b.Reg() == RegShiftCount:
-		reg, _ := opMaybeResultReg(f, a, false)
-		insn.reg.opReg(&f.Text, a.Type, reg)
+		r, _ := opMaybeResultReg(f, a, false)
+		insn.r.opReg(&f.Text, a.Type, r)
 		if b.Storage == val.TempReg {
 			f.Regs.Free(abi.I32, RegShiftCount)
 		}
-		result = val.TempRegOperand(a.Type, reg, true)
+		result = val.TempRegOperand(a.Type, r, true)
 
 	case f.Regs.Allocated(abi.I32, RegShiftCount):
-		reg, _ := opMaybeResultReg(f, a, true)
-		if reg == RegShiftCount {
+		r, _ := opMaybeResultReg(f, a, true)
+		if r == RegShiftCount {
 			mov.opFromReg(&f.Text, a.Type, RegResult, RegShiftCount)
-			result = subtleShiftOp(f, insn.reg, a.Type, RegResult, b)
+			result = subtleShiftOp(f, insn.r, a.Type, RegResult, b)
 			f.Regs.Free(abi.I32, RegShiftCount)
 		} else {
 			// unknown operand in RegShiftCount
 			mov.opFromReg(&f.Text, abi.I64, RegScratch, RegShiftCount) // save
-			result = subtleShiftOp(f, insn.reg, a.Type, reg, b)
+			result = subtleShiftOp(f, insn.r, a.Type, r, b)
 			mov.opFromReg(&f.Text, abi.I64, RegShiftCount, RegScratch) // restore
 		}
 
 	default:
 		f.Regs.AllocSpecific(abi.I32, RegShiftCount)
-		reg, _ := opMaybeResultReg(f, a, true)
-		result = subtleShiftOp(f, insn.reg, a.Type, reg, b)
+		r, _ := opMaybeResultReg(f, a, true)
+		result = subtleShiftOp(f, insn.r, a.Type, r, b)
 		f.Regs.Free(abi.I32, RegShiftCount)
 	}
 
@@ -362,11 +362,11 @@ func binaryIntShiftOp(f *gen.Func, index uint8, a, b val.Operand) (result val.Op
 }
 
 // subtleShiftOp trashes RegShiftCount.
-func subtleShiftOp(f *gen.Func, insn insnRexM, t abi.Type, reg regs.R, count val.Operand) val.Operand {
+func subtleShiftOp(f *gen.Func, insn insnRexM, t abi.Type, r reg.R, count val.Operand) val.Operand {
 	count.Type = abi.I32                   // TODO: 8-bit mov
 	opMove(f, RegShiftCount, count, false) //
-	insn.opReg(&f.Text, t, reg)
-	return val.TempRegOperand(t, reg, true)
+	insn.opReg(&f.Text, t, r)
+	return val.TempRegOperand(t, r, true)
 }
 
 var commonBinaryFloatInsns = []insnPrefix{

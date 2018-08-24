@@ -170,7 +170,7 @@ func log2(value uint64) (count uint8) {
 }
 
 func inplaceIntOp(f *gen.Func, insn insnRexM, x val.Operand) val.Operand {
-	reg, _ := opMaybeResultReg(f, x, false)
-	insn.opReg(&f.Text, x.Type, reg)
-	return val.TempRegOperand(x.Type, reg, true)
+	r, _ := opMaybeResultReg(f, x, false)
+	insn.opReg(&f.Text, x.Type, r)
+	return val.TempRegOperand(x.Type, r, true)
 }

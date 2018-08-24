@@ -8,9 +8,9 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/prop"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/regs"
 	"github.com/tsavola/wag/internal/rodata"
 )
 
@@ -33,18 +33,18 @@ func unaryIntOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
 }
 
 func opIntEqz(f *gen.Func, x val.Operand) val.Operand {
-	reg, _, own := opBorrowMaybeScratchReg(f, x, false)
+	r, _, own := opBorrowMaybeScratchReg(f, x, false)
 	if own {
-		defer f.Regs.Free(x.Type, reg)
+		defer f.Regs.Free(x.Type, r)
 	}
 
-	test.opFromReg(&f.Text, x.Type, reg, reg)
+	test.opFromReg(&f.Text, x.Type, r, r)
 	return val.ConditionFlagsOperand(val.Eq)
 }
 
 func commonUnaryIntOp(f *gen.Func, index uint8, x val.Operand) (result val.Operand) {
 	var ok bool
-	var targetReg regs.R
+	var targetReg reg.R
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(f, x, false)
 	if own {
@@ -84,25 +84,25 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x val.Operand) (result val.Opera
 func unaryFloatOp(f *gen.Func, props uint16, x val.Operand) (result val.Operand) {
 	// TODO: support memory source operands
 
-	reg, _ := opMaybeResultReg(f, x, false)
-	result = val.TempRegOperand(x.Type, reg, false)
+	r, _ := opMaybeResultReg(f, x, false)
+	result = val.TempRegOperand(x.Type, r, false)
 
 	if (props & prop.UnaryRound) != 0 {
 		roundMode := uint8(props)
-		roundsSSE.opReg(&f.Text, x.Type, reg, reg, int8(roundMode))
+		roundsSSE.opReg(&f.Text, x.Type, r, r, int8(roundMode))
 		return
 	} else {
 		switch index := uint8(props); index {
 		case prop.IndexFloatAbs:
-			opAbsFloatReg(f.M, x.Type, reg)
+			opAbsFloatReg(f.M, x.Type, r)
 			return
 
 		case prop.IndexFloatNeg:
-			opNegFloatReg(f.M, x.Type, reg)
+			opNegFloatReg(f.M, x.Type, r)
 			return
 
 		case prop.IndexFloatSqrt:
-			sqrtsSSE.opFromReg(&f.Text, x.Type, reg, reg)
+			sqrtsSSE.opFromReg(&f.Text, x.Type, r, r)
 			return
 		}
 	}
@@ -111,13 +111,13 @@ func unaryFloatOp(f *gen.Func, props uint16, x val.Operand) (result val.Operand)
 }
 
 // opAbsFloatReg in-place.
-func opAbsFloatReg(m *module.M, t abi.Type, reg regs.R) {
+func opAbsFloatReg(m *module.M, t abi.Type, r reg.R) {
 	absMaskAddr := rodata.MaskAddr(m.RODataAddr, rodata.Mask7fBase, t)
-	andpSSE.opFromAddr(&m.Text, t, reg, 0, NoIndex, absMaskAddr)
+	andpSSE.opFromAddr(&m.Text, t, r, 0, NoIndex, absMaskAddr)
 }
 
 // opNegFloatReg in-place.
-func opNegFloatReg(m *module.M, t abi.Type, reg regs.R) {
+func opNegFloatReg(m *module.M, t abi.Type, r reg.R) {
 	signMaskAddr := rodata.MaskAddr(m.RODataAddr, rodata.Mask80Base, t)
-	xorpSSE.opFromAddr(&m.Text, t, reg, 0, NoIndex, signMaskAddr)
+	xorpSSE.opFromAddr(&m.Text, t, r, 0, NoIndex, signMaskAddr)
 }

@@ -22,7 +22,7 @@ const (
 )
 
 // wag's internal calling convention
-var regs = []string{"CX", "BX", "BP", "SI", "DI", "R8"}
+var reg = []string{"CX", "BX", "BP", "SI", "DI", "R8"}
 
 type call struct {
 	name    string
@@ -64,11 +64,11 @@ func main() {
 
 		fmt.Fprintf(impl, "TEXT sys%s<>(SB),NOSPLIT,$0\n", sc.titleName())
 
-		for i, reg := range regs {
+		for i, r := range reg {
 			if (sc.ptrMask & (1 << uint(i))) != 0 {
-				fmt.Fprintf(impl, "\tANDL\t%s, %s\n", reg, reg) // zero-extend and test
+				fmt.Fprintf(impl, "\tANDL\t%s, %s\n", r, r) // zero-extend and test
 				fmt.Fprintf(impl, "\tJZ\tnull%d\n", i)
-				fmt.Fprintf(impl, "\tADDQ\tR14, %s\n", reg)
+				fmt.Fprintf(impl, "\tADDQ\tR14, %s\n", r)
 				fmt.Fprintf(impl, "null%d:", i)
 			}
 		}

@@ -8,9 +8,9 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/regs"
 )
 
 func genGetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
@@ -70,7 +70,7 @@ func opSetLocal(f *gen.Func, op Opcode, index int32) {
 	debugf("variable reference count: %d", v.RefCount)
 
 	if v.RefCount > 0 {
-		// detach all references by copying to temp regs or spilling to stack
+		// detach all references by copying to temp reg or spilling to stack
 
 		switch v.Cache.Storage {
 		case val.Nowhere, val.VarReg:
@@ -80,14 +80,14 @@ func opSetLocal(f *gen.Func, op Opcode, index int32) {
 				x := f.Operands[i]
 
 				if x.Storage == val.VarReference && x.VarIndex() == index {
-					reg, ok := f.Regs.Alloc(t)
+					r, ok := f.Regs.Alloc(t)
 					if !ok {
 						spillUntil = i
 						goto spill
 					}
 
-					zeroExt := opMove(f, reg, x, true) // TODO: avoid multiple loads
-					f.Operands[i] = val.TempRegOperand(t, reg, zeroExt)
+					zeroExt := opMove(f, r, x, true) // TODO: avoid multiple loads
+					f.Operands[i] = val.TempRegOperand(t, r, zeroExt)
 
 					v.RefCount--
 					if v.RefCount == 0 {
@@ -136,20 +136,20 @@ func opSetLocal(f *gen.Func, op Opcode, index int32) {
 		v.Dirty = true
 
 	case newValue.Storage.IsVarOrStackOrConditionFlags():
-		var reg regs.R
+		var r reg.R
 		var ok bool
 
 		if oldCache.Storage == val.VarReg {
-			reg = oldCache.Reg()
+			r = oldCache.Reg()
 			ok = true
 			oldCache.Storage = val.Nowhere // reusing cache register, don't free it
 		} else {
-			reg, ok = opTryAllocVarReg(f, t)
+			r, ok = opTryAllocVarReg(f, t)
 		}
 
 		if ok {
-			zeroExt := opMove(f, reg, newValue, false)
-			v.Cache = val.VarRegOperand(t, index, reg, zeroExt)
+			zeroExt := opMove(f, r, newValue, false)
+			v.Cache = val.VarRegOperand(t, index, r, zeroExt)
 			v.Dirty = true
 		} else {
 			// spill to stack
@@ -159,33 +159,33 @@ func opSetLocal(f *gen.Func, op Opcode, index int32) {
 		}
 
 	case newValue.Storage == val.TempReg:
-		var reg regs.R
+		var r reg.R
 		var zeroExt bool
 		var ok bool
 
 		if valueReg := newValue.Reg(); f.Regs.Allocated(t, valueReg) {
 			// repurposing the register which already contains the value
-			reg = valueReg
+			r = valueReg
 			zeroExt = newValue.RegZeroExt()
 			ok = true
 		} else {
 			// can't keep the transient register which contains the value
 			if oldCache.Storage == val.VarReg {
-				reg = oldCache.Reg()
+				r = oldCache.Reg()
 				ok = true
 				oldCache.Storage = val.Nowhere // reusing cache register, don't free it
 			} else {
-				reg, ok = opTryAllocVarReg(f, t)
+				r, ok = opTryAllocVarReg(f, t)
 			}
 
 			if ok {
 				// we got a register for the value
-				zeroExt = opMove(f, reg, newValue, false)
+				zeroExt = opMove(f, r, newValue, false)
 			}
 		}
 
 		if ok {
-			v.Cache = val.VarRegOperand(t, index, reg, zeroExt)
+			v.Cache = val.VarRegOperand(t, index, r, zeroExt)
 			v.Dirty = true
 		} else {
 			opStoreVar(f, index, newValue)
