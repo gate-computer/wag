@@ -30,10 +30,10 @@ const (
 	FloatRoundOp = 6
 	FloatSqrt    = 7
 
-	FloatCeil    = FloatRoundOp | (roundModeCeil << 3)
-	FloatFloor   = FloatRoundOp | (roundModeFloor << 3)
-	FloatTrunc   = FloatRoundOp | (roundModeTrunc << 3)
-	FloatNearest = FloatRoundOp | (roundModeNearest << 3)
+	FloatCeil    = FloatRoundOp | (roundModeCeil << 8)
+	FloatFloor   = FloatRoundOp | (roundModeFloor << 8)
+	FloatTrunc   = FloatRoundOp | (roundModeTrunc << 8)
+	FloatNearest = FloatRoundOp | (roundModeNearest << 8)
 )
 
 // Binary

@@ -15,7 +15,7 @@ import (
 )
 
 func (ISA) UnaryOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
-	switch props & 7 {
+	switch uint8(props) {
 	case prop.IntEqz:
 		r, _, own := opBorrowMaybeScratchReg(f, x, false)
 		test.opFromReg(&f.Text, x.Type, r, r)
@@ -57,7 +57,7 @@ func (ISA) UnaryOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
 
 	case prop.FloatRoundOp:
 		r, result := commonUnaryFloatOpPrologue(f, x)
-		roundMode := int8(props >> 3)
+		roundMode := int8(props >> 8)
 		roundsSSE.opReg(&f.Text, x.Type, r, r, roundMode)
 		return result
 
