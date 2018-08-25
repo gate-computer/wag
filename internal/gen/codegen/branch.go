@@ -172,8 +172,8 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	if value.Type != abi.Void {
 		if cond.Storage == val.TempReg && cond.Reg() == reg.Result {
 			r := opAllocReg(f, abi.I32)
-			zeroExt := opMove(f, r, cond, true)
-			cond = val.TempRegOperand(cond.Type, r, zeroExt)
+			isa.OpMoveI32Reg(f.M, r, reg.Result)
+			cond = val.TempRegOperand(cond.Type, r, true)
 		}
 
 		opMove(f, reg.Result, value, true)
@@ -260,8 +260,8 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	if value.Type != abi.Void {
 		if index.Storage == val.TempReg && index.Reg() == reg.Result {
 			r := opAllocReg(f, abi.I32)
-			zeroExt := opMove(f, r, index, true)
-			index = val.TempRegOperand(index.Type, r, zeroExt)
+			isa.OpMoveI32Reg(f.M, r, reg.Result)
+			index = val.TempRegOperand(index.Type, r, true)
 		}
 
 		opMove(f, reg.Result, value, true)

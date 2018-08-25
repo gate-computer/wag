@@ -329,6 +329,12 @@ func (ISA) OpMoveReg(m *module.M, t abi.Type, targetReg, sourceReg reg.R) {
 	}
 }
 
+// OpMoveI32Reg must not allocate registers or update CPU's condition flags.
+// It must zero-extend.
+func (ISA) OpMoveI32Reg(m *module.M, target, source reg.R) {
+	mov.opFromReg(&m.Text, abi.I32, target, source)
+}
+
 // OpStoreStackReg must not allocate registers.
 func (ISA) OpStoreStackReg(m *module.M, t abi.Type, offset int32, r reg.R) {
 	opStoreStackReg(m, t, offset, r)

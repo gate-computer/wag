@@ -113,7 +113,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 			regArgs.Set(abi.Int, indirect.Reg(), i)
 		} else {
 			debugf("indirect call index: %s <- %s", reg.Result, indirect)
-			isa.OpMoveReg(f.M, abi.I32, reg.Result, indirect.Reg())
+			isa.OpMoveI32Reg(f.M, reg.Result, indirect.Reg())
 		}
 	}
 
