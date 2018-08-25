@@ -268,14 +268,12 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	var r reg.R
-	var regZeroExt bool
 
 	if index.Storage.IsReg() {
 		r = index.Reg()
-		regZeroExt = index.RegZeroExt()
 	} else {
 		r = opAllocReg(f, abi.I32)
-		regZeroExt = isa.OpMove(f, r, index, false)
+		isa.OpMove(f, r, index, false)
 	}
 
 	f.Regs.FreeAll()
@@ -294,16 +292,20 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	isa.OpAddStackPtrImm(f.M, defaultDelta)
 	tableStackOffset := f.StackOffset - defaultDelta
 	opBranchIfOutOfBounds(f, r, int32(len(targetTable)), &defaultTarget.Label)
-	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f, tableType, r, regZeroExt, tableScale, int32(tableAddr))
+
+	isa.OpLoadIntROData(f, tableType, r, tableScale, int32(tableAddr))
+
+	var zeroExt bool
 
 	if commonStackOffset >= 0 {
 		isa.OpAddStackPtrImm(f.M, tableStackOffset-commonStackOffset)
+		zeroExt = true
 	} else {
 		isa.OpAddStackPtrUpper32(f.M, r)
-		regZeroExt = false
+		zeroExt = false
 	}
 
-	isa.OpBranchIndirect32(f.M, r, regZeroExt)
+	isa.OpBranchIndirect32(f.M, r, zeroExt)
 
 	// end of critical section.
 

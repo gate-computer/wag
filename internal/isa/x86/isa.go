@@ -385,6 +385,7 @@ func (ISA) OpBranchIfOutOfBounds(m *module.M, indexReg reg.R, upperBound, addr i
 	return m.Text.Addr
 }
 
+// opCompareBounds zero-extends the indexReg.
 func opCompareBounds(m *module.M, indexReg reg.R, upperBound int32) {
 	movImm.opImm(&m.Text, abi.I32, RegScratch, upperBound)
 	test.opFromReg(&m.Text, abi.I32, indexReg, indexReg)
@@ -451,15 +452,10 @@ func (ISA) OpCallIndirect(f *gen.Func, tableLen, sigIndex int32) int32 {
 	return f.Text.Addr
 }
 
-// OpLoadROIntIndex32ScaleDisp must not allocate registers.
-func (ISA) OpLoadROIntIndex32ScaleDisp(f *gen.Func, t abi.Type, r reg.R, regZeroExt bool, scale uint8, addr int32) (resultZeroExt bool) {
-	if !regZeroExt {
-		mov.opFromReg(&f.Text, abi.I32, r, r)
-	}
-
+// OpLoadIntROData must not allocate registers.  The register is both the index
+// (source) and the target register.  The index must have been zero-extended.
+func (ISA) OpLoadIntROData(f *gen.Func, t abi.Type, r reg.R, scale uint8, addr int32) {
 	mov.opFromAddr(&f.Text, t, r, scale, r, f.RODataAddr+addr)
-	resultZeroExt = true
-	return
 }
 
 // OpSetGlobal must not update CPU's condition flags.
