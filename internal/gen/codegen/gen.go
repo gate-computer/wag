@@ -268,7 +268,7 @@ func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 		opMove(f, reg.Result, result, false)
 	}
 
-	isa.OpAddImmToStackPtr(f.M, f.StackOffset)
+	isa.OpAddStackPtrImm(f.M, f.StackOffset)
 	isa.OpReturn(f.M)
 	deadend = true
 	return

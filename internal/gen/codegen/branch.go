@@ -133,13 +133,13 @@ func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	}
 
 	if target.FuncEnd {
-		isa.OpAddImmToStackPtr(f.M, f.StackOffset)
+		isa.OpAddStackPtrImm(f.M, f.StackOffset)
 		isa.OpReturn(f.M)
 	} else {
 		opSaveTemporaryOperands(f) // TODO: avoid saving operands which we are going to skip over
 		opInitVars(f)
 		opStoreVars(f, true)
-		isa.OpAddImmToStackPtr(f.M, f.StackOffset-target.StackOffset)
+		isa.OpAddStackPtrImm(f.M, f.StackOffset-target.StackOffset)
 		opBranch(f, &target.Label)
 	}
 
@@ -181,9 +181,9 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	stackDelta := f.StackOffset - target.StackOffset
 
-	isa.OpAddImmToStackPtr(f.M, stackDelta)
+	isa.OpAddStackPtrImm(f.M, stackDelta)
 	opBranchIf(f, cond, true, &target.Label)
-	isa.OpAddImmToStackPtr(f.M, -stackDelta)
+	isa.OpAddStackPtrImm(f.M, -stackDelta)
 
 	if target.ValueType != abi.Void {
 		pushResultRegOperand(f, target.ValueType)
@@ -257,12 +257,6 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	opInitVars(f)
 	opStoreVars(f, false)
 
-	var reg2 reg.R
-
-	if commonStackOffset < 0 {
-		reg2 = opAllocReg(f, abi.I32)
-	}
-
 	if value.Type != abi.Void {
 		if index.Storage == val.TempReg && index.Reg() == reg.Result {
 			r := opAllocReg(f, abi.I32)
@@ -297,18 +291,15 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 
 	defaultDelta := f.StackOffset - defaultTarget.StackOffset
 
-	isa.OpAddImmToStackPtr(f.M, defaultDelta)
+	isa.OpAddStackPtrImm(f.M, defaultDelta)
 	tableStackOffset := f.StackOffset - defaultDelta
 	opBranchIfOutOfBounds(f, r, int32(len(targetTable)), &defaultTarget.Label)
 	regZeroExt = isa.OpLoadROIntIndex32ScaleDisp(f, tableType, r, regZeroExt, tableScale, int32(tableAddr))
 
 	if commonStackOffset >= 0 {
-		isa.OpAddImmToStackPtr(f.M, tableStackOffset-commonStackOffset)
+		isa.OpAddStackPtrImm(f.M, tableStackOffset-commonStackOffset)
 	} else {
-		isa.OpMoveReg(f.M, abi.I64, reg2, r)
-		isa.OpShiftRightLogical32Bits(f.M, reg2)
-		isa.OpAddToStackPtr(f.M, reg2)
-
+		isa.OpAddStackPtrUpper32(f.M, r)
 		regZeroExt = false
 	}
 

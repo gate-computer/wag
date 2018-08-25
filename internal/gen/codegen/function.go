@@ -310,11 +310,11 @@ func opReserveStack(f *gen.Func, offset int32) {
 
 func opAdvanceStackPtr(f *gen.Func, offset int32) {
 	opReserveStack(f, offset)
-	isa.OpAddImmToStackPtr(f.M, -offset)
+	isa.OpAddStackPtrImm(f.M, -offset)
 }
 
 func opBackoffStackPtr(f *gen.Func, offset int32) {
-	isa.OpAddImmToStackPtr(f.M, offset)
+	isa.OpAddStackPtrImm(f.M, offset)
 	f.StackOffset -= offset
 
 	debugf("stack offset: %d", f.StackOffset)

@@ -209,14 +209,18 @@ func alignFunc(m *module.M) {
 	}
 }
 
-func (ISA) OpAddImmToStackPtr(m *module.M, offset int32) {
+// OpAddStackPtrImm must not allocate registers.
+func (ISA) OpAddStackPtrImm(m *module.M, offset int32) {
 	if offset != 0 {
 		add.opImm(&m.Text, abi.I64, RegStackPtr, offset)
 	}
 }
 
-func (ISA) OpAddToStackPtr(m *module.M, source reg.R) {
-	add.opFromReg(&m.Text, abi.I64, RegStackPtr, source)
+// OpAddStackPtrUpper32 must not allocate registers.
+func (ISA) OpAddStackPtrUpper32(m *module.M, r reg.R) {
+	mov.opFromReg(&m.Text, abi.I64, RegScratch, r)
+	shrImm.op(&m.Text, abi.I64, RegScratch, 32)
+	add.opFromReg(&m.Text, abi.I64, RegStackPtr, RegScratch)
 }
 
 // OpMoveIntImm may update CPU's condition flags.
@@ -323,11 +327,6 @@ func (ISA) OpMoveReg(m *module.M, t abi.Type, targetReg, sourceReg reg.R) {
 	default:
 		panic(t)
 	}
-}
-
-// OpShiftRightLogical32Bits must not allocate registers.
-func (ISA) OpShiftRightLogical32Bits(m *module.M, subject reg.R) {
-	shrImm.op(&m.Text, abi.I64, subject, 32)
 }
 
 // OpStoreStackReg must not allocate registers.
