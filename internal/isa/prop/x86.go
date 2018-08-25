@@ -13,43 +13,27 @@ import (
 // Unary
 
 const (
-	UnaryFloat = 1 << 8
-	UnaryRound = 1 << 9
+	// ROUNDSS/ROUNDSD instruction operands
+	roundModeNearest = 0x0
+	roundModeFloor   = 0x1
+	roundModeCeil    = 0x2
+	roundModeTrunc   = 0x3
 )
 
 const (
-	IndexIntEqz = iota
-	IndexIntClz
-	IndexIntCtz
-	IndexIntPopcnt
-)
+	IntEqz       = 0
+	IntClz       = 1
+	IntCtz       = 2
+	IntPopcnt    = 3
+	FloatAbs     = 4
+	FloatNeg     = 5
+	FloatRoundOp = 6
+	FloatSqrt    = 7
 
-const (
-	IndexFloatAbs = iota
-	IndexFloatNeg
-	IndexFloatSqrt
-)
-
-const (
-	// x86-64 ROUNDSS/ROUNDSD instruction operands
-	RoundModeNearest = 0x0
-	RoundModeFloor   = 0x1
-	RoundModeCeil    = 0x2
-	RoundModeTrunc   = 0x3
-)
-
-const (
-	IntEqz       = IndexIntEqz
-	IntClz       = IndexIntClz
-	IntCtz       = IndexIntCtz
-	IntPopcnt    = IndexIntPopcnt
-	FloatAbs     = UnaryFloat | IndexFloatAbs
-	FloatNeg     = UnaryFloat | IndexFloatNeg
-	FloatCeil    = UnaryFloat | UnaryRound | RoundModeCeil
-	FloatFloor   = UnaryFloat | UnaryRound | RoundModeFloor
-	FloatTrunc   = UnaryFloat | UnaryRound | RoundModeTrunc
-	FloatNearest = UnaryFloat | UnaryRound | RoundModeNearest
-	FloatSqrt    = UnaryFloat | IndexFloatSqrt
+	FloatCeil    = FloatRoundOp | (roundModeCeil << 3)
+	FloatFloor   = FloatRoundOp | (roundModeFloor << 3)
+	FloatTrunc   = FloatRoundOp | (roundModeTrunc << 3)
+	FloatNearest = FloatRoundOp | (roundModeNearest << 3)
 )
 
 // Binary

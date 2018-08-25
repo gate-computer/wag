@@ -15,36 +15,63 @@ import (
 )
 
 func (ISA) UnaryOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
-	if (props & prop.UnaryFloat) == 0 {
-		return unaryIntOp(f, props, x)
-	} else {
-		return unaryFloatOp(f, props, x)
+	switch props & 7 {
+	case prop.IntEqz:
+		r, _, own := opBorrowMaybeScratchReg(f, x, false)
+		test.opFromReg(&f.Text, x.Type, r, r)
+		if own {
+			f.Regs.Free(x.Type, r)
+		}
+		return val.ConditionFlagsOperand(val.Eq)
+
+	case prop.IntClz:
+		sourceReg, targetReg, result := commonUnaryIntOpPrologue(f, x)
+		bsr.opFromReg(&f.Text, x.Type, RegScratch, sourceReg)
+		movImm.opImm(&f.Text, x.Type, targetReg, -1)
+		cmove.opFromReg(&f.Text, x.Type, RegScratch, targetReg)
+		movImm.opImm(&f.Text, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
+		sub.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
+		return result
+
+	case prop.IntCtz:
+		sourceReg, targetReg, result := commonUnaryIntOpPrologue(f, x)
+		bsf.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
+		movImm.opImm(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
+		cmove.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
+		return result
+
+	case prop.IntPopcnt:
+		sourceReg, targetReg, result := commonUnaryIntOpPrologue(f, x)
+		popcnt.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
+		return result
+
+	case prop.FloatAbs:
+		r, result := commonUnaryFloatOpPrologue(f, x)
+		opAbsFloatReg(f.M, x.Type, r)
+		return result
+
+	case prop.FloatNeg:
+		r, result := commonUnaryFloatOpPrologue(f, x)
+		opNegFloatReg(f.M, x.Type, r)
+		return result
+
+	case prop.FloatRoundOp:
+		r, result := commonUnaryFloatOpPrologue(f, x)
+		roundMode := int8(props >> 3)
+		roundsSSE.opReg(&f.Text, x.Type, r, r, roundMode)
+		return result
+
+	case prop.FloatSqrt:
+		r, result := commonUnaryFloatOpPrologue(f, x)
+		sqrtsSSE.opFromReg(&f.Text, x.Type, r, r)
+		return result
 	}
+
+	panic("unknown unary op")
 }
 
-func unaryIntOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
-	switch index := uint8(props); index {
-	case prop.IndexIntEqz:
-		return opIntEqz(f, x)
-
-	default:
-		return commonUnaryIntOp(f, index, x)
-	}
-}
-
-func opIntEqz(f *gen.Func, x val.Operand) val.Operand {
-	r, _, own := opBorrowMaybeScratchReg(f, x, false)
-	if own {
-		defer f.Regs.Free(x.Type, r)
-	}
-
-	test.opFromReg(&f.Text, x.Type, r, r)
-	return val.ConditionFlagsOperand(val.Eq)
-}
-
-func commonUnaryIntOp(f *gen.Func, index uint8, x val.Operand) (result val.Operand) {
+func commonUnaryIntOpPrologue(f *gen.Func, x val.Operand) (sourceReg, targetReg reg.R, result val.Operand) {
 	var ok bool
-	var targetReg reg.R
 
 	sourceReg, _, own := opBorrowMaybeScratchReg(f, x, false)
 	if own {
@@ -57,57 +84,15 @@ func commonUnaryIntOp(f *gen.Func, index uint8, x val.Operand) (result val.Opera
 	}
 
 	result = val.TempRegOperand(x.Type, targetReg, true)
-
-	switch index {
-	case prop.IndexIntClz:
-		bsr.opFromReg(&f.Text, x.Type, RegScratch, sourceReg)
-		movImm.opImm(&f.Text, x.Type, targetReg, -1)
-		cmove.opFromReg(&f.Text, x.Type, RegScratch, targetReg)
-		movImm.opImm(&f.Text, x.Type, targetReg, (int32(x.Type.Size())<<3)-1)
-		sub.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
-		return
-
-	case prop.IndexIntCtz:
-		bsf.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
-		movImm.opImm(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
-		cmove.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
-		return
-
-	case prop.IndexIntPopcnt:
-		popcnt.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
-		return
-	}
-
-	panic("unknown unary int op")
+	return
 }
 
-func unaryFloatOp(f *gen.Func, props uint16, x val.Operand) (result val.Operand) {
+func commonUnaryFloatOpPrologue(f *gen.Func, x val.Operand) (r reg.R, result val.Operand) {
 	// TODO: support memory source operands
 
-	r, _ := opMaybeResultReg(f, x, false)
+	r, _ = opMaybeResultReg(f, x, false)
 	result = val.TempRegOperand(x.Type, r, false)
-
-	if (props & prop.UnaryRound) != 0 {
-		roundMode := uint8(props)
-		roundsSSE.opReg(&f.Text, x.Type, r, r, int8(roundMode))
-		return
-	} else {
-		switch index := uint8(props); index {
-		case prop.IndexFloatAbs:
-			opAbsFloatReg(f.M, x.Type, r)
-			return
-
-		case prop.IndexFloatNeg:
-			opNegFloatReg(f.M, x.Type, r)
-			return
-
-		case prop.IndexFloatSqrt:
-			sqrtsSSE.opFromReg(&f.Text, x.Type, r, r)
-			return
-		}
-	}
-
-	panic("unknown unary float op")
+	return
 }
 
 // opAbsFloatReg in-place.
