@@ -180,7 +180,8 @@ func opSetLocal(f *gen.Func, op Opcode, index int32) {
 
 			if ok {
 				// we got a register for the value
-				zeroExt = opMove(f, r, newValue, false)
+				isa.OpMoveReg(f.M, newValue.Type, r, valueReg)
+				zeroExt = true
 			}
 		}
 

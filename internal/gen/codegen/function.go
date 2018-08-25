@@ -369,7 +369,7 @@ func opMove(f *gen.Func, target reg.R, x val.Operand, preserveFlags bool) (zeroE
 func opMaterializeOperand(f *gen.Func, x val.Operand) val.Operand {
 	if x.Storage == val.ConditionFlags {
 		r := opAllocReg(f, x.Type)
-		zeroExt := opMove(f, r, x, false)
+		zeroExt := opMove(f, r, x, false) // TODO: use condition flags-specific move function
 		return val.TempRegOperand(x.Type, r, zeroExt)
 	} else {
 		return opPreloadOperand(f, x) // XXX: should this be effectiveOperand?
@@ -385,7 +385,7 @@ func opPreloadOperand(f *gen.Func, x val.Operand) val.Operand {
 		v := &f.Vars[index]
 
 		if r, ok := opTryAllocVarReg(f, x.Type); ok {
-			zeroExt := opMove(f, r, x, true)
+			zeroExt := opMove(f, r, x, true) // TODO: use VarMem-specific move function
 			x = val.VarRegOperand(x.Type, index, r, zeroExt).WithBounds(x.Bounds)
 			v.Cache = x
 			v.Dirty = false
@@ -393,7 +393,7 @@ func opPreloadOperand(f *gen.Func, x val.Operand) val.Operand {
 
 	case val.Stack:
 		r := opAllocReg(f, x.Type)
-		zeroExt := opMove(f, r, x, true)
+		zeroExt := opMove(f, r, x, true) // TODO: use stack-specific move function
 		x = val.TempRegOperand(x.Type, r, zeroExt)
 	}
 
@@ -458,7 +458,7 @@ func opStabilizeOperandStack(f *gen.Func) {
 		debugf("stabilizing operand: %v", x)
 
 		r := opAllocReg(f, x.Type)
-		zeroExt := opMove(f, r, x, false)
+		zeroExt := opMove(f, r, x, false) // TODO: use specific move functions (in above switch)
 		f.Operands[i] = val.TempRegOperand(x.Type, r, zeroExt)
 	}
 
