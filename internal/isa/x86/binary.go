@@ -15,7 +15,7 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func (ISA) BinaryOp(f *gen.Func, props uint16, a, b val.Operand) val.Operand {
+func (MacroAssembler) OpBinary(f *gen.Func, props uint16, a, b val.Operand) val.Operand {
 	if (props & prop.BinaryFloat) == 0 {
 		switch {
 		case (props & prop.BinaryCompare) != 0:
@@ -266,7 +266,7 @@ func binaryIntDivmulOp(f *gen.Func, index uint8, a, b val.Operand) val.Operand {
 				jne.rel8.opStub(&f.Text)
 				do.AddSite(f.Text.Addr)
 
-				opTrapCall(f, trap.IntegerOverflow)
+				opTrap(f, trap.IntegerOverflow)
 			}
 
 			do.Addr = f.Text.Addr
@@ -304,7 +304,7 @@ func opCheckDivideByZero(f *gen.Func, t abi.Type, r reg.R) {
 	jne.rel8.opStub(&f.Text)
 	end.AddSite(f.Text.Addr)
 
-	opTrapCall(f, trap.IntegerDivideByZero)
+	opTrap(f, trap.IntegerDivideByZero)
 
 	end.Addr = f.Text.Addr
 	updateLocalBranches(f.M, &end)

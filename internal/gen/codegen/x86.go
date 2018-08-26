@@ -10,4 +10,7 @@ import (
 	"github.com/tsavola/wag/internal/isa/x86"
 )
 
-var isa x86.ISA
+var (
+	isa x86.ISA
+	asm x86.MacroAssembler
+)

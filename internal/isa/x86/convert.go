@@ -14,7 +14,7 @@ import (
 	"github.com/tsavola/wag/internal/isa/prop"
 )
 
-func (ISA) ConversionOp(f *gen.Func, props uint16, resultType abi.Type, source val.Operand) (result val.Operand) {
+func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType abi.Type, source val.Operand) (result val.Operand) {
 	switch props {
 	case prop.Wrap:
 		return opWrap(f, resultType, source)

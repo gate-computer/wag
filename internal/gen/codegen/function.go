@@ -145,7 +145,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 	addr := f.Text.Addr
 	f.FuncLinks[funcIndex].Addr = addr
 	f.Map.PutFuncAddr(addr)
-	isa.OpEnterFunc(f)
+	asm.TrapIfSuspended(f)
 
 	f.ResultType = sig.Result
 
@@ -215,7 +215,7 @@ func genFunction(m *module.M, p *gen.Prog, load loader.L, funcIndex int) {
 
 	if !deadend {
 		opBackoffStackPtr(f, f.StackOffset)
-		isa.OpReturn(m)
+		asm.Return(m)
 	}
 
 	if len(f.Operands) != 0 {
@@ -293,7 +293,7 @@ func opTryAllocVarReg(f *gen.Func, t abi.Type) (r reg.R, ok bool) {
 func opStackCheck(f *gen.Func) {
 	if f.StackCheckAddr == 0 {
 		debugf("stack check")
-		f.StackCheckAddr = isa.OpTrapIfStackExhausted(f)
+		f.StackCheckAddr = asm.TrapIfStackExhausted(f)
 	}
 }
 
@@ -310,11 +310,11 @@ func opReserveStack(f *gen.Func, offset int32) {
 
 func opAdvanceStackPtr(f *gen.Func, offset int32) {
 	opReserveStack(f, offset)
-	isa.OpAddStackPtrImm(f.M, -offset)
+	asm.AddStackPtrImm(f.M, -offset)
 }
 
 func opBackoffStackPtr(f *gen.Func, offset int32) {
-	isa.OpAddStackPtrImm(f.M, offset)
+	asm.AddStackPtrImm(f.M, offset)
 	f.StackOffset -= offset
 
 	debugf("stack offset: %d", f.StackOffset)
@@ -323,7 +323,7 @@ func opBackoffStackPtr(f *gen.Func, offset int32) {
 func opPush(f *gen.Func, x val.Operand) {
 	x = effectiveOperand(f, x)
 	opReserveStack(f, obj.Word)
-	isa.OpPush(f, x)
+	asm.Push(f, x)
 }
 
 func opInitVars(f *gen.Func) {
@@ -363,7 +363,7 @@ func opInitVarsUntil(f *gen.Func, lastIndex int32, lastValue val.Operand) {
 // opMove must not allocate registers.
 func opMove(f *gen.Func, target reg.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
 	x = effectiveOperand(f, x)
-	return isa.OpMove(f, target, x, preserveFlags)
+	return asm.Move(f, target, x, preserveFlags)
 }
 
 func opMaterializeOperand(f *gen.Func, x val.Operand) val.Operand {
@@ -657,6 +657,6 @@ func opStoreVar(f *gen.Func, index int32, x val.Operand) {
 		opInitVarsUntil(f, index, x)
 	} else {
 		offset := effectiveVarStackOffset(f, index)
-		isa.OpStoreStack(f, offset, x)
+		asm.StoreStack(f, offset, x)
 	}
 }

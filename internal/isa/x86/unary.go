@@ -14,7 +14,7 @@ import (
 	"github.com/tsavola/wag/internal/module"
 )
 
-func (ISA) UnaryOp(f *gen.Func, props uint16, x val.Operand) val.Operand {
+func (MacroAssembler) OpUnary(f *gen.Func, props uint16, x val.Operand) val.Operand {
 	switch uint8(props) {
 	case prop.IntEqz:
 		r, _, own := opBorrowMaybeScratchReg(f, x, false)

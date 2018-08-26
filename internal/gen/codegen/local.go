@@ -180,7 +180,7 @@ func opSetLocal(f *gen.Func, op Opcode, index int32) {
 
 			if ok {
 				// we got a register for the value
-				isa.OpMoveReg(f.M, newValue.Type, r, valueReg)
+				asm.MoveReg(f.M, newValue.Type, r, valueReg)
 				zeroExt = true
 			}
 		}

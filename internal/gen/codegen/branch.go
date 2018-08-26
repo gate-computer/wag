@@ -133,13 +133,13 @@ func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	}
 
 	if target.FuncEnd {
-		isa.OpAddStackPtrImm(f.M, f.StackOffset)
-		isa.OpReturn(f.M)
+		asm.AddStackPtrImm(f.M, f.StackOffset)
+		asm.Return(f.M)
 	} else {
 		opSaveTemporaryOperands(f) // TODO: avoid saving operands which we are going to skip over
 		opInitVars(f)
 		opStoreVars(f, true)
-		isa.OpAddStackPtrImm(f.M, f.StackOffset-target.StackOffset)
+		asm.AddStackPtrImm(f.M, f.StackOffset-target.StackOffset)
 		opBranch(f, &target.Label)
 	}
 
@@ -172,7 +172,7 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	if value.Type != abi.Void {
 		if cond.Storage == val.TempReg && cond.Reg() == reg.Result {
 			r := opAllocReg(f, abi.I32)
-			isa.OpMoveI32Reg(f.M, r, reg.Result)
+			asm.MoveI32Reg(f.M, r, reg.Result)
 			cond = val.TempRegOperand(cond.Type, r, true)
 		}
 
@@ -181,9 +181,9 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	stackDelta := f.StackOffset - target.StackOffset
 
-	isa.OpAddStackPtrImm(f.M, stackDelta)
+	asm.AddStackPtrImm(f.M, stackDelta)
 	opBranchIf(f, cond, true, &target.Label)
-	isa.OpAddStackPtrImm(f.M, -stackDelta)
+	asm.AddStackPtrImm(f.M, -stackDelta)
 
 	if target.ValueType != abi.Void {
 		pushResultRegOperand(f, target.ValueType)
@@ -260,7 +260,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	if value.Type != abi.Void {
 		if index.Storage == val.TempReg && index.Reg() == reg.Result {
 			r := opAllocReg(f, abi.I32)
-			isa.OpMoveI32Reg(f.M, r, reg.Result)
+			asm.MoveI32Reg(f.M, r, reg.Result)
 			index = val.TempRegOperand(index.Type, r, true)
 		}
 
@@ -273,7 +273,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 		r = index.Reg()
 	} else {
 		r = opAllocReg(f, abi.I32)
-		isa.OpMove(f, r, index, false)
+		asm.Move(f, r, index, false)
 	}
 
 	f.Regs.FreeAll()
@@ -289,23 +289,23 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 
 	defaultDelta := f.StackOffset - defaultTarget.StackOffset
 
-	isa.OpAddStackPtrImm(f.M, defaultDelta)
+	asm.AddStackPtrImm(f.M, defaultDelta)
 	tableStackOffset := f.StackOffset - defaultDelta
 	opBranchIfOutOfBounds(f, r, int32(len(targetTable)), &defaultTarget.Label)
 
-	isa.OpLoadIntROData(f, tableType, r, tableScale, int32(tableAddr))
+	asm.LoadIntROData(f, tableType, r, tableScale, int32(tableAddr))
 
 	var zeroExt bool
 
 	if commonStackOffset >= 0 {
-		isa.OpAddStackPtrImm(f.M, tableStackOffset-commonStackOffset)
+		asm.AddStackPtrImm(f.M, tableStackOffset-commonStackOffset)
 		zeroExt = true
 	} else {
-		isa.OpAddStackPtrUpper32(f.M, r)
+		asm.AddStackPtrUpper32(f.M, r)
 		zeroExt = false
 	}
 
-	isa.OpBranchIndirect32(f.M, r, zeroExt)
+	asm.BranchIndirect(f.M, r, zeroExt)
 
 	// end of critical section.
 
@@ -440,7 +440,7 @@ func opLabel(f *gen.Func, l *link.L) {
 }
 
 func opBranch(f *gen.Func, l *link.L) {
-	retAddr := isa.OpBranch(f.M, l.Addr)
+	retAddr := asm.Branch(f.M, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}
@@ -448,14 +448,14 @@ func opBranch(f *gen.Func, l *link.L) {
 
 func opBranchIf(f *gen.Func, x val.Operand, yes bool, l *link.L) {
 	x = effectiveOperand(f, x)
-	retAddrs := isa.OpBranchIf(f, x, yes, l.Addr)
+	retAddrs := asm.BranchIf(f, x, yes, l.Addr)
 	if l.Addr == 0 {
 		l.AddSites(retAddrs)
 	}
 }
 
 func opBranchIfOutOfBounds(f *gen.Func, indexReg reg.R, upperBound int32, l *link.L) {
-	site := isa.OpBranchIfOutOfBounds(f.M, indexReg, upperBound, l.Addr)
+	site := asm.BranchIfOutOfBounds(f.M, indexReg, upperBound, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(site)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/atomic"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/rodata"
@@ -47,9 +48,9 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 	binary.LittleEndian.PutUint32(buf[rodata.Mask5f00Addr32:], 0x5f000000)
 	binary.LittleEndian.PutUint64(buf[rodata.Mask43e0Addr64:], 0x43e0000000000000)
 
-	isa.OpEnterTrapHandler(m, trap.MissingFunction) // at zero address
+	asm.JumpToTrapHandler(m, trap.MissingFunction) // at zero address
 
-	isa.OpInit(m)
+	asm.Init(m)
 	// after init, execution proceeds to start func, main func, or exit trap
 
 	maxInitIndex := -1
@@ -58,7 +59,7 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 	if m.StartDefined {
 		maxInitIndex = int(m.StartIndex)
 
-		opInitCall(m, &p.FuncLinks[m.StartIndex])
+		opInitialCall(m, &p.FuncLinks[m.StartIndex])
 		// start func returns here; execution proceeds to main func or exit trap
 	}
 
@@ -76,29 +77,29 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 
 			for i, t := range sig.Args {
 				r := paramRegs.IterForward(t.Category())
-				isa.OpMoveIntImm(m, r, entryArgs[i])
+				asm.MoveIntImm(m, r, entryArgs[i])
 			}
 		}
 
-		opInitCall(m, &p.FuncLinks[m.EntryIndex])
+		opInitialCall(m, &p.FuncLinks[m.EntryIndex])
 		// main func returns here; execution proceeds to exit trap
 
 		mainResultType = sig.Result
 	}
 
 	if mainResultType != abi.I32 {
-		isa.OpClearIntResultReg(m)
+		asm.ClearIntResultReg(m)
 	}
 
-	isa.OpEnterExitTrapHandler(m)
+	asm.Exit(m)
 
 	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
 		p.TrapLinks[id].Addr = m.Text.Addr
-		isa.OpEnterTrapHandler(m, id)
+		asm.JumpToTrapHandler(m, id)
 	}
 
 	for i, imp := range m.ImportFuncs {
-		addr := genImportEntry(m, imp)
+		addr := genImportTrampoline(m, imp)
 		p.FuncLinks[i].Addr = addr
 	}
 
@@ -149,7 +150,7 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 			genFunction(m, p, load, i)
 		}
 
-		isa.ClearInsnCache()
+		// TODO: trigger instruction cache invalidation
 
 		roDataBuf := m.ROData.Bytes()
 
@@ -159,18 +160,18 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 
 			for _, tableIndex := range ln.TableIndexes {
 				offset := rodata.TableAddr + tableIndex*8
-				isa.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
+				atomic.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
 			}
 
 			isa.UpdateCalls(m.Text.Bytes(), &ln.L)
 		}
 
-		isa.ClearInsnCache()
+		// TODO: trigger instruction cache invalidation
 	}
 }
 
-func opInitCall(m *module.M, l *link.FuncL) {
-	retAddr := isa.OpInitCall(m)
+func opInitialCall(m *module.M, l *link.FuncL) {
+	retAddr := asm.CallMissing(m)
 	m.Map.PutCallSite(retAddr, 0) // initial stack frame
 	l.AddSite(retAddr)
 }

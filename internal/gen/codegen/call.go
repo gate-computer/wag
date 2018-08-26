@@ -56,7 +56,7 @@ func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 		opMove(f, reg.Result, funcIndex, false)
 	}
 
-	retAddr := isa.OpCallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
+	retAddr := asm.CallIndirect(f, int32(len(f.TableFuncs)), int32(sigIndex))
 	f.MapCallAddr(retAddr)
 	opBackoffStackPtr(f, numStackParams*obj.Word)
 	return
@@ -106,14 +106,14 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 	if indirect.Storage.IsReg() && indirect.Reg() != reg.Result {
 		if i := regArgs.Get(abi.Int, reg.Result); i >= 0 {
 			debugf("indirect call index: %s <-> %s", reg.Result, indirect)
-			isa.OpSwap(f.M, abi.Int, reg.Result, indirect.Reg())
+			asm.Swap(f.M, abi.Int, reg.Result, indirect.Reg())
 
 			args[i] = val.TempRegOperand(args[i].Type, indirect.Reg(), args[i].RegZeroExt())
 			regArgs.Clear(abi.Int, reg.Result)
 			regArgs.Set(abi.Int, indirect.Reg(), i)
 		} else {
 			debugf("indirect call index: %s <- %s", reg.Result, indirect)
-			isa.OpMoveI32Reg(f.M, reg.Result, indirect.Reg())
+			asm.MoveI32Reg(f.M, reg.Result, indirect.Reg())
 		}
 	}
 
@@ -138,7 +138,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 		for i := int32(len(args)) - 1; i >= numStackParams; i-- {
 			if args[i].Storage == val.Stack {
 				debugf("call param #%d: stack (temporary) <- %s", i, args[i])
-				isa.OpCopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
+				asm.CopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
 				sourceIndex++
 				targetIndex++
 			}
@@ -152,13 +152,13 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 			switch x.Storage {
 			case val.Stack:
 				debugf("call param #%d: stack <- %s", i, x)
-				isa.OpCopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
+				asm.CopyStack(f.M, targetIndex*obj.Word, sourceIndex*obj.Word)
 				sourceIndex++
 
 			default:
 				x = effectiveOperand(f, x)
 				debugf("call param #%d: stack <- %s", i, x)
-				isa.OpStoreStack(f, targetIndex*obj.Word, x)
+				asm.StoreStack(f, targetIndex*obj.Word, x)
 			}
 
 			targetIndex++
@@ -177,7 +177,7 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 				}
 
 				debugf("call param #%d: %s %s <- %s", i, cat, r, value.Reg())
-				isa.OpMoveReg(f.M, value.Type, r, value.Reg())
+				asm.MoveReg(f.M, value.Type, r, value.Reg())
 
 				args[i] = val.RegOperand(false, value.Type, r)
 				regArgs.Set(cat, r, i)
@@ -201,13 +201,13 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 			} else {
 				if otherArgIndex := regArgs.Get(cat, posReg); otherArgIndex >= 0 {
 					debugf("call param #%d: %s %s <-> %s", i, cat, posReg, value.Reg())
-					isa.OpSwap(f.M, cat, posReg, value.Reg())
+					asm.Swap(f.M, cat, posReg, value.Reg())
 
 					args[otherArgIndex] = value
 					regArgs.Set(cat, value.Reg(), otherArgIndex)
 				} else {
 					debugf("call param #%d: %s %s <- %s", i, cat, posReg, value.Reg())
-					isa.OpMoveReg(f.M, value.Type, posReg, value.Reg())
+					asm.MoveReg(f.M, value.Type, posReg, value.Reg())
 				}
 			}
 
@@ -250,7 +250,12 @@ func setupCallOperands(f *gen.Func, op Opcode, sig abi.Sig, indirect val.Operand
 }
 
 func opCall(f *gen.Func, l *link.L) {
-	retAddr := isa.OpCall(f.M, l.Addr)
+	var retAddr int32
+	if l.Addr != 0 {
+		retAddr = asm.Call(f.M, l.Addr)
+	} else {
+		retAddr = asm.CallMissing(f.M)
+	}
 	f.MapCallAddr(retAddr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)

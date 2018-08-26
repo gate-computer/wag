@@ -134,7 +134,7 @@ func binaryOp(f *gen.Func, op Opcode, left, right val.Operand, info opInfo) {
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.BinaryOp(f, info.props(), left, right)
+	result := asm.OpBinary(f, info.props(), left, right)
 	pushOperand(f, result)
 }
 
@@ -165,7 +165,7 @@ func genConversionOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.ConversionOp(f, info.props(), info.primaryType(), x)
+	result := asm.Convert(f, info.props(), info.primaryType(), x)
 	pushOperand(f, result)
 	return
 }
@@ -182,7 +182,7 @@ func genLoadOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	result := isa.LoadOp(f, info.props(), index, info.primaryType(), offset)
+	result := asm.Load(f, info.props(), index, info.primaryType(), offset)
 	updateMemoryIndex(f, virtualIndex, offset, info.props())
 	pushOperand(f, result)
 	return
@@ -205,7 +205,7 @@ func genStoreOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	offset := load.Varuint32()
 
 	opStabilizeOperandStack(f)
-	isa.StoreOp(f, info.props(), index, value, offset)
+	asm.Store(f, info.props(), index, value, offset)
 	updateMemoryIndex(f, virtualIndex, offset, info.props())
 	return
 }
@@ -222,7 +222,7 @@ func genUnaryOp(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.UnaryOp(f, info.props(), x)
+	result := asm.OpUnary(f, info.props(), x)
 	pushOperand(f, result)
 	return
 }
@@ -231,7 +231,7 @@ func genCurrentMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deade
 	load.Byte() // reserved
 
 	opStabilizeOperandStack(f)
-	result := isa.OpCurrentMemory(f.M)
+	result := asm.QueryMemorySize(f.M)
 	pushOperand(f, result)
 	return
 }
@@ -250,7 +250,7 @@ func genGrowMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend 
 	}
 
 	opStabilizeOperandStack(f)
-	result := isa.OpGrowMemory(f, x)
+	result := asm.GrowMemory(f, x)
 	pushOperand(f, result)
 	return
 }
@@ -268,8 +268,8 @@ func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 		opMove(f, reg.Result, result, false)
 	}
 
-	isa.OpAddStackPtrImm(f.M, f.StackOffset)
-	isa.OpReturn(f.M)
+	asm.AddStackPtrImm(f.M, f.StackOffset)
+	asm.Return(f.M)
 	deadend = true
 	return
 }
@@ -286,13 +286,13 @@ func genSelect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 		panic(fmt.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
 	}
 
-	result := isa.OpSelect(f, left, right, cond)
+	result := asm.Select(f, left, right, cond)
 	pushOperand(f, result)
 	return
 }
 
 func genUnreachable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	isa.OpTrapCall(f, trap.Unreachable)
+	asm.Trap(f, trap.Unreachable)
 	deadend = true
 	return
 }

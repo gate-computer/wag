@@ -41,8 +41,8 @@ var memoryStores = []memoryAccess{
 	prop.IndexFloatStore: {binaryInsn{movsSSE, movImm}, 0, false}, // integer immediate works
 }
 
-// LoadOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) LoadOp(f *gen.Func, props uint16, index val.Operand, resultType abi.Type, offset uint32) (result val.Operand) {
+// Load makes sure that index gets zero-extended if it's a VarReg operand.
+func (MacroAssembler) Load(f *gen.Func, props uint16, index val.Operand, resultType abi.Type, offset uint32) (result val.Operand) {
 	size := props >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
@@ -68,8 +68,8 @@ func (ISA) LoadOp(f *gen.Func, props uint16, index val.Operand, resultType abi.T
 	return
 }
 
-// StoreOp makes sure that index gets zero-extended if it's a VarReg operand.
-func (ISA) StoreOp(f *gen.Func, props uint16, index, x val.Operand, offset uint32) {
+// Store makes sure that index gets zero-extended if it's a VarReg operand.
+func (MacroAssembler) Store(f *gen.Func, props uint16, index, x val.Operand, offset uint32) {
 	size := props >> 8
 
 	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
@@ -121,7 +121,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32)
 	reachOffset := uint64(offset) + sizeReach
 
 	if reachOffset >= 0x80000000 {
-		opTrapCall(f, trap.MemoryOutOfBounds)
+		opTrap(f, trap.MemoryOutOfBounds)
 		return
 	}
 
@@ -132,7 +132,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32)
 		value := uint64(index.ImmValue())
 
 		if value >= 0x80000000 {
-			opTrapCall(f, trap.MemoryOutOfBounds)
+			opTrap(f, trap.MemoryOutOfBounds)
 			return
 		}
 
@@ -140,7 +140,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32)
 		reachAddr := addr + sizeReach
 
 		if reachAddr >= 0x80000000 {
-			opTrapCall(f, trap.MemoryOutOfBounds)
+			opTrap(f, trap.MemoryOutOfBounds)
 			return
 		}
 
@@ -185,7 +185,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32)
 		jl.rel8.opStub(&f.Text)
 		checked.AddSite(f.Text.Addr)
 
-		opTrapCall(f, trap.MemoryOutOfBounds)
+		opTrap(f, trap.MemoryOutOfBounds)
 
 		checked.Addr = f.Text.Addr
 		updateLocalBranches(f.M, &checked)
@@ -197,7 +197,7 @@ func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32)
 	return
 }
 
-func (ISA) OpCurrentMemory(m *module.M) val.Operand {
+func (MacroAssembler) QueryMemorySize(m *module.M) val.Operand {
 	mov.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryLimit)
 	sub.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryBase)
 	shrImm.op(&m.Text, abi.I64, RegResult, wasm.PageBits)
@@ -205,7 +205,7 @@ func (ISA) OpCurrentMemory(m *module.M) val.Operand {
 	return val.TempRegOperand(abi.I32, RegResult, true)
 }
 
-func (ISA) OpGrowMemory(f *gen.Func, x val.Operand) val.Operand {
+func (MacroAssembler) GrowMemory(f *gen.Func, x val.Operand) val.Operand {
 	var out link.L
 	var fail link.L
 

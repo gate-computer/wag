@@ -14,7 +14,7 @@ const (
 	MaxImportParams = obj.StackReserve/obj.Word - 2
 )
 
-func genImportEntry(m *module.M, imp module.ImportFunc) (addr int32) {
+func genImportTrampoline(m *module.M, imp module.ImportFunc) (addr int32) {
 	if debug {
 		debugf("import function")
 		debugDepth++
@@ -37,11 +37,11 @@ func genImportEntry(m *module.M, imp module.ImportFunc) (addr int32) {
 		for i := range sig.Args {
 			t := sig.Args[i]
 			r := paramRegs.IterForward(t.Category())
-			isa.OpStoreStackReg(m, t, -(int32(i)+1)*obj.Word, r)
+			asm.StoreStackReg(m, t, -(int32(i)+1)*obj.Word, r)
 		}
 	}
 
-	isa.OpEnterImportFunc(m, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
+	asm.JumpToImportFunc(m, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
 
 	if debug {
 		debugDepth--
