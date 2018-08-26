@@ -52,7 +52,7 @@ const (
 	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxRODataSize = 16 * 1024 * 1024
 	loadBenchmarkRODataAddr    = 0x10000
-	loadBenchmarkTextCRC32     = 0xbb8d1b04
+	loadBenchmarkTextCRC32     = 0x1068856a
 	loadBenchmarkRODataCRC32   = 0xd63dcf14
 )
 
