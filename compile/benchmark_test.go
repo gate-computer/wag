@@ -52,8 +52,8 @@ const (
 	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxRODataSize = 16 * 1024 * 1024
 	loadBenchmarkRODataAddr    = 0x10000
-	loadBenchmarkTextCRC32     = 0x1068856a
-	loadBenchmarkRODataCRC32   = 0xd63dcf14
+	loadBenchmarkTextCRC32     = 0x6f5cffa4
+	loadBenchmarkRODataCRC32   = 0xb4d294b0
 )
 
 func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b) }

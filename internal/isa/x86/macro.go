@@ -236,19 +236,13 @@ func (MacroAssembler) Exit(m *module.M) {
 }
 
 // GetGlobal must not update CPU's condition flags.
-func (MacroAssembler) GetGlobal(f *gen.Func, t abi.Type, offset int32) val.Operand {
-	r, ok := f.Regs.Alloc(t)
-	if !ok {
-		r = RegResult
-	}
-
+func (MacroAssembler) GetGlobal(m *module.M, t abi.Type, target reg.R, offset int32) (zeroExt bool) {
 	if t.Category() == abi.Int {
-		mov.opFromIndirect(&f.Text, t, r, 0, NoIndex, RegMemoryBase, offset)
+		mov.opFromIndirect(&m.Text, t, target, 0, NoIndex, RegMemoryBase, offset)
 	} else {
-		movSSE.opFromIndirect(&f.Text, t, r, 0, NoIndex, RegMemoryBase, offset)
+		movSSE.opFromIndirect(&m.Text, t, target, 0, NoIndex, RegMemoryBase, offset)
 	}
-
-	return val.TempRegOperand(t, r, true)
+	return true
 }
 
 // SetGlobal must not update CPU's condition flags.

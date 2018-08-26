@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
 )
@@ -26,8 +27,9 @@ func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend b
 	offset := offsetOfGlobal(f, globalIndex)
 
 	opStabilizeOperandStack(f)
-	result := asm.GetGlobal(f, global.Type, offset)
-	pushOperand(f, result)
+	r := opAllocReg(f, global.Type)
+	zeroExt := asm.GetGlobal(f.M, global.Type, r, offset)
+	pushOperand(f, val.TempRegOperand(global.Type, r, zeroExt))
 	return
 }
 
