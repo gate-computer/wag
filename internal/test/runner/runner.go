@@ -156,6 +156,10 @@ func NewProgram(maxTextSize, maxRODataSize int) (p *Program, err error) {
 	return
 }
 
+func (p *Program) TextAddr() uintptr {
+	return (*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data
+}
+
 func (p *Program) RODataAddr() int32 {
 	addr := (*reflect.SliceHeader)(unsafe.Pointer(&p.ROData)).Data
 	if addr == 0 || addr > 0x7fffffff-uintptr(len(p.ROData)) {

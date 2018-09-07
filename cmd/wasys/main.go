@@ -19,6 +19,9 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile"
+	"github.com/tsavola/wag/object"
+	"github.com/tsavola/wag/object/debug/dump"
+	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/static"
 )
 
@@ -79,6 +82,8 @@ func main() {
 		roDataSize  = 4 * 1024 * 1024
 		stackSize   = 64 * 1024
 		entrySymbol = "main"
+		dumpText    = false
+		dumpROData  = false
 	)
 
 	flag.BoolVar(&verbose, "v", verbose, "verbose logging")
@@ -86,6 +91,8 @@ func main() {
 	flag.IntVar(&roDataSize, "rodatasize", roDataSize, "maximum read-only data size")
 	flag.IntVar(&stackSize, "stacksize", stackSize, "call stack size")
 	flag.StringVar(&entrySymbol, "func", entrySymbol, "function to run")
+	flag.BoolVar(&dumpText, "dumptext", dumpText, "disassemble the generated code to stdout")
+	flag.BoolVar(&dumpROData, "dumprodata", dumpROData, "dump the generated read-only data to stdout")
 	flag.Parse()
 
 	if flag.NArg() != 1 {
@@ -117,10 +124,16 @@ func main() {
 	pageSize := os.Getpagesize()
 	pageMask := pageSize - 1
 
+	var (
+		funcs object.FuncMap
+		names section.NameSection
+	)
+
 	m := compile.Module{
-		EntrySymbol:     entrySymbol,
-		EntryArgs:       make([]uint64, 2),
-		MemoryAlignment: pageSize,
+		EntrySymbol:          entrySymbol,
+		EntryArgs:            make([]uint64, 2),
+		MemoryAlignment:      pageSize,
+		UnknownSectionLoader: section.UnknownLoaders{"name": names.Load}.Load,
 	}
 
 	err = m.LoadPreliminarySections(progReader, &env{})
@@ -128,9 +141,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), nil, nil)
+	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), &funcs, nil)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if dumpText {
+		dump.Text(os.Stdout, m.Text(), textAddr, int32(roDataAddr), funcs.FuncAddrs, &names)
+	}
+	if dumpROData {
+		dump.ROData(os.Stdout, m.ROData(), 0)
 	}
 
 	memoryOffset := (m.GlobalsSize() + pageMask) &^ pageMask

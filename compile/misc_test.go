@@ -11,8 +11,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/static"
 )
 
@@ -58,7 +58,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), p.ObjInfo.FuncAddrs, nil)
+		dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
 	}
 
 	var printBuf bytes.Buffer

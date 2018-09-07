@@ -11,8 +11,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/static"
 )
@@ -90,6 +90,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		disasm.Fprint(os.Stdout, m.Text(), p.ObjInfo.FuncAddrs, nil)
+		dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
 	}
 }

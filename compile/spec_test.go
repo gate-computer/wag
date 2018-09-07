@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tsavola/wag/disasm"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
+	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/static"
 	"github.com/tsavola/wag/trap"
@@ -473,20 +473,13 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 		}
 
-		if dumpText && testing.Verbose() {
-			disasm.Fprint(os.Stdout, m.Text(), p.ObjInfo.FuncAddrs, &nameSection)
-		}
+		if testing.Verbose() {
+			if dumpText {
+				dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, &nameSection)
+			}
 
-		if dumpROData {
-			buf := m.ROData()
-			for i := 0; len(buf) > 0; i++ {
-				if len(buf) > 4 {
-					t.Logf("read-only data #%d*8: 0x%08x 0x%08x", i, binary.LittleEndian.Uint32(buf[:4]), binary.LittleEndian.Uint32(buf[4:8]))
-					buf = buf[8:]
-				} else {
-					t.Logf("read-only data #%d*8: 0x%08x", i, binary.LittleEndian.Uint32(buf[:4]))
-					buf = buf[4:]
-				}
+			if dumpROData {
+				dump.ROData(os.Stdout, m.ROData(), 0)
 			}
 		}
 
