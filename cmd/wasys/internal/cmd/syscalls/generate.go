@@ -41,7 +41,7 @@ func main() {
 	}
 	defer decl.Close()
 
-	impl, err := os.Create("syscall_asm64.s")
+	impl, err := os.Create("syscall_amd64.s")
 	if err != nil {
 		log.Panic(err)
 	}
