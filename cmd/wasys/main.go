@@ -142,15 +142,14 @@ func main() {
 	}
 
 	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), &funcs, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	if dumpText {
 		dump.Text(os.Stdout, m.Text(), textAddr, int32(roDataAddr), funcs.FuncAddrs, &names)
 	}
 	if dumpROData {
 		dump.ROData(os.Stdout, m.ROData(), 0)
+	}
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	memoryOffset := (m.GlobalsSize() + pageMask) &^ pageMask
