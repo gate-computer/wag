@@ -14,15 +14,15 @@ func (l *L) Reset() {
 	l.Addr = 0
 }
 
-func (l *L) SetLive() {
-	if l.Sites == nil {
-		l.Sites = []int32{}
-	}
-}
+// func (l *L) SetLive() {
+// 	if l.Sites == nil {
+// 		l.Sites = []int32{}
+// 	}
+// }
 
-func (l *L) Live() bool {
-	return l.Sites != nil
-}
+// func (l *L) Live() bool {
+// 	return l.Sites != nil
+// }
 
 func (l *L) AddSite(addr int32) {
 	l.Sites = append(l.Sites, addr)

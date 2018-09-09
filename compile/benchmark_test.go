@@ -52,8 +52,9 @@ const (
 	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxRODataSize = 16 * 1024 * 1024
 	loadBenchmarkRODataAddr    = 0x10000
-	loadBenchmarkTextCRC32     = 0x6f5cffa4
-	loadBenchmarkRODataCRC32   = 0xb4d294b0
+	loadBenchmarkTextCRC32     = 0x5e8971b3
+	loadBenchmarkRODataCRC32   = 0xc4e3c183
+	loadBenchmarkIgnoreCRC32   = false
 )
 
 func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b) }
@@ -153,13 +154,13 @@ func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *static.Buffer) {
 	b.Helper()
 
 	sum := crc32.ChecksumIEEE(textBuf.Bytes())
-	if sum != loadBenchmarkTextCRC32 {
-		b.Errorf("text checksum changed: 0x%x", sum)
+	if sum != loadBenchmarkTextCRC32 && !loadBenchmarkIgnoreCRC32 {
+		b.Errorf("text checksum changed: 0x%08x", sum)
 	}
 
 	sum = crc32.ChecksumIEEE(roDataBuf.Bytes())
-	if sum != loadBenchmarkRODataCRC32 {
-		b.Errorf("read-only data checksum changed: 0x%x", sum)
+	if sum != loadBenchmarkRODataCRC32 && !loadBenchmarkIgnoreCRC32 {
+		b.Errorf("rodata checksum changed: 0x%08x", sum)
 	}
 }
 

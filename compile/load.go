@@ -291,7 +291,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 				}
 
 				sig := m.m.Sigs[sigIndex]
-				if n := len(sig.Args); n > codegen.MaxImportParams {
+				if n := len(sig.Args); n > codegen.MaxFuncParams {
 					panic(fmt.Errorf("import function #%d has too many parameters: %d", i, n))
 				}
 
@@ -407,7 +407,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 
 					sigIndex := m.m.FuncSigs[index]
 					sig := m.m.Sigs[sigIndex]
-					if len(sig.Args) > codegen.MaxEntryParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == abi.Void || sig.Result == abi.I32) {
+					if len(sig.Args) > codegen.MaxFuncParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == abi.Void || sig.Result == abi.I32) {
 						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
 					}
 

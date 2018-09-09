@@ -8,12 +8,12 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/val"
+	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
 )
 
-func offsetOfGlobal(f *gen.Func, index uint32) int32 {
+func globalOffset(f *gen.Func, index uint32) int32 {
 	return (int32(index) - int32(len(f.Globals))) * obj.Word
 }
 
@@ -24,12 +24,9 @@ func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend b
 	}
 
 	global := f.Globals[globalIndex]
-	offset := offsetOfGlobal(f, globalIndex)
-
-	opStabilizeOperandStack(f)
 	r := opAllocReg(f, global.Type)
-	zeroExt := asm.GetGlobal(f.M, global.Type, r, offset)
-	pushOperand(f, val.TempRegOperand(global.Type, r, zeroExt))
+	zeroExt := asm.LoadGlobal(f.M, global.Type, r, globalOffset(f, globalIndex))
+	pushOperand(f, operand.Reg(global.Type, r, zeroExt))
 	return
 }
 
@@ -44,13 +41,7 @@ func genSetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend b
 		panic(fmt.Errorf("%s: global %d is immutable", op, globalIndex))
 	}
 
-	offset := offsetOfGlobal(f, globalIndex)
-
-	x := opMaterializeOperand(f, popOperand(f))
-	if x.Type != global.Type {
-		panic(fmt.Errorf("%s operand type is %s, but type of global %d is %s", op, x.Type, globalIndex, global.Type))
-	}
-
-	asm.SetGlobal(f, offset, x)
+	x := popOperand(f, global.Type)
+	asm.StoreGlobal(f, globalOffset(f, globalIndex), x)
 	return
 }

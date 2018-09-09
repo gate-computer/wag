@@ -5,6 +5,7 @@
 package codegen
 
 import (
+	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/loader"
 )
 
@@ -38,7 +39,7 @@ func skipThenOps(load loader.L) (haveElse bool) {
 }
 
 func skipOp(load loader.L, op Opcode) {
-	debugf("skipping %s", op)
+	debug.Printf("skip %s", op)
 	opcodeSkips[op](load, op)
 }
 
@@ -82,6 +83,5 @@ func skipVarint32(load loader.L, op Opcode)  { load.Varint32() }
 func skipVarint64(load loader.L, op Opcode)  { load.Varint64() }
 func skipVaruint1(load loader.L, op Opcode)  { load.Varuint1() }
 func skipVaruint32(load loader.L, op Opcode) { load.Varuint32() }
-func skipVaruint64(load loader.L, op Opcode) { load.Varuint64() }
 func skipNothing(load loader.L, op Opcode)   {}
 func badSkip(load loader.L, op Opcode)       { badOp(op) }

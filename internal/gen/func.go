@@ -6,30 +6,50 @@ package gen
 
 import (
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/gen/operand"
+	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/regalloc"
-	"github.com/tsavola/wag/internal/gen/val"
+	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/trap"
 )
 
+type Block struct {
+	Suspension bool
+}
+
 type BranchTarget struct {
-	Label       link.L
-	StackOffset int32
-	ValueType   abi.Type
-	FuncEnd     bool
+	Label      link.L
+	StackDepth int
+	ValueType  abi.Type
+	FuncEnd    bool
+
+	Block Block
 }
 
 type BranchTable struct {
-	RODataAddr      int32
-	Targets         []*BranchTarget
-	CodeStackOffset int32 // -1 indicates common offset
+	RODataAddr int32
+	Targets    []*BranchTarget
+	StackDepth int // -1 indicates common depth among all targets
 }
 
 type TrapTrampoline struct {
-	StackOffset int32
-	Link        link.L
+	stackDepth int
+	addr       int32
+}
+
+func (t *TrapTrampoline) Init(f *Func) {
+	t.stackDepth = f.StackDepth
+	t.addr = f.Text.Addr
+}
+
+func (t *TrapTrampoline) Addr(f *Func) (addr int32) {
+	if t.stackDepth == f.StackDepth {
+		addr = t.addr
+	}
+	return
 }
 
 type Func struct {
@@ -39,50 +59,56 @@ type Func struct {
 	Regs regalloc.Allocator
 
 	ResultType abi.Type
+	LocalTypes []abi.Type
+	NumParams  int
+	NumLocals  int // The non-param ones
 
-	Vars           []VarState
-	NumStackParams int32
-	NumInitedVars  int32
-
-	StackOffset    int32
-	MaxStackOffset int32
-	StackCheckAddr int32
-
-	Operands              []val.Operand
-	MinBlockOperand       int
-	NumStableOperands     int
-	NumPersistentOperands int
+	Operands          []operand.O
+	FrameBase         int // Number of (stack) operands belonging on to parent blocks
+	NumStableOperands int
+	StackDepth        int // The dynamic entries after locals
+	MaxStackDepth     int
 
 	BranchTargets []*BranchTarget
 	BranchTables  []BranchTable
 
-	TrapTrampolines [trap.NumTraps]TrapTrampoline
+	MemoryOutOfBounds TrapTrampoline
 }
 
-func (f *Func) Consumed(x val.Operand) {
+func (f *Func) LocalOffset(index int) int32 {
+	// Params are in behind function link address slot
+	n := f.StackDepth + f.NumLocals + f.NumParams - index
+	if index >= f.NumParams {
+		// Other locals are on this side of function link address slot
+		n--
+	}
+	if n < 0 {
+		panic("effective stack offset of local variable #%d is negative")
+	}
+	return int32(n * obj.Word)
+}
+
+// StackValueConsumed updates the virtual stack pointer on behalf of
+// MacroAssembler when it changes the physical stack pointer.
+func (f *Func) StackValueConsumed() {
+	f.StackDepth--
+	debug.Printf("stack depth: %d (pop 1)", f.StackDepth)
+}
+
+// ValueBecameUnreachable keeps the state consistent when an operand will not
+// be operated on (because it was popped on an unreachable code path).
+func (f *Func) ValueBecameUnreachable(x operand.O) {
 	switch x.Storage {
-	case val.TempReg:
-		f.Regs.Free(x.Type, x.Reg())
+	case storage.Stack:
+		f.StackValueConsumed()
 
-	case val.Stack:
-		f.StackOffset -= obj.Word
+	case storage.Reg:
+		if x.Reg() != reg.Result {
+			f.Regs.Free(x.Type, x.Reg())
+		}
 	}
-}
-
-func (f *Func) TrapTrampolineAddr(id trap.Id) (addr int32) {
-	t := &f.TrapTrampolines[id]
-	if t.StackOffset == f.StackOffset {
-		addr = t.Link.Addr
-	}
-	return
-}
-
-func (f *Func) InitTrapTrampoline(id trap.Id) {
-	t := &f.TrapTrampolines[id]
-	t.StackOffset = f.StackOffset
-	t.Link.Addr = f.Text.Addr
 }
 
 func (f *Func) MapCallAddr(retAddr int32) {
-	f.Map.PutCallSite(retAddr, f.StackOffset+obj.Word)
+	f.Map.PutCallSite(retAddr, int32((f.NumLocals+f.StackDepth+1)*obj.Word)) // +1 for link address
 }

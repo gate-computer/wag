@@ -17,14 +17,14 @@ func (r R) String() string {
 }
 
 const (
-	Result = R(0)
+	Result     = R(0)
+	ScratchISA = R(1) // for internal ISA implementation use
 )
 
-func Bitmap(cat abi.Category, reg *[]R, available ...bool) (mask uint64) {
+func Bitmap(cat abi.Category, available ...bool) (mask uint64) {
 	for i, set := range available {
 		if set {
 			mask |= uint64(1) << (uint8(i<<1) + uint8(cat))
-			*reg = append(*reg, R(i))
 		}
 	}
 	return

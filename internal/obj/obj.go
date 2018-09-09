@@ -5,8 +5,7 @@
 package obj
 
 const (
-	Word         = 8          // stack entry size
-	StackReserve = Word + 128 // trap/import call return address + red zone
+	Word = 8 // stack entry size
 )
 
 // Map gathers information about positions of (WebAssembly) functions, function

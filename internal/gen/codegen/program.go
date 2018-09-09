@@ -12,24 +12,30 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/atomic"
+	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/trap"
 )
 
+// alignType rounds up.
+func alignType(addr int, t abi.Type) int {
+	mask := int(t.Size()) - 1
+	return (addr + mask) &^ mask
+}
+
 func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
 	p := &gen.Prog{
 		FuncLinks: make([]link.FuncL, len(m.FuncSigs)),
 	}
 
-	if debug {
-		if debugDepth != 0 {
-			debugf("")
+	if debug.Enabled {
+		if debug.Depth != 0 {
+			debug.Printf("")
 		}
-		debugDepth = 0
+		debug.Depth = 0
 	}
 
 	funcCodeCount := load.Varuint32()
@@ -71,14 +77,8 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		sigIndex := m.FuncSigs[m.EntryIndex]
 		sig := m.Sigs[sigIndex]
 
-		{
-			var paramRegs regalloc.Iterator
-			paramRegs.Init(isa.ParamRegs(), sig.Args)
-
-			for i, t := range sig.Args {
-				r := paramRegs.IterForward(t.Category())
-				asm.MoveIntImm(m, r, entryArgs[i])
-			}
+		for i := range sig.Args {
+			asm.PushImm(m, int64(entryArgs[i]))
 		}
 
 		opInitialCall(m, &p.FuncLinks[m.EntryIndex])
@@ -138,7 +138,7 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(funcAddr))
 		ptr = ptr[8:]
 
-		debugf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
+		debug.Printf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
 	}
 
 	if startTrigger != nil {

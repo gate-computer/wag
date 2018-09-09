@@ -135,6 +135,9 @@ func generatePanic(w io.Writer, input string) {
 		case "end":
 			out(`Opcode%s: {nil, 0},`, op.sym)
 
+		case "i32.wrap/i64":
+			out(`Opcode%s: {genWrap, 0},`, op.sym)
+
 		default:
 			if m := regexp.MustCompile("^(...)\\.const$").FindStringSubmatch(op.name); m != nil {
 				var (
@@ -145,7 +148,7 @@ func generatePanic(w io.Writer, input string) {
 				out(`Opcode%s: {%s, opInfo(%s)},`, op.sym, impl, type1)
 			} else if m := regexp.MustCompile("^(...)\\.(.+)/(...)$").FindStringSubmatch(op.name); m != nil {
 				var (
-					impl  = "genConversionOp"
+					impl  = "genConvert"
 					type1 = "abi." + strings.ToUpper(m[1])
 					props = "prop." + symbol(m[2])
 					type2 = "abi." + strings.ToUpper(m[3])
@@ -154,16 +157,12 @@ func generatePanic(w io.Writer, input string) {
 				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, props)
 			} else if m := regexp.MustCompile("^(.)(..)\\.(load|store)(.*)$").FindStringSubmatch(op.name); m != nil {
 				var (
-					impl  = "gen" + symbol(m[3]) + "Op"
+					impl  = "gen" + symbol(m[3])
 					type1 = "abi." + strings.ToUpper(m[1]+m[2])
 					props string
 				)
 
-				if m[4] == "" {
-					props = "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3])
-				} else {
-					props = "prop." + typeCategory(m[1]) + symbol(m[3]+m[4])
-				}
+				props = "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3]+m[4])
 
 				out(`Opcode%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
 			} else if m := regexp.MustCompile("^(.)(..)\\.(.+)$").FindStringSubmatch(op.name); m != nil {
@@ -236,23 +235,14 @@ func typeCategory(letter string) string {
 
 func operGen(props string) string {
 	switch props {
-	case "abs", "ceil", "clz", "ctz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
-		return "genUnaryOp"
+	case "abs", "ceil", "clz", "ctz", "eqz", "floor", "nearest", "neg", "popcnt", "sqrt", "trunc":
+		return "genUnary"
 
-	case "eqz":
-		return "genUnaryConditionOp"
+	case "add", "and", "eq", "max", "min", "mul", "ne", "or", "xor":
+		return "genBinaryCommute"
 
-	case "add", "and", "max", "min", "mul", "or", "xor":
-		return "genBinaryCommuteOp"
-
-	case "copysign", "div", "div_s", "div_u", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub":
-		return "genBinaryOp"
-
-	case "eq", "ne":
-		return "genBinaryConditionCommuteOp"
-
-	case "ge", "ge_s", "ge_u", "gt", "gt_s", "gt_u", "le", "le_s", "le_u", "lt", "lt_s", "lt_u":
-		return "genBinaryConditionOp"
+	case "copysign", "div", "div_s", "div_u", "ge", "ge_s", "ge_u", "gt", "gt_s", "gt_u", "le", "le_s", "le_u", "lt", "lt_s", "lt_u", "rem_s", "rem_u", "rotl", "rotr", "shl", "shr_s", "shr_u", "sub":
+		return "genBinary"
 	}
 
 	panic(errors.New(props))

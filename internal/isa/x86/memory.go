@@ -6,239 +6,219 @@ package x86
 
 import (
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/val"
+	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/prop"
-	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/isa/x86/in"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wasm"
 )
 
-type memoryAccess struct {
-	insn     binaryInsn
-	insnType abi.Type
-	zeroExt  bool
+type regMemDispInsn interface {
+	RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32)
+}
+type memDispImmInsn interface {
+	MemDispImm(text *code.Buf, t abi.Type, base in.BaseReg, disp int32, val int64)
 }
 
-var memoryLoads = []memoryAccess{
-	prop.IndexIntLoad:    {mov, 0, true},
-	prop.IndexIntLoad8S:  {binaryInsn{movsx8, noPrefixMIInsn}, 0, false},
-	prop.IndexIntLoad8U:  {binaryInsn{movzx8, noPrefixMIInsn}, 0, false},
-	prop.IndexIntLoad16S: {binaryInsn{movsx16, noPrefixMIInsn}, 0, false},
-	prop.IndexIntLoad16U: {binaryInsn{movzx16, noPrefixMIInsn}, 0, false},
-	prop.IndexIntLoad32S: {binaryInsn{movsxd, noPrefixMIInsn}, 0, false}, // type is ignored
-	prop.IndexIntLoad32U: {mov, abi.I32, true},
-	prop.IndexFloatLoad:  {binaryInsn{movsSSE, noPrefixMIInsn}, 0, false},
+type opLoadInt32S struct{}
+type opLoadInt32U struct{}
+type opStoreRegInt32 struct{}
+type opStoreImm struct{}
+
+func (opLoadInt32S) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32) {
+	in.MOVSXD.RegMemDisp(text, abi.I64, r, base, disp)
+}
+func (opLoadInt32U) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32) {
+	in.MOV.RegMemDisp(text, abi.I32, r, base, disp)
+}
+func (opStoreRegInt32) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32) {
+	in.MOVmr.RegMemDisp(text, abi.I32, r, base, disp)
+}
+func (opStoreImm) MemDispImm(text *code.Buf, t abi.Type, base in.BaseReg, disp int32, val int64) {
+	switch {
+	case val == 0:
+		in.MOVmr.RegMemDisp(text, t, RegZero, base, disp)
+	case uint64(val+0x80000000) <= 0xffffffff:
+		in.MOV32i.MemDispImm(text, t, base, disp, val)
+	default:
+		in.MOV64i.RegImm64(text, RegResult, val)
+		in.MOVmr.RegMemDisp(text, t, RegResult, base, disp)
+	}
 }
 
-var memoryStores = []memoryAccess{
-	prop.IndexIntStore:   {mov, 0, false},
-	prop.IndexIntStore8:  {mov8, abi.I32, false},
-	prop.IndexIntStore16: {mov16, abi.I32, false},
-	prop.IndexIntStore32: {mov, abi.I32, false},
-	prop.IndexFloatStore: {binaryInsn{movsSSE, movImm}, 0, false}, // integer immediate works
+var loadInsns = [8]regMemDispInsn{
+	prop.IndexIntLoad:    in.MOV,
+	prop.IndexIntLoad8S:  in.MOVSX8,
+	prop.IndexIntLoad8U:  in.MOVZX8,
+	prop.IndexIntLoad16S: in.MOVSX16,
+	prop.IndexIntLoad16U: in.MOVZX16,
+	prop.IndexIntLoad32S: opLoadInt32S{},
+	prop.IndexIntLoad32U: opLoadInt32U{},
+	prop.IndexFloatLoad:  in.MOVSSD,
 }
 
-// Load makes sure that index gets zero-extended if it's a VarReg operand.
-func (MacroAssembler) Load(f *gen.Func, props uint16, index val.Operand, resultType abi.Type, offset uint32) (result val.Operand) {
-	size := props >> 8
-
-	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
-	if ownIndexReg {
-		defer f.Regs.Free(abi.I64, indexReg)
-	}
-
-	load := memoryLoads[uint8(props)]
-
-	targetReg, ok := f.Regs.Alloc(resultType)
-	if !ok {
-		targetReg = RegResult
-	}
-
-	result = val.TempRegOperand(resultType, targetReg, load.zeroExt)
-
-	insnType := load.insnType
-	if insnType == 0 {
-		insnType = resultType
-	}
-
-	load.insn.opFromIndirect(&f.Text, insnType, targetReg, 0, indexReg, baseReg, disp)
-	return
+var storeRegInsns = [5]regMemDispInsn{
+	prop.IndexIntStore:   in.MOVmr,
+	prop.IndexIntStore8:  in.MOV8mr,
+	prop.IndexIntStore16: in.MOV16mr,
+	prop.IndexIntStore32: opStoreRegInt32{},
+	prop.IndexFloatStore: in.MOVSSDmr,
 }
 
-// Store makes sure that index gets zero-extended if it's a VarReg operand.
-func (MacroAssembler) Store(f *gen.Func, props uint16, index, x val.Operand, offset uint32) {
-	size := props >> 8
-
-	baseReg, indexReg, ownIndexReg, disp := opMemoryAddress(f, size, index, offset)
-	if ownIndexReg {
-		defer f.Regs.Free(abi.I64, indexReg)
-	}
-
-	store := memoryStores[uint8(props)]
-
-	insnType := store.insnType
-	if insnType == 0 {
-		insnType = x.Type
-	}
-
-	if x.Storage == val.Imm {
-		value := x.ImmValue()
-		value32 := int32(value)
-
-		switch {
-		case size == 1:
-			value32 = int32(int8(value32))
-
-		case size == 2:
-			value32 = int32(int16(value32))
-
-		case size == 4 || (value >= -0x80000000 && value < 0x80000000):
-
-		default:
-			goto large
-		}
-
-		store.insn.opImmToIndirect(&f.Text, insnType, 0, indexReg, baseReg, disp, value32)
-		return
-
-	large:
-	}
-
-	valueReg, _, own := opBorrowMaybeResultReg(f, x, false)
-	if own {
-		defer f.Regs.Free(x.Type, valueReg)
-	}
-
-	store.insn.opToIndirect(&f.Text, insnType, valueReg, 0, indexReg, baseReg, disp)
+var storeImmInsns = [5]memDispImmInsn{
+	prop.IndexIntStore:   opStoreImm{},
+	prop.IndexIntStore8:  in.MOV8i,
+	prop.IndexIntStore16: in.MOV16i,
+	prop.IndexIntStore32: in.MOV32i,
+	prop.IndexFloatStore: opStoreImm{},
 }
 
-// opMemoryAddress may return the scratch register as the base.
-func opMemoryAddress(f *gen.Func, size uint16, index val.Operand, offset uint32) (baseReg, indexReg reg.R, ownIndexReg bool, disp int32) {
-	sizeReach := uint64(size - 1)
+// Load may allocate registers, use RegResult and update condition flags.  The
+// index operand may be RegResult or the condition flags.
+func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType abi.Type, offset uint32) operand.O {
+	sizeReach := uint64(props >> 8)
+	base, disp := checkAccess(f, sizeReach, index, offset)
+
+	r := f.Regs.AllocResult(resultType)
+	loadInsns[uint8(props&prop.LoadIndexMask)].RegMemDisp(&f.Text, resultType, r, base, disp)
+	return operand.Reg(resultType, r, (props&prop.LoadIndexZeroExtFlag) != 0)
+}
+
+// Store may allocate registers, use RegResult and update condition flags.
+func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, offset uint32) {
+	sizeReach := uint64(props >> 8)
+	base, disp := checkAccess(f, sizeReach, index, offset)
+
+	if x.Storage == storage.Imm {
+		storeImmInsns[uint8(props)].MemDispImm(&f.Text, x.Type, base, disp, x.ImmValue())
+	} else {
+		valueReg, _ := allocResultReg(f, x)
+		storeRegInsns[uint8(props)].RegMemDisp(&f.Text, x.Type, valueReg, base, disp)
+		f.Regs.Free(x.Type, valueReg)
+	}
+}
+
+// checkAccess returns RegMemoryBase or RegScratch as base.
+func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) (base in.BaseReg, disp int32) {
 	reachOffset := uint64(offset) + sizeReach
 
 	if reachOffset >= 0x80000000 {
-		opTrap(f, trap.MemoryOutOfBounds)
-		return
+		f.ValueBecameUnreachable(index)
+		return invalidAccess(f)
 	}
 
-	alreadyChecked := reachOffset < uint64(index.Bounds.Upper)
-
 	switch index.Storage {
-	case val.Imm:
+	case storage.Imm:
 		value := uint64(index.ImmValue())
 
 		if value >= 0x80000000 {
-			opTrap(f, trap.MemoryOutOfBounds)
-			return
+			return invalidAccess(f)
 		}
 
 		addr := value + uint64(offset)
 		reachAddr := addr + sizeReach
 
 		if reachAddr >= 0x80000000 {
-			opTrap(f, trap.MemoryOutOfBounds)
-			return
+			return invalidAccess(f)
 		}
 
-		if reachAddr < uint64(f.MemoryLimitValues.Initial) || alreadyChecked {
-			baseReg = RegMemoryBase
-			indexReg = NoIndex
+		if reachAddr < uint64(f.MemoryLimitValues.Initial) {
+			base = in.BaseMemory
 			disp = int32(addr)
 			return
 		}
 
-		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, NoIndex, RegMemoryBase, int32(reachAddr))
+		in.LEA.RegMemDisp(&f.Text, abi.I64, RegScratch, in.BaseMemory, int32(reachAddr))
 
 	default:
-		r, zeroExt, own := opBorrowMaybeScratchReg(f, index, true)
-
+		r, zeroExt := getScratchReg(f, index)
 		if !zeroExt {
-			mov.opFromReg(&f.Text, abi.I32, r, r) // zero-extend index
+			in.MOV.RegReg(&f.Text, abi.I32, r, r)
 		}
-
-		if alreadyChecked {
-			baseReg = RegMemoryBase
-			indexReg = r
-			ownIndexReg = own
-			disp = int32(offset)
-			return
-		}
-
-		lea.opFromIndirect(&f.Text, abi.I64, RegScratch, 0, r, RegMemoryBase, int32(reachOffset))
-
-		if own {
-			f.Regs.Free(abi.I32, r)
-		}
+		in.LEA.RegMemIndexDisp(&f.Text, abi.I64, RegScratch, in.BaseMemory, r, in.Scale0, int32(reachOffset))
+		f.Regs.Free(abi.I32, r)
 	}
 
-	cmp.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
+	in.CMP.RegReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
 
-	if addr := f.TrapTrampolineAddr(trap.MemoryOutOfBounds); addr != 0 {
-		jge.op(&f.Text, addr)
+	if addr := f.MemoryOutOfBounds.Addr(f); addr != 0 {
+		in.JGEcb.Addr8(&f.Text, addr)
 	} else {
 		var checked link.L
 
-		jl.rel8.opStub(&f.Text)
+		in.JLcb.Stub8(&f.Text)
 		checked.AddSite(f.Text.Addr)
 
-		opTrap(f, trap.MemoryOutOfBounds)
+		f.MemoryOutOfBounds.Init(f)
+		asm.Trap(f, trap.MemoryOutOfBounds)
 
 		checked.Addr = f.Text.Addr
-		updateLocalBranches(f.M, &checked)
+		isa.UpdateNearBranches(f.Text.Bytes(), &checked)
 	}
 
-	baseReg = RegScratch
-	indexReg = NoIndex
+	base = in.BaseScratch
 	disp = -int32(sizeReach)
 	return
 }
 
-func (MacroAssembler) QueryMemorySize(m *module.M) val.Operand {
-	mov.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryLimit)
-	sub.opFromReg(&m.Text, abi.I64, RegResult, RegMemoryBase)
-	shrImm.op(&m.Text, abi.I64, RegResult, wasm.PageBits)
+func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
+	asm.Trap(f, trap.MemoryOutOfBounds)
 
-	return val.TempRegOperand(abi.I32, RegResult, true)
+	base = in.BaseZero
+	disp = 0
+	return
 }
 
-func (MacroAssembler) GrowMemory(f *gen.Func, x val.Operand) val.Operand {
+// QueryMemorySize may allocate registers, use RegResult and update condition
+// flags.
+func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
+	r := f.Regs.AllocResult(abi.I64)
+	in.MOV.RegReg(&f.Text, abi.I64, r, RegMemoryLimit)
+	in.SUB.RegReg(&f.Text, abi.I64, r, RegMemoryBase)
+	in.SHRi.RegImm8(&f.Text, abi.I64, r, wasm.PageBits)
+	return operand.Reg(abi.I32, r, true)
+}
+
+// GrowMemory may allocate registers, use RegResult and update condition flags.
+func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	var out link.L
 	var fail link.L
 
-	movMMX.opToReg(&f.Text, abi.I64, RegScratch, RegMemoryGrowLimitMMX)
+	in.MOVDQmrMMX.RegReg(&f.Text, abi.I64, RegMemoryGrowLimitMMX, RegScratch)
 
-	targetReg, zeroExt := opMaybeResultReg(f, x, false)
+	targetReg, zeroExt := allocResultReg(f, x)
 	if !zeroExt {
-		mov.opFromReg(&f.Text, abi.I32, targetReg, targetReg)
+		in.MOV.RegReg(&f.Text, abi.I32, targetReg, targetReg)
 	}
 
-	shlImm.op(&f.Text, abi.I64, targetReg, wasm.PageBits)
-	add.opFromReg(&f.Text, abi.I64, targetReg, RegMemoryLimit) // new memory limit
-	cmp.opFromReg(&f.Text, abi.I64, targetReg, RegScratch)
+	in.SHLi.RegImm8(&f.Text, abi.I64, targetReg, wasm.PageBits)
+	in.ADD.RegReg(&f.Text, abi.I64, targetReg, RegMemoryLimit) // new memory limit
+	in.CMP.RegReg(&f.Text, abi.I64, targetReg, RegScratch)
 
-	jg.rel8.opStub(&f.Text)
+	in.JGcb.Stub8(&f.Text)
 	fail.AddSite(f.Text.Addr)
 
-	mov.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
-	mov.opFromReg(&f.Text, abi.I64, RegMemoryLimit, targetReg)
-	sub.opFromReg(&f.Text, abi.I64, RegScratch, RegMemoryBase)
-	shrImm.op(&f.Text, abi.I64, RegScratch, wasm.PageBits) // value on success
-	mov.opFromReg(&f.Text, abi.I32, targetReg, RegScratch)
+	in.MOV.RegReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
+	in.MOV.RegReg(&f.Text, abi.I64, RegMemoryLimit, targetReg)
+	in.SUB.RegReg(&f.Text, abi.I64, RegScratch, RegMemoryBase)
+	in.SHRi.RegImm8(&f.Text, abi.I64, RegScratch, wasm.PageBits) // value on success
+	in.MOV.RegReg(&f.Text, abi.I32, targetReg, RegScratch)
 
-	jmpRel.rel8.opStub(&f.Text)
+	in.JMPcb.Stub8(&f.Text)
 	out.AddSite(f.Text.Addr)
 
 	fail.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &fail)
+	isa.UpdateNearBranches(f.Text.Bytes(), &fail)
 
-	movImm.opImm(&f.Text, abi.I32, targetReg, -1) // value on failure
+	in.MOVi.RegImm32(&f.Text, abi.I32, targetReg, -1) // value on failure
 
 	out.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &out)
+	isa.UpdateNearBranches(f.Text.Bytes(), &out)
 
-	return val.TempRegOperand(abi.I32, targetReg, true)
+	return operand.Reg(abi.I32, targetReg, true)
 }

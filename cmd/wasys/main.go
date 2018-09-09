@@ -29,7 +29,12 @@ var (
 	verbose = false
 )
 
-var importFuncs = make(map[string]uint64)
+type importFunc struct {
+	absAddr uint64
+	params  int
+}
+
+var importFuncs = make(map[string]importFunc)
 
 type env struct{}
 
@@ -39,16 +44,21 @@ func (*env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAdd
 	}
 
 	if module != "env" {
-		err = fmt.Errorf("imported function's module is unknown: %s %s", module, field)
+		err = fmt.Errorf("import function's module is unknown: %s %s", module, field)
 		return
 	}
 
-	absAddr = importFuncs[field]
-	if absAddr == 0 {
-		err = fmt.Errorf("imported function not supported: %s %s", module, field)
+	i := importFuncs[field]
+	if i.absAddr == 0 {
+		err = fmt.Errorf("import function not supported: %s", field)
+		return
+	}
+	if len(sig.Args) != i.params {
+		err = fmt.Errorf("%s: import function has wrong number of parameters: import signature has %d, syscall wrapper has %d", field, len(sig.Args), i.params)
 		return
 	}
 
+	absAddr = i.absAddr
 	return
 }
 

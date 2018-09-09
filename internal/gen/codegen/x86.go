@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build wag_amd64 amd64,!wag_arm64
+// +build wagamd64 amd64,!wagarm64
 
 package codegen
 

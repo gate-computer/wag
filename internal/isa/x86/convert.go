@@ -8,136 +8,131 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
-	"github.com/tsavola/wag/internal/gen/val"
 	"github.com/tsavola/wag/internal/isa/prop"
+	"github.com/tsavola/wag/internal/isa/x86/in"
 )
 
-func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType abi.Type, source val.Operand) (result val.Operand) {
-	switch props {
-	case prop.Wrap:
-		return opWrap(f, resultType, source)
-
-	default:
-		return commonConversionOp(f, props, resultType, source)
-	}
-}
-
-func opWrap(f *gen.Func, resultType abi.Type, source val.Operand) val.Operand {
-	source.Type = abi.I32 // short mov; useful zeroExt flag
-	r, zeroExt := opMaybeResultReg(f, source, false)
-	return val.TempRegOperand(resultType, r, zeroExt)
-}
-
-func commonConversionOp(f *gen.Func, props uint16, resultType abi.Type, source val.Operand) val.Operand {
-	r, zeroExt := opMaybeResultReg(f, source, false)
-	// TODO: for int<->float ops: borrow source r, allocate target r
-
+// Convert may allocate registers, use RegResult and update condition flags.
+// The source operand may be RegResult or condition flags.
+func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType abi.Type, source operand.O) (result operand.O) {
 	switch props {
 	case prop.ExtendS:
-		movsxd.opFromReg(&f.Text, 0, r, r)
-		return val.TempRegOperand(resultType, r, false)
+		r, _ := allocResultReg(f, source)
+		in.MOVSXD.RegReg(&f.Text, abi.I64, r, r)
+		result = operand.Reg(resultType, r, false)
 
 	case prop.ExtendU:
+		r, zeroExt := allocResultReg(f, source)
 		if !zeroExt {
-			mov.opFromReg(&f.Text, abi.I32, r, r)
+			in.MOV.RegReg(&f.Text, abi.I32, r, r)
 		}
-		return val.TempRegOperand(resultType, r, false)
+		result = operand.Reg(resultType, r, false)
 
 	case prop.Mote:
-		cvts2sSSE.opFromReg(&f.Text, source.Type, r, r)
-		return val.TempRegOperand(resultType, r, false)
+		r, _ := allocResultReg(f, source)
+		in.CVTS2SSD.RegReg(&f.Text, source.Type, r, r)
+		result = operand.Reg(resultType, r, false)
 
 	case prop.TruncS:
-		cvttsSSE2si.opReg(&f.Text, source.Type, resultType, RegResult, r)
-		f.Regs.Free(source.Type, r)
-		return val.TempRegOperand(resultType, RegResult, true)
+		sourceReg, _ := getScratchReg(f, source)
+		resultReg := f.Regs.AllocResult(resultType)
+		in.CVTTSSD2SI.TypeRegReg(&f.Text, source.Type, resultType, resultReg, sourceReg)
+		f.Regs.Free(source.Type, sourceReg)
+		result = operand.Reg(resultType, resultReg, true)
 
 	case prop.TruncU:
+		sourceReg, _ := getScratchReg(f, source)
+		resultReg := f.Regs.AllocResult(resultType)
 		if resultType == abi.I32 {
-			cvttsSSE2si.opReg(&f.Text, source.Type, abi.I64, RegResult, r)
+			in.CVTTSSD2SI.TypeRegReg(&f.Text, source.Type, abi.I64, resultReg, sourceReg)
 		} else {
-			opTruncFloatToUnsignedI64(f, source.Type, r)
+			truncFloatToUnsignedI64(f, resultReg, source.Type, sourceReg)
 		}
-		f.Regs.Free(source.Type, r)
-		return val.TempRegOperand(resultType, RegResult, false)
+		f.Regs.Free(source.Type, sourceReg)
+		result = operand.Reg(resultType, resultReg, false)
 
 	case prop.ConvertS:
-		cvtsi2sSSE.opReg(&f.Text, resultType, source.Type, RegResult, r)
-		f.Regs.Free(source.Type, r)
-		return val.TempRegOperand(resultType, RegResult, false)
+		sourceReg, _ := getScratchReg(f, source)
+		resultReg := f.Regs.AllocResult(resultType)
+		in.CVTSI2SSD.TypeRegReg(&f.Text, resultType, source.Type, resultReg, sourceReg)
+		f.Regs.Free(source.Type, sourceReg)
+		result = operand.Reg(resultType, resultReg, false)
 
 	case prop.ConvertU:
+		sourceReg, zeroExt := getScratchReg(f, source)
+		resultReg := f.Regs.AllocResult(resultType)
 		if source.Type == abi.I32 {
 			if !zeroExt {
-				mov.opFromReg(&f.Text, abi.I32, r, r)
+				in.MOV.RegReg(&f.Text, abi.I32, sourceReg, sourceReg)
 			}
-			cvtsi2sSSE.opReg(&f.Text, resultType, abi.I64, RegResult, r)
+			in.CVTSI2SSD.TypeRegReg(&f.Text, resultType, abi.I64, resultReg, sourceReg)
 		} else {
-			opConvertUnsignedI64ToFloat(f, resultType, r)
+			convertUnsignedI64ToFloat(f, resultType, resultReg, sourceReg)
 		}
-		f.Regs.Free(source.Type, r)
-		return val.TempRegOperand(resultType, RegResult, false)
+		f.Regs.Free(source.Type, sourceReg)
+		result = operand.Reg(resultType, resultReg, false)
 
 	case prop.Reinterpret:
+		sourceReg, _ := getScratchReg(f, source)
+		resultReg := f.Regs.AllocResult(resultType)
 		if source.Type.Category() == abi.Int {
-			movSSE.opFromReg(&f.Text, source.Type, RegResult, r)
+			in.MOVDQ.RegReg(&f.Text, source.Type, resultReg, sourceReg)
 		} else {
-			movSSE.opToReg(&f.Text, source.Type, RegResult, r)
+			in.MOVDQmr.RegReg(&f.Text, source.Type, sourceReg, resultReg)
 		}
-		f.Regs.Free(source.Type, r)
-		return val.TempRegOperand(resultType, RegResult, true)
+		f.Regs.Free(source.Type, sourceReg)
+		result = operand.Reg(resultType, resultReg, true)
 	}
 
-	panic("unknown conversion op")
+	return
 }
 
-func opTruncFloatToUnsignedI64(f *gen.Func, sourceType abi.Type, inputReg reg.R) {
-	// this algorithm is copied from code generated by gcc and clang:
+func truncFloatToUnsignedI64(f *gen.Func, target reg.R, sourceType abi.Type, source reg.R) {
+	// This algorithm is copied from code generated by gcc and clang:
 
 	roDataAddr := f.RODataAddr
 	truncMaskAddr := rodata.MaskAddr(roDataAddr, rodata.MaskTruncBase, sourceType)
 
-	movapSSE.opFromReg(&f.Text, sourceType, RegScratch, inputReg)
-	subsSSE.opFromAddr(&f.Text, sourceType, RegScratch, 0, NoIndex, truncMaskAddr)
-	cvttsSSE2si.opReg(&f.Text, sourceType, abi.I64, RegResult, RegScratch)
-	mov.opFromAddr(&f.Text, abi.I64, RegScratch, 0, NoIndex, roDataAddr+rodata.Mask80Addr64)
-	xor.opFromReg(&f.Text, abi.I64, RegScratch, RegResult)
-	cvttsSSE2si.opReg(&f.Text, sourceType, abi.I64, RegResult, inputReg)
-	ucomisSSE.opFromAddr(&f.Text, sourceType, inputReg, 0, NoIndex, truncMaskAddr)
-	cmovae.opFromReg(&f.Text, abi.I64, RegResult, RegScratch)
+	in.MOVAPSD.RegReg(&f.Text, sourceType, RegScratch, source)
+	in.SUBSSD.RegMemDisp(&f.Text, sourceType, RegScratch, in.BaseZero, truncMaskAddr)
+	in.CVTTSSD2SI.TypeRegReg(&f.Text, sourceType, abi.I64, target, RegScratch)
+	in.MOV.RegMemDisp(&f.Text, abi.I64, RegScratch, in.BaseZero, roDataAddr+rodata.Mask80Addr64)
+	in.XOR.RegReg(&f.Text, abi.I64, RegScratch, target)
+	in.CVTTSSD2SI.TypeRegReg(&f.Text, sourceType, abi.I64, target, source)
+	in.UCOMISSD.RegMemDisp(&f.Text, sourceType, source, in.BaseZero, truncMaskAddr)
+	in.CMOVAE.RegReg(&f.Text, abi.I64, target, RegScratch)
 }
 
-func opConvertUnsignedI64ToFloat(f *gen.Func, resultType abi.Type, inputReg reg.R) {
-	// this algorithm is copied from code generated by gcc and clang:
+func convertUnsignedI64ToFloat(f *gen.Func, targetType abi.Type, target, source reg.R) {
+	// This algorithm is copied from code generated by gcc and clang:
 
 	var done link.L
 	var huge link.L
 
-	// TODO: allocate target r
-
-	test.opFromReg(&f.Text, abi.I64, inputReg, inputReg)
-	js.rel8.opStub(&f.Text)
+	in.TEST.RegReg(&f.Text, abi.I64, source, source)
+	in.JScb.Stub8(&f.Text)
 	huge.AddSite(f.Text.Addr)
 
 	// max. 63-bit value
-	cvtsi2sSSE.opReg(&f.Text, resultType, abi.I64, RegResult, inputReg)
+	in.CVTSI2SSD.TypeRegReg(&f.Text, targetType, abi.I64, target, source)
 
-	jmpRel.rel8.opStub(&f.Text)
+	in.JMPcb.Stub8(&f.Text)
 	done.AddSite(f.Text.Addr)
 
 	huge.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &huge)
+	isa.UpdateNearBranches(f.Text.Bytes(), &huge)
 
 	// 64-bit value
-	mov.opFromReg(&f.Text, abi.I64, RegScratch, inputReg)
-	and.opImm(&f.Text, abi.I64, RegScratch, 1)
-	shrImm.op(&f.Text, abi.I64, inputReg, 1)
-	or.opFromReg(&f.Text, abi.I64, inputReg, RegScratch)
-	cvtsi2sSSE.opReg(&f.Text, resultType, abi.I64, RegResult, inputReg)
-	addsSSE.opFromReg(&f.Text, resultType, RegResult, RegResult)
+	in.MOV.RegReg(&f.Text, abi.I64, RegScratch, source)
+	in.ANDi.RegImm8(&f.Text, abi.I64, RegScratch, 1)
+	in.SHRi.RegImm8(&f.Text, abi.I64, source, 1)
+	in.OR.RegReg(&f.Text, abi.I64, source, RegScratch)
+	in.CVTSI2SSD.TypeRegReg(&f.Text, targetType, abi.I64, target, source)
+	in.ADDSSD.RegReg(&f.Text, targetType, target, target)
 
 	done.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &done)
+	isa.UpdateNearBranches(f.Text.Bytes(), &done)
 }

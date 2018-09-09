@@ -5,5 +5,3 @@
 package main
 
 func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr uintptr)
-
-func callSys()

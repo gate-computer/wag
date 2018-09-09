@@ -7,753 +7,590 @@ package x86
 import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/condition"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
-	"github.com/tsavola/wag/internal/gen/val"
+	"github.com/tsavola/wag/internal/gen/storage"
+	"github.com/tsavola/wag/internal/isa/x86/in"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 )
 
-var (
-	ret = insnConst{0xc3}
-
-	pushImm32 = insnI{0x68}
-	pushImm8  = insnI{0x6a}
-
-	callRel = insnAddr32{0xe8}
-	jmpRel  = insnAddr{insnAddr8{0xeb}, insnAddr32{0xe9}}
-	jb      = insnAddr{insnAddr8{0x72}, insnAddr32{0x0f, 0x82}}
-	jae     = insnAddr{insnAddr8{0x73}, insnAddr32{0x0f, 0x83}}
-	je      = insnAddr{insnAddr8{0x74}, insnAddr32{0x0f, 0x84}}
-	jne     = insnAddr{insnAddr8{0x75}, insnAddr32{0x0f, 0x85}}
-	jbe     = insnAddr{insnAddr8{0x76}, insnAddr32{0x0f, 0x86}}
-	ja      = insnAddr{insnAddr8{0x77}, insnAddr32{0x0f, 0x87}}
-	js      = insnAddr{insnAddr8{0x78}, insnAddr32{0x0f, 0x88}}
-	jp      = insnAddr{insnAddr8{0x7a}, insnAddr32{0x0f, 0x8a}}
-	jl      = insnAddr{insnAddr8{0x7c}, insnAddr32{0x0f, 0x8c}}
-	jge     = insnAddr{insnAddr8{0x7d}, insnAddr32{0x0f, 0x8d}}
-	jle     = insnAddr{insnAddr8{0x7e}, insnAddr32{0x0f, 0x8e}}
-	jg      = insnAddr{insnAddr8{0x7f}, insnAddr32{0x0f, 0x8f}}
-
-	cdqCqo = insnRex{0x99}
-
-	call  = insnRexOM{[]byte{0xff}, 2}
-	jmp   = insnRexOM{[]byte{0xff}, 4}
-	setb  = insnRexOM{[]byte{0x0f, 0x92}, 0}
-	setae = insnRexOM{[]byte{0x0f, 0x93}, 0}
-	sete  = insnRexOM{[]byte{0x0f, 0x94}, 0}
-	setne = insnRexOM{[]byte{0x0f, 0x95}, 0}
-	setbe = insnRexOM{[]byte{0x0f, 0x96}, 0}
-	seta  = insnRexOM{[]byte{0x0f, 0x97}, 0}
-	setl  = insnRexOM{[]byte{0x0f, 0x9c}, 0}
-	setge = insnRexOM{[]byte{0x0f, 0x9d}, 0}
-	setle = insnRexOM{[]byte{0x0f, 0x9e}, 0}
-	setg  = insnRexOM{[]byte{0x0f, 0x9f}, 0}
-
-	lea    = insnPrefix{rexSize, []byte{0x8d}, nil}
-	movMMX = insnPrefix{rexSize, []byte{0x0f, 0x6e}, []byte{0x0f, 0x7e}}
-)
-
-var conditionInsns = []struct {
-	jcc   insnAddr
-	setcc insnRexOM
-	cmov  insnPrefix
-}{
-	val.Eq:            {je, sete, cmove},
-	val.Ne:            {jne, setne, cmovne},
-	val.GeS:           {jge, setge, cmovge},
-	val.GtS:           {jg, setg, cmovg},
-	val.GeU:           {jae, setae, cmovae},
-	val.GtU:           {ja, seta, cmova},
-	val.LeS:           {jle, setle, cmovle},
-	val.LtS:           {jl, setl, cmovl},
-	val.LeU:           {jbe, setbe, cmovbe},
-	val.LtU:           {jb, setb, cmovb},
-	val.OrderedAndEq:  {je, sete, cmove},
-	val.OrderedAndNe:  {jne, setne, cmovne},
-	val.OrderedAndGe:  {jae, setae, cmovae},
-	val.OrderedAndGt:  {ja, seta, cmova},
-	val.OrderedAndLe:  {jbe, setbe, cmovbe},
-	val.OrderedAndLt:  {jb, setb, cmovb},
-	val.UnorderedOrEq: {je, sete, cmove},
-	val.UnorderedOrNe: {jne, setne, cmovne},
-	val.UnorderedOrGe: {jae, setae, cmovae},
-	val.UnorderedOrGt: {ja, seta, cmova},
-	val.UnorderedOrLe: {jbe, setbe, cmovbe},
-	val.UnorderedOrLt: {jb, setb, cmovb},
+var conditionInsns = [22]in.CCInsn{
+	condition.Eq:            in.InsnEq,
+	condition.Ne:            in.InsnNe,
+	condition.GeS:           in.InsnGeS,
+	condition.GtS:           in.InsnGtS,
+	condition.GeU:           in.InsnGeU,
+	condition.GtU:           in.InsnGtU,
+	condition.LeS:           in.InsnLeS,
+	condition.LtS:           in.InsnLtS,
+	condition.LeU:           in.InsnLeU,
+	condition.LtU:           in.InsnLtU,
+	condition.OrderedAndEq:  in.InsnEq,
+	condition.OrderedAndNe:  in.InsnNe,
+	condition.OrderedAndGe:  in.InsnGeU,
+	condition.OrderedAndGt:  in.InsnGtU,
+	condition.OrderedAndLe:  in.InsnLeU,
+	condition.OrderedAndLt:  in.InsnLtU,
+	condition.UnorderedOrEq: in.InsnEq,
+	condition.UnorderedOrNe: in.InsnNe,
+	condition.UnorderedOrGe: in.InsnGeU,
+	condition.UnorderedOrGt: in.InsnGtU,
+	condition.UnorderedOrLe: in.InsnLeU,
+	condition.UnorderedOrLt: in.InsnLtU,
 }
 
+// MacroAssembler methods by default MUST NOT update condition flags, use
+// RegResult or allocate registers.
+//
+// Methods which return an operand (and can are allowed to do things) may
+// return either an allocated register or RegResult.
+//
+// Some methods which can use RegResult or update condition flags may need to
+// still handle them as input operands.
 type MacroAssembler struct{}
 
-// AddStackPtrImm must not allocate registers.
-func (MacroAssembler) AddStackPtrImm(m *module.M, offset int32) {
-	if offset != 0 {
-		add.opImm(&m.Text, abi.I64, RegStackPtr, offset)
+var asm MacroAssembler
+
+// AddToStackPtrUpper32 may update condition flags.  It takes ownership of the
+// register.
+func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
+	in.SARi.RegImm8(&f.Text, abi.I64, r, 32) // sign-extension
+	in.ADD.RegReg(&f.Text, abi.I64, RegStackPtr, r)
+	f.Regs.Free(abi.I64, r)
+}
+
+// DropStackValues has default restrictions.  The caller will take care of
+// updating the virtual stack pointer.
+func (MacroAssembler) DropStackValues(m *module.M, n int) {
+	if n != 0 {
+		in.LEA.RegStackDisp(&m.Text, abi.I64, RegStackPtr, int32(n*obj.Word))
 	}
 }
 
-// AddStackPtrUpper32 must not allocate registers.
-func (MacroAssembler) AddStackPtrUpper32(m *module.M, r reg.R) {
-	mov.opFromReg(&m.Text, abi.I64, RegScratch, r)
-	shrImm.op(&m.Text, abi.I64, RegScratch, 32)
-	add.opFromReg(&m.Text, abi.I64, RegStackPtr, RegScratch)
+func dropStableValue(f *gen.Func, x operand.O) {
+	switch x.Storage {
+	case storage.Stack:
+		in.LEA.RegStackDisp8(&f.Text, abi.I64, RegStackPtr, obj.Word)
+		f.StackValueConsumed()
+
+	case storage.Reg:
+		f.Regs.Free(x.Type, x.Reg())
+	}
 }
 
+// Branch may use RegResult and update condition flags.
 func (MacroAssembler) Branch(m *module.M, addr int32) int32 {
-	jmpRel.op(&m.Text, addr)
+	if addr != 0 {
+		in.JMPcd.Addr32(&m.Text, addr)
+	} else {
+		in.JMPcd.Stub32(&m.Text)
+	}
 	return m.Text.Addr
 }
 
-// BranchIndirect must not allocate registers.  The supplied register is
-// trashed.
-func (MacroAssembler) BranchIndirect(m *module.M, r reg.R, isZeroExt bool) {
-	if !isZeroExt {
-		mov.opFromReg(&m.Text, abi.I32, r, r)
-	}
-	add.opFromReg(&m.Text, abi.I64, r, RegTextBase)
-	jmp.opReg(&m.Text, r)
+// BranchIndirect may use RegResult and update condition flags.  It takes
+// ownership of address register, which has already been zero-extended.
+func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
+	in.ADD.RegReg(&f.Text, abi.I64, addr, RegTextBase)
+	in.JMP.Reg(&f.Text, in.OneSize, addr)
+	f.Regs.Free(abi.I64, addr)
 }
 
-func (MacroAssembler) BranchIf(f *gen.Func, x val.Operand, yes bool, addr int32) (sites []int32) {
-	var cond val.Condition
+// BranchIfStub may use RegResult and update condition flags.
+func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (sites []int32) {
+	var cond condition.C
 
-	if x.Storage == val.ConditionFlags {
-		cond = x.Condition()
+	if x.Storage == storage.Flags {
+		cond = x.FlagsCond()
 	} else {
-		r, _, own := opBorrowMaybeScratchReg(f, x, false)
-		if own {
-			defer f.Regs.Free(abi.I32, r)
-		}
-
-		test.opFromReg(&f.Text, abi.I32, r, r)
-		cond = val.Ne
+		r, _ := getScratchReg(f, x)
+		in.TEST.RegReg(&f.Text, abi.I32, r, r)
+		cond = condition.Ne
+		f.Regs.Free(abi.I32, r)
 	}
 
 	if !yes {
-		cond = val.InvertedConditions[cond]
+		cond = condition.Inverted[cond]
 	}
 
 	var end link.L
 
 	switch {
-	case cond >= val.MinUnorderedOrCondition:
-		jp.op(&f.Text, addr)
+	case cond >= condition.MinUnorderedOrCondition:
+		in.JPc.Stub(&f.Text, near)
 		sites = append(sites, f.Text.Addr)
 
-	case cond >= val.MinOrderedAndCondition:
-		jp.rel8.opStub(&f.Text)
+	case cond >= condition.MinOrderedAndCondition:
+		in.JPcb.Stub8(&f.Text)
 		end.AddSite(f.Text.Addr)
 	}
 
-	conditionInsns[cond].jcc.op(&f.Text, addr)
+	conditionInsns[cond].JccOpcodeC().Stub(&f.Text, near)
 	sites = append(sites, f.Text.Addr)
 
 	end.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &end)
+	isa.UpdateNearBranches(f.Text.Bytes(), &end)
 	return
 }
 
-// BranchIfOutOfBounds must not allocate registers.  indexReg will be
-// zero-extended.
+// BranchIfOutOfBounds may use RegResult and update condition flags.  It MUST
+// zero-extend the index register.
 func (MacroAssembler) BranchIfOutOfBounds(m *module.M, indexReg reg.R, upperBound, addr int32) int32 {
-	opCompareBounds(m, indexReg, upperBound)
-	jle.op(&m.Text, addr) // TODO: is this the correct comparison?
+	compareBounds(m, indexReg, upperBound)
+	in.JLEc.Addr(&m.Text, addr)
 	return m.Text.Addr
 }
 
-// opCompareBounds zero-extends the indexReg.
-func opCompareBounds(m *module.M, indexReg reg.R, upperBound int32) {
-	movImm.opImm(&m.Text, abi.I32, RegScratch, upperBound)
-	test.opFromReg(&m.Text, abi.I32, indexReg, indexReg)
-	cmovl.opFromReg(&m.Text, abi.I32, indexReg, RegScratch) // negative index -> upper bound
-	cmp.opFromReg(&m.Text, abi.I32, RegScratch, indexReg)
+// compareBounds zero-extends indexReg.
+func compareBounds(m *module.M, indexReg reg.R, upperBound int32) {
+	in.MOVi.RegImm32(&m.Text, abi.I32, RegScratch, upperBound)
+	in.TEST.RegReg(&m.Text, abi.I32, indexReg, indexReg)
+	in.CMOVL.RegReg(&m.Text, abi.I32, indexReg, RegScratch) // negative index -> upper bound
+	in.CMP.RegReg(&m.Text, abi.I32, RegScratch, indexReg)
 }
 
+// Call may use RegResult and update condition flags.
 func (MacroAssembler) Call(m *module.M, addr int32) (retAddr int32) {
-	callRel.op(&m.Text, addr)
+	in.CALLcd.Addr32(&m.Text, addr)
 	return m.Text.Addr
 }
 
+// CallMissing may use RegResult and update condition flags.
 func (MacroAssembler) CallMissing(m *module.M) (retAddr int32) {
-	// Position of the jump target (part of the call instruction) must be
-	// aligned in memory.
-	if relPos := (m.Text.Addr + callRel.size()) & 3; relPos > 0 {
-		padSize := 4 - relPos
-		m.Text.PutBytes(nopSequences[padSize-1])
-	}
-	callRel.opMissingFunc(&m.Text)
+	in.CALLcd.MissingFunction(&m.Text)
 	return m.Text.Addr
 }
 
-// CallIndirect using table index located in result register.
-func (MacroAssembler) CallIndirect(f *gen.Func, tableLen, sigIndex int32) int32 {
+// CallIndirect may use RegResult and update condition flags.  It takes
+// ownership of funcIndexReg.
+func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32 {
 	var outOfBounds link.L
 	var checksOut link.L
 
-	opCompareBounds(f.M, RegResult, tableLen)
-	jle.rel8.opStub(&f.Text)
+	compareBounds(f.M, funcIndexReg, int32(len(f.TableFuncs))) // zero-extension
+	in.JLEcb.Stub8(&f.Text)
 	outOfBounds.AddSite(f.Text.Addr)
 
-	mov.opFromAddr(&f.Text, abi.I64, RegResult, 3, RegResult, f.RODataAddr+rodata.TableAddr)
-	mov.opFromReg(&f.Text, abi.I32, RegScratch, RegResult) // zero-extended function address
-	shrImm.op(&f.Text, abi.I64, RegResult, 32)             // signature index
-	cmp.opImm(&f.Text, abi.I32, RegResult, sigIndex)
-	je.rel8.opStub(&f.Text)
+	in.MOV.RegMemIndexDisp(&f.Text, abi.I64, RegResult, in.BaseZero, funcIndexReg, in.Scale3, f.RODataAddr+rodata.TableAddr)
+	f.Regs.Free(abi.I64, funcIndexReg)
+	in.MOV.RegReg(&f.Text, abi.I32, RegScratch, RegResult) // zero-extended function address
+	in.SHRi.RegImm8(&f.Text, abi.I64, RegResult, 32)       // signature index
+	in.CMPi.RegImm(&f.Text, abi.I32, RegResult, sigIndex)
+	in.JEcb.Stub8(&f.Text)
 	checksOut.AddSite(f.Text.Addr)
 
-	opTrap(f, trap.IndirectCallSignature)
+	asm.Trap(f, trap.IndirectCallSignature)
 
 	outOfBounds.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &outOfBounds)
+	isa.UpdateNearBranches(f.Text.Bytes(), &outOfBounds)
 
-	opTrap(f, trap.IndirectCallIndex)
+	asm.Trap(f, trap.IndirectCallIndex)
 
 	checksOut.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &checksOut)
+	isa.UpdateNearBranches(f.Text.Bytes(), &checksOut)
 
-	add.opFromReg(&f.Text, abi.I64, RegScratch, RegTextBase)
-	call.opReg(&f.Text, RegScratch)
+	in.ADD.RegReg(&f.Text, abi.I64, RegScratch, RegTextBase)
+	in.CALL.Reg(&f.Text, in.OneSize, RegScratch)
 	return f.Text.Addr
 }
 
-// ClearIntResultReg may update CPU's condition flags.
+// ClearIntResultReg may use RegResult and update condition flags.
 func (MacroAssembler) ClearIntResultReg(m *module.M) {
-	xor.opFromReg(&m.Text, abi.I32, RegResult, RegResult)
+	in.MOV.RegReg(&m.Text, abi.I32, RegResult, RegZero)
 }
 
-// CopyStack must not allocate registers.
-func (MacroAssembler) CopyStack(m *module.M, targetOffset, sourceOffset int32) {
-	mov.opFromStack(&m.Text, abi.I64, RegScratch, sourceOffset)
-	mov.opToStack(&m.Text, abi.I64, RegScratch, targetOffset)
-}
-
+// Exit may use RegResult and update condition flags.
 func (MacroAssembler) Exit(m *module.M) {
-	shlImm.op(&m.Text, abi.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
-	movMMX.opToReg(&m.Text, abi.I64, RegScratch, RegTrapHandlerMMX)
-	jmp.opReg(&m.Text, RegScratch)
+	in.SHLi.RegImm8(&m.Text, abi.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
+	in.MOVDQmrMMX.RegReg(&m.Text, abi.I64, RegTrapHandlerMMX, RegScratch)
+	in.JMP.Reg(&m.Text, in.OneSize, RegScratch)
 }
 
-// GetGlobal must not update CPU's condition flags.
-func (MacroAssembler) GetGlobal(m *module.M, t abi.Type, target reg.R, offset int32) (zeroExt bool) {
+// LoadGlobal has default restrictions.
+func (MacroAssembler) LoadGlobal(m *module.M, t abi.Type, target reg.R, offset int32) (zeroExt bool) {
 	if t.Category() == abi.Int {
-		mov.opFromIndirect(&m.Text, t, target, 0, NoIndex, RegMemoryBase, offset)
+		in.MOV.RegMemDisp(&m.Text, t, target, in.BaseMemory, offset)
 	} else {
-		movSSE.opFromIndirect(&m.Text, t, target, 0, NoIndex, RegMemoryBase, offset)
+		in.MOVDQ.RegMemDisp(&m.Text, t, target, in.BaseMemory, offset)
 	}
 	return true
 }
 
-// SetGlobal must not update CPU's condition flags.
-func (MacroAssembler) SetGlobal(f *gen.Func, offset int32, x val.Operand) {
+// StoreGlobal has default restrictions.
+func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 	var r reg.R
 
-	if x.Storage.IsReg() {
+	if x.Storage == storage.Reg {
 		r = x.Reg()
-		if x.Storage == val.TempReg {
-			f.Regs.Free(x.Type, r)
-		}
+		f.Regs.Free(x.Type, r)
 	} else {
-		opMove(f, RegScratch, x, true)
 		r = RegScratch
+		asm.Move(f, r, x)
 	}
 
 	if x.Type.Category() == abi.Int {
-		mov.opToIndirect(&f.Text, x.Type, r, 0, NoIndex, RegMemoryBase, offset)
+		in.MOVmr.RegMemDisp(&f.Text, x.Type, r, in.BaseMemory, offset)
 	} else {
-		movSSE.opToIndirect(&f.Text, x.Type, r, 0, NoIndex, RegMemoryBase, offset)
+		in.MOVDQmr.RegMemDisp(&f.Text, x.Type, r, in.BaseMemory, offset)
 	}
 }
 
+// Init may use RegResult and update condition flags.
 func (MacroAssembler) Init(m *module.M) {
 	if m.Text.Addr == 0 || m.Text.Addr > FuncAlignment {
 		panic("inconsistency")
 	}
 	alignFunc(m)
-	add.opImm(&m.Text, abi.I64, RegStackLimit, obj.StackReserve)
+	in.XOR.RegReg(&m.Text, abi.I64, RegZero, RegZero)
+	in.ADDi.RegImm8(&m.Text, abi.I64, RegStackLimit, obj.Word*2) // call + stack check trap
 
 	var notResume link.L
 
-	test.opFromReg(&m.Text, abi.I64, RegResult, RegResult)
-	je.rel8.opStub(&m.Text)
+	in.TEST.RegReg(&m.Text, abi.I64, RegResult, RegResult)
+	in.JEcb.Stub8(&m.Text)
 	notResume.AddSite(m.Text.Addr)
-	ret.op(&m.Text) // simulate return from snapshot function call
+	in.RET.Simple(&m.Text) // simulate return from snapshot function call
 
 	notResume.Addr = m.Text.Addr
-	updateLocalBranches(m, &notResume)
+	isa.UpdateNearBranches(m.Text.Bytes(), &notResume)
 }
 
+// JumpToImportFunc may use RegResult and update condition flags.
+//
+// Import function implementations must make sure that RDX is zero when they
+// return.  Void functions must also make sure that they don't return any
+// sensitive information in RAX.
 func (MacroAssembler) JumpToImportFunc(m *module.M, addr uint64, variadic bool, argCount, sigIndex int) {
 	if variadic {
-		opMoveIntImm(m, RegImportArgCount, int64(argCount))
-		opMoveIntImm(m, RegImportSigIndex, int64(sigIndex))
+		in.MOV64i.RegImm64(&m.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
-	opMoveIntImm(m, RegResult, int64(addr))
-	jmp.opReg(&m.Text, RegResult)
-	// Void import functions must make sure that they don't return any damaging
-	// information in result register (including the absolute jump target).
+	in.MOV64i.RegImm64(&m.Text, RegScratch, int64(addr))
+	in.JMP.Reg(&m.Text, in.OneSize, RegScratch)
 }
 
-// JumpToTrapHandler must not generate over 16 bytes of code.
+// JumpToTrapHandler may use RegResult and update condition flags.  It MUST NOT
+// generate over 16 bytes of code.
 func (MacroAssembler) JumpToTrapHandler(m *module.M, id trap.Id) {
-	mov.opImm(&m.Text, abi.I32, RegResult, int32(id)) // automatic zero-extension
-	movMMX.opToReg(&m.Text, abi.I64, RegScratch, RegTrapHandlerMMX)
-	jmp.opReg(&m.Text, RegScratch)
+	in.MOVi.RegImm32(&m.Text, abi.I32, RegResult, int32(id)) // automatic zero-extension
+	in.MOVDQmrMMX.RegReg(&m.Text, abi.I64, RegTrapHandlerMMX, RegScratch)
+	in.JMP.Reg(&m.Text, in.OneSize, RegScratch)
 }
 
-// LoadIntROData must not allocate registers.  The register is both the index
-// (source) and the target register.  The index must have been zero-extended.
-func (MacroAssembler) LoadIntROData(f *gen.Func, t abi.Type, r reg.R, scale uint8, addr int32) {
-	mov.opFromAddr(&f.Text, t, r, scale, r, f.RODataAddr+addr)
+// LoadIntROData may update condition flags.  The register passed as argument
+// is both the index (source) and the target register.  The index has been
+// zero-extended.
+func (MacroAssembler) LoadIntROData(f *gen.Func, indexType abi.Type, r reg.R, addr int32) {
+	in.MOV.RegMemIndexDisp(&f.Text, indexType, r, in.BaseZero, r, in.TypeScale(indexType), f.RODataAddr+addr)
 }
 
-// Move must not update CPU's condition flags if preserveFlags is set.
-func (MacroAssembler) Move(f *gen.Func, target reg.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
-	return opMove(f, target, x, preserveFlags)
-}
-
-// opMove has same restrictions as OpMove.  Additional ISA restriction: opMove
-// must not blindly rely on RegScratch or RegResult in this function because we
-// may be moving to one of them.
-func opMove(f *gen.Func, targetReg reg.R, x val.Operand, preserveFlags bool) (zeroExt bool) {
+// Move MUST NOT update condition flags unless the operand is the condition
+// flags.  The source operand is consumed.
+func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool) {
 	switch x.Type.Category() {
 	case abi.Int:
 		switch x.Storage {
-		case val.Imm:
-			if value := x.ImmValue(); value == 0 && !preserveFlags {
-				xor.opFromReg(&f.Text, abi.I32, targetReg, targetReg)
-			} else {
-				movImm64.op(&f.Text, x.Type, targetReg, value)
-			}
-			zeroExt = true
+		case storage.Stack:
+			in.POP.Reg(&f.Text, in.OneSize, target)
+			f.StackValueConsumed()
 
-		case val.VarMem:
-			mov.opFromStack(&f.Text, x.Type, targetReg, x.VarMemOffset())
-			zeroExt = true
-
-		case val.VarReg:
-			if sourceReg := x.Reg(); sourceReg != targetReg {
-				mov.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
-				zeroExt = true
-			}
-
-		case val.TempReg:
-			if sourceReg := x.Reg(); sourceReg != targetReg {
-				mov.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
-				zeroExt = true
-			} else if targetReg == RegResult {
-				zeroExt = x.RegZeroExt()
-			} else {
-				panic("moving temporary integer register to itself")
-			}
-
-		case val.Stack:
-			pop.op(&f.Text, targetReg)
-
-		case val.ConditionFlags:
-			if x.Type != abi.I32 {
-				panic(x)
-			}
-
-			var end link.L
-
-			cond := x.Condition()
-			setcc := conditionInsns[cond].setcc
-
-			switch {
-			case cond >= val.MinUnorderedOrCondition:
-				movImm.opImm(&f.Text, x.Type, targetReg, 1) // true
-				jp.rel8.opStub(&f.Text)                     // if unordered, else
-				end.AddSite(f.Text.Addr)                    //
-				setcc.opReg(&f.Text, targetReg)             // cond
-
-			case cond >= val.MinOrderedAndCondition:
-				movImm.opImm(&f.Text, x.Type, targetReg, 0) // false
-				jp.rel8.opStub(&f.Text)                     // if unordered, else
-				end.AddSite(f.Text.Addr)                    //
-				setcc.opReg(&f.Text, targetReg)             // cond
-
+		case storage.Imm:
+			switch value := x.ImmValue(); {
+			case value == 0:
+				in.MOV.RegReg(&f.Text, abi.I32, target, RegZero)
+			case uint64(value+0x80000000) <= 0xffffffff:
+				in.MOVi.RegImm32(&f.Text, x.Type, target, int32(value))
 			default:
-				setcc.opReg(&f.Text, targetReg)
-				movzx8.opFromReg(&f.Text, x.Type, targetReg, targetReg)
+				in.MOV64i.RegImm64(&f.Text, target, value)
 			}
-
-			end.Addr = f.Text.Addr
-			updateLocalBranches(f.M, &end)
-
 			zeroExt = true
 
-		default:
-			panic(x)
+		case storage.Reg:
+			if source := x.Reg(); source != target {
+				in.MOV.RegReg(&f.Text, x.Type, target, source)
+				f.Regs.Free(x.Type, source)
+				zeroExt = true
+			} else {
+				if target != RegResult {
+					panic("register moved to itself")
+				}
+				zeroExt = x.RegZeroExt()
+			}
+
+		case storage.Flags:
+			setBool(f.M, x.FlagsCond())
+			if target != RegScratch {
+				in.MOV.RegReg(&f.Text, abi.I32, target, RegScratch)
+			}
+			zeroExt = true
 		}
 
 	case abi.Float:
 		switch x.Storage {
-		case val.Imm:
+		case storage.Stack:
+			in.MOVDQ.RegStack(&f.Text, x.Type, target)
+			in.ADDi.RegImm8(&f.Text, abi.I64, RegStackPtr, obj.Word)
+			f.StackValueConsumed()
+
+		case storage.Imm:
 			if value := x.ImmValue(); value == 0 {
-				pxorSSE.opFromReg(&f.Text, x.Type, targetReg, targetReg)
+				in.PXOR.RegReg(&f.Text, in.OneSize, target, target)
 			} else {
-				movImm64.op(&f.Text, x.Type, RegScratch, value) // integer scratch register
-				movSSE.opFromReg(&f.Text, x.Type, targetReg, RegScratch)
+				in.MOV64i.RegImm64(&f.Text, RegScratch, value) // integer scratch register
+				in.MOVDQ.RegReg(&f.Text, x.Type, target, RegScratch)
 			}
 
-		case val.VarMem:
-			movsSSE.opFromStack(&f.Text, x.Type, targetReg, x.VarMemOffset())
-
-		case val.VarReg:
-			if sourceReg := x.Reg(); sourceReg != targetReg {
-				movapSSE.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
+		case storage.Reg:
+			if source := x.Reg(); source != target {
+				in.MOVAPSD.RegReg(&f.Text, x.Type, target, source)
+				f.Regs.Free(x.Type, source)
+			} else {
+				if target != RegResult {
+					panic("register moved to itself")
+				}
 			}
-
-		case val.TempReg:
-			if sourceReg := x.Reg(); sourceReg != targetReg {
-				movapSSE.opFromReg(&f.Text, x.Type, targetReg, sourceReg)
-			} else if targetReg != RegResult {
-				panic("moving temporary float register to itself")
-			}
-
-		case val.Stack:
-			popFloatOp(f.M, x.Type, targetReg)
-
-		default:
-			panic(x)
 		}
-
-	default:
-		panic(x)
 	}
-
-	f.Consumed(x)
 
 	return
 }
 
-// MoveIntImm may update CPU's condition flags.
-func (MacroAssembler) MoveIntImm(m *module.M, r reg.R, value uint64) {
-	opMoveIntImm(m, r, int64(value))
-}
-
-func opMoveIntImm(m *module.M, r reg.R, value int64) {
-	if value == 0 {
-		xor.opFromReg(&m.Text, abi.I32, r, r)
-	} else {
-		movImm64.op(&m.Text, abi.I64, r, value)
-	}
-}
-
-// MoveReg must not allocate registers.
-func (MacroAssembler) MoveReg(m *module.M, t abi.Type, targetReg, sourceReg reg.R) {
-	if targetReg == sourceReg {
-		panic("target and source registers are the same")
-	}
-
+// MoveReg has default restrictions.  It MUST zero-extend the (integer) target
+// register.
+func (MacroAssembler) MoveReg(m *module.M, t abi.Type, target, source reg.R) {
 	switch t.Category() {
 	case abi.Int:
-		mov.opFromReg(&m.Text, t, targetReg, sourceReg)
+		in.MOV.RegReg(&m.Text, t, target, source)
 
 	case abi.Float:
-		movapSSE.opFromReg(&m.Text, t, targetReg, sourceReg)
-
-	default:
-		panic(t)
+		in.MOVAPSD.RegReg(&m.Text, t, target, source)
 	}
 }
 
-// MoveI32Reg must not allocate registers or update CPU's condition flags.
-// It must zero-extend.
-func (MacroAssembler) MoveI32Reg(m *module.M, target, source reg.R) {
-	mov.opFromReg(&m.Text, abi.I32, target, source)
+// PushImm has default restrictions.
+func (MacroAssembler) PushImm(m *module.M, value int64) {
+	switch {
+	case value == 0:
+		in.PUSHo.RegZero(&m.Text)
+
+	case uint64(value+0x80000000) <= 0xffffffff:
+		in.PUSHi.Imm(&m.Text, int32(value))
+
+	default:
+		in.MOV64i.RegImm64(&m.Text, RegScratch, value)
+		in.PUSHo.RegScratch(&m.Text)
+	}
 }
 
-// Push must not allocate registers, and must not update CPU's condition
-// flags unless the operand is the condition flags.
-func (MacroAssembler) Push(f *gen.Func, x val.Operand) {
-	var r reg.R
+// PushReg has default restrictions.
+func (MacroAssembler) PushReg(m *module.M, t abi.Type, r reg.R) {
+	switch t.Category() {
+	case abi.Int:
+		in.PUSH.Reg(&m.Text, in.OneSize, r)
+
+	case abi.Float:
+		in.SUBi.RegImm8(&m.Text, abi.I64, RegStackPtr, obj.Word)
+		in.MOVDQmr.RegStack(&m.Text, t, r)
+	}
+}
+
+// PushCond has default restrictions.
+func (MacroAssembler) PushCond(m *module.M, cond condition.C) {
+	setBool(m, cond)
+	in.PUSHo.RegScratch(&m.Text)
+}
+
+// PushZeros may use RegResult and update condition flags.
+func (MacroAssembler) PushZeros(m *module.M, n int) {
+	if n <= 9 {
+		for i := 0; i < n; i++ {
+			in.PUSHo.RegZero(&m.Text)
+		}
+	} else {
+		in.MOVi.RegImm32(&m.Text, abi.I32, RegCount, int32(n)) // 6 bytes
+		loopAddr := m.Text.Addr
+		in.PUSHo.RegZero(&m.Text)          // 1 byte
+		in.LOOPcb.Addr8(&m.Text, loopAddr) // 2 bytes
+	}
+}
+
+// Return may use RegResult and update condition flags.
+func (MacroAssembler) Return(m *module.M, numStackValues int) {
+	asm.DropStackValues(m, numStackValues)
+	in.RET.Simple(&m.Text)
+}
+
+// SetupStackFrame may use RegResult and update condition flags.
+func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
+	var checked link.L
+
+	in.LEA.RegStackStub32(&f.Text, abi.I64, RegScratch)
+	stackCheckAddr = f.Text.Addr
+
+	in.CMP.RegReg(&f.Text, abi.I64, RegScratch, RegStackLimit)
+
+	in.JGEcb.Stub8(&f.Text)
+	checked.AddSite(f.Text.Addr)
+
+	asm.Trap(f, trap.CallStackExhausted) // handler checks if it was actually suspension
+
+	checked.Addr = f.Text.Addr
+	isa.UpdateNearBranches(f.Text.Bytes(), &checked)
+	return
+}
+
+// SetBool has default restrictions.  It MUST zero-extend the target register.
+func (MacroAssembler) SetBool(m *module.M, target reg.R, cond condition.C) {
+	setBool(m, cond)
+	in.MOV.RegReg(&m.Text, abi.I32, target, RegScratch)
+}
+
+// setBool sets the scratch register.  (SETcc's register encoding is tricky.)
+func setBool(m *module.M, cond condition.C) {
+	var end link.L
 
 	switch {
-	case x.Storage.IsReg():
-		r = x.Reg()
+	case cond >= condition.MinUnorderedOrCondition:
+		in.MOVi.RegImm32(&m.Text, abi.I32, RegScratch, 1) // true
+		in.JPcb.Stub8(&m.Text)                            // if unordered, else
+		end.AddSite(m.Text.Addr)
 
-	case x.Storage == val.Imm:
-		value := x.ImmValue()
-
-		switch {
-		case value >= -0x80 && value < 0x80:
-			pushImm8.op8(&f.Text, int8(value))
-			return
-
-		case value >= -0x80000000 && value < 0x80000000:
-			pushImm32.op32(&f.Text, int32(value))
-			return
-		}
-
-		fallthrough
+	case cond >= condition.MinOrderedAndCondition:
+		in.MOV.RegReg(&m.Text, abi.I32, RegScratch, RegZero) // false
+		in.JPcb.Stub8(&m.Text)                               // if unordered, else
+		end.AddSite(m.Text.Addr)
 
 	default:
-		r = RegScratch
-		opMove(f, r, x, true)
+		in.MOV.RegReg(&m.Text, abi.I32, RegScratch, RegZero)
 	}
 
-	switch x.Type.Category() {
-	case abi.Int:
-		push.op(&f.Text, r)
+	conditionInsns[cond].SetccOpcode().OneSizeReg(&m.Text, RegScratch)
 
-	case abi.Float:
-		pushFloatOp(f.M, x.Type, r)
-
-	default:
-		panic(x)
-	}
-
-	if x.Storage == val.TempReg {
-		f.Regs.Free(x.Type, r)
-	}
+	end.Addr = m.Text.Addr
+	isa.UpdateNearBranches(m.Text.Bytes(), &end)
 }
 
-func (MacroAssembler) Return(m *module.M) {
-	ret.op(&m.Text)
-}
-
-func (MacroAssembler) Select(f *gen.Func, a, b, condOperand val.Operand) val.Operand {
-	defer f.Consumed(condOperand)
-
-	var cond val.Condition
-
-	switch condOperand.Storage {
-	case val.VarMem:
-		cmp.opImmToStack(&f.Text, abi.I32, condOperand.VarMemOffset(), 0)
-		cond = val.Ne
-
-	case val.VarReg, val.TempReg:
-		r := condOperand.Reg()
-		test.opFromReg(&f.Text, abi.I32, r, r)
-		cond = val.Ne
-
-	case val.Stack:
-		add.opImm(&f.Text, abi.I64, RegStackPtr, obj.Word) // do before cmp to avoid overwriting flags
-		cmp.opImmToStack(&f.Text, abi.I32, -obj.Word, 0)
-		cond = val.Ne
-
-	case val.ConditionFlags:
-		cond = condOperand.Condition()
-
-	case val.Imm:
-		if condOperand.ImmValue() != 0 {
-			f.Consumed(b)
-			return a
-		} else {
-			f.Consumed(a)
-			return b
-		}
-
-	default:
-		panic(condOperand)
-	}
-
-	t := a.Type
-	targetReg, _ := opMaybeResultReg(f, b, true)
-
+// LoadStack has default restrictions.  It MUST zero-extend the (integer)
+// target register.
+func (MacroAssembler) LoadStack(m *module.M, t abi.Type, target reg.R, offset int32) {
 	switch t.Category() {
 	case abi.Int:
-		cmov := conditionInsns[cond].cmov
-
-		switch a.Storage {
-		case val.VarMem:
-			cmov.opFromStack(&f.Text, t, targetReg, a.VarMemOffset())
-
-		default:
-			aReg, _, own := opBorrowMaybeScratchReg(f, a, true)
-			if own {
-				defer f.Regs.Free(t, aReg)
-			}
-
-			cmov.opFromReg(&f.Text, t, targetReg, aReg)
-		}
+		in.MOV.RegStackDisp(&m.Text, t, target, offset)
 
 	case abi.Float:
-		var moveIt link.L
-		var end link.L
-
-		cond = val.InvertedConditions[cond]
-		notCondJump := conditionInsns[cond].jcc
-
-		switch {
-		case cond >= val.MinUnorderedOrCondition:
-			jp.rel8.opStub(&f.Text) // move it if unordered
-			moveIt.AddSite(f.Text.Addr)
-
-			notCondJump.rel8.opStub(&f.Text) // break if not cond
-			end.AddSite(f.Text.Addr)
-
-		case cond >= val.MinOrderedAndCondition:
-			jp.rel8.opStub(&f.Text) // break if unordered
-			end.AddSite(f.Text.Addr)
-
-			notCondJump.rel8.opStub(&f.Text) // break if not cond
-			end.AddSite(f.Text.Addr)
-
-		default:
-			notCondJump.rel8.opStub(&f.Text) // break if not cond
-			end.AddSite(f.Text.Addr)
-		}
-
-		moveIt.Addr = f.Text.Addr
-		updateLocalBranches(f.M, &moveIt)
-
-		opMove(f, targetReg, a, false)
-
-		end.Addr = f.Text.Addr
-		updateLocalBranches(f.M, &end)
-
-	default:
-		panic(t)
-	}
-
-	// cmov zero-extends the target unconditionally
-	return val.TempRegOperand(t, targetReg, true)
-}
-
-// StoreStack must not allocate registers.
-func (MacroAssembler) StoreStack(f *gen.Func, offset int32, x val.Operand) {
-	var r reg.R
-
-	if x.Storage.IsReg() {
-		r = x.Reg()
-	} else {
-		r = RegScratch
-		opMove(f, r, x, true)
-	}
-
-	opStoreStackReg(f.M, x.Type, offset, r)
-
-	if x.Storage == val.TempReg {
-		f.Regs.Free(x.Type, r)
+		in.MOVDQ.RegStackDisp(&m.Text, t, target, offset)
 	}
 }
 
-// StoreStackReg must not allocate registers.
+// StoreStack has default restrictions.  The source operand is consumed.
+func (MacroAssembler) StoreStack(f *gen.Func, offset int32, x operand.O) {
+	r, _ := getScratchReg(f, x)
+	asm.StoreStackReg(f.M, x.Type, offset, r)
+	f.Regs.Free(x.Type, r)
+}
+
+// StoreStackImm has default restrictions.
+func (MacroAssembler) StoreStackImm(m *module.M, t abi.Type, offset int32, value int64) {
+	switch {
+	case value == 0:
+		in.MOVmr.RegStackDisp(&m.Text, abi.I64, RegZero, offset)
+
+	case t.Size() == abi.Size32:
+		in.MOVi.StackDispImm32(&m.Text, abi.I32, offset, int32(value))
+
+	case t.Size() == abi.Size64:
+		in.MOV64i.RegImm64(&m.Text, RegScratch, value)
+		in.MOVmr.RegStackDisp(&m.Text, abi.I64, RegScratch, offset)
+	}
+}
+
+// StoreStackReg has default restrictions.
 func (MacroAssembler) StoreStackReg(m *module.M, t abi.Type, offset int32, r reg.R) {
-	opStoreStackReg(m, t, offset, r)
-}
-
-// opStoreStackReg has same restrictions as OpStoreStackReg.
-func opStoreStackReg(m *module.M, t abi.Type, offset int32, r reg.R) {
 	switch t.Category() {
 	case abi.Int:
-		mov.opToStack(&m.Text, t, r, offset)
+		in.MOVmr.RegStackDisp(&m.Text, t, r, offset)
 
 	case abi.Float:
-		movsSSE.opToStack(&m.Text, t, r, offset)
-
-	default:
-		panic(t)
+		in.MOVDQmr.RegStackDisp(&m.Text, t, r, offset)
 	}
 }
 
-// Swap must not allocate registers, or update CPU's condition flags.
-func (MacroAssembler) Swap(m *module.M, cat abi.Category, a, b reg.R) {
-	if cat == abi.Int {
-		xchg.opFromReg(&m.Text, abi.I64, a, b)
-	} else {
-		movSSE.opFromReg(&m.Text, abi.F64, RegScratch, a)
-		movSSE.opFromReg(&m.Text, abi.F64, a, b)
-		movSSE.opFromReg(&m.Text, abi.F64, b, RegScratch)
-	}
-}
-
+// Trap may use RegResult and update condition flags.
 func (MacroAssembler) Trap(f *gen.Func, id trap.Id) {
-	opTrap(f, id)
-}
-
-func opTrap(f *gen.Func, id trap.Id) {
-	f.InitTrapTrampoline(id)
-	callRel.op(&f.Text, f.TrapLinks[id].Addr)
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[id].Addr)
 	f.MapCallAddr(f.Text.Addr)
 }
 
-func (MacroAssembler) TrapIfStackExhausted(f *gen.Func) (stackCheckAddr int32) {
-	var checked link.L
-
-	lea.opFromStack(&f.Text, abi.I64, RegScratch, -0x80000000) // reserve 32-bit displacement
-	stackCheckAddr = f.Text.Addr
-
-	cmp.opFromReg(&f.Text, abi.I64, RegScratch, RegStackLimit)
-
-	jge.rel8.opStub(&f.Text)
-	checked.AddSite(f.Text.Addr)
-
-	opTrap(f, trap.CallStackExhausted)
-
-	checked.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &checked)
-	return
-}
-
-func (MacroAssembler) TrapIfSuspended(f *gen.Func) {
+// TrapIfLoopSuspended may use RegResult and update condition flags.
+func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
 	var skip link.L
 
-	test.opFromReg(&f.Text, abi.I64, RegSuspendFlag, RegSuspendFlag)
-	je.rel8.opStub(&f.Text)
+	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
+	in.JEcb.Stub8(&f.Text) // 0 -> skip, 1 -> trap
 	skip.AddSite(f.Text.Addr)
 
-	opTrap(f, trap.Suspended)
+	asm.Trap(f, trap.Suspended)
 
 	skip.Addr = f.Text.Addr
-	updateLocalBranches(f.M, &skip)
+	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
 }
 
-// opBorrowMaybeScratchReg returns either the register of the given operand, or
-// the reserved scratch register with the value of the operand.
-func opBorrowMaybeScratchReg(f *gen.Func, x val.Operand, preserveFlags bool) (r reg.R, zeroExt, own bool) {
-	if x.Storage.IsReg() {
+// TrapIfLoopSuspendedSaveInt may update condition flags.
+func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
+	var skip link.L
+
+	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
+	in.JEcb.Stub8(&f.Text) // 0 -> skip, 1 -> trap
+	skip.AddSite(f.Text.Addr)
+
+	in.PUSH.Reg(&f.Text, in.OneSize, saveReg)
+	asm.Trap(f, trap.Suspended)
+	in.POP.Reg(&f.Text, in.OneSize, saveReg)
+
+	skip.Addr = f.Text.Addr
+	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
+}
+
+// TrapIfLoopSuspendedElse may use RegResult and update condition flags.
+func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
+	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
+	in.JEcd.Addr32(&f.Text, elseAddr) // 0 -> else, 1 -> trap
+
+	asm.Trap(f, trap.Suspended)
+}
+
+// ZeroExtendResultReg may use RegResult and update condition flags.
+func (MacroAssembler) ZeroExtendResultReg(m *module.M) {
+	in.MOV.RegReg(&m.Text, abi.I32, RegResult, RegResult)
+}
+
+// getScratchReg returns either the operand's existing register, or the
+// operand's value in RegScratch.
+func getScratchReg(f *gen.Func, x operand.O) (r reg.R, zeroExt bool) {
+	if x.Storage == storage.Reg {
 		r = x.Reg()
 		zeroExt = x.RegZeroExt()
 	} else {
 		r = RegScratch
-		zeroExt = opMove(f, r, x, preserveFlags)
-	}
-	own = (x.Storage == val.TempReg)
-	return
-}
-
-func opBorrowMaybeScratchRegOperand(f *gen.Func, x val.Operand, preserveFlags bool) val.Operand {
-	r, _, own := opBorrowMaybeScratchReg(f, x, preserveFlags)
-	return val.RegOperand(own, x.Type, r)
-}
-
-// opBorrowMaybeResultReg returns either the register of the given operand, or
-// the reserved result register with the value of the operand.
-func opBorrowMaybeResultReg(f *gen.Func, x val.Operand, preserveFlags bool) (r reg.R, zeroExt, own bool) {
-	if x.Storage == val.VarReg {
-		r = x.Reg()
-		zeroExt = x.RegZeroExt()
-	} else {
-		r, zeroExt = opMaybeResultReg(f, x, preserveFlags)
-		own = (r != RegResult)
+		zeroExt = asm.Move(f, r, x)
 	}
 	return
 }
 
-// opMaybeResultReg returns either the register of the given operand, or the
-// reserved result register with the value of the operand.  The caller has
-// exclusive ownership of the register.
-func opMaybeResultReg(f *gen.Func, x val.Operand, preserveFlags bool) (r reg.R, zeroExt bool) {
-	if x.Storage == val.TempReg {
+// allocResultReg may allocate registers.  It returns either the operand's
+// existing register, or the operand's value in allocated register or
+// RegResult.
+func allocResultReg(f *gen.Func, x operand.O) (r reg.R, zeroExt bool) {
+	if x.Storage == storage.Reg {
 		r = x.Reg()
 		zeroExt = x.RegZeroExt()
 	} else {
-		var ok bool
-
-		r, ok = f.Regs.Alloc(x.Type)
-		if !ok {
-			r = RegResult
-		}
-
-		if x.Storage != val.Nowhere {
-			opMove(f, r, x, preserveFlags)
-			zeroExt = true
-		}
+		r = f.Regs.AllocResult(x.Type)
+		zeroExt = asm.Move(f, r, x)
 	}
 	return
 }

@@ -5,139 +5,93 @@
 package regalloc
 
 import (
-	"fmt"
+	"math/bits"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/internal/isa/reglayout"
 )
 
-func regIndex(cat abi.Category, r reg.R) uint8 {
-	return uint8(r<<1) + uint8(cat)
-}
+type bitmap uint32
 
-func regMask(cat abi.Category, r reg.R) uint64 {
-	return uint64(1) << regIndex(cat, r)
-}
+const (
+	numInt   = reglayout.AllocIntLast - reglayout.AllocIntFirst + 1
+	numFloat = reglayout.AllocFloatLast - reglayout.AllocFloatFirst + 1
+
+	allocatableInt   = bitmap((1<<numInt - 1) << reglayout.AllocIntFirst)
+	allocatableFloat = bitmap((1<<numFloat - 1) << reglayout.AllocFloatFirst)
+)
 
 type Allocator struct {
-	avail uint64
-	freed uint64
+	categories [2]state
 }
 
-func MakeAllocator(avail uint64) Allocator {
-	return Allocator{avail, avail}
+func Make() (a Allocator) {
+	a.categories[abi.Int].init(allocatableInt)
+	a.categories[abi.Float].init(allocatableFloat)
+	return
 }
 
-func (a *Allocator) Alloc(t abi.Type) (r reg.R, ok bool) {
-	cat := t.Category()
+func (a *Allocator) AllocResult(t abi.Type) (r reg.R) {
+	r = a.categories[t.Category()].allocResult()
 
-	for bits := a.freed >> uint8(cat); bits != 0; bits >>= 2 {
-		if (bits & 1) != 0 {
-			a.freed &^= regMask(cat, r)
-			ok = true
-			break
-		}
-
-		r++
+	if r != reg.Result {
+		debug.Printf("allocate %s register: %s", t.Category(), r)
+	} else {
+		debug.Printf("failed to allocate %s register", t.Category())
 	}
 
 	return
 }
 
-func (a *Allocator) AllocSpecific(t abi.Type, r reg.R) {
-	mask := regMask(t.Category(), r)
-
-	if (a.freed & mask) == 0 {
-		panic(r)
-	}
-
-	a.freed &^= mask
-}
-
-func (a *Allocator) SetAllocated(t abi.Type, r reg.R) {
-	mask := regMask(t.Category(), r)
-
-	a.freed &^= mask
-}
-
+// Free can be called with reg.Result or reg.ScratchISA.
 func (a *Allocator) Free(t abi.Type, r reg.R) {
-	mask := regMask(t.Category(), r)
+	debug.Printf("free %s register: %s", t.Category(), r)
 
-	if (a.freed & mask) != 0 {
-		panic(r)
+	a.categories[t.Category()].free(r)
+}
+
+func (a *Allocator) CheckNoneAllocated() {
+	a.categories[abi.Int].checkNoneAllocated(allocatableInt, "int registers still allocated")
+	a.categories[abi.Float].checkNoneAllocated(allocatableFloat, "float registers still allocated")
+}
+
+func (a *Allocator) DebugPrintAllocated() {
+	a.categories[abi.Int].debugPrintAllocated(reglayout.AllocIntFirst, reglayout.AllocIntLast, "int")
+	a.categories[abi.Float].debugPrintAllocated(reglayout.AllocFloatFirst, reglayout.AllocFloatLast, "float")
+}
+
+type state struct {
+	available bitmap // registers
+}
+
+func (s *state) init(allocatable bitmap) {
+	s.available = allocatable
+}
+
+func (s *state) allocResult() reg.R {
+	i := uint(bits.TrailingZeros32(uint32(s.available)))
+	s.available = s.available &^ (1 << i)
+	return reg.R(i & 31) // convert 32 to 0 (result register)
+}
+
+func (s *state) free(r reg.R) {
+	s.available |= (1 << r) &^ 0x3 // ignore result and scratch regs
+}
+
+func (s *state) checkNoneAllocated(allocatable bitmap, msg string) {
+	if s.available != allocatable {
+		panic(msg)
 	}
-
-	if (a.avail & mask) == 0 {
-		return
-	}
-
-	a.freed |= mask
 }
 
-func (a *Allocator) FreeAll() {
-	a.freed = a.avail
-}
-
-// Allocated indicates if we can hang onto a register returned by ISA ops.
-func (a *Allocator) Allocated(t abi.Type, r reg.R) bool {
-	mask := regMask(t.Category(), r)
-
-	return ((a.avail &^ a.freed) & mask) != 0
-}
-
-func (a *Allocator) AssertNoneAllocated() {
-	if a.freed != a.avail {
-		panic(fmt.Sprintf("registers still allocated at end of function: %08x", (^a.freed)&a.avail))
-	}
-}
-
-type Map [64]uint8
-
-func (m *Map) Set(cat abi.Category, r reg.R, index int) {
-	m[regIndex(cat, r)] = uint8(index) + 1
-}
-
-func (m *Map) Clear(cat abi.Category, r reg.R) {
-	m[regIndex(cat, r)] = 0
-}
-
-func (m *Map) Get(cat abi.Category, r reg.R) (index int) {
-	return int(m[regIndex(cat, r)]) - 1
-}
-
-type Iterator struct {
-	counts [2]int
-	reg    [2][]reg.R
-}
-
-func (iter *Iterator) Init(paramRegs [2][]reg.R, paramTypes []abi.Type) (stackCount int32) {
-	for i := int32(len(paramTypes)) - 1; i >= 0; i-- {
-		cat := paramTypes[i].Category()
-		if iter.counts[cat] == len(paramRegs[cat]) {
-			stackCount = i + 1
-			break
+func (s *state) debugPrintAllocated(first, last reg.R, kind string) {
+	if debug.Enabled {
+		for r := first; r <= last; r++ {
+			if s.available&(1<<r) == 0 {
+				debug.Printf("%s register is currently allocated: %s", kind, r)
+			}
 		}
-		iter.counts[cat]++
 	}
-	iter.InitRegs(paramRegs)
-	return
-}
-
-func (iter *Iterator) InitRegs(paramRegs [2][]reg.R) {
-	for cat, n := range iter.counts {
-		iter.reg[cat] = paramRegs[cat][:n]
-	}
-}
-
-func (iter *Iterator) IterForward(cat abi.Category) (r reg.R) {
-	r = iter.reg[cat][0]
-	iter.reg[cat] = iter.reg[cat][1:]
-	return
-}
-
-func (iter *Iterator) IterBackward(cat abi.Category) (r reg.R) {
-	n := len(iter.reg[cat]) - 1
-	r = iter.reg[cat][n]
-	iter.reg[cat] = iter.reg[cat][:n]
-	return
 }
