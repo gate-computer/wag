@@ -18,10 +18,8 @@ type defaultBuffer struct {
 	b []byte
 }
 
-func (d *defaultBuffer) Bytes() []byte     { return d.b }
-func (d *defaultBuffer) Pos() int32        { return int32(len(d.b)) }
-func (d *defaultBuffer) PutByte(b byte)    { d.Extend(1)[0] = b }
-func (d *defaultBuffer) PutBytes(b []byte) { copy(d.Extend(len(b)), b) }
+func (d *defaultBuffer) Bytes() []byte  { return d.b }
+func (d *defaultBuffer) PutByte(b byte) { d.Extend(1)[0] = b }
 
 func (d *defaultBuffer) Extend(n int) []byte {
 	offset := len(d.b)

@@ -14,9 +14,8 @@ type Buffer struct {
 // NewBuffer because it has different semantics than the stdlib functions.)
 func Buf(b []byte) *Buffer { return &Buffer{b[:0]} }
 
-func (f *Buffer) Bytes() []byte     { return f.b }
-func (f *Buffer) PutByte(b byte)    { f.Extend(1)[0] = b }
-func (f *Buffer) PutBytes(b []byte) { copy(f.Extend(len(b)), b) }
+func (f *Buffer) Bytes() []byte  { return f.b }
+func (f *Buffer) PutByte(b byte) { f.Extend(1)[0] = b }
 
 func (f *Buffer) Extend(n int) []byte {
 	b := f.b
