@@ -13,6 +13,7 @@ import (
 	"math"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/datalayout"
 	"github.com/tsavola/wag/internal/errorpanic"
@@ -486,16 +487,16 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 }
 
 // LoadCodeSection, after loading the preliminary sections.
-func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, startTrigger chan<- struct{}) (err error) {
+func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, eventHandler func(event.Event)) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	m.loadCodeSection(r, text, roData, roDataAddr, objMap, startTrigger)
+	m.loadCodeSection(r, text, roData, roDataAddr, objMap, eventHandler)
 	return
 }
 
-func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, startTrigger chan<- struct{}) {
+func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, eventHandler func(event.Event)) {
 	if text == nil {
 		text = new(defaultBuffer)
 	}
@@ -514,7 +515,7 @@ func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, r
 	load := loader.L{R: r}
 
 	if readSectionHeader(load, module.SectionCode, "not a code section") {
-		genCode(m, load, startTrigger)
+		genCode(m, load, eventHandler)
 	}
 }
 
@@ -606,10 +607,10 @@ func (m *Module) Data() (data []byte, memoryOffset int) {
 	return
 }
 
-func genCode(m *Module, load loader.L, startTrigger chan<- struct{}) {
+func genCode(m *Module, load loader.L, eventHandler func(event.Event)) {
 	if m.EntrySymbol != "" && !m.m.EntryDefined {
 		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
 	}
 
-	codegen.GenProgram(&m.m, load, m.EntrySymbol, m.EntryArgs, startTrigger)
+	codegen.GenProgram(&m.m, load, m.EntrySymbol, m.EntryArgs, eventHandler)
 }

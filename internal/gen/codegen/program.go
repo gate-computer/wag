@@ -10,6 +10,7 @@ import (
 	"math"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/atomic"
 	"github.com/tsavola/wag/internal/gen/debug"
@@ -26,7 +27,7 @@ func alignType(addr int, t abi.Type) int {
 	return (addr + mask) &^ mask
 }
 
-func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint64, startTrigger chan<- struct{}) {
+func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint64, eventHandler func(event.Event)) {
 	p := &gen.Prog{
 		FuncLinks: make([]link.FuncL, len(m.FuncSigs)),
 	}
@@ -105,7 +106,7 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 
 	var midpoint int
 
-	if startTrigger != nil {
+	if eventHandler != nil {
 		midpoint = maxInitIndex + 1
 	} else {
 		midpoint = len(m.FuncSigs)
@@ -141,16 +142,14 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		debug.Printf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
 	}
 
-	if startTrigger != nil {
-		close(startTrigger)
-	}
-
 	if midpoint < len(m.FuncSigs) {
+		eventHandler(event.Init)
+
 		for i := midpoint; i < len(m.FuncSigs); i++ {
 			genFunction(m, p, load, i)
 		}
 
-		// TODO: trigger instruction cache invalidation
+		eventHandler(event.FunctionBarrier)
 
 		roDataBuf := m.ROData.Bytes()
 
@@ -165,8 +164,6 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 
 			isa.UpdateCalls(m.Text.Bytes(), &ln.L)
 		}
-
-		// TODO: trigger instruction cache invalidation
 	}
 }
 

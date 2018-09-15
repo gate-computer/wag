@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/test/runner/imports"
 	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/section"
@@ -335,7 +336,7 @@ type Executor struct {
 	err    error
 }
 
-func (r *Runner) NewExecutor(sigs []abi.Sig, printer io.Writer) (e *Executor, trigger chan<- struct{}) {
+func (r *Runner) NewExecutor(sigs []abi.Sig, printer io.Writer) (e *Executor, eventHandler func(event.Event)) {
 	e = &Executor{
 		runner:  r,
 		sigs:    sigs,
@@ -347,13 +348,21 @@ func (r *Runner) NewExecutor(sigs []abi.Sig, printer io.Writer) (e *Executor, tr
 	start := make(chan struct{})
 
 	go func() {
-		<-start
+		select {
+		case <-start:
+		case <-e.cont:
+		}
 		fmt.Fprintf(e.printer, "--- execution starting ---\n")
 		defer close(e.done)
 		e.run()
 	}()
 
-	trigger = start
+	eventHandler = func(e event.Event) {
+		fmt.Fprintf(printer, "--- event: %s ---\n", e)
+		if e == event.Init {
+			close(start)
+		}
+	}
 	return
 }
 

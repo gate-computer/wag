@@ -69,11 +69,11 @@ func TestExec(t *testing.T) {
 	defer r.Close()
 
 	var printBuf bytes.Buffer
-	e, trigger := r.NewExecutor(m.Sigs(), &printBuf)
+	e, eventHandler := r.NewExecutor(m.Sigs(), &printBuf)
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), &p.ObjInfo, trigger)
+	m.loadCodeSection(&codeBuf, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), &p.ObjInfo, eventHandler)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)

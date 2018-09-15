@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/static"
@@ -28,9 +29,6 @@ func (target *testDuration) set(d time.Duration) {
 		target.Duration = d
 	}
 }
-
-func makeNoTrigger() chan struct{} { return nil }
-func makeTrigger() chan struct{}   { return make(chan struct{}) }
 
 type dummyEnv struct{}
 
@@ -57,9 +55,9 @@ const (
 	loadBenchmarkIgnoreCRC32   = false
 )
 
-func BenchmarkLoad(b *testing.B)                { benchmarkLoad(b) }
-func BenchmarkLoadSections(b *testing.B)        { benchmarkLoadSections(b, makeNoTrigger) }
-func BenchmarkLoadTriggerSections(b *testing.B) { benchmarkLoadSections(b, makeTrigger) }
+func BenchmarkLoad(b *testing.B)              { benchmarkLoad(b) }
+func BenchmarkLoadSections(b *testing.B)      { benchmarkLoadSections(b, nil) }
+func BenchmarkLoadEventSections(b *testing.B) { benchmarkLoadSections(b, func(event.Event) {}) }
 
 func benchmarkLoad(b *testing.B) {
 	b.Helper()
@@ -93,7 +91,7 @@ func benchmarkLoad(b *testing.B) {
 	}
 }
 
-func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{}) {
+func benchmarkLoadSections(b *testing.B, eventHandler func(event.Event)) {
 	b.Helper()
 
 	wasm, err := ioutil.ReadFile(loadBenchmarkFilename)
@@ -124,14 +122,13 @@ func benchmarkLoadSections(b *testing.B, makeOptionalTrigger func() chan struct{
 		textBuf := static.Buf(text)
 		roDataBuf := static.Buf(roData)
 		dataBuf := static.Buf(data)
-		trigger := makeOptionalTrigger()
 
 		b.StartTimer()
 
 		t0 := time.Now()
 		m.loadPreliminarySections(r, loadBenchmarkEnv)
 		t1 := time.Now()
-		m.loadCodeSection(r, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, trigger)
+		m.loadCodeSection(r, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, eventHandler)
 		t2 := time.Now()
 		m.loadDataSection(r, dataBuf)
 		t3 := time.Now()
