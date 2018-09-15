@@ -153,10 +153,16 @@ func main() {
 
 	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), &funcs, nil)
 	if dumpText {
-		dump.Text(os.Stdout, m.Text(), textAddr, roDataAddr, funcs.FuncAddrs, &names)
+		e := dump.Text(os.Stdout, m.Text(), textAddr, roDataAddr, funcs.FuncAddrs, &names)
+		if err == nil {
+			err = e
+		}
 	}
 	if dumpROData {
-		dump.ROData(os.Stdout, m.ROData(), 0)
+		e := dump.ROData(os.Stdout, m.ROData(), 0)
+		if err == nil {
+			err = e
+		}
 	}
 	if err != nil {
 		log.Fatal(err)
