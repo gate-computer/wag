@@ -73,7 +73,7 @@ func TestExec(t *testing.T) {
 
 	m.loadDataSection(wasm, nil)
 	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), &p.ObjInfo, eventHandler)
+	m.loadCodeSection(&codeBuf, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), &p.ObjInfo, eventHandler)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)

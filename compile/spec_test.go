@@ -462,7 +462,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}.Load,
 		}
 
-		m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, &p.ObjInfo)
+		m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
 		p.Seal()
 		p.SetData(m.Data())
 		minMemorySize, maxMemorySize := m.MemoryLimits()

@@ -172,10 +172,10 @@ func genLoad(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	opStabilizeOperands(f)
 
-	load.Varuint32() // flags
+	align := load.Varuint32()
 	offset := load.Varuint32()
 
-	result := asm.Load(f, info.props(), index, info.primaryType(), offset)
+	result := asm.Load(f, info.props(), index, info.primaryType(), align, offset)
 	pushOperand(f, result)
 	return
 }
@@ -183,13 +183,13 @@ func genLoad(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 func genStore(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	opStabilizeOperands(f)
 
-	load.Varuint32() // flags
+	align := load.Varuint32()
 	offset := load.Varuint32()
 
 	value := popOperand(f, info.primaryType())
 	index := popOperand(f, abi.I32)
 
-	asm.Store(f, info.props(), index, value, offset)
+	asm.Store(f, info.props(), index, value, align, offset)
 	return
 }
 

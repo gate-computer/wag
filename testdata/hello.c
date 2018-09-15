@@ -29,7 +29,7 @@ int main(void)
 	for (int i = 0; i < sizeof buf; i++)
 		buf[i] = i;
 
-	int zero = open("/dev/zero", O_RDONLY);
+	int zero = openat(AT_FDCWD, "/dev/zero", O_RDONLY);
 	if (zero < 0)
 		return 1;
 
@@ -54,7 +54,7 @@ int main(void)
 	if (close(fds[1]) != 0)
 		return 1;
 
-	int out = open("/dev/stdout", O_WRONLY);
+	int out = openat(AT_FDCWD, "/dev/stdout", O_WRONLY);
 	if (out < 0)
 		return 1;
 

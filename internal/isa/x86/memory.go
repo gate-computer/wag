@@ -80,7 +80,7 @@ var storeImmInsns = [5]memDispImmInsn{
 
 // Load may allocate registers, use RegResult and update condition flags.  The
 // index operand may be RegResult or the condition flags.
-func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType abi.Type, offset uint32) operand.O {
+func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType abi.Type, align, offset uint32) operand.O {
 	sizeReach := uint64(props >> 8)
 	base, disp := checkAccess(f, sizeReach, index, offset)
 
@@ -90,7 +90,7 @@ func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultTyp
 }
 
 // Store may allocate registers, use RegResult and update condition flags.
-func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, offset uint32) {
+func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
 	sizeReach := uint64(props >> 8)
 	base, disp := checkAccess(f, sizeReach, index, offset)
 

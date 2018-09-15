@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -22,9 +21,7 @@ import (
 	"github.com/tsavola/wag/wasm"
 )
 
-func setRunArg(arg int64)
-
-func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize, roDataBase uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
 
 func importGetArg() uint64
 func importSnapshot() uint64
@@ -121,6 +118,7 @@ var Env env
 
 type runnable interface {
 	getText() []byte
+	getRODataAddr() uintptr
 	getData() ([]byte, int)
 	getStack() []byte
 	writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection, stack []byte) error
@@ -142,13 +140,13 @@ type Program struct {
 func NewProgram(maxTextSize, maxRODataSize int) (p *Program, err error) {
 	p = &Program{}
 
-	p.Text, err = makeMemory(maxTextSize, syscall.PROT_EXEC, syscall.MAP_32BIT)
+	p.Text, err = makeMemory(maxTextSize, syscall.PROT_EXEC, 0)
 	if err != nil {
 		p.Close()
 		return
 	}
 
-	p.ROData, err = makeMemory(maxRODataSize, 0, syscall.MAP_32BIT)
+	p.ROData, err = makeMemory(maxRODataSize, 0, roDataFlags)
 	if err != nil {
 		p.Close()
 		return
@@ -161,12 +159,15 @@ func (p *Program) TextAddr() uintptr {
 	return (*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data
 }
 
-func (p *Program) RODataAddr() int32 {
-	addr := (*reflect.SliceHeader)(unsafe.Pointer(&p.ROData)).Data
-	if addr == 0 || addr > 0x7fffffff-uintptr(len(p.ROData)) {
-		panic("sanity check failed")
+func (p *Program) RODataAddr() uintptr {
+	return (*reflect.SliceHeader)(unsafe.Pointer(&p.ROData)).Data
+}
+
+func (p *Program) FixedRODataAddr() (addr int32) {
+	if roDataFlags != 0 {
+		addr = int32(p.RODataAddr())
 	}
-	return int32(addr)
+	return
 }
 
 func (p *Program) SetData(data []byte, memoryOffset int) {
@@ -176,7 +177,7 @@ func (p *Program) SetData(data []byte, memoryOffset int) {
 
 func (p *Program) Seal() (err error) {
 	if p.Text != nil {
-		err = syscall.Mprotect(p.Text, syscall.PROT_EXEC)
+		err = syscall.Mprotect(p.Text, syscall.PROT_READ|syscall.PROT_EXEC)
 		if err != nil {
 			return
 		}
@@ -210,6 +211,10 @@ func (p *Program) Close() (first error) {
 
 func (p *Program) getText() []byte {
 	return p.Text
+}
+
+func (p *Program) getRODataAddr() uintptr {
+	return p.RODataAddr()
 }
 
 func (p *Program) getData() (data []byte, memoryOffset int) {
@@ -405,16 +410,11 @@ func (e *Executor) run() {
 		e.slave(fds[0], e.sigs, e.printer, e.cont)
 	}()
 
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	setRunArg(e.arg)
-
 	globalsMemoryAddr := (*reflect.SliceHeader)(unsafe.Pointer(&e.runner.globalsMemory)).Data
 	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
 	growMemorySize := len(e.runner.globalsMemory) - e.runner.memoryOffset
 
-	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.stack, stackOffset, resumeResult, fds[1])
+	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.prog.getRODataAddr(), e.runner.stack, stackOffset, resumeResult, fds[1], e.arg)
 
 	e.runner.memorySize = wasm.MemorySize(memorySize)
 	e.runner.lastTrap = trap.Id(uint32(trapId))

@@ -117,7 +117,7 @@ func main() {
 	}
 	progReader := bytes.NewReader(prog)
 
-	roDataMem, err := makeMem(roDataSize, 0, syscall.MAP_32BIT)
+	roDataMem, err := makeMem(roDataSize, 0, roDataFlags)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func main() {
 
 	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), &funcs, nil)
 	if dumpText {
-		dump.Text(os.Stdout, m.Text(), textAddr, int32(roDataAddr), funcs.FuncAddrs, &names)
+		dump.Text(os.Stdout, m.Text(), textAddr, roDataAddr, funcs.FuncAddrs, &names)
 	}
 	if dumpROData {
 		dump.ROData(os.Stdout, m.ROData(), 0)
@@ -193,5 +193,7 @@ func main() {
 	stackAddr := memAddr(stackMem)
 	stackEnd := stackAddr + uintptr(stackSize)
 
-	exec(textAddr, stackAddr, memoryAddr, initMemoryEnd, growMemoryEnd, stackEnd)
+	stackLimit := stackAddr + 512 + 128 // some space for register context and red zone
+
+	exec(textAddr, stackLimit, memoryAddr, initMemoryEnd, growMemoryEnd, stackEnd, roDataAddr)
 }

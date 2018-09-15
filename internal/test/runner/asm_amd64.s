@@ -4,38 +4,32 @@
 
 #include "textflag.h"
 
-// func setRunArg(arg int64)
-TEXT ·setRunArg(SB),$0-8
-	PUSHQ	AX
-	MOVQ	arg+0(FP), AX
-	MOVQ	AX, M4
-	POPQ	AX
-	RET
-
-// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int) (trapId uint64, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),NOSPLIT,$0-120
+// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize, roDataBase uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+TEXT ·run(SB),NOSPLIT,$0-144
 	MOVQ	text+0(FP), R15
 	MOVQ	initialMemorySize+24(FP), R13
 	MOVQ	memoryAddr+32(FP), R14	// memory ptr
 	MOVQ	growMemorySize+40(FP), R11
 	ADDQ	R14, R13		// current memory limit
 	ADDQ	R14, R11		// memory growth limit
-	MOVQ	stack+48(FP), BX	// stack limit
-	MOVQ	stackOffset+72(FP), CX
+	MOVQ	stack+56(FP), BX	// stack limit
+	MOVQ	stackOffset+80(FP), CX
 	ADDQ	BX, CX			// stack ptr
 	ADDQ	$128, BX		// red zone (for imports and traps)
-	MOVQ	resumeResult+80(FP), AX	// resume result (0 = don't resume)
-	MOVQ	slaveFd+88(FP), M6	// slave fd
+	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
+	MOVQ	slaveFd+96(FP), M6	// slave fd
+	MOVQ	arg+104(FP), DX		// arg
 	LEAQ	trap<>(SB), R8
 	MOVQ	R8, M0			// trap handler
 	MOVQ	R11, M1			// memory growth limit
+	PUSHQ	DX			// arg
 	MOVQ	SP, M7			// original stack
 	MOVQ	CX, SP			// stack ptr
 	MOVQ	R15, DI
 	ADDQ	$16, DI			// init routine address
 	JMP	DI			// returns via trap handler
 
-TEXT trap<>(SB),NOSPLIT,$0-120
+TEXT trap<>(SB),NOSPLIT,$0-144
 	CMPL	AX, $3			// CallStackExhausted
 	JNE	skip
 	TESTB	$1, BX
@@ -47,10 +41,11 @@ skip:
 
 	MOVQ	SP, R11			// stack ptr
 	MOVQ	M7, SP			// original stack
-	MOVQ	AX, trapId+96(FP)
+	ADDQ	$8, SP			// arg
+	MOVQ	AX, trapId+112(FP)
 	SUBQ	R14, R13
-	MOVQ	R13, currentMemorySize+104(FP)
-	MOVQ	R11, stackPtr+112(FP)
+	MOVQ	R13, currentMemorySize+120(FP)
+	MOVQ	R11, stackPtr+128(FP)
 	RET				// return from run function
 
 pause:
@@ -248,16 +243,9 @@ TEXT ·importGetArg(SB),$0-8
 	RET
 
 TEXT getArg<>(SB),NOSPLIT,$0
-	MOVQ	M4, AX
+	MOVQ	M7, AX			// original stack
+	MOVQ	(AX), AX		// arg
 
-	XORL	DX, DX
-	RET
-
-TEXT setResult<>(SB),NOSPLIT,$0
-	MOVQ	8(SP), CX
-	MOVL	CX, M5
-
-	XORL	AX, AX
 	XORL	DX, DX
 	RET
 

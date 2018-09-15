@@ -38,24 +38,6 @@ null2:	MOVQ	8(SP), DX
 	XORL	DX, DX
 	RET
 
-// func importOpen() uint64
-TEXT ·importOpen(SB),$0-8
-	LEAQ	sysOpen<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysOpen<>(SB),NOSPLIT,$0
-	MOVQ	24(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	16(SP), SI
-	MOVQ	8(SP), DX
-	MOVL	$2, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
 // func importClose() uint64
 TEXT ·importClose(SB),$0-8
 	LEAQ	sysClose<>(SB), AX
@@ -122,39 +104,6 @@ null2:	MOVQ	16(SP), DX
 	XORL	DX, DX
 	RET
 
-// func importAccess() uint64
-TEXT ·importAccess(SB),$0-8
-	LEAQ	sysAccess<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysAccess<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	MOVL	$21, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importPipe() uint64
-TEXT ·importPipe(SB),$0-8
-	LEAQ	sysPipe<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysPipe<>(SB),NOSPLIT,$0
-	MOVQ	8(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVL	$22, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
 // func importDup() uint64
 TEXT ·importDup(SB),$0-8
 	LEAQ	sysDup<>(SB), AX
@@ -164,20 +113,6 @@ TEXT ·importDup(SB),$0-8
 TEXT sysDup<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$32, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importDup2() uint64
-TEXT ·importDup2(SB),$0-8
-	LEAQ	sysDup2<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysDup2<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	MOVQ	8(SP), SI
-	MOVL	$33, AX
 	SYSCALL
 	XORL	DX, DX
 	RET
@@ -363,170 +298,6 @@ TEXT sysFchdir<>(SB),NOSPLIT,$0
 	XORL	DX, DX
 	RET
 
-// func importRename() uint64
-TEXT ·importRename(SB),$0-8
-	LEAQ	sysRename<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysRename<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	ANDL	SI, SI
-	JZ	null2
-	ADDQ	R14, SI
-null2:	MOVL	$82, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importMkdir() uint64
-TEXT ·importMkdir(SB),$0-8
-	LEAQ	sysMkdir<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysMkdir<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	MOVL	$83, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importRmdir() uint64
-TEXT ·importRmdir(SB),$0-8
-	LEAQ	sysRmdir<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysRmdir<>(SB),NOSPLIT,$0
-	MOVQ	8(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVL	$84, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importCreat() uint64
-TEXT ·importCreat(SB),$0-8
-	LEAQ	sysCreat<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysCreat<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	MOVL	$85, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importLink() uint64
-TEXT ·importLink(SB),$0-8
-	LEAQ	sysLink<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysLink<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	ANDL	SI, SI
-	JZ	null2
-	ADDQ	R14, SI
-null2:	MOVL	$86, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importUnlink() uint64
-TEXT ·importUnlink(SB),$0-8
-	LEAQ	sysUnlink<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysUnlink<>(SB),NOSPLIT,$0
-	MOVQ	8(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVL	$87, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importSymlink() uint64
-TEXT ·importSymlink(SB),$0-8
-	LEAQ	sysSymlink<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysSymlink<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	ANDL	SI, SI
-	JZ	null2
-	ADDQ	R14, SI
-null2:	MOVL	$88, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importReadlink() uint64
-TEXT ·importReadlink(SB),$0-8
-	LEAQ	sysReadlink<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysReadlink<>(SB),NOSPLIT,$0
-	MOVQ	24(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	16(SP), SI
-	ANDL	SI, SI
-	JZ	null2
-	ADDQ	R14, SI
-null2:	MOVQ	8(SP), DX
-	MOVL	$89, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importChmod() uint64
-TEXT ·importChmod(SB),$0-8
-	LEAQ	sysChmod<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysChmod<>(SB),NOSPLIT,$0
-	MOVQ	16(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	8(SP), SI
-	MOVL	$90, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
 // func importFchmod() uint64
 TEXT ·importFchmod(SB),$0-8
 	LEAQ	sysFchmod<>(SB), AX
@@ -537,24 +308,6 @@ TEXT sysFchmod<>(SB),NOSPLIT,$0
 	MOVQ	16(SP), DI
 	MOVQ	8(SP), SI
 	MOVL	$91, AX
-	SYSCALL
-	XORL	DX, DX
-	RET
-
-// func importChown() uint64
-TEXT ·importChown(SB),$0-8
-	LEAQ	sysChown<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysChown<>(SB),NOSPLIT,$0
-	MOVQ	24(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	16(SP), SI
-	MOVQ	8(SP), DX
-	MOVL	$92, AX
 	SYSCALL
 	XORL	DX, DX
 	RET
@@ -710,14 +463,14 @@ TEXT sysExit<>(SB),NOSPLIT,$0
 	XORL	DX, DX
 	RET
 
-// func importInotifyInit() uint64
-TEXT ·importInotifyInit(SB),$0-8
-	LEAQ	sysInotifyInit<>(SB), AX
+// func importInotifyInit1() uint64
+TEXT ·importInotifyInit1(SB),$0-8
+	LEAQ	sysInotifyInit1<>(SB), AX
 	MOVQ	AX, ret+0(FP)
 	RET
 
-TEXT sysInotifyInit<>(SB),NOSPLIT,$0
-	MOVL	$253, AX
+TEXT sysInotifyInit1<>(SB),NOSPLIT,$0
+	MOVL	$294, AX
 	SYSCALL
 	XORL	DX, DX
 	RET

@@ -191,7 +191,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		EntrySymbol:     "benchmark_main",
 		MemoryAlignment: os.Getpagesize(),
 	}
-	m.load(bytes.NewReader(data), runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, &p.ObjInfo)
+	m.load(bytes.NewReader(data), runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
 	minMemorySize, maxMemorySize := m.MemoryLimits()

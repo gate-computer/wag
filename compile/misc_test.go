@@ -46,7 +46,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	defer p.Close()
 
 	var m Module
-	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, &p.ObjInfo)
+	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
 	minMemorySize, maxMemorySize := m.MemoryLimits()

@@ -44,7 +44,7 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	m := Module{EntrySymbol: "main"}
-	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.RODataAddr(), nil, &p.ObjInfo)
+	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
 	p.Seal()
 	p.SetData(m.Data())
 	minMemorySize, maxMemorySize := m.MemoryLimits()

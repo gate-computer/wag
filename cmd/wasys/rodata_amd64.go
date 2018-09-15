@@ -4,4 +4,8 @@
 
 package main
 
-func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr, roDataBase uintptr)
+import (
+	"syscall"
+)
+
+const roDataFlags = syscall.MAP_32BIT

@@ -10,7 +10,7 @@ import (
 	"io"
 )
 
-func ROData(w io.Writer, roData []byte, roDataAddr int32) (err error) {
+func ROData(w io.Writer, roData []byte, roDataAddr uintptr) (err error) {
 	fmt.Fprintf(w, "rodata:\n")
 
 	for addr := roDataAddr; len(roData) > 0; {
