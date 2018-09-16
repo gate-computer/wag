@@ -40,7 +40,8 @@ func Text(w io.Writer, text []byte, textAddr, roDataAddr uintptr, funcMap []int3
 	firstFuncAddr := uint(funcMap[0])
 
 	targets := map[uint]string{
-		16: "init",
+		16: "resume",
+		32: "init",
 	}
 
 	for i := 0; len(funcMap) > 0; i++ {

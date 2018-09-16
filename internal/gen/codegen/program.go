@@ -56,7 +56,13 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 	binary.LittleEndian.PutUint64(buf[rodata.Mask43e0Addr64:], 0x43e0000000000000)
 
 	asm.JumpToTrapHandler(m, trap.MissingFunction) // at zero address
-
+	if m.Text.Addr == 0 || m.Text.Addr > 16 {
+		panic("bad address after MissingFunction trap handler")
+	}
+	asm.Resume(m)
+	if m.Text.Addr <= 16 || m.Text.Addr > 32 {
+		panic("bad address after resume routine")
+	}
 	asm.Init(m)
 	// after init, execution proceeds to start func, main func, or exit trap
 

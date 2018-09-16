@@ -94,8 +94,9 @@ var generators = map[string]func(io.Writer, call){
 
 		fmt.Fprintf(w, "\tMOVL\t$%d, AX\n", sc.number)
 		fmt.Fprintf(w, "\tSYSCALL\n")
-		fmt.Fprintf(w, "\tXORL\tDX, DX\n")
-		fmt.Fprintf(w, "\tRET\n")
+		fmt.Fprintf(w, "\tMOVQ\tR15, DX\n")
+		fmt.Fprintf(w, "\tADDQ\t$16, DX\n") // resume routine
+		fmt.Fprintf(w, "\tJMP\tDX\n")
 	},
 }
 

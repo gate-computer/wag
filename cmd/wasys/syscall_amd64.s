@@ -17,8 +17,9 @@ TEXT sysRead<>(SB),NOSPLIT,$0
 null2:	MOVQ	8(SP), DX
 	MOVL	$0, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importWrite() uint64
 TEXT ·importWrite(SB),$0-8
@@ -35,8 +36,9 @@ TEXT sysWrite<>(SB),NOSPLIT,$0
 null2:	MOVQ	8(SP), DX
 	MOVL	$1, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importClose() uint64
 TEXT ·importClose(SB),$0-8
@@ -48,8 +50,9 @@ TEXT sysClose<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$3, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importLseek() uint64
 TEXT ·importLseek(SB),$0-8
@@ -63,8 +66,9 @@ TEXT sysLseek<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DX
 	MOVL	$8, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importPread() uint64
 TEXT ·importPread(SB),$0-8
@@ -82,8 +86,9 @@ null2:	MOVQ	16(SP), DX
 	MOVQ	8(SP), R10
 	MOVL	$17, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importPwrite() uint64
 TEXT ·importPwrite(SB),$0-8
@@ -101,8 +106,9 @@ null2:	MOVQ	16(SP), DX
 	MOVQ	8(SP), R10
 	MOVL	$18, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importDup() uint64
 TEXT ·importDup(SB),$0-8
@@ -114,8 +120,9 @@ TEXT sysDup<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$32, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importGetpid() uint64
 TEXT ·importGetpid(SB),$0-8
@@ -126,8 +133,9 @@ TEXT ·importGetpid(SB),$0-8
 TEXT sysGetpid<>(SB),NOSPLIT,$0
 	MOVL	$39, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importSendfile() uint64
 TEXT ·importSendfile(SB),$0-8
@@ -145,8 +153,9 @@ TEXT sysSendfile<>(SB),NOSPLIT,$0
 null3:	MOVQ	8(SP), R10
 	MOVL	$40, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importShutdown() uint64
 TEXT ·importShutdown(SB),$0-8
@@ -159,8 +168,9 @@ TEXT sysShutdown<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), SI
 	MOVL	$48, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importSocketpair() uint64
 TEXT ·importSocketpair(SB),$0-8
@@ -178,8 +188,9 @@ TEXT sysSocketpair<>(SB),NOSPLIT,$0
 	ADDQ	R14, R10
 null4:	MOVL	$53, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFlock() uint64
 TEXT ·importFlock(SB),$0-8
@@ -192,8 +203,9 @@ TEXT sysFlock<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), SI
 	MOVL	$73, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFsync() uint64
 TEXT ·importFsync(SB),$0-8
@@ -205,8 +217,9 @@ TEXT sysFsync<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$74, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFdatasync() uint64
 TEXT ·importFdatasync(SB),$0-8
@@ -218,8 +231,9 @@ TEXT sysFdatasync<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$75, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importTruncate() uint64
 TEXT ·importTruncate(SB),$0-8
@@ -235,8 +249,9 @@ TEXT sysTruncate<>(SB),NOSPLIT,$0
 null1:	MOVQ	8(SP), SI
 	MOVL	$76, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFtruncate() uint64
 TEXT ·importFtruncate(SB),$0-8
@@ -249,8 +264,9 @@ TEXT sysFtruncate<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), SI
 	MOVL	$77, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importGetcwd() uint64
 TEXT ·importGetcwd(SB),$0-8
@@ -266,8 +282,9 @@ TEXT sysGetcwd<>(SB),NOSPLIT,$0
 null1:	MOVQ	8(SP), SI
 	MOVL	$79, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importChdir() uint64
 TEXT ·importChdir(SB),$0-8
@@ -282,8 +299,9 @@ TEXT sysChdir<>(SB),NOSPLIT,$0
 	ADDQ	R14, DI
 null1:	MOVL	$80, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFchdir() uint64
 TEXT ·importFchdir(SB),$0-8
@@ -295,8 +313,9 @@ TEXT sysFchdir<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$81, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFchmod() uint64
 TEXT ·importFchmod(SB),$0-8
@@ -309,8 +328,9 @@ TEXT sysFchmod<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), SI
 	MOVL	$91, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFchown() uint64
 TEXT ·importFchown(SB),$0-8
@@ -324,8 +344,9 @@ TEXT sysFchown<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DX
 	MOVL	$93, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importLchown() uint64
 TEXT ·importLchown(SB),$0-8
@@ -342,8 +363,9 @@ null1:	MOVQ	16(SP), SI
 	MOVQ	8(SP), DX
 	MOVL	$94, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importUmask() uint64
 TEXT ·importUmask(SB),$0-8
@@ -355,8 +377,9 @@ TEXT sysUmask<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$95, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importGetuid() uint64
 TEXT ·importGetuid(SB),$0-8
@@ -367,8 +390,9 @@ TEXT ·importGetuid(SB),$0-8
 TEXT sysGetuid<>(SB),NOSPLIT,$0
 	MOVL	$102, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importGetgid() uint64
 TEXT ·importGetgid(SB),$0-8
@@ -379,8 +403,9 @@ TEXT ·importGetgid(SB),$0-8
 TEXT sysGetgid<>(SB),NOSPLIT,$0
 	MOVL	$104, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importVhangup() uint64
 TEXT ·importVhangup(SB),$0-8
@@ -391,8 +416,9 @@ TEXT ·importVhangup(SB),$0-8
 TEXT sysVhangup<>(SB),NOSPLIT,$0
 	MOVL	$153, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importSync() uint64
 TEXT ·importSync(SB),$0-8
@@ -403,8 +429,9 @@ TEXT ·importSync(SB),$0-8
 TEXT sysSync<>(SB),NOSPLIT,$0
 	MOVL	$162, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importGettid() uint64
 TEXT ·importGettid(SB),$0-8
@@ -415,8 +442,9 @@ TEXT ·importGettid(SB),$0-8
 TEXT sysGettid<>(SB),NOSPLIT,$0
 	MOVL	$186, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importTime() uint64
 TEXT ·importTime(SB),$0-8
@@ -431,8 +459,9 @@ TEXT sysTime<>(SB),NOSPLIT,$0
 	ADDQ	R14, DI
 null1:	MOVL	$201, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importPosixFadvise() uint64
 TEXT ·importPosixFadvise(SB),$0-8
@@ -447,8 +476,9 @@ TEXT sysPosixFadvise<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), R10
 	MOVL	$221, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importExit() uint64
 TEXT ·importExit(SB),$0-8
@@ -460,8 +490,9 @@ TEXT sysExit<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DI
 	MOVL	$231, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importInotifyInit1() uint64
 TEXT ·importInotifyInit1(SB),$0-8
@@ -472,8 +503,9 @@ TEXT ·importInotifyInit1(SB),$0-8
 TEXT sysInotifyInit1<>(SB),NOSPLIT,$0
 	MOVL	$294, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importInotifyAddWatch() uint64
 TEXT ·importInotifyAddWatch(SB),$0-8
@@ -490,8 +522,9 @@ TEXT sysInotifyAddWatch<>(SB),NOSPLIT,$0
 null2:	MOVQ	8(SP), DX
 	MOVL	$254, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importInotifyRmWatch() uint64
 TEXT ·importInotifyRmWatch(SB),$0-8
@@ -504,8 +537,9 @@ TEXT sysInotifyRmWatch<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), SI
 	MOVL	$255, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importOpenat() uint64
 TEXT ·importOpenat(SB),$0-8
@@ -523,8 +557,9 @@ null2:	MOVQ	16(SP), DX
 	MOVQ	8(SP), R10
 	MOVL	$257, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importMkdirat() uint64
 TEXT ·importMkdirat(SB),$0-8
@@ -541,8 +576,9 @@ TEXT sysMkdirat<>(SB),NOSPLIT,$0
 null2:	MOVQ	8(SP), DX
 	MOVL	$258, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFchownat() uint64
 TEXT ·importFchownat(SB),$0-8
@@ -561,8 +597,9 @@ null2:	MOVQ	24(SP), DX
 	MOVQ	8(SP), R8
 	MOVL	$260, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importUnlinkat() uint64
 TEXT ·importUnlinkat(SB),$0-8
@@ -579,8 +616,9 @@ TEXT sysUnlinkat<>(SB),NOSPLIT,$0
 null2:	MOVQ	8(SP), DX
 	MOVL	$263, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importRenameat() uint64
 TEXT ·importRenameat(SB),$0-8
@@ -601,8 +639,9 @@ null2:	MOVQ	16(SP), DX
 	ADDQ	R14, R10
 null4:	MOVL	$264, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importLinkat() uint64
 TEXT ·importLinkat(SB),$0-8
@@ -624,8 +663,9 @@ null2:	MOVQ	24(SP), DX
 null4:	MOVQ	8(SP), R8
 	MOVL	$265, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importSymlinkat() uint64
 TEXT ·importSymlinkat(SB),$0-8
@@ -645,8 +685,9 @@ null1:	MOVQ	16(SP), SI
 	ADDQ	R14, DX
 null3:	MOVL	$266, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importReadlinkat() uint64
 TEXT ·importReadlinkat(SB),$0-8
@@ -667,8 +708,9 @@ null2:	MOVQ	16(SP), DX
 null3:	MOVQ	8(SP), R10
 	MOVL	$267, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFchmodat() uint64
 TEXT ·importFchmodat(SB),$0-8
@@ -686,8 +728,9 @@ null2:	MOVQ	16(SP), DX
 	MOVQ	8(SP), R10
 	MOVL	$268, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFaccessat() uint64
 TEXT ·importFaccessat(SB),$0-8
@@ -705,8 +748,9 @@ null2:	MOVQ	16(SP), DX
 	MOVQ	8(SP), R10
 	MOVL	$269, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importSplice() uint64
 TEXT ·importSplice(SB),$0-8
@@ -729,8 +773,9 @@ null4:	MOVQ	16(SP), R8
 	MOVQ	8(SP), R9
 	MOVL	$275, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importTee() uint64
 TEXT ·importTee(SB),$0-8
@@ -745,8 +790,9 @@ TEXT sysTee<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), R10
 	MOVL	$276, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importSyncFileRange() uint64
 TEXT ·importSyncFileRange(SB),$0-8
@@ -761,8 +807,9 @@ TEXT sysSyncFileRange<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), R10
 	MOVL	$277, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importFallocate() uint64
 TEXT ·importFallocate(SB),$0-8
@@ -777,8 +824,9 @@ TEXT sysFallocate<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), R10
 	MOVL	$285, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importEventfd() uint64
 TEXT ·importEventfd(SB),$0-8
@@ -791,8 +839,9 @@ TEXT sysEventfd<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), SI
 	MOVL	$290, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importDup3() uint64
 TEXT ·importDup3(SB),$0-8
@@ -806,8 +855,9 @@ TEXT sysDup3<>(SB),NOSPLIT,$0
 	MOVQ	8(SP), DX
 	MOVL	$292, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX
 
 // func importPipe2() uint64
 TEXT ·importPipe2(SB),$0-8
@@ -823,5 +873,6 @@ TEXT sysPipe2<>(SB),NOSPLIT,$0
 null1:	MOVQ	8(SP), SI
 	MOVL	$293, AX
 	SYSCALL
-	XORL	DX, DX
-	RET
+	MOVQ	R15, DX
+	ADDQ	$16, DX
+	JMP	DX

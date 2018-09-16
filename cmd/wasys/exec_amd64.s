@@ -30,7 +30,7 @@ TEXT ·exec(SB),NOSPLIT,$0-56
 	XORL	R12, R12
 
 	MOVQ	R15, DX
-	ADDQ	$16, DX			// init code after trap trampoline
+	ADDQ	$32, DX			// init routine
 	JMP	DX
 
 TEXT traphandler<>(SB),NOSPLIT,$0

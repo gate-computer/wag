@@ -240,24 +240,18 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 	}
 }
 
+// Resume may update condition flags.  It MUST NOT generate over 16 bytes of
+// code.
+func (MacroAssembler) Resume(m *module.M) {
+	alignFunc(m)
+	in.XOR.RegReg(&m.Text, abi.I32, RegZero, RegZero)
+	in.RET.Simple(&m.Text) // return from trap handler or import function call
+}
+
 // Init may use RegResult and update condition flags.
 func (MacroAssembler) Init(m *module.M) {
-	if m.Text.Addr == 0 || m.Text.Addr > FuncAlignment {
-		panic("inconsistency")
-	}
 	alignFunc(m)
-	in.XOR.RegReg(&m.Text, abi.I64, RegZero, RegZero)
-	in.ADDi.RegImm8(&m.Text, abi.I64, RegStackLimit, obj.Word*2) // call + stack check trap
-
-	var notResume link.L
-
-	in.TEST.RegReg(&m.Text, abi.I64, RegResult, RegResult)
-	in.JEcb.Stub8(&m.Text)
-	notResume.AddSite(m.Text.Addr)
-	in.RET.Simple(&m.Text) // simulate return from snapshot function call
-
-	notResume.Addr = m.Text.Addr
-	isa.UpdateNearBranches(m.Text.Bytes(), &notResume)
+	in.XOR.RegReg(&m.Text, abi.I32, RegZero, RegZero)
 }
 
 // JumpToImportFunc may use RegResult and update condition flags.

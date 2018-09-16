@@ -15,7 +15,8 @@ TEXT ·run(SB),NOSPLIT,$0-144
 	MOVQ	stack+56(FP), BX	// stack limit
 	MOVQ	stackOffset+80(FP), CX
 	ADDQ	BX, CX			// stack ptr
-	ADDQ	$128, BX		// red zone (for imports and traps)
+	ADDQ	$128, BX		// for imports and traps
+	ADDQ	$16, BX			// call + stack check trap call
 	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
 	MOVQ	slaveFd+96(FP), M6	// slave fd
 	MOVQ	arg+104(FP), DX		// arg
@@ -26,8 +27,16 @@ TEXT ·run(SB),NOSPLIT,$0-144
 	MOVQ	SP, M7			// original stack
 	MOVQ	CX, SP			// stack ptr
 	MOVQ	R15, DI
-	ADDQ	$16, DI			// init routine address
-	JMP	DI			// returns via trap handler
+	ADDQ	$16, DI			// resume routine
+	TESTQ	AX, AX
+	JNE	resume
+	ADDQ	$16, DI			// init routine
+resume:	JMP	DI			// returns via trap handler
+
+TEXT resume<>(SB),NOSPLIT,$0
+	MOVQ	R15, DI
+	ADDQ	$16, DI			// resume routine
+	JMP	DI
 
 TEXT trap<>(SB),NOSPLIT,$0-144
 	CMPL	AX, $3			// CallStackExhausted
@@ -75,8 +84,7 @@ pause:
 	POPQ	CX
 
 	SUBQ	$5, (SP)	// move return address before the call that got us here
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 fail:
 	MOVQ	$3003, AX
@@ -108,8 +116,7 @@ TEXT spectestPrint<>(SB),NOSPLIT,$0
 
 	MOVQ	R9, (SP)	// restore link address
 	XORL	AX, AX
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 fail:
 	MOVQ	$3001, AX
@@ -157,8 +164,7 @@ TEXT putns<>(SB),NOSPLIT,$0
 	JNE	fail4
 
 	XORL	AX, AX
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 fail1:
 	MOVQ	$3001, AX
@@ -193,8 +199,7 @@ TEXT benchmarkBegin<>(SB),NOSPLIT,$0
 	ORQ	DX, AX
 
 	MOVQ	R9, BX
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 // func importBenchmarkEnd() uint64
 TEXT ·importBenchmarkEnd(SB),$0-8
@@ -217,8 +222,7 @@ TEXT benchmarkEnd<>(SB),NOSPLIT,$0
 	CMOVLLE	DX, AX
 
 	MOVQ	R9, BX
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 // func importBenchmarkBarrier() uint64
 TEXT ·importBenchmarkBarrier(SB),$0-8
@@ -230,9 +234,7 @@ TEXT ·importBenchmarkBarrier(SB),$0-8
 
 TEXT benchmarkBarrier<>(SB),NOSPLIT,$0
 	MOVQ	16(SP), AX
-
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 // func importGetArg() uint64
 TEXT ·importGetArg(SB),$0-8
@@ -245,9 +247,7 @@ TEXT ·importGetArg(SB),$0-8
 TEXT getArg<>(SB),NOSPLIT,$0
 	MOVQ	M7, AX			// original stack
 	MOVQ	(AX), AX		// arg
-
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 // func importSnapshot() uint64
 TEXT ·importSnapshot(SB),$0-8
@@ -285,8 +285,7 @@ TEXT snapshot<>(SB),NOSPLIT,$0
 	JNE	fail
 	MOVQ	(SI), AX	// snapshot id
 
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 fail:
 	MOVQ	$3002, AX
@@ -302,9 +301,7 @@ TEXT ·importSuspendNextCall(SB),$0-8
 
 TEXT suspendNextCall<>(SB),NOSPLIT,$0
 	MOVQ	$-8, BX		// even value doesn't suspend loops
-
-	XORL	DX, DX
-	RET
+	JMP	resume<>(SB)
 
 fail:
 	MOVQ	$3002, AX
