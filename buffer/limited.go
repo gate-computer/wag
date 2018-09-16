@@ -4,6 +4,10 @@
 
 package buffer
 
+import (
+	"encoding/binary"
+)
+
 // Limited is a dynamic buffer with a maximum size.  The default value is an
 // empty buffer that cannot grow.
 type Limited struct {
@@ -26,6 +30,11 @@ func (l *Limited) PutByte(value byte) {
 		panic(ErrSizeLimit)
 	}
 	l.d.PutByte(value)
+}
+
+// Extend panics with ErrSizeLimit if 4 bytes cannot be appended to the buffer.
+func (l *Limited) PutUint32(i uint32) {
+	binary.LittleEndian.PutUint32(l.Extend(4), i)
 }
 
 // Extend panics with ErrSizeLimit if n bytes cannot be appended to the buffer.

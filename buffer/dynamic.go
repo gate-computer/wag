@@ -5,6 +5,8 @@
 package buffer
 
 import (
+	"encoding/binary"
+
 	"github.com/pkg/errors"
 )
 
@@ -41,6 +43,11 @@ func (d *Dynamic) Bytes() []byte {
 // PutBytes doesn't panic unless out of memory.
 func (d *Dynamic) PutByte(value byte) {
 	d.Extend(1)[0] = value
+}
+
+// Extend doesn't panic unless out of memory.
+func (d *Dynamic) PutUint32(i uint32) {
+	binary.LittleEndian.PutUint32(d.Extend(4), i)
 }
 
 // Extend doesn't panic unless out of memory.

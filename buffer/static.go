@@ -4,6 +4,10 @@
 
 package buffer
 
+import (
+	"encoding/binary"
+)
+
 // Static is a fixed-capacity buffer, for wrapping a memory-mapped region.  The
 // default value is a zero-capacity buffer.
 type Static struct {
@@ -51,6 +55,12 @@ func (s *Static) PutByte(value byte) {
 	}
 	s.buf = s.buf[:offset+1]
 	s.buf[offset] = value
+}
+
+// Extend panics with ErrStaticSize if 4 bytes cannot be appended to the
+// buffer.
+func (s *Static) PutUint32(i uint32) {
+	binary.LittleEndian.PutUint32(s.Extend(4), i)
 }
 
 // Extend panics with ErrStaticSize if n bytes cannot be appended to the
