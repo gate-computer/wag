@@ -10,9 +10,9 @@ Features
 
 - The input is a wasm32 binary module.
 
-- The output is executable x86-64 machine code.  Support for 64-bit ARM is
-  planned.  (Support for non-64-bit or non-little-endian CPU architectures
-  isn't planned.)
+- The output is executable x86-64 or ARM64 machine code.  (ARM64 support is
+  incomplete.  Support for 32-bit or big-endian CPU architectures isn't
+  planned.)
 
 - It is only a compiler.  A runtime environment for the compiled program,
   including all import functions, needs to be implemented separately.  (But see
@@ -32,7 +32,8 @@ Features
 
 - Cross-compilaton is supported via Go build tags.  If `wagamd64` is specified,
   the x86-64 code generator is used regardless of host architecture, and CPU
-  feature detection is disabled with pessimistic assumptions.
+  feature detection is disabled with pessimistic assumptions.  Likewise for
+  `wagarm64`, but feature detection is never used for ARM64.
 
 
 Status
@@ -42,7 +43,7 @@ Status
 
 - Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
 
-- ARM64 support is in development.
+- ARM64 backend supports "hello, world" but not much else.
 
 - The Go package API hasn't been finalized (but it's getting there).
 

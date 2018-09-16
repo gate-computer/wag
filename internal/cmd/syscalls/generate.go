@@ -80,6 +80,7 @@ func main() {
 }
 
 var x86Regs = []string{"DI", "SI", "DX", "R10", "R8", "R9"}
+var armRegs = []string{"R0", "R1", "R2", "R3", "R4", "R5"}
 
 var generators = map[string]func(io.Writer, call){
 	"amd64": func(w io.Writer, sc call) {
@@ -107,6 +108,33 @@ var generators = map[string]func(io.Writer, call){
 		fmt.Fprintf(w, "\tMOVQ\tR15, DX\n")
 		fmt.Fprintf(w, "\tADDQ\t$16, DX\n") // resume routine
 		fmt.Fprintf(w, "\tJMP\tDX\n")
+	},
+	"arm64": func(w io.Writer, sc call) {
+		fmt.Fprintf(w, "\tBL\tafter\n\n")
+
+		for i := 0; i < sc.params; i++ {
+			r := armRegs[i]
+
+			if (sc.ptrMask & (1 << uint(i))) != 0 {
+				fmt.Fprintf(w, "\tMOVD\t$0, %s\n", r)
+				fmt.Fprintf(w, "\tMOVW\t%d(R29), %s\n", (sc.params-i-1)*8, r)
+				fmt.Fprintf(w, "\tCMPW\t$0, %s\n", r)
+				fmt.Fprintf(w, "\tBEQ\tnull%d\n", i+1)
+				fmt.Fprintf(w, "\tADD\tR26, %s\n", r)
+				fmt.Fprintf(w, "null%d:", i+1)
+			} else {
+				fmt.Fprintf(w, "\tMOVD\t%d(R29), %s\n", (sc.params-i-1)*8, r)
+			}
+		}
+
+		fmt.Fprintf(w, "\tMOVD\t$%d, R8\n", sc.number)
+		fmt.Fprintf(w, "\tSVC\n")
+		fmt.Fprintf(w, "\tMOVD\tR27, R1\n")
+		fmt.Fprintf(w, "\tADD\t$16, R1\n") // resume routine
+		fmt.Fprintf(w, "\tB\t(R1)\n\n")
+
+		fmt.Fprintf(w, "after:\tMOVD\tLR, ret+0(FP)\n")
+		fmt.Fprintf(w, "\tRET\n")
 	},
 }
 
