@@ -4,7 +4,7 @@
 
 package static
 
-// Buffer is a fixed-capacity implementation of compile.TextBuffer and
+// Buffer is a fixed-capacity implementation of compile.CodeBuffer and
 // compile.DataBuffer.
 type Buffer struct {
 	b []byte

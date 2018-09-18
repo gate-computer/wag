@@ -28,7 +28,7 @@ func readLocalIndex(f *gen.Func, load loader.L, op Opcode) (index int, t abi.Typ
 func genGetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	index, t := readLocalIndex(f, load, op)
 	r := opAllocReg(f, t)
-	asm.LoadStack(f.M, t, r, f.LocalOffset(index))
+	asm.LoadStack(f.Prog, t, r, f.LocalOffset(index))
 	pushOperand(f, operand.Reg(t, r, true))
 	return
 }
@@ -46,7 +46,7 @@ func genTeeLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bo
 
 	switch value.Storage {
 	case storage.Imm:
-		asm.StoreStackImm(f.M, t, f.LocalOffset(index), value.ImmValue())
+		asm.StoreStackImm(f.Prog, t, f.LocalOffset(index), value.ImmValue())
 
 	default:
 		r := opAllocReg(f, t)
@@ -55,7 +55,7 @@ func genTeeLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bo
 		fallthrough
 
 	case storage.Reg:
-		asm.StoreStackReg(f.M, t, f.LocalOffset(index), value.Reg())
+		asm.StoreStackReg(f.Prog, t, f.LocalOffset(index), value.Reg())
 	}
 
 	pushOperand(f, value)

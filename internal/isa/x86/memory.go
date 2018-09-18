@@ -127,7 +127,7 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 			return invalidAccess(f)
 		}
 
-		if reachAddr < uint64(f.MemoryLimitValues.Initial) {
+		if reachAddr < uint64(f.Module.MemoryLimitValues.Initial) {
 			base = in.BaseMemory
 			disp = int32(addr)
 			return

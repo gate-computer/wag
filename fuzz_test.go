@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package compile
+package wag
 
 import (
 	"bufio"
@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/static"
 )
 
@@ -58,7 +57,6 @@ func fuzz(t *testing.T, filename string) {
 	}
 	defer f.Close()
 
-	var m Module
 	var ok bool
 
 	defer func() {
@@ -67,9 +65,13 @@ func fuzz(t *testing.T, filename string) {
 		}
 	}()
 
-	dummy := new(object.FuncMap)
+	config := Config{
+		Text:       static.Buf(p.Text),
+		ROData:     static.Buf(p.ROData),
+		RODataAddr: p.RODataAddr(),
+	}
 
-	err = m.Load(bufio.NewReader(f), runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, dummy)
+	_, err = Compile(&config, bufio.NewReader(f), runner.Env)
 	if err == nil {
 		t.Logf("%s: no error", filename)
 	} else {

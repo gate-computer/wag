@@ -4,15 +4,7 @@
 
 package compile
 
-import (
-	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/data"
-)
-
-type TextBuffer = code.Buffer
-type DataBuffer = data.Buffer
-
-// defaultBuffer is a variable-capacity implementation of TextBuffer and
+// defaultBuffer is a variable-capacity implementation of CodeBuffer and
 // DataBuffer.
 type defaultBuffer struct {
 	b []byte

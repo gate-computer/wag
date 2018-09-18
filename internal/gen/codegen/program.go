@@ -11,6 +11,8 @@ import (
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
+	"github.com/tsavola/wag/internal/code"
+	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/atomic"
 	"github.com/tsavola/wag/internal/gen/debug"
@@ -18,6 +20,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -27,8 +30,23 @@ func alignType(addr int, t abi.Type) int {
 	return (addr + mask) &^ mask
 }
 
-func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint64, eventHandler func(event.Event)) {
+func GenProgram(
+	text code.Buffer,
+	roData data.Buffer,
+	roDataAddr int32,
+	objMap obj.Map,
+	load loader.L,
+	m *module.M,
+	entrySymbol string,
+	entryArgs []uint64,
+	eventHandler func(event.Event),
+) {
 	p := &gen.Prog{
+		Text:       code.Buf{Buffer: text},
+		ROData:     roData,
+		RODataAddr: roDataAddr,
+		Map:        objMap,
+
 		FuncLinks: make([]link.FuncL, len(m.FuncSigs)),
 	}
 
@@ -44,10 +62,10 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
-	m.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
+	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
 	roTableSize := len(m.TableFuncs) * 8
-	buf := m.ROData.ResizeBytes(rodata.TableAddr + roTableSize)
+	buf := p.ROData.ResizeBytes(rodata.TableAddr + roTableSize)
 	binary.LittleEndian.PutUint32(buf[rodata.Mask7fAddr32:], 0x7fffffff)
 	binary.LittleEndian.PutUint64(buf[rodata.Mask7fAddr64:], 0x7fffffffffffffff)
 	binary.LittleEndian.PutUint32(buf[rodata.Mask80Addr32:], 0x80000000)
@@ -55,15 +73,15 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 	binary.LittleEndian.PutUint32(buf[rodata.Mask5f00Addr32:], 0x5f000000)
 	binary.LittleEndian.PutUint64(buf[rodata.Mask43e0Addr64:], 0x43e0000000000000)
 
-	asm.JumpToTrapHandler(m, trap.MissingFunction) // at zero address
-	if m.Text.Addr == 0 || m.Text.Addr > 16 {
+	asm.JumpToTrapHandler(p, trap.MissingFunction) // at zero address
+	if p.Text.Addr == 0 || p.Text.Addr > 16 {
 		panic("bad address after MissingFunction trap handler")
 	}
-	asm.Resume(m)
-	if m.Text.Addr <= 16 || m.Text.Addr > 32 {
+	asm.Resume(p)
+	if p.Text.Addr <= 16 || p.Text.Addr > 32 {
 		panic("bad address after resume routine")
 	}
-	asm.Init(m)
+	asm.Init(p)
 	// after init, execution proceeds to start func, main func, or exit trap
 
 	maxInitIndex := -1
@@ -72,7 +90,7 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 	if m.StartDefined {
 		maxInitIndex = int(m.StartIndex)
 
-		opInitialCall(m, &p.FuncLinks[m.StartIndex])
+		opInitialCall(p, &p.FuncLinks[m.StartIndex])
 		// start func returns here; execution proceeds to main func or exit trap
 	}
 
@@ -85,28 +103,28 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		sig := m.Sigs[sigIndex]
 
 		for i := range sig.Args {
-			asm.PushImm(m, int64(entryArgs[i]))
+			asm.PushImm(p, int64(entryArgs[i]))
 		}
 
-		opInitialCall(m, &p.FuncLinks[m.EntryIndex])
+		opInitialCall(p, &p.FuncLinks[m.EntryIndex])
 		// main func returns here; execution proceeds to exit trap
 
 		mainResultType = sig.Result
 	}
 
 	if mainResultType != abi.I32 {
-		asm.ClearIntResultReg(m)
+		asm.ClearIntResultReg(p)
 	}
 
-	asm.Exit(m)
+	asm.Exit(p)
 
 	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
-		p.TrapLinks[id].Addr = m.Text.Addr
-		asm.JumpToTrapHandler(m, id)
+		p.TrapLinks[id].Addr = p.Text.Addr
+		asm.JumpToTrapHandler(p, id)
 	}
 
 	for i, imp := range m.ImportFuncs {
-		addr := genImportTrampoline(m, imp)
+		addr := genImportTrampoline(p, m, imp)
 		p.FuncLinks[i].Addr = addr
 	}
 
@@ -119,11 +137,11 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 	}
 
 	for i := len(m.ImportFuncs); i < midpoint; i++ {
-		genFunction(m, p, load, i)
-		isa.UpdateCalls(m.Text.Bytes(), &p.FuncLinks[i].L)
+		genFunction(p, load, m, i)
+		isa.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
-	ptr := m.ROData.Bytes()[rodata.TableAddr:]
+	ptr := p.ROData.Bytes()[rodata.TableAddr:]
 
 	for i, funcIndex := range m.TableFuncs {
 		var funcAddr uint32 // missing function trap by default
@@ -152,12 +170,12 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 		eventHandler(event.Init)
 
 		for i := midpoint; i < len(m.FuncSigs); i++ {
-			genFunction(m, p, load, i)
+			genFunction(p, load, m, i)
 		}
 
 		eventHandler(event.FunctionBarrier)
 
-		roDataBuf := m.ROData.Bytes()
+		roDataBuf := p.ROData.Bytes()
 
 		for i := midpoint; i < len(m.FuncSigs); i++ {
 			ln := &p.FuncLinks[i]
@@ -168,13 +186,13 @@ func GenProgram(m *module.M, load loader.L, entrySymbol string, entryArgs []uint
 				atomic.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
 			}
 
-			isa.UpdateCalls(m.Text.Bytes(), &ln.L)
+			isa.UpdateCalls(p.Text.Bytes(), &ln.L)
 		}
 	}
 }
 
-func opInitialCall(m *module.M, l *link.FuncL) {
-	retAddr := asm.CallMissing(m)
-	m.Map.PutCallSite(retAddr, 0) // initial stack frame
+func opInitialCall(p *gen.Prog, l *link.FuncL) {
+	retAddr := asm.CallMissing(p)
+	p.Map.PutCallSite(retAddr, 0) // initial stack frame
 	l.AddSite(retAddr)
 }

@@ -5,17 +5,18 @@
 package codegen
 
 import (
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/module"
 )
 
-func genImportTrampoline(m *module.M, imp module.ImportFunc) (addr int32) {
-	isa.AlignFunc(m)
-	addr = m.Text.Addr
-	m.Map.PutImportFuncAddr(addr)
+func genImportTrampoline(p *gen.Prog, m *module.M, imp module.ImportFunc) (addr int32) {
+	isa.AlignFunc(p)
+	addr = p.Text.Addr
+	p.Map.PutImportFuncAddr(addr)
 
 	sigIndex := m.FuncSigs[imp.FuncIndex]
 	sig := m.Sigs[sigIndex]
 
-	asm.JumpToImportFunc(m, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
+	asm.JumpToImportFunc(p, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
 	return
 }

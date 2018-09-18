@@ -19,12 +19,12 @@ func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
-	if funcIndex >= uint32(len(f.FuncSigs)) {
+	if funcIndex >= uint32(len(f.Module.FuncSigs)) {
 		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
-	sigIndex := f.FuncSigs[funcIndex]
-	sig := f.Sigs[sigIndex]
+	sigIndex := f.Module.FuncSigs[funcIndex]
+	sig := f.Module.Sigs[sigIndex]
 
 	opCall(f, &f.FuncLinks[funcIndex].L)
 	opFinalizeCall(f, sig)
@@ -33,11 +33,11 @@ func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
-	if sigIndex >= uint32(len(f.Sigs)) {
+	if sigIndex >= uint32(len(f.Module.Sigs)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
 
-	sig := f.Sigs[sigIndex]
+	sig := f.Module.Sigs[sigIndex]
 
 	load.Byte() // reserved
 
@@ -73,9 +73,9 @@ func opFinalizeCall(f *gen.Func, sig abi.Sig) {
 func opCall(f *gen.Func, l *link.L) {
 	var retAddr int32
 	if l.Addr != 0 {
-		retAddr = asm.Call(f.M, l.Addr)
+		retAddr = asm.Call(f.Prog, l.Addr)
 	} else {
-		retAddr = asm.CallMissing(f.M)
+		retAddr = asm.CallMissing(f.Prog)
 	}
 	f.MapCallAddr(retAddr)
 	if l.Addr == 0 {

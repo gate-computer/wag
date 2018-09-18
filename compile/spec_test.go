@@ -140,7 +140,7 @@ func spec(t *testing.T, name string) {
 	}
 }
 
-func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
+func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []byte {
 	const (
 		maxTextSize   = 0x100000
 		maxRODataSize = 0x100000
@@ -149,27 +149,26 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 
 		timeout     = time.Second * 3
 		dumpExps    = false
-		dumpBin     = false
 		dumpText    = false
 		dumpROData  = false
 		dumpGlobals = false
 		dumpMemory  = false
 	)
 
-	module, data := sexp.ParsePanic(data)
+	module, wasmData := sexp.ParsePanic(wasmData)
 	if module == nil {
 		return nil
 	}
 
 	if name := module[0].(string); name != "module" {
 		t.Logf("%s not supported", name)
-		return data
+		return wasmData
 	}
 
 	if len(module) > 1 {
 		if s, ok := module[1].(string); ok && s == "binary" {
 			t.Logf("module binary not supported")
-			return data
+			return wasmData
 		}
 	}
 
@@ -278,9 +277,9 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 	for {
 		id := idCount
 
-		assert, tail := sexp.ParsePanic(data)
+		assert, tail := sexp.ParsePanic(wasmData)
 		if assert == nil {
-			data = tail
+			wasmData = tail
 			break
 		}
 
@@ -290,7 +289,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 
 		idCount++
-		data = tail
+		wasmData = tail
 
 		if testType == "register" {
 			t.Logf("run: module %s: register expressions not supported", filename)
@@ -414,7 +413,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 	}
 
 	if unsupported {
-		return data
+		return wasmData
 	}
 
 	testFunc = append(testFunc, []interface{}{
@@ -453,39 +452,46 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 		}()
 
-		var nameSection section.NameSection
+		var (
+			nameSection section.NameSection
+			nameLoader  = section.UnknownLoaders{"name": nameSection.Load}.Load
 
-		m := Module{
-			EntrySymbol: "test",
-			UnknownSectionLoader: section.UnknownLoaders{
-				"name": nameSection.Load,
-			}.Load,
-		}
-
-		m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
-		p.Seal()
-		p.SetData(m.Data())
-		minMemorySize, maxMemorySize := m.MemoryLimits()
-
-		if dumpBin {
-			if err := writeBin(&m, path.Join("../testdata", filename)); err != nil {
-				t.Error(err)
+			mod = &Module{
+				EntrySymbol:          "test",
+				UnknownSectionLoader: nameLoader,
 			}
-		}
+			code = &CodeConfig{
+				Text:                 static.Buf(p.Text),
+				ROData:               static.Buf(p.ROData),
+				RODataAddr:           p.RODataAddr(),
+				ObjectMapper:         &p.ObjInfo,
+				UnknownSectionLoader: nameLoader,
+			}
+			data = &DataConfig{
+				UnknownSectionLoader: nameLoader,
+			}
+		)
+
+		mod.loadInitialSections(wasm, runner.Env)
+		loadCodeSection(code, wasm, mod)
+		loadDataSection(data, wasm, mod)
+		loadUnknownSections(nameLoader, wasm)
+
+		p.Seal()
+		p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
+		minMemorySize, maxMemorySize := mod.MemoryLimits()
 
 		if testing.Verbose() {
 			if dumpText {
-				dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, &nameSection)
+				dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, &nameSection)
 			}
-
 			if dumpROData {
-				dump.ROData(os.Stdout, m.ROData(), 0)
+				dump.ROData(os.Stdout, code.ROData.Bytes(), 0)
 			}
 		}
 
 		if dumpGlobals {
-			data, memoryOffset := m.Data()
-			buf := data[:memoryOffset]
+			buf := data.GlobalsMemory.Bytes()[:mod.GlobalsSize()]
 
 			if len(buf) == 0 {
 				t.Log("no globals")
@@ -498,8 +504,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 
 		if dumpMemory {
-			data, memoryOffset := m.Data()
-			t.Logf("memory: %#v", data[memoryOffset:])
+			t.Logf("memory: %#v", data.GlobalsMemory.Bytes()[mod.GlobalsSize():])
 		}
 
 		memGrowSize := maxMemorySize
@@ -519,7 +524,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 
 		if realStartName != "" {
 			var printBuf bytes.Buffer
-			result, err := r.Run(0, m.Sigs(), &printBuf)
+			result, err := r.Run(0, mod.Sigs(), &printBuf)
 			if printBuf.Len() > 0 {
 				t.Logf("run: module %s: print:\n%s", filename, string(printBuf.Bytes()))
 			}
@@ -549,7 +554,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 				defer func() {
 					panicked = recover()
 				}()
-				result, err = r.Run(int64(id), m.Sigs(), &printBuf)
+				result, err = r.Run(int64(id), mod.Sigs(), &printBuf)
 			}()
 
 			timer := time.NewTimer(timeout)
@@ -572,7 +577,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 			}
 
 			var stackBuf bytes.Buffer
-			if err := r.WriteStacktraceTo(&stackBuf, m.FuncSigs(), &nameSection); err == nil {
+			if err := r.WriteStacktraceTo(&stackBuf, mod.FuncSigs(), &nameSection); err == nil {
 				if stackBuf.Len() > 0 {
 					t.Logf("run: module %s: test #%d: stacktrace:\n%s", filename, id, string(stackBuf.Bytes()))
 				}
@@ -617,7 +622,7 @@ func testModule(t *testing.T, data []byte, filename string, quiet bool) []byte {
 		}
 	}
 
-	return data
+	return wasmData
 }
 
 func invoke2call(exports map[string]string, x interface{}) {

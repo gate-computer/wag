@@ -53,8 +53,8 @@ func (t *TrapTrampoline) Addr(f *Func) (addr int32) {
 }
 
 type Func struct {
-	*module.M
 	*Prog
+	Module *module.M
 
 	Regs regalloc.Allocator
 

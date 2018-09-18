@@ -8,9 +8,6 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/data"
-	"github.com/tsavola/wag/internal/obj"
 )
 
 const (
@@ -38,6 +35,7 @@ const (
 	SectionData
 
 	NumSections
+	NumMetaSections = SectionElement + 1
 )
 
 type ExternalKind byte
@@ -96,12 +94,4 @@ type M struct {
 	StartIndex        uint32
 	StartDefined      bool
 	TableFuncs        []uint32
-
-	Text       code.Buf
-	RODataAddr int32
-	ROData     data.Buffer
-	Map        obj.Map
-
-	Data         data.Buffer
-	MemoryOffset int
 }

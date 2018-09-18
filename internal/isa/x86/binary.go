@@ -327,7 +327,7 @@ func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 	in.JEcb.Stub8(&f.Text)
 	done.AddSite(f.Text.Addr)
 
-	negFloatReg(f.M, a.Type, targetReg)
+	negFloatReg(f.Prog, a.Type, targetReg)
 
 	done.Addr = f.Text.Addr
 	isa.UpdateNearBranches(f.Text.Bytes(), &done)

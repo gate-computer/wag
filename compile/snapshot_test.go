@@ -24,16 +24,15 @@ func TestSnapshot(t *testing.T) {
 		maxRODataSize = 4096
 		stackSize     = 4096
 
-		dumpBin  = false
 		dumpText = false
 	)
 
-	data, err := ioutil.ReadFile(filename)
+	wasmData, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wast2wasm(data, false)
+	wasmReadCloser := wast2wasm(wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
@@ -43,20 +42,28 @@ func TestSnapshot(t *testing.T) {
 	}
 	defer p.Close()
 
-	m := Module{EntrySymbol: "main"}
-	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
-	p.Seal()
-	p.SetData(m.Data())
-	minMemorySize, maxMemorySize := m.MemoryLimits()
-
-	if dumpBin {
-		if err := writeBin(&m, filename); err != nil {
-			t.Error(err)
-		}
+	var mod = &Module{
+		EntrySymbol: "main",
 	}
+	mod.loadInitialSections(wasm, runner.Env)
+
+	var code = &CodeConfig{
+		Text:         static.Buf(p.Text),
+		ROData:       static.Buf(p.ROData),
+		RODataAddr:   p.RODataAddr(),
+		ObjectMapper: &p.ObjInfo,
+	}
+	loadCodeSection(code, wasm, mod)
+
+	var data = &DataConfig{}
+	loadDataSection(data, wasm, mod)
+
+	p.Seal()
+	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
+	minMemorySize, maxMemorySize := mod.MemoryLimits()
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
+		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
 	}
 
 	var printBuf bytes.Buffer
@@ -65,7 +72,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r1.Run(0, m.Sigs(), &printBuf)
+	_, err = r1.Run(0, mod.Sigs(), &printBuf)
 	r1.Close()
 
 	if printBuf.Len() > 0 {
@@ -85,7 +92,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r2.Run(0, m.Sigs(), &printBuf)
+	_, err = r2.Run(0, mod.Sigs(), &printBuf)
 	r2.Close()
 
 	if printBuf.Len() > 0 {

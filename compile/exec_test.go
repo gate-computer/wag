@@ -25,21 +25,22 @@ func TestExec(t *testing.T) {
 		maxRODataSize = 4096
 		stackSize     = 4096
 
-		dumpBin  = false
 		dumpText = false
 	)
 
-	data, err := ioutil.ReadFile(filename)
+	wasmData, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wast2wasm(data, false)
+	wasmReadCloser := wast2wasm(wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	m := Module{EntrySymbol: "main"}
-	m.loadPreliminarySections(wasm, runner.Env)
+	var mod = &Module{
+		EntrySymbol: "main",
+	}
+	mod.loadInitialSections(wasm, runner.Env)
 
 	var codeBuf bytes.Buffer
 
@@ -54,7 +55,7 @@ func TestExec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	minMemorySize, maxMemorySize := m.MemoryLimits()
+	minMemorySize, maxMemorySize := mod.MemoryLimits()
 
 	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
 	if err != nil {
@@ -69,11 +70,20 @@ func TestExec(t *testing.T) {
 	defer r.Close()
 
 	var printBuf bytes.Buffer
-	e, eventHandler := r.NewExecutor(m.Sigs(), &printBuf)
+	e, eventHandler := r.NewExecutor(mod.Sigs(), &printBuf)
 
-	m.loadDataSection(wasm, nil)
-	p.SetData(m.Data())
-	m.loadCodeSection(&codeBuf, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), &p.ObjInfo, eventHandler)
+	var data = &DataConfig{}
+	loadDataSection(data, wasm, mod)
+	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
+
+	var code = &CodeConfig{
+		Text:         static.Buf(p.Text),
+		ROData:       static.Buf(p.ROData),
+		RODataAddr:   p.RODataAddr(),
+		ObjectMapper: &p.ObjInfo,
+		EventHandler: eventHandler,
+	}
+	loadCodeSection(code, &codeBuf, mod)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
 		t.Fatal(err)
@@ -83,13 +93,7 @@ func TestExec(t *testing.T) {
 		t.Logf("print output:\n%s", string(printBuf.Bytes()))
 	}
 
-	if dumpBin {
-		if err := writeBin(&m, filename); err != nil {
-			t.Error(err)
-		}
-	}
-
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
+		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
 	}
 }

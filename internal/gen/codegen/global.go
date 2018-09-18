@@ -14,29 +14,29 @@ import (
 )
 
 func globalOffset(f *gen.Func, index uint32) int32 {
-	return (int32(index) - int32(len(f.Globals))) * obj.Word
+	return (int32(index) - int32(len(f.Module.Globals))) * obj.Word
 }
 
 func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
-	if globalIndex >= uint32(len(f.Globals)) {
+	if globalIndex >= uint32(len(f.Module.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
-	global := f.Globals[globalIndex]
+	global := f.Module.Globals[globalIndex]
 	r := opAllocReg(f, global.Type)
-	zeroExt := asm.LoadGlobal(f.M, global.Type, r, globalOffset(f, globalIndex))
+	zeroExt := asm.LoadGlobal(f.Prog, global.Type, r, globalOffset(f, globalIndex))
 	pushOperand(f, operand.Reg(global.Type, r, zeroExt))
 	return
 }
 
 func genSetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
-	if globalIndex >= uint32(len(f.Globals)) {
+	if globalIndex >= uint32(len(f.Module.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
-	global := f.Globals[globalIndex]
+	global := f.Module.Globals[globalIndex]
 	if !global.Mutable {
 		panic(fmt.Errorf("%s: global %d is immutable", op, globalIndex))
 	}

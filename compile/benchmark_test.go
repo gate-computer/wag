@@ -8,15 +8,11 @@ import (
 	"bytes"
 	"hash/crc32"
 	"io/ioutil"
-	"os"
-	"runtime"
 	"testing"
 	"time"
 
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
-	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/static"
 )
 
@@ -50,61 +46,28 @@ const (
 	loadBenchmarkMaxDataSize   = 16 * 1024 * 1024
 	loadBenchmarkMaxRODataSize = 16 * 1024 * 1024
 	loadBenchmarkRODataAddr    = 0x10000
-	loadBenchmarkTextCRC32     = 0x5e8971b3
-	loadBenchmarkRODataCRC32   = 0xc4e3c183
+	loadBenchmarkTextCRC32     = 0xb1e93623
+	loadBenchmarkRODataCRC32   = 0x7b5e3821
 	loadBenchmarkIgnoreCRC32   = false
 )
 
-func BenchmarkLoad(b *testing.B)              { benchmarkLoad(b) }
-func BenchmarkLoadSections(b *testing.B)      { benchmarkLoadSections(b, nil) }
-func BenchmarkLoadEventSections(b *testing.B) { benchmarkLoadSections(b, func(event.Event) {}) }
+func BenchmarkLoad(b *testing.B)       { benchmarkLoad(b, nil) }
+func BenchmarkLoadEvents(b *testing.B) { benchmarkLoad(b, func(event.Event) {}) }
 
-func benchmarkLoad(b *testing.B) {
+func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 	b.Helper()
 
 	wasm, err := ioutil.ReadFile(loadBenchmarkFilename)
 	if err != nil {
 		b.Fatal(err)
 	}
-
-	text := make([]byte, loadBenchmarkMaxTextSize)
-	roData := make([]byte, loadBenchmarkMaxRODataSize)
-
-	b.StopTimer()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		m := Module{
-			EntrySymbol: loadBenchmarkEntrySymbol,
-			EntryArgs:   make([]uint64, loadBenchmarkEntryNumArgs),
-		}
-
-		r := bytes.NewReader(wasm)
-		textBuf := static.Buf(text)
-		roDataBuf := static.Buf(roData)
-
-		b.StartTimer()
-		m.load(r, loadBenchmarkEnv, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, nil)
-		b.StopTimer()
-
-		checkLoadBenchmarkOutput(b, textBuf, roDataBuf)
-	}
-}
-
-func benchmarkLoadSections(b *testing.B, eventHandler func(event.Event)) {
-	b.Helper()
-
-	wasm, err := ioutil.ReadFile(loadBenchmarkFilename)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	text := make([]byte, loadBenchmarkMaxTextSize)
-	roData := make([]byte, loadBenchmarkMaxRODataSize)
-	data := make([]byte, loadBenchmarkMaxDataSize)
 
 	var (
-		elapPre  testDuration
+		text          = make([]byte, loadBenchmarkMaxTextSize)
+		roData        = make([]byte, loadBenchmarkMaxRODataSize)
+		globalsMemory = make([]byte, loadBenchmarkMaxDataSize)
+
+		elapMeta testDuration
 		elapCode testDuration
 		elapData testDuration
 	)
@@ -113,110 +76,58 @@ func benchmarkLoadSections(b *testing.B, eventHandler func(event.Event)) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		m := Module{
+		var mod = &Module{
 			EntrySymbol: loadBenchmarkEntrySymbol,
 			EntryArgs:   make([]uint64, loadBenchmarkEntryNumArgs),
 		}
 
+		var code = &CodeConfig{
+			Text:         static.Buf(text),
+			ROData:       static.Buf(roData),
+			RODataAddr:   loadBenchmarkRODataAddr,
+			EventHandler: eventHandler,
+		}
+
+		var data = &DataConfig{
+			GlobalsMemory: static.Buf(globalsMemory),
+		}
+
 		r := bytes.NewReader(wasm)
-		textBuf := static.Buf(text)
-		roDataBuf := static.Buf(roData)
-		dataBuf := static.Buf(data)
 
 		b.StartTimer()
 
 		t0 := time.Now()
-		m.loadPreliminarySections(r, loadBenchmarkEnv)
+		mod.loadInitialSections(r, loadBenchmarkEnv)
 		t1 := time.Now()
-		m.loadCodeSection(r, textBuf, roDataBuf, loadBenchmarkRODataAddr, nil, eventHandler)
+		loadCodeSection(code, r, mod)
 		t2 := time.Now()
-		m.loadDataSection(r, dataBuf)
+		loadDataSection(data, r, mod)
 		t3 := time.Now()
 
 		b.StopTimer()
 
-		elapPre.set(t1.Sub(t0))
+		elapMeta.set(t1.Sub(t0))
 		elapCode.set(t2.Sub(t1))
 		elapData.set(t3.Sub(t2))
 
-		checkLoadBenchmarkOutput(b, textBuf, roDataBuf)
+		checkLoadBenchmarkOutput(b, code)
 	}
 
-	b.Logf("pre:  %v", elapPre)
+	b.Logf("meta: %v", elapMeta)
 	b.Logf("code: %v", elapCode)
 	b.Logf("data: %v", elapData)
 }
 
-func checkLoadBenchmarkOutput(b *testing.B, textBuf, roDataBuf *static.Buffer) {
+func checkLoadBenchmarkOutput(b *testing.B, code *CodeConfig) {
 	b.Helper()
 
-	sum := crc32.ChecksumIEEE(textBuf.Bytes())
+	sum := crc32.ChecksumIEEE(code.Text.Bytes())
 	if sum != loadBenchmarkTextCRC32 && !loadBenchmarkIgnoreCRC32 {
 		b.Errorf("text checksum changed: 0x%08x", sum)
 	}
 
-	sum = crc32.ChecksumIEEE(roDataBuf.Bytes())
+	sum = crc32.ChecksumIEEE(code.ROData.Bytes())
 	if sum != loadBenchmarkRODataCRC32 && !loadBenchmarkIgnoreCRC32 {
 		b.Errorf("rodata checksum changed: 0x%08x", sum)
-	}
-}
-
-func TestBenchmarkRunNqueens(t *testing.T) {
-	if !testing.Verbose() {
-		t.SkipNow()
-	}
-
-	const (
-		filename = "../testdata/nqueens.wasm"
-
-		maxTextSize   = 65536
-		maxRODataSize = 4096
-		stackSize     = 65536
-
-		dumpText = false
-	)
-
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer p.Close()
-
-	m := Module{
-		EntrySymbol:     "benchmark_main",
-		MemoryAlignment: os.Getpagesize(),
-	}
-	m.load(bytes.NewReader(data), runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
-	p.Seal()
-	p.SetData(m.Data())
-	minMemorySize, maxMemorySize := m.MemoryLimits()
-
-	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
-	}
-
-	r, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	var printBuf bytes.Buffer
-	result, err := r.Run(0, m.Sigs(), &printBuf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result < 0 {
-		t.Error("TSC measurement out of range")
-	} else {
-		t.Logf("%d measures (%.2fx standalone)", result, float64(result)/123456789)
 	}
 }

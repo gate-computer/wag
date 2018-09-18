@@ -26,16 +26,15 @@ func misc(t *testing.T, filename, expectOutput string) {
 		maxRODataSize = 4096
 		stackSize     = 4096
 
-		dumpBin  = false
 		dumpText = false
 	)
 
-	data, err := ioutil.ReadFile(filename)
+	wasmData, err := ioutil.ReadFile(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wast2wasm(data, false)
+	wasmReadCloser := wast2wasm(wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
@@ -45,20 +44,26 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 	defer p.Close()
 
-	var m Module
-	m.load(wasm, runner.Env, static.Buf(p.Text), static.Buf(p.ROData), p.FixedRODataAddr(), nil, &p.ObjInfo)
-	p.Seal()
-	p.SetData(m.Data())
-	minMemorySize, maxMemorySize := m.MemoryLimits()
+	var mod = &Module{}
+	mod.loadInitialSections(wasm, runner.Env)
 
-	if dumpBin {
-		if err := writeBin(&m, filename); err != nil {
-			t.Error(err)
-		}
+	var code = &CodeConfig{
+		Text:         static.Buf(p.Text),
+		ROData:       static.Buf(p.ROData),
+		RODataAddr:   p.RODataAddr(),
+		ObjectMapper: &p.ObjInfo,
 	}
+	loadCodeSection(code, wasm, mod)
+
+	var data = &DataConfig{}
+	loadDataSection(data, wasm, mod)
+
+	p.Seal()
+	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
+	minMemorySize, maxMemorySize := mod.MemoryLimits()
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, m.Text(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
+		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
 	}
 
 	var printBuf bytes.Buffer
@@ -69,7 +74,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 	defer r.Close()
 
-	_, err = r.Run(0, m.Sigs(), &printBuf)
+	_, err = r.Run(0, mod.Sigs(), &printBuf)
 	if err != nil {
 		t.Fatal(err)
 	}

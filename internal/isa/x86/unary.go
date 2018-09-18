@@ -13,7 +13,6 @@ import (
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/isa/x86/in"
-	"github.com/tsavola/wag/internal/module"
 )
 
 // Unary may allocate registers, use RegResult and update condition flags.  The
@@ -49,12 +48,12 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 
 	case prop.FloatAbs:
 		r, _ := allocResultReg(f, x)
-		absFloatReg(f.M, x.Type, r)
+		absFloatReg(f.Prog, x.Type, r)
 		return operand.Reg(x.Type, r, false)
 
 	case prop.FloatNeg:
 		r, _ := allocResultReg(f, x)
-		negFloatReg(f.M, x.Type, r)
+		negFloatReg(f.Prog, x.Type, r)
 		return operand.Reg(x.Type, r, false)
 
 	case prop.FloatRoundOp:
@@ -71,13 +70,13 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 }
 
 // absFloatReg in-place.
-func absFloatReg(m *module.M, t abi.Type, r reg.R) {
-	absMaskAddr := rodata.MaskAddr(m.RODataAddr, rodata.Mask7fBase, t)
-	in.ANDPSD.RegMemDisp(&m.Text, t, r, in.BaseZero, absMaskAddr)
+func absFloatReg(p *gen.Prog, t abi.Type, r reg.R) {
+	absMaskAddr := rodata.MaskAddr(p.RODataAddr, rodata.Mask7fBase, t)
+	in.ANDPSD.RegMemDisp(&p.Text, t, r, in.BaseZero, absMaskAddr)
 }
 
 // negFloatReg in-place.
-func negFloatReg(m *module.M, t abi.Type, r reg.R) {
-	signMaskAddr := rodata.MaskAddr(m.RODataAddr, rodata.Mask80Base, t)
-	in.XORPSD.RegMemDisp(&m.Text, t, r, in.BaseZero, signMaskAddr)
+func negFloatReg(p *gen.Prog, t abi.Type, r reg.R) {
+	signMaskAddr := rodata.MaskAddr(p.RODataAddr, rodata.Mask80Base, t)
+	in.XORPSD.RegMemDisp(&p.Text, t, r, in.BaseZero, signMaskAddr)
 }

@@ -7,11 +7,11 @@ package x86
 import (
 	"encoding/binary"
 
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/atomic"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/isa/x86/in"
-	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 )
 
@@ -54,12 +54,8 @@ type ISA struct{}
 
 var isa ISA
 
-func (ISA) AlignFunc(m *module.M) {
-	alignFunc(m)
-}
-
-func alignFunc(m *module.M) {
-	gap := m.Text.Extend((FuncAlignment - int(m.Text.Addr)) & (FuncAlignment - 1))
+func (ISA) AlignFunc(p *gen.Prog) {
+	gap := p.Text.Extend((FuncAlignment - int(p.Text.Addr)) & (FuncAlignment - 1))
 	for i := range gap {
 		gap[i] = PaddingByte
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/code"
+	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/datalayout"
 	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/gen/codegen"
@@ -27,6 +28,8 @@ import (
 	"github.com/tsavola/wag/wasm"
 )
 
+// Env knows what importable functions are available and where they are during
+// execution.  It also knows the values of importable globals.
 type Env interface {
 	ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error)
 	ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error)
@@ -35,9 +38,8 @@ type Env interface {
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
 type Reader = reader.R
 
-const (
-	DefaultMemoryAlignment = datalayout.DefaultAlignment // see Module.MemoryAlignment
-)
+type CodeBuffer = code.Buffer
+type DataBuffer = data.Buffer
 
 const (
 	maxStringLen          = 255   // TODO
@@ -94,89 +96,29 @@ func readMemory(m *module.M, load loader.L) {
 	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wasm.Page))
 }
 
-func readSectionHeader(load loader.L, expectId byte, idError string) (ok bool) {
-	id, err := load.ReadByte()
-	if err != nil {
-		if err == io.EOF {
-			return
-		}
-		panic(err)
-	}
-
-	if id != expectId {
-		panic(errors.New(idError))
-	}
-
-	load.Varuint32() // payload len
-
-	ok = true
-	return
-}
-
+// Module contains a WebAssembly module's metadata.
 type Module struct {
-	EntrySymbol          string
-	EntryArgs            []uint64
-	MemoryAlignment      int // see Data()
+	EntrySymbol          string   // Used to resolve the entry function during
+	EntryArgs            []uint64 // initial section loading.
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 
 	m module.M
 }
 
-// LoadPreliminarySections, excluding the code and data sections.
-func (m *Module) LoadPreliminarySections(r Reader, env Env) (err error) {
+// LoadInitialSections reads all sections preceding code and data, initializing
+// the Module instance.
+func (m *Module) LoadInitialSections(r Reader, env Env) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	m.loadPreliminarySections(r, env)
+	m.loadInitialSections(r, env)
 	return
 }
 
-func (m *Module) loadPreliminarySections(r Reader, env Env) {
-	loadUntil(m, loader.L{R: r}, env, module.SectionCode)
-}
+func (m *Module) loadInitialSections(r Reader, env Env) {
+	load := loader.L{R: r}
 
-// Load all (remaining) sections.
-func (m *Module) Load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, objMap ObjectMap) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
-
-	m.load(r, env, text, roData, roDataAddr, data, objMap)
-	return
-}
-
-func (m *Module) load(r Reader, env Env, text TextBuffer, roData DataBuffer, roDataAddr int32, data DataBuffer, objMap ObjectMap) {
-	if text == nil {
-		text = new(defaultBuffer)
-	}
-	if roData == nil {
-		roData = new(defaultBuffer)
-	}
-	if data == nil {
-		data = new(defaultBuffer)
-	}
-	if objMap == nil {
-		objMap = dummyMap{}
-	}
-
-	m.m.Text = code.Buf{Buffer: text}
-	m.m.ROData = roData
-	m.m.RODataAddr = roDataAddr
-	m.m.Data = data
-	m.m.Map = objMap
-
-	load(m, loader.L{R: r}, env)
-}
-
-func load(m *Module, load loader.L, env Env) {
-	nextId := loadUntil(m, load, env, module.NumSections)
-	if nextId != 0 {
-		panic(fmt.Errorf("unknown section id: 0x%x", nextId))
-	}
-}
-
-func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
 	var header module.Header
 	if err := binary.Read(load, binary.LittleEndian, &header); err != nil {
 		panic(err)
@@ -188,31 +130,13 @@ func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
 		panic(fmt.Errorf("unsupported module version: %d", header.Version))
 	}
 
-	var skipSection func(byte, uint32) error
-
-	if m.UnknownSectionLoader != nil {
-		skipSection = func(id byte, payloadLen uint32) (err error) {
-			if id == module.SectionUnknown {
-				err = m.UnknownSectionLoader(load, payloadLen)
-			} else {
-				_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
-			}
-			return
-		}
-	} else {
-		skipSection = func(id byte, payloadLen uint32) (err error) {
-			_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
-			return
-		}
-	}
-
 	var seenId byte
 
 	for {
 		id, err := load.ReadByte()
 		if err != nil {
 			if err == io.EOF {
-				return 0
+				return
 			}
 			panic(err)
 		}
@@ -224,23 +148,33 @@ func loadUntil(m *Module, load loader.L, env Env, untilSection byte) byte {
 			seenId = id
 		}
 
-		if id >= untilSection {
+		if id >= module.NumMetaSections {
 			load.UnreadByte()
-			return id
+			if id >= module.NumSections {
+				panic(fmt.Errorf("unknown section id: 0x%x", id))
+			}
+			return
 		}
 
 		payloadLen := load.Varuint32()
-
-		if f := sectionLoaders[id]; f != nil {
-			f(m, load, env)
-		} else if err := skipSection(id, payloadLen); err != nil {
-			panic(err)
-		}
+		metaSectionLoaders[id](payloadLen, m, load, env)
 	}
 }
 
-var sectionLoaders = []func(*Module, loader.L, Env){
-	module.SectionType: func(m *Module, load loader.L, env Env) {
+var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L, Env){
+	module.SectionUnknown: func(payloadLen uint32, m *Module, load loader.L, _ Env) {
+		var err error
+		if m.UnknownSectionLoader != nil {
+			err = m.UnknownSectionLoader(load, payloadLen)
+		} else {
+			_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
+		}
+		if err != nil {
+			panic(err)
+		}
+	},
+
+	module.SectionType: func(_ uint32, m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			if form := load.Varint7(); form != -0x20 {
 				panic(fmt.Errorf("unsupported function type form: %d", form))
@@ -266,7 +200,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionImport: func(m *Module, load loader.L, env Env) {
+	module.SectionImport: func(_ uint32, m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			moduleLen := load.Varuint32()
 			if moduleLen > maxStringLen {
@@ -347,7 +281,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		m.m.NumImportGlobals = len(m.m.Globals)
 	},
 
-	module.SectionFunction: func(m *Module, load loader.L, env Env) {
+	module.SectionFunction: func(_ uint32, m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.m.Sigs)) {
@@ -358,19 +292,19 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionTable: func(m *Module, load loader.L, env Env) {
+	module.SectionTable: func(_ uint32, m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			readTable(&m.m, load)
 		}
 	},
 
-	module.SectionMemory: func(m *Module, load loader.L, env Env) {
+	module.SectionMemory: func(_ uint32, m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			readMemory(&m.m, load)
 		}
 	},
 
-	module.SectionGlobal: func(m *Module, load loader.L, env Env) {
+	module.SectionGlobal: func(_ uint32, m *Module, load loader.L, env Env) {
 		for range load.Count() {
 			if len(m.m.Globals) >= maxGlobals {
 				panic(errors.New("too many globals"))
@@ -388,7 +322,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionExport: func(m *Module, load loader.L, env Env) {
+	module.SectionExport: func(_ uint32, m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			fieldLen := load.Varuint32()
 			if fieldLen > maxStringLen {
@@ -424,7 +358,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		}
 	},
 
-	module.SectionStart: func(m *Module, load loader.L, env Env) {
+	module.SectionStart: func(_ uint32, m *Module, load loader.L, env Env) {
 		index := load.Varuint32()
 		if index >= uint32(len(m.m.FuncSigs)) {
 			panic(fmt.Errorf("start function index out of bounds: %d", index))
@@ -440,7 +374,7 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 		m.m.StartDefined = true
 	},
 
-	module.SectionElement: func(m *Module, load loader.L, env Env) {
+	module.SectionElement: func(_ uint32, m *Module, load loader.L, env Env) {
 		for i := range load.Count() {
 			if index := load.Varuint32(); index != 0 {
 				panic(fmt.Errorf("unsupported table index: %d", index))
@@ -475,85 +409,12 @@ var sectionLoaders = []func(*Module, loader.L, Env){
 			}
 		}
 	},
-
-	module.SectionCode: func(m *Module, load loader.L, env Env) {
-		genCode(m, load, nil)
-	},
-
-	module.SectionData: func(m *Module, load loader.L, env Env) {
-		datalayout.CopyGlobals(&m.m, m.MemoryAlignment)
-		datalayout.ReadMemory(&m.m, load)
-	},
 }
 
-// LoadCodeSection, after loading the preliminary sections.
-func (m *Module) LoadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, eventHandler func(event.Event)) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
-
-	m.loadCodeSection(r, text, roData, roDataAddr, objMap, eventHandler)
-	return
-}
-
-func (m *Module) loadCodeSection(r Reader, text TextBuffer, roData DataBuffer, roDataAddr int32, objMap ObjectMap, eventHandler func(event.Event)) {
-	if text == nil {
-		text = new(defaultBuffer)
-	}
-	if roData == nil {
-		roData = new(defaultBuffer)
-	}
-	if objMap == nil {
-		objMap = dummyMap{}
-	}
-
-	m.m.Text = code.Buf{Buffer: text}
-	m.m.ROData = roData
-	m.m.RODataAddr = roDataAddr
-	m.m.Map = objMap
-
-	load := loader.L{R: r}
-
-	if readSectionHeader(load, module.SectionCode, "not a code section") {
-		genCode(m, load, eventHandler)
-	}
-}
-
-// LoadDataSection, after loading the preliminary sections.
-func (m *Module) LoadDataSection(r Reader, data DataBuffer) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
-
-	m.loadDataSection(r, data)
-	return
-}
-
-func (m *Module) loadDataSection(r Reader, data DataBuffer) {
-	if m.m.Data != nil {
-		panic(errors.New("data section has already been loaded"))
-	}
-
-	if data == nil {
-		data = new(defaultBuffer)
-	}
-	m.m.Data = data
-
-	datalayout.CopyGlobals(&m.m, m.MemoryAlignment)
-
-	load := loader.L{R: r}
-
-	if readSectionHeader(load, module.SectionData, "not a data section") {
-		datalayout.ReadMemory(&m.m, load)
-	}
-}
-
-// Sigs are available after preliminary sections have been loaded.
 func (m *Module) Sigs() []abi.Sig {
 	return m.m.Sigs
 }
 
-// FuncSigs are available after preliminary sections have been loaded.
 func (m *Module) FuncSigs() (funcSigs []abi.Sig) {
 	funcSigs = make([]abi.Sig, len(m.m.FuncSigs))
 	for i, sigIndex := range m.m.FuncSigs {
@@ -562,55 +423,170 @@ func (m *Module) FuncSigs() (funcSigs []abi.Sig) {
 	return
 }
 
-// MemoryLimits are available after preliminary sections have been loaded.
 func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
 	initial = wasm.MemorySize(m.m.MemoryLimitValues.Initial)
 	maximum = wasm.MemorySize(m.m.MemoryLimitValues.Maximum)
 	return
 }
 
-// GlobalsSize is available after preliminary sections have been loaded.
 func (m *Module) GlobalsSize() int {
-	return len(m.m.Globals) * obj.Word
+	size := len(m.m.Globals) * obj.Word
+	mask := datalayout.MinAlignment - 1 // Round up so that linear memory will
+	return (size + mask) &^ mask        // have at least minimum alignment.
 }
 
-// Text is available after code section has been loaded.
-func (m *Module) Text() (b []byte) {
-	if m.m.Text.Buffer != nil {
-		b = m.m.Text.Buffer.Bytes()
-	}
+// CopyGlobalsData copies globals' initial values into dest, aligning them
+// against its end.  len(dest) must be at least m.GlobalsSize().
+func (m *Module) CopyGlobalsData(dest []byte) {
+	datalayout.CopyGlobalsAtEnd(dest, &m.m)
+}
+
+// CodeConfig for a single compiler invocation.
+type CodeConfig struct {
+	Text                 CodeBuffer // Initialized with default implementation if nil.
+	ROData               DataBuffer // Initialized with default implementation if nil.
+	RODataAddr           uintptr
+	ObjectMapper         ObjectMap
+	EventHandler         func(event.Event)
+	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+}
+
+// LoadCodeSection reads a WebAssembly module's code section and generates
+// machine code and read-only data.
+func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
+	defer func() {
+		err = errorpanic.Handle(recover())
+	}()
+
+	loadCodeSection(config, r, mod)
 	return
 }
 
-// ROData is available after code section has been loaded.
-func (m *Module) ROData() (b []byte) {
-	if m.m.ROData != nil {
-		b = m.m.ROData.Bytes()
+func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
+	if mod.EntrySymbol != "" && !mod.m.EntryDefined {
+		panic(fmt.Errorf("%s function not found in export section", mod.EntrySymbol))
 	}
+
+	if config.Text == nil {
+		config.Text = new(defaultBuffer)
+	}
+	if config.ROData == nil {
+		config.ROData = new(defaultBuffer)
+	}
+
+	objMap := config.ObjectMapper
+	if objMap == nil {
+		objMap = dummyMap{}
+	}
+
+	load := loader.L{R: r}
+
+	switch id := findSection(module.SectionCode, load, config.UnknownSectionLoader); id {
+	case module.SectionCode:
+		codegen.GenProgram(config.Text, config.ROData, int32(config.RODataAddr), objMap, load, &mod.m, mod.EntrySymbol, mod.EntryArgs, config.EventHandler)
+
+	case module.SectionData:
+		// no code section
+
+	case 0:
+		// no sections
+
+	default:
+		panic(fmt.Errorf("unexpected section id: 0x%x (looking for code section)", id))
+	}
+}
+
+// DataConfig for a single compiler invocation.
+type DataConfig struct {
+	GlobalsMemory        DataBuffer // Initialized with default implementation if nil.
+	MemoryAlignment      int        // Initialized with minimal value if zero.
+	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+}
+
+// LoadDataSection reads a WebAssembly module's data section and generates
+// initial contents of mutable program state (globals and linear memory).
+func LoadDataSection(config *DataConfig, r Reader, mod *Module) (err error) {
+	defer func() {
+		err = errorpanic.Handle(recover())
+	}()
+
+	loadDataSection(config, r, mod)
 	return
 }
 
-// Data is available after data section has been loaded.  memoryOffset is an
-// offset into data.  It will be a multiple of MemoryAlignment.
-func (m *Module) Data() (data []byte, memoryOffset int) {
-	if m.m.Data == nil {
-		m.m.Data = new(defaultBuffer)
+func loadDataSection(config *DataConfig, r Reader, mod *Module) {
+	if config.GlobalsMemory == nil {
+		config.GlobalsMemory = new(defaultBuffer)
+	}
+	if config.MemoryAlignment == 0 {
+		config.MemoryAlignment = datalayout.MinAlignment
 	}
 
-	if len(m.m.Globals) > 0 && m.m.MemoryOffset == 0 {
-		// simple program without data section, but has globals
-		datalayout.CopyGlobals(&m.m, m.MemoryAlignment)
-	}
+	datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, config.MemoryAlignment)
 
-	data = m.m.Data.Bytes()
-	memoryOffset = m.m.MemoryOffset
+	load := loader.L{R: r}
+
+	switch id := findSection(module.SectionData, load, config.UnknownSectionLoader); id {
+	case module.SectionData:
+		datalayout.ReadMemory(config.GlobalsMemory, load, &mod.m)
+
+	case 0:
+		// no sections
+
+	default:
+		panic(fmt.Errorf("unexpected section id: 0x%x (looking for data section)", id))
+	}
+}
+
+// LoadUnknownSections reads a WebAssembly module's extension sections which
+// follow known sections.
+func LoadUnknownSections(unknownLoader func(r Reader, payloadLen uint32) error, r Reader) (err error) {
+	defer func() {
+		err = errorpanic.Handle(recover())
+	}()
+
+	loadUnknownSections(unknownLoader, r)
 	return
 }
 
-func genCode(m *Module, load loader.L, eventHandler func(event.Event)) {
-	if m.EntrySymbol != "" && !m.m.EntryDefined {
-		panic(fmt.Errorf("%s function not found in export section", m.EntrySymbol))
-	}
+func loadUnknownSections(unknownLoader func(Reader, uint32) error, r Reader) {
+	load := loader.L{R: r}
 
-	codegen.GenProgram(&m.m, load, m.EntrySymbol, m.EntryArgs, eventHandler)
+	if id := findSection(0, load, unknownLoader); id != 0 {
+		panic(fmt.Errorf("unexpected section id: 0x%x (after all known sections)", id))
+	}
+}
+
+func findSection(findId byte, load loader.L, unknownLoader func(Reader, uint32) error) byte {
+	for {
+		id, err := load.ReadByte()
+		if err != nil {
+			if err == io.EOF {
+				return 0
+			}
+			panic(err)
+		}
+
+		switch id {
+		case module.SectionUnknown: // = 0
+			payloadLen := load.Varuint32()
+
+			if unknownLoader != nil {
+				err = unknownLoader(load, payloadLen)
+			} else {
+				_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
+			}
+			if err != nil {
+				panic(err)
+			}
+
+		case findId:
+			load.Varuint32() // payloadLen
+			return id
+
+		default:
+			load.UnreadByte()
+			return id
+		}
+	}
 }

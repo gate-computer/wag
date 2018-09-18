@@ -163,13 +163,6 @@ func (p *Program) RODataAddr() uintptr {
 	return (*reflect.SliceHeader)(unsafe.Pointer(&p.ROData)).Data
 }
 
-func (p *Program) FixedRODataAddr() (addr int32) {
-	if roDataFlags != 0 {
-		addr = int32(p.RODataAddr())
-	}
-	return
-}
-
 func (p *Program) SetData(data []byte, memoryOffset int) {
 	p.data = data
 	p.memoryOffset = memoryOffset

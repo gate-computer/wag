@@ -17,11 +17,9 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/tsavola/wag"
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/compile"
-	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/object/debug/dump"
-	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/static"
 )
 
@@ -67,9 +65,9 @@ func (*env) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, er
 	return
 }
 
-func makeMem(size int, extraProt, extraFlags int) (mem []byte, err error) {
+func makeMem(size int, extraFlags int) (mem []byte, err error) {
 	if size > 0 {
-		mem, err = syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE|extraProt, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
+		mem, err = syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
 	}
 	return
 }
@@ -117,49 +115,37 @@ func main() {
 	}
 	progReader := bytes.NewReader(prog)
 
-	roDataMem, err := makeMem(roDataSize, 0, roDataFlags)
+	roDataMem, err := makeMem(roDataSize, roDataFlags)
 	if err != nil {
 		log.Fatal(err)
 	}
 	roDataAddr := memAddr(roDataMem)
 	roDataBuf := static.Buf(roDataMem)
 
-	textMem, err := makeMem(textSize, syscall.PROT_EXEC, 0)
+	textMem, err := makeMem(textSize, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
 	textAddr := memAddr(textMem)
 	textBuf := static.Buf(textMem)
 
-	pageSize := os.Getpagesize()
-	pageMask := pageSize - 1
-
-	var (
-		funcs object.FuncMap
-		names section.NameSection
-	)
-
-	m := compile.Module{
-		EntrySymbol:          entrySymbol,
-		EntryArgs:            make([]uint64, 2),
-		MemoryAlignment:      pageSize,
-		UnknownSectionLoader: section.UnknownLoaders{"name": names.Load}.Load,
+	config := &wag.Config{
+		EntrySymbol:     entrySymbol,
+		EntryArgs:       make([]uint64, 2),
+		Text:            textBuf,
+		ROData:          roDataBuf,
+		RODataAddr:      roDataAddr,
+		MemoryAlignment: os.Getpagesize(),
 	}
-
-	err = m.LoadPreliminarySections(progReader, &env{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = m.LoadCodeSection(progReader, textBuf, roDataBuf, int32(roDataAddr), &funcs, nil)
+	obj, err := wag.Compile(config, progReader, &env{})
 	if dumpText {
-		e := dump.Text(os.Stdout, m.Text(), textAddr, roDataAddr, funcs.FuncAddrs, &names)
+		e := dump.Text(os.Stdout, obj.Text, textAddr, roDataAddr, obj.FuncAddrs, &obj.Names)
 		if err == nil {
 			err = e
 		}
 	}
 	if dumpROData {
-		e := dump.ROData(os.Stdout, m.ROData(), 0)
+		e := dump.ROData(os.Stdout, obj.ROData, 0)
 		if err == nil {
 			err = e
 		}
@@ -168,21 +154,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	memoryOffset := (m.GlobalsSize() + pageMask) &^ pageMask
-	initMemorySize, growMemorySize := m.MemoryLimits()
-	globalsMemoryMem, err := makeMem(memoryOffset+int(growMemorySize), 0, 0)
-	if err != nil {
-		log.Fatal(err)
-	}
-	dataBuf := static.Buf(globalsMemoryMem)
-	memoryAddr := memAddr(globalsMemoryMem) + uintptr(memoryOffset)
-	initMemoryEnd := memoryAddr + uintptr(initMemorySize)
-	growMemoryEnd := memoryAddr + uintptr(growMemorySize)
-
-	err = m.LoadDataSection(progReader, dataBuf)
-	if err != nil {
-		log.Fatal(err)
-	}
+	memoryAddr := memAddr(obj.GlobalsMemory) + uintptr(obj.MemoryOffset)
+	initMemoryEnd := memoryAddr + uintptr(obj.InitMemorySize)
+	growMemoryEnd := memoryAddr + uintptr(obj.GrowMemoryLimit)
 
 	if err := syscall.Mprotect(roDataMem, syscall.PROT_READ); err != nil {
 		log.Fatal(err)
@@ -192,7 +166,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stackMem, err := makeMem(stackSize, 0, syscall.MAP_STACK)
+	stackMem, err := makeMem(stackSize, syscall.MAP_STACK)
 	if err != nil {
 		log.Fatal(err)
 	}

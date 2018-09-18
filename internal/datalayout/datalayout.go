@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/initexpr"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
@@ -15,34 +16,37 @@ import (
 )
 
 const (
-	DefaultAlignment = 16 // for x86-64 SSE
+	MinAlignment = 16 // for x86-64 SSE
 )
 
-func CopyGlobals(m *module.M, align int) {
-	if align == 0 {
-		align = DefaultAlignment
-	}
-
+func CopyGlobalsAlign(buffer data.Buffer, m *module.M, alignment int) {
 	size := len(m.Globals) * obj.Word
 
 	offset := 0
-	if n := size & (align - 1); n > 0 {
-		offset = align - n
+	if n := size & (alignment - 1); n > 0 {
+		offset = alignment - n
 	}
 
-	buf := m.Data.ResizeBytes(offset + size)
-
-	ptr := buf[offset:]
-	for _, global := range m.Globals {
-		binary.LittleEndian.PutUint64(ptr, global.Init)
-		ptr = ptr[obj.Word:]
-	}
-
-	m.MemoryOffset = len(buf)
+	b := buffer.ResizeBytes(offset + size)
+	copyGlobals(b[offset:], m)
 }
 
-func ReadMemory(m *module.M, load loader.L) {
-	buf := m.Data.Bytes()
+func CopyGlobalsAtEnd(b []byte, m *module.M) {
+	size := len(m.Globals) * obj.Word
+	offset := len(b) - size
+	copyGlobals(b[offset:], m)
+}
+
+func copyGlobals(b []byte, m *module.M) {
+	for _, global := range m.Globals {
+		binary.LittleEndian.PutUint64(b, global.Init)
+		b = b[obj.Word:]
+	}
+}
+
+func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
+	b := buffer.Bytes()
+	memoryOffset := len(b)
 
 	for i := range load.Count() {
 		if index := load.Varuint32(); index != 0 {
@@ -58,12 +62,12 @@ func ReadMemory(m *module.M, load loader.L) {
 			panic(fmt.Errorf("memory segment #%d exceeds initial memory size", i))
 		}
 
-		needDataSize := m.MemoryOffset + int(needMemorySize)
-		if needDataSize > len(buf) {
-			buf = m.Data.ResizeBytes(needDataSize)
+		needDataSize := memoryOffset + int(needMemorySize)
+		if needDataSize > len(b) {
+			b = buffer.ResizeBytes(needDataSize)
 		}
 
-		dataOffset := m.MemoryOffset + int(offset)
-		load.Into(buf[dataOffset:needDataSize])
+		dataOffset := memoryOffset + int(offset)
+		load.Into(b[dataOffset:needDataSize])
 	}
 }

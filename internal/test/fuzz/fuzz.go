@@ -10,8 +10,8 @@ import (
 
 	"github.com/bnagy/gapstone"
 
+	"github.com/tsavola/wag"
 	"github.com/tsavola/wag/abi"
-	"github.com/tsavola/wag/compile"
 )
 
 const (
@@ -19,22 +19,19 @@ const (
 )
 
 func Fuzz(data []byte) int {
-	var m compile.Module
-
-	err := m.Load(bytes.NewReader(data), env{}, nil, nil, roDataAddr, nil, nil)
+	obj, err := wag.Compile(&wag.Config{RODataAddr: roDataAddr}, bytes.NewReader(data), env{})
 	if err != nil {
 		return 0
 	}
 
-	text := m.Text()
-	if len(text) != 0 {
+	if len(obj.Text) != 0 {
 		engine, err := gapstone.New(gapstone.CS_ARCH_X86, gapstone.CS_MODE_64)
 		if err != nil {
 			panic(err)
 		}
 		defer engine.Close()
 
-		_, err = engine.Disasm(text, 0, 0)
+		_, err = engine.Disasm(obj.Text, 0, 0)
 		if err != nil {
 			panic(err)
 		}

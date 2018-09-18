@@ -14,7 +14,6 @@ import (
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/x86/in"
-	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 )
@@ -66,9 +65,9 @@ func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
 
 // DropStackValues has default restrictions.  The caller will take care of
 // updating the virtual stack pointer.
-func (MacroAssembler) DropStackValues(m *module.M, n int) {
+func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
 	if n != 0 {
-		in.LEA.RegStackDisp(&m.Text, abi.I64, RegStackPtr, int32(n*obj.Word))
+		in.LEA.RegStackDisp(&p.Text, abi.I64, RegStackPtr, int32(n*obj.Word))
 	}
 }
 
@@ -84,13 +83,13 @@ func dropStableValue(f *gen.Func, x operand.O) {
 }
 
 // Branch may use RegResult and update condition flags.
-func (MacroAssembler) Branch(m *module.M, addr int32) int32 {
+func (MacroAssembler) Branch(p *gen.Prog, addr int32) int32 {
 	if addr != 0 {
-		in.JMPcd.Addr32(&m.Text, addr)
+		in.JMPcd.Addr32(&p.Text, addr)
 	} else {
-		in.JMPcd.Stub32(&m.Text)
+		in.JMPcd.Stub32(&p.Text)
 	}
-	return m.Text.Addr
+	return p.Text.Addr
 }
 
 // BranchIndirect may use RegResult and update condition flags.  It takes
@@ -140,30 +139,30 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 
 // BranchIfOutOfBounds may use RegResult and update condition flags.  It MUST
 // zero-extend the index register.
-func (MacroAssembler) BranchIfOutOfBounds(m *module.M, indexReg reg.R, upperBound, addr int32) int32 {
-	compareBounds(m, indexReg, upperBound)
-	in.JLEc.Addr(&m.Text, addr)
-	return m.Text.Addr
+func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) int32 {
+	compareBounds(p, indexReg, upperBound)
+	in.JLEc.Addr(&p.Text, addr)
+	return p.Text.Addr
 }
 
 // compareBounds zero-extends indexReg.
-func compareBounds(m *module.M, indexReg reg.R, upperBound int32) {
-	in.MOVi.RegImm32(&m.Text, abi.I32, RegScratch, upperBound)
-	in.TEST.RegReg(&m.Text, abi.I32, indexReg, indexReg)
-	in.CMOVL.RegReg(&m.Text, abi.I32, indexReg, RegScratch) // negative index -> upper bound
-	in.CMP.RegReg(&m.Text, abi.I32, RegScratch, indexReg)
+func compareBounds(p *gen.Prog, indexReg reg.R, upperBound int32) {
+	in.MOVi.RegImm32(&p.Text, abi.I32, RegScratch, upperBound)
+	in.TEST.RegReg(&p.Text, abi.I32, indexReg, indexReg)
+	in.CMOVL.RegReg(&p.Text, abi.I32, indexReg, RegScratch) // negative index -> upper bound
+	in.CMP.RegReg(&p.Text, abi.I32, RegScratch, indexReg)
 }
 
 // Call may use RegResult and update condition flags.
-func (MacroAssembler) Call(m *module.M, addr int32) (retAddr int32) {
-	in.CALLcd.Addr32(&m.Text, addr)
-	return m.Text.Addr
+func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {
+	in.CALLcd.Addr32(&p.Text, addr)
+	return p.Text.Addr
 }
 
 // CallMissing may use RegResult and update condition flags.
-func (MacroAssembler) CallMissing(m *module.M) (retAddr int32) {
-	in.CALLcd.MissingFunction(&m.Text)
-	return m.Text.Addr
+func (MacroAssembler) CallMissing(p *gen.Prog) (retAddr int32) {
+	in.CALLcd.MissingFunction(&p.Text)
+	return p.Text.Addr
 }
 
 // CallIndirect may use RegResult and update condition flags.  It takes
@@ -172,7 +171,7 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	var outOfBounds link.L
 	var checksOut link.L
 
-	compareBounds(f.M, funcIndexReg, int32(len(f.TableFuncs))) // zero-extension
+	compareBounds(f.Prog, funcIndexReg, int32(len(f.Module.TableFuncs))) // zero-extension
 	in.JLEcb.Stub8(&f.Text)
 	outOfBounds.AddSite(f.Text.Addr)
 
@@ -200,23 +199,23 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 }
 
 // ClearIntResultReg may use RegResult and update condition flags.
-func (MacroAssembler) ClearIntResultReg(m *module.M) {
-	in.MOV.RegReg(&m.Text, abi.I32, RegResult, RegZero)
+func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
+	in.MOV.RegReg(&p.Text, abi.I32, RegResult, RegZero)
 }
 
 // Exit may use RegResult and update condition flags.
-func (MacroAssembler) Exit(m *module.M) {
-	in.SHLi.RegImm8(&m.Text, abi.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
-	in.MOVDQmrMMX.RegReg(&m.Text, abi.I64, RegTrapHandlerMMX, RegScratch)
-	in.JMP.Reg(&m.Text, in.OneSize, RegScratch)
+func (MacroAssembler) Exit(p *gen.Prog) {
+	in.SHLi.RegImm8(&p.Text, abi.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
+	in.MOVDQmrMMX.RegReg(&p.Text, abi.I64, RegTrapHandlerMMX, RegScratch)
+	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
 // LoadGlobal has default restrictions.
-func (MacroAssembler) LoadGlobal(m *module.M, t abi.Type, target reg.R, offset int32) (zeroExt bool) {
+func (MacroAssembler) LoadGlobal(p *gen.Prog, t abi.Type, target reg.R, offset int32) (zeroExt bool) {
 	if t.Category() == abi.Int {
-		in.MOV.RegMemDisp(&m.Text, t, target, in.BaseMemory, offset)
+		in.MOV.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
 	} else {
-		in.MOVDQ.RegMemDisp(&m.Text, t, target, in.BaseMemory, offset)
+		in.MOVDQ.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
 	}
 	return true
 }
@@ -242,16 +241,16 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 
 // Resume may update condition flags.  It MUST NOT generate over 16 bytes of
 // code.
-func (MacroAssembler) Resume(m *module.M) {
-	alignFunc(m)
-	in.XOR.RegReg(&m.Text, abi.I32, RegZero, RegZero)
-	in.RET.Simple(&m.Text) // return from trap handler or import function call
+func (MacroAssembler) Resume(p *gen.Prog) {
+	isa.AlignFunc(p)
+	in.XOR.RegReg(&p.Text, abi.I32, RegZero, RegZero)
+	in.RET.Simple(&p.Text) // return from trap handler or import function call
 }
 
 // Init may use RegResult and update condition flags.
-func (MacroAssembler) Init(m *module.M) {
-	alignFunc(m)
-	in.XOR.RegReg(&m.Text, abi.I32, RegZero, RegZero)
+func (MacroAssembler) Init(p *gen.Prog) {
+	isa.AlignFunc(p)
+	in.XOR.RegReg(&p.Text, abi.I32, RegZero, RegZero)
 }
 
 // JumpToImportFunc may use RegResult and update condition flags.
@@ -259,20 +258,20 @@ func (MacroAssembler) Init(m *module.M) {
 // Import function implementations must make sure that RDX is zero when they
 // return.  Void functions must also make sure that they don't return any
 // sensitive information in RAX.
-func (MacroAssembler) JumpToImportFunc(m *module.M, addr uint64, variadic bool, argCount, sigIndex int) {
+func (MacroAssembler) JumpToImportFunc(p *gen.Prog, addr uint64, variadic bool, argCount, sigIndex int) {
 	if variadic {
-		in.MOV64i.RegImm64(&m.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
+		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
-	in.MOV64i.RegImm64(&m.Text, RegScratch, int64(addr))
-	in.JMP.Reg(&m.Text, in.OneSize, RegScratch)
+	in.MOV64i.RegImm64(&p.Text, RegScratch, int64(addr))
+	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
 // JumpToTrapHandler may use RegResult and update condition flags.  It MUST NOT
 // generate over 16 bytes of code.
-func (MacroAssembler) JumpToTrapHandler(m *module.M, id trap.Id) {
-	in.MOVi.RegImm32(&m.Text, abi.I32, RegResult, int32(id)) // automatic zero-extension
-	in.MOVDQmrMMX.RegReg(&m.Text, abi.I64, RegTrapHandlerMMX, RegScratch)
-	in.JMP.Reg(&m.Text, in.OneSize, RegScratch)
+func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
+	in.MOVi.RegImm32(&p.Text, abi.I32, RegResult, int32(id)) // automatic zero-extension
+	in.MOVDQmrMMX.RegReg(&p.Text, abi.I64, RegTrapHandlerMMX, RegScratch)
+	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
 // LoadIntROData may update condition flags.  The register passed as argument
@@ -316,7 +315,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool
 			}
 
 		case storage.Flags:
-			setBool(f.M, x.FlagsCond())
+			setBool(f.Prog, x.FlagsCond())
 			if target != RegScratch {
 				in.MOV.RegReg(&f.Text, abi.I32, target, RegScratch)
 			}
@@ -355,67 +354,67 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool
 
 // MoveReg has default restrictions.  It MUST zero-extend the (integer) target
 // register.
-func (MacroAssembler) MoveReg(m *module.M, t abi.Type, target, source reg.R) {
+func (MacroAssembler) MoveReg(p *gen.Prog, t abi.Type, target, source reg.R) {
 	switch t.Category() {
 	case abi.Int:
-		in.MOV.RegReg(&m.Text, t, target, source)
+		in.MOV.RegReg(&p.Text, t, target, source)
 
 	case abi.Float:
-		in.MOVAPSD.RegReg(&m.Text, t, target, source)
+		in.MOVAPSD.RegReg(&p.Text, t, target, source)
 	}
 }
 
 // PushImm has default restrictions.
-func (MacroAssembler) PushImm(m *module.M, value int64) {
+func (MacroAssembler) PushImm(p *gen.Prog, value int64) {
 	switch {
 	case value == 0:
-		in.PUSHo.RegZero(&m.Text)
+		in.PUSHo.RegZero(&p.Text)
 
 	case uint64(value+0x80000000) <= 0xffffffff:
-		in.PUSHi.Imm(&m.Text, int32(value))
+		in.PUSHi.Imm(&p.Text, int32(value))
 
 	default:
-		in.MOV64i.RegImm64(&m.Text, RegScratch, value)
-		in.PUSHo.RegScratch(&m.Text)
+		in.MOV64i.RegImm64(&p.Text, RegScratch, value)
+		in.PUSHo.RegScratch(&p.Text)
 	}
 }
 
 // PushReg has default restrictions.
-func (MacroAssembler) PushReg(m *module.M, t abi.Type, r reg.R) {
+func (MacroAssembler) PushReg(p *gen.Prog, t abi.Type, r reg.R) {
 	switch t.Category() {
 	case abi.Int:
-		in.PUSH.Reg(&m.Text, in.OneSize, r)
+		in.PUSH.Reg(&p.Text, in.OneSize, r)
 
 	case abi.Float:
-		in.SUBi.RegImm8(&m.Text, abi.I64, RegStackPtr, obj.Word)
-		in.MOVDQmr.RegStack(&m.Text, t, r)
+		in.SUBi.RegImm8(&p.Text, abi.I64, RegStackPtr, obj.Word)
+		in.MOVDQmr.RegStack(&p.Text, t, r)
 	}
 }
 
 // PushCond has default restrictions.
-func (MacroAssembler) PushCond(m *module.M, cond condition.C) {
-	setBool(m, cond)
-	in.PUSHo.RegScratch(&m.Text)
+func (MacroAssembler) PushCond(p *gen.Prog, cond condition.C) {
+	setBool(p, cond)
+	in.PUSHo.RegScratch(&p.Text)
 }
 
 // PushZeros may use RegResult and update condition flags.
-func (MacroAssembler) PushZeros(m *module.M, n int) {
+func (MacroAssembler) PushZeros(p *gen.Prog, n int) {
 	if n <= 9 {
 		for i := 0; i < n; i++ {
-			in.PUSHo.RegZero(&m.Text)
+			in.PUSHo.RegZero(&p.Text)
 		}
 	} else {
-		in.MOVi.RegImm32(&m.Text, abi.I32, RegCount, int32(n)) // 6 bytes
-		loopAddr := m.Text.Addr
-		in.PUSHo.RegZero(&m.Text)          // 1 byte
-		in.LOOPcb.Addr8(&m.Text, loopAddr) // 2 bytes
+		in.MOVi.RegImm32(&p.Text, abi.I32, RegCount, int32(n)) // 6 bytes
+		loopAddr := p.Text.Addr
+		in.PUSHo.RegZero(&p.Text)          // 1 byte
+		in.LOOPcb.Addr8(&p.Text, loopAddr) // 2 bytes
 	}
 }
 
 // Return may use RegResult and update condition flags.
-func (MacroAssembler) Return(m *module.M, numStackValues int) {
-	asm.DropStackValues(m, numStackValues)
-	in.RET.Simple(&m.Text)
+func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
+	asm.DropStackValues(p, numStackValues)
+	in.RET.Simple(&p.Text)
 }
 
 // SetupStackFrame may use RegResult and update condition flags.
@@ -438,78 +437,78 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 }
 
 // SetBool has default restrictions.  It MUST zero-extend the target register.
-func (MacroAssembler) SetBool(m *module.M, target reg.R, cond condition.C) {
-	setBool(m, cond)
-	in.MOV.RegReg(&m.Text, abi.I32, target, RegScratch)
+func (MacroAssembler) SetBool(p *gen.Prog, target reg.R, cond condition.C) {
+	setBool(p, cond)
+	in.MOV.RegReg(&p.Text, abi.I32, target, RegScratch)
 }
 
 // setBool sets the scratch register.  (SETcc's register encoding is tricky.)
-func setBool(m *module.M, cond condition.C) {
+func setBool(p *gen.Prog, cond condition.C) {
 	var end link.L
 
 	switch {
 	case cond >= condition.MinUnorderedOrCondition:
-		in.MOVi.RegImm32(&m.Text, abi.I32, RegScratch, 1) // true
-		in.JPcb.Stub8(&m.Text)                            // if unordered, else
-		end.AddSite(m.Text.Addr)
+		in.MOVi.RegImm32(&p.Text, abi.I32, RegScratch, 1) // true
+		in.JPcb.Stub8(&p.Text)                            // if unordered, else
+		end.AddSite(p.Text.Addr)
 
 	case cond >= condition.MinOrderedAndCondition:
-		in.MOV.RegReg(&m.Text, abi.I32, RegScratch, RegZero) // false
-		in.JPcb.Stub8(&m.Text)                               // if unordered, else
-		end.AddSite(m.Text.Addr)
+		in.MOV.RegReg(&p.Text, abi.I32, RegScratch, RegZero) // false
+		in.JPcb.Stub8(&p.Text)                               // if unordered, else
+		end.AddSite(p.Text.Addr)
 
 	default:
-		in.MOV.RegReg(&m.Text, abi.I32, RegScratch, RegZero)
+		in.MOV.RegReg(&p.Text, abi.I32, RegScratch, RegZero)
 	}
 
-	conditionInsns[cond].SetccOpcode().OneSizeReg(&m.Text, RegScratch)
+	conditionInsns[cond].SetccOpcode().OneSizeReg(&p.Text, RegScratch)
 
-	end.Addr = m.Text.Addr
-	isa.UpdateNearBranches(m.Text.Bytes(), &end)
+	end.Addr = p.Text.Addr
+	isa.UpdateNearBranches(p.Text.Bytes(), &end)
 }
 
 // LoadStack has default restrictions.  It MUST zero-extend the (integer)
 // target register.
-func (MacroAssembler) LoadStack(m *module.M, t abi.Type, target reg.R, offset int32) {
+func (MacroAssembler) LoadStack(p *gen.Prog, t abi.Type, target reg.R, offset int32) {
 	switch t.Category() {
 	case abi.Int:
-		in.MOV.RegStackDisp(&m.Text, t, target, offset)
+		in.MOV.RegStackDisp(&p.Text, t, target, offset)
 
 	case abi.Float:
-		in.MOVDQ.RegStackDisp(&m.Text, t, target, offset)
+		in.MOVDQ.RegStackDisp(&p.Text, t, target, offset)
 	}
 }
 
 // StoreStack has default restrictions.  The source operand is consumed.
 func (MacroAssembler) StoreStack(f *gen.Func, offset int32, x operand.O) {
 	r, _ := getScratchReg(f, x)
-	asm.StoreStackReg(f.M, x.Type, offset, r)
+	asm.StoreStackReg(f.Prog, x.Type, offset, r)
 	f.Regs.Free(x.Type, r)
 }
 
 // StoreStackImm has default restrictions.
-func (MacroAssembler) StoreStackImm(m *module.M, t abi.Type, offset int32, value int64) {
+func (MacroAssembler) StoreStackImm(p *gen.Prog, t abi.Type, offset int32, value int64) {
 	switch {
 	case value == 0:
-		in.MOVmr.RegStackDisp(&m.Text, abi.I64, RegZero, offset)
+		in.MOVmr.RegStackDisp(&p.Text, abi.I64, RegZero, offset)
 
 	case t.Size() == abi.Size32:
-		in.MOVi.StackDispImm32(&m.Text, abi.I32, offset, int32(value))
+		in.MOVi.StackDispImm32(&p.Text, abi.I32, offset, int32(value))
 
 	case t.Size() == abi.Size64:
-		in.MOV64i.RegImm64(&m.Text, RegScratch, value)
-		in.MOVmr.RegStackDisp(&m.Text, abi.I64, RegScratch, offset)
+		in.MOV64i.RegImm64(&p.Text, RegScratch, value)
+		in.MOVmr.RegStackDisp(&p.Text, abi.I64, RegScratch, offset)
 	}
 }
 
 // StoreStackReg has default restrictions.
-func (MacroAssembler) StoreStackReg(m *module.M, t abi.Type, offset int32, r reg.R) {
+func (MacroAssembler) StoreStackReg(p *gen.Prog, t abi.Type, offset int32, r reg.R) {
 	switch t.Category() {
 	case abi.Int:
-		in.MOVmr.RegStackDisp(&m.Text, t, r, offset)
+		in.MOVmr.RegStackDisp(&p.Text, t, r, offset)
 
 	case abi.Float:
-		in.MOVDQmr.RegStackDisp(&m.Text, t, r, offset)
+		in.MOVDQmr.RegStackDisp(&p.Text, t, r, offset)
 	}
 }
 
@@ -558,8 +557,8 @@ func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 }
 
 // ZeroExtendResultReg may use RegResult and update condition flags.
-func (MacroAssembler) ZeroExtendResultReg(m *module.M) {
-	in.MOV.RegReg(&m.Text, abi.I32, RegResult, RegResult)
+func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {
+	in.MOV.RegReg(&p.Text, abi.I32, RegResult, RegResult)
 }
 
 // getScratchReg returns either the operand's existing register, or the
