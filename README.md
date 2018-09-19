@@ -1,5 +1,5 @@
-**wag** is a [WebAssembly](https://webassembly.org) compiler (or assembler?)
-implemented as a [Go](https://golang.org) package.
+**wag** is a [WebAssembly](https://webassembly.org) compiler implemented as a
+[Go](https://golang.org) package.
 
 - License: [3-clause BSD](LICENSE)
 - Author: Timo Savola <timo.savola@iki.fi>
@@ -8,13 +8,15 @@ implemented as a [Go](https://golang.org) package.
 Features
 --------
 
-- The input is a wasm32 binary module.  The embedders of the compiler decide
-  what kind of import functions they choose to implement and make available for
-  the WebAssembly programs.
+- The input is a wasm32 binary module.
 
-- The output is executable x86-64 machine code.  Support for 64-bit ARM is
-  planned.  (Support for non-64-bit or non-little-endian CPU architectures
+- The output is executable x86-64 machine code.  Support for 64-bit ARM is in
+  development.  (Support for non-64-bit or non-little-endian CPU architectures
   isn't planned.)
+
+- It is only a compiler.  A runtime environment for the compiled program,
+  including all import functions, needs to be implemented separately.  (But see
+  [wasys](cmd/wasys) for a combined compiler and runtime.)
 
 - Single-pass, fast ahead-of-time compilation.  Early functions can be executed
   while the latter functions are still being compiled, even while the source is
@@ -26,16 +28,15 @@ Features
   syscalls as WebAssembly import functions.
 
 - Supports snapshot-and-restore across compiler versions and CPU architectures.
+  Could also support limited form of code swapping during snapshot and restore.
 
 
 Status
 ------
 
-- Implements WebAssembly binary encoding version 1.
+- Supports WebAssembly version 1 (MVP).
 
-- The Go package API hasn't been finalized.
-
-- The snapshot-and-restore functionality is beta quality.
+- The Go package API hasn't been finalized (but it's getting there).
 
 
 Testing
@@ -46,7 +47,7 @@ spec testsuite is run, by first converting the tests to binary format:
 
 1. `go get -t github.com/tsavola/wag`
 2. `make -C $GOPATH/src/github.com/tsavola/wag/testdata/wabt`
-3. `go test -v github.com/tsavola/wag`
+3. `go test -v -bench=. github.com/tsavola/wag/...`
 
 
 Screenshot #1
@@ -56,7 +57,7 @@ Screenshot #1
 $ go get github.com/tsavola/wag/cmd/wasys
 $ wasys -v $GOPATH/src/github.com/tsavola/wag/testdata/hello.wasm
 import write(i32, i32, i32) i32
-import open(i32, i32, i32) i32
+import openat(i32, i32, i32, i32) i32
 import read(i32, i32, i32) i32
 import close(i32) i32
 import pipe2(i32, i32) i32
@@ -70,26 +71,26 @@ Screenshot #2
 ```
 === RUN   TestSnapshot
 --- PASS: TestSnapshot (0.00s)
-	snapshot_test.go:73: print output:
-		10
-		--- snapshotting ---
-		current memory limit: 0x6a96051ca000
-		current stack ptr:    0x6a960533ffc0
-		globals+memory addr:  0x6a96051ba000
-		stack addr:           0x6a960533f000
-		globals+memory size:  65536
-		memory size:          65536
-		stack offset:         4032
-		stacktrace:
-		#1  func-3
-		#2  func-2
-		--- shot snapped ---
-		20
-	snapshot_test.go:81: resuming
-	snapshot_test.go:93: print output:
-		20
-		30
-		330
-		40
-		440
+    snapshot_test.go:80: print output:
+        10
+        --- snapshotting ---
+        current memory limit: 0x6a96051ca000
+        current stack ptr:    0x6a960533ffc0
+        globals+memory addr:  0x6a96051ba000
+        stack addr:           0x6a960533f000
+        globals+memory size:  65536
+        memory size:          65536
+        stack offset:         4032
+        stacktrace:
+        #1  func-3
+        #2  func-2
+        --- shot snapped ---
+        20
+    snapshot_test.go:88: resuming
+    snapshot_test.go:100: print output:
+        20
+        30
+        330
+        40
+        440
 ```
