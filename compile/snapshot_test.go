@@ -73,7 +73,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r1.Run(0, mod.Sigs(), &printBuf)
+	_, err = r1.Run(0, mod.Types(), &printBuf)
 	r1.Close()
 
 	if printBuf.Len() > 0 {
@@ -93,7 +93,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r2.Run(0, mod.Sigs(), &printBuf)
+	_, err = r2.Run(0, mod.Types(), &printBuf)
 	r2.Close()
 
 	if printBuf.Len() > 0 {

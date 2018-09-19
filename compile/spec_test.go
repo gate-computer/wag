@@ -524,7 +524,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		if realStartName != "" {
 			var printBuf bytes.Buffer
-			result, err := r.Run(0, mod.Sigs(), &printBuf)
+			result, err := r.Run(0, mod.Types(), &printBuf)
 			if printBuf.Len() > 0 {
 				t.Logf("run: module %s: print:\n%s", filename, string(printBuf.Bytes()))
 			}
@@ -554,7 +554,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 				defer func() {
 					panicked = recover()
 				}()
-				result, err = r.Run(int64(id), mod.Sigs(), &printBuf)
+				result, err = r.Run(int64(id), mod.Types(), &printBuf)
 			}()
 
 			timer := time.NewTimer(timeout)
@@ -577,7 +577,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 			}
 
 			var stackBuf bytes.Buffer
-			if err := r.WriteStacktraceTo(&stackBuf, mod.FuncSigs(), &nameSection); err == nil {
+			if err := r.WriteStacktraceTo(&stackBuf, mod.FuncTypes(), &nameSection); err == nil {
 				if stackBuf.Len() > 0 {
 					t.Logf("run: module %s: test #%d: stacktrace:\n%s", filename, id, string(stackBuf.Bytes()))
 				}

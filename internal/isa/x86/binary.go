@@ -5,7 +5,6 @@
 package x86
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -16,6 +15,7 @@ import (
 	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/isa/x86/in"
 	"github.com/tsavola/wag/trap"
+	"github.com/tsavola/wag/wa"
 )
 
 // Binary may allocate registers, use RegResult and update condition flags.
@@ -161,7 +161,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 
 		if a.Storage == storage.Imm {
 			value := a.ImmValue()
-			if a.Type == abi.I32 {
+			if a.Type == wa.I32 {
 				if value != -0x80000000 {
 					checkOverflow = false
 				}
@@ -182,7 +182,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 				in.JEcb.Stub8(&f.Text)
 				doNot.AddSite(f.Text.Addr)
 			} else {
-				if a.Type == abi.I32 {
+				if a.Type == wa.I32 {
 					in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
 				} else {
 					in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseZero, f.RODataAddr+rodata.Mask80Addr64)
@@ -220,12 +220,12 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 		in.MOV.RegReg(&f.Text, a.Type, RegResult, RegDividendHigh)
 	}
 
-	in.XOR.RegReg(&f.Text, abi.I32, RegZero, RegZero)
+	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
 
 	return operand.Reg(a.Type, RegResult, true)
 }
 
-func opCheckDivideByZero(f *gen.Func, t abi.Type, r reg.R) {
+func opCheckDivideByZero(f *gen.Func, t wa.Type, r reg.R) {
 	var end link.L
 
 	in.TEST.RegReg(&f.Text, t, r, r)
@@ -245,7 +245,7 @@ func binaryIntShift(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	if b.Storage == storage.Imm {
 		insn.OpcodeI().RegImm8(&f.Text, a.Type, r, b.ImmValue8())
 	} else {
-		b.Type = abi.I32
+		b.Type = wa.I32
 		asm.Move(f, RegCount, b)
 		insn.Opcode().Reg(&f.Text, a.Type, r)
 	}

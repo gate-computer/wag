@@ -12,8 +12,8 @@ import (
 	"sort"
 	"unsafe"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/section"
+	"github.com/tsavola/wag/wa"
 )
 
 func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {
@@ -140,7 +140,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 	return
 }
 
-func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection, stack []byte) (err error) {
+func (p *Program) writeStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *section.NameSection, stack []byte) (err error) {
 	textAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&p.Text)).Data)
 	callSites := p.CallSites()
 
@@ -196,8 +196,8 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section
 
 		var sigStr string
 
-		if funcNum < len(funcSigs) {
-			sigStr = funcSigWithNames(funcSigs[funcNum], localNames)
+		if funcNum < len(funcs) {
+			sigStr = funcSigWithNames(funcs[funcNum], localNames)
 		}
 
 		fmt.Fprintf(w, "#%d  %s%s\n", depth, name, sigStr)
@@ -209,7 +209,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section
 	return
 }
 
-func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection) (err error) {
+func (r *Runner) WriteStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *section.NameSection) (err error) {
 	if r.lastTrap != 0 {
 		fmt.Fprintf(w, "#0  %s\n", r.lastTrap)
 	}
@@ -225,12 +225,12 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.
 		return
 	}
 
-	return r.prog.writeStacktraceTo(w, funcSigs, ns, r.stack[unused:])
+	return r.prog.writeStacktraceTo(w, funcs, ns, r.stack[unused:])
 }
 
-func funcSigWithNames(f abi.Sig, localNames []string) (s string) {
+func funcSigWithNames(f wa.FuncType, localNames []string) (s string) {
 	s = "("
-	for i, t := range f.Args {
+	for i, t := range f.Params {
 		if i > 0 {
 			s += ", "
 		}
@@ -240,7 +240,7 @@ func funcSigWithNames(f abi.Sig, localNames []string) (s string) {
 		s += t.String()
 	}
 	s += ")"
-	if f.Result != abi.Void {
+	if f.Result != wa.Void {
 		s += " " + f.Result.String()
 	}
 	return

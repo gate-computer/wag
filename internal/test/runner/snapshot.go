@@ -11,9 +11,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wa"
 )
 
 type Snapshot struct {
@@ -55,8 +54,8 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 
 	memorySize := globalsMemorySize - uint64(r.memoryOffset)
 
-	if (memorySize & uint64(wasm.Page-1)) != 0 {
-		panic(fmt.Errorf("snapshot: memory size is not multiple of %d", wasm.Page))
+	if (memorySize & uint64(wa.Page-1)) != 0 {
+		panic(fmt.Errorf("snapshot: memory size is not multiple of %d", wa.Page))
 	}
 
 	stackAddr := (*reflect.SliceHeader)(unsafe.Pointer(&r.stack)).Data
@@ -124,7 +123,7 @@ func (s *Snapshot) getStack() []byte {
 	return s.nativeStack
 }
 
-func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []abi.Sig, ns *section.NameSection, stack []byte) (err error) {
+func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []wa.FuncType, ns *section.NameSection, stack []byte) (err error) {
 	return s.prog.writeStacktraceTo(w, sigs, ns, stack)
 }
 
@@ -132,7 +131,7 @@ func (s *Snapshot) exportStack(native []byte) (portable []byte, err error) {
 	return s.prog.exportStack(native)
 }
 
-func (s *Snapshot) NewRunner(growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
-	memorySize := wasm.MemorySize(len(s.data) - s.memoryOffset)
+func (s *Snapshot) NewRunner(growMemorySize wa.MemorySize, stackSize int) (r *Runner, err error) {
+	memorySize := wa.MemorySize(len(s.data) - s.memoryOffset)
 	return newRunner(s, memorySize, growMemorySize, stackSize)
 }

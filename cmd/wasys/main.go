@@ -18,9 +18,9 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag"
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/static"
+	"github.com/tsavola/wag/wa"
 )
 
 var (
@@ -36,7 +36,7 @@ var importFuncs = make(map[string]importFunc)
 
 type resolver struct{}
 
-func (resolver) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
+func (resolver) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
 	if verbose {
 		log.Printf("import %s%s", field, sig)
 	}
@@ -51,8 +51,8 @@ func (resolver) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err
 		err = fmt.Errorf("import function not supported: %s", field)
 		return
 	}
-	if len(sig.Args) != i.params {
-		err = fmt.Errorf("%s: import function has wrong number of parameters: import signature has %d, syscall wrapper has %d", field, len(sig.Args), i.params)
+	if len(sig.Params) != i.params {
+		err = fmt.Errorf("%s: import function has wrong number of parameters: import signature has %d, syscall wrapper has %d", field, len(sig.Params), i.params)
 		return
 	}
 
@@ -60,7 +60,7 @@ func (resolver) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err
 	return
 }
 
-func (resolver) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
+func (resolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
 	err = fmt.Errorf("imported global not supported: %s %s", module, field)
 	return
 }

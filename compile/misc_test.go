@@ -75,7 +75,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	}
 	defer r.Close()
 
-	_, err = r.Run(0, mod.Sigs(), &printBuf)
+	_, err = r.Run(0, mod.Types(), &printBuf)
 	if err != nil {
 		t.Fatal(err)
 	}

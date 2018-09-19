@@ -7,10 +7,10 @@ package regalloc
 import (
 	"math/bits"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/isa/reglayout"
+	"github.com/tsavola/wag/wa"
 )
 
 type bitmap uint32
@@ -28,12 +28,12 @@ type Allocator struct {
 }
 
 func Make() (a Allocator) {
-	a.categories[abi.Int].init(allocatableInt)
-	a.categories[abi.Float].init(allocatableFloat)
+	a.categories[wa.Int].init(allocatableInt)
+	a.categories[wa.Float].init(allocatableFloat)
 	return
 }
 
-func (a *Allocator) AllocResult(t abi.Type) (r reg.R) {
+func (a *Allocator) AllocResult(t wa.Type) (r reg.R) {
 	r = a.categories[t.Category()].allocResult()
 
 	if r != reg.Result {
@@ -46,20 +46,20 @@ func (a *Allocator) AllocResult(t abi.Type) (r reg.R) {
 }
 
 // Free can be called with reg.Result or reg.ScratchISA.
-func (a *Allocator) Free(t abi.Type, r reg.R) {
+func (a *Allocator) Free(t wa.Type, r reg.R) {
 	debug.Printf("free %s register: %s", t.Category(), r)
 
 	a.categories[t.Category()].free(r)
 }
 
 func (a *Allocator) CheckNoneAllocated() {
-	a.categories[abi.Int].checkNoneAllocated(allocatableInt, "int registers still allocated")
-	a.categories[abi.Float].checkNoneAllocated(allocatableFloat, "float registers still allocated")
+	a.categories[wa.Int].checkNoneAllocated(allocatableInt, "int registers still allocated")
+	a.categories[wa.Float].checkNoneAllocated(allocatableFloat, "float registers still allocated")
 }
 
 func (a *Allocator) DebugPrintAllocated() {
-	a.categories[abi.Int].debugPrintAllocated(reglayout.AllocIntFirst, reglayout.AllocIntLast, "int")
-	a.categories[abi.Float].debugPrintAllocated(reglayout.AllocFloatFirst, reglayout.AllocFloatLast, "float")
+	a.categories[wa.Int].debugPrintAllocated(reglayout.AllocIntFirst, reglayout.AllocIntLast, "int")
+	a.categories[wa.Float].debugPrintAllocated(reglayout.AllocFloatFirst, reglayout.AllocFloatLast, "float")
 }
 
 type state struct {

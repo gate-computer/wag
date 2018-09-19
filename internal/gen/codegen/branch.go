@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -17,9 +16,10 @@ import (
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/typedecode"
+	"github.com/tsavola/wag/wa"
 )
 
-func stealDeadBlockOperandReg(f *gen.Func, t abi.Type) (r reg.R) {
+func stealDeadBlockOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
 	cat := t.Category()
 
 	for i := len(f.Operands) - 1; i >= f.FrameBase; i-- {
@@ -39,7 +39,7 @@ func stealDeadBlockOperandReg(f *gen.Func, t abi.Type) (r reg.R) {
 
 // allocStealDeadReg may take current block's operand's register without
 // spilling it to stack.  It can only be used in a deadend situation.
-func allocStealDeadReg(f *gen.Func, t abi.Type) (r reg.R) {
+func allocStealDeadReg(f *gen.Func, t wa.Type) (r reg.R) {
 	r = f.Regs.AllocResult(t)
 	if r == reg.Result {
 		r = stealDeadBlockOperandReg(f, t)
@@ -47,7 +47,7 @@ func allocStealDeadReg(f *gen.Func, t abi.Type) (r reg.R) {
 	return
 }
 
-func pushBranchTarget(f *gen.Func, valueType abi.Type, funcEnd bool) {
+func pushBranchTarget(f *gen.Func, valueType wa.Type, funcEnd bool) {
 	f.BranchTargets = append(f.BranchTargets, &gen.BranchTarget{
 		StackDepth: f.StackDepth,
 		ValueType:  valueType,
@@ -94,7 +94,7 @@ func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
 	frame := beginFrame(f)
 	deadend := genOps(f, load)
 
-	if blockType != abi.Void {
+	if blockType != wa.Void {
 		result := popBlockResultOperand(f, blockType, deadend)
 		opMoveResult(f, result, deadend)
 		debug.Printf("result: %s", result)
@@ -118,7 +118,7 @@ func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
-	if target.ValueType != abi.Void {
+	if target.ValueType != wa.Void {
 		value := popOperand(f, target.ValueType)
 		asm.Move(f, reg.Result, value)
 		debug.Printf("value: %s", value)
@@ -150,16 +150,16 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
-	cond := popOperand(f, abi.I32)
+	cond := popOperand(f, wa.I32)
 
 	var valueZeroExt bool
-	if target.ValueType != abi.Void {
+	if target.ValueType != wa.Void {
 		value := popOperand(f, target.ValueType)
 		debug.Printf("value: %s", value)
 
 		if cond.Storage == storage.Reg && cond.Reg() == reg.Result {
-			r := opAllocReg(f, abi.I32)
-			asm.MoveReg(f.Prog, abi.I32, r, reg.Result)
+			r := opAllocReg(f, wa.I32)
+			asm.MoveReg(f.Prog, wa.I32, r, reg.Result)
 			cond.SetReg(r, true)
 		}
 		valueZeroExt = asm.Move(f, reg.Result, value)
@@ -176,7 +176,7 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 		asm.DropStackValues(f.Prog, -drop)
 	} else if b := getCurrentBlock(f); !b.Suspension {
 		debug.Printf("loop")
-		if target.ValueType != abi.Void {
+		if target.ValueType != wa.Void {
 			panic("backwards branch with value")
 		}
 
@@ -216,12 +216,12 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	relativeDepth := load.Varuint32()
 	defaultTarget := getBranchTarget(f, relativeDepth)
 
-	index := popOperand(f, abi.I32)
+	index := popOperand(f, wa.I32)
 	debug.Printf("index: %s", index)
 
 	loop := (defaultTarget.Label.Addr != 0)
 	commonStackDepth := defaultTarget.StackDepth
-	tableType := abi.I32
+	tableType := wa.I32
 
 	for i, target := range targetTable {
 		if debug.Enabled {
@@ -238,7 +238,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 
 		if target.StackDepth != commonStackDepth {
 			commonStackDepth = -1
-			tableType = abi.I64 // need space for target-specific operand counts
+			tableType = wa.I64 // need space for target-specific operand counts
 		}
 
 		if target.ValueType != defaultTarget.ValueType {
@@ -257,15 +257,15 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	f.ROData.ResizeBytes(tableAddr + len(targetTable)*int(tableType.Size()))
 
 	var value operand.O
-	if defaultTarget.ValueType != abi.Void {
+	if defaultTarget.ValueType != wa.Void {
 		value = popOperand(f, defaultTarget.ValueType)
 		debug.Printf("value: %s", value)
 	}
 
-	if value.Type != abi.Void {
+	if value.Type != wa.Void {
 		if index.Storage == storage.Reg && index.Reg() == reg.Result {
-			indexReg := allocStealDeadReg(f, abi.I32)
-			asm.MoveReg(f.Prog, abi.I32, indexReg, reg.Result)
+			indexReg := allocStealDeadReg(f, wa.I32)
+			asm.MoveReg(f.Prog, wa.I32, indexReg, reg.Result)
 			index.SetReg(indexReg, true)
 		}
 		asm.Move(f, reg.Result, value)
@@ -275,7 +275,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	if index.Storage == storage.Reg {
 		r = index.Reg()
 	} else {
-		r = allocStealDeadReg(f, abi.I32)
+		r = allocStealDeadReg(f, wa.I32)
 		asm.Move(f, r, index)
 	}
 
@@ -284,7 +284,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	asm.DropStackValues(f.Prog, defaultDrop)
 
 	if b := getCurrentBlock(f); loop && !b.Suspension {
-		if value.Type != abi.Void {
+		if value.Type != wa.Void {
 			panic("backwards branch with value")
 		}
 		asm.TrapIfLoopSuspendedSaveInt(f, r)
@@ -294,14 +294,14 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	opBranchIfOutOfBounds(f, r, int32(len(targetTable)), &defaultTarget.Label)
 	asm.LoadIntROData(f, tableType, r, int32(tableAddr))
 
-	if tableType == abi.I32 {
+	if tableType == wa.I32 {
 		drop := defaultTarget.StackDepth - commonStackDepth
 		debug.Printf("drop values from physical stack for dynamic target: %d", drop)
 		asm.DropStackValues(f.Prog, drop)
 	} else {
 		debug.Printf("drop values from physical stack for dynamic target")
-		indexOnly := allocStealDeadReg(f, abi.I32)
-		asm.MoveReg(f.Prog, abi.I32, indexOnly, r)
+		indexOnly := allocStealDeadReg(f, wa.I32)
+		asm.MoveReg(f.Prog, wa.I32, indexOnly, r)
 		asm.AddToStackPtrUpper32(f, r)
 		r = indexOnly
 	}
@@ -312,7 +312,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 		RODataAddr: int32(tableAddr),
 		Targets:    targetTable,
 	}
-	if tableType == abi.I32 {
+	if tableType == wa.I32 {
 		// Common operand count
 		table.StackDepth = -1
 	} else {
@@ -332,7 +332,7 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
 	debug.Printf("operands: %d", len(f.Operands))
 	debug.Printf("stack depth: %d", f.StackDepth)
 
-	cond := popOperand(f, abi.I32)
+	cond := popOperand(f, wa.I32)
 
 	opSaveOperands(f)
 
@@ -345,11 +345,11 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
 	frame := beginFrame(f)
 	thenDeadend, haveElse := genThenOps(f, load)
 
-	if ifType != abi.Void && !haveElse {
+	if ifType != wa.Void && !haveElse {
 		panic(errors.New("if without else has result type"))
 	}
 
-	if ifType != abi.Void {
+	if ifType != wa.Void {
 		result := popBlockResultOperand(f, ifType, thenDeadend)
 		opMoveResult(f, result, thenDeadend)
 		debug.Printf("result: %s", result)
@@ -370,7 +370,7 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
 	if haveElse {
 		elseDeadend := genOps(f, load)
 
-		if ifType != abi.Void {
+		if ifType != wa.Void {
 			result := popBlockResultOperand(f, ifType, elseDeadend)
 			opMoveResult(f, result, elseDeadend)
 			debug.Printf("result: %s", result)
@@ -397,7 +397,7 @@ func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	blockType := typedecode.Block(load.Varint7())
 
-	pushBranchTarget(f, abi.Void, false) // begin
+	pushBranchTarget(f, wa.Void, false) // begin
 	label(f, &getBranchTarget(f, 0).Label)
 
 	debug.Printf("type: %s", blockType)
@@ -408,7 +408,7 @@ func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	deadend = genOps(f, load)
 
 	var result operand.O
-	if blockType != abi.Void {
+	if blockType != wa.Void {
 		result = popBlockResultOperand(f, blockType, deadend)
 		debug.Printf("result: %s", result)
 	}
@@ -418,7 +418,7 @@ func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 	truncateBlockOperands(f)
 	frame.end(f)
-	if blockType != abi.Void {
+	if blockType != wa.Void {
 		pushOperand(f, result)
 	}
 

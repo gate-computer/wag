@@ -5,20 +5,19 @@
 package wag
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wa"
 )
 
 // Object code with stack map and debug symbols.  The text (machine code),
 // read-only data, initial global values, and initial linear memory contents
 // can be used to execute the program (the details are architecture-specific).
 type Object struct {
-	FuncSigs        []abi.Sig
-	InitMemorySize  wasm.MemorySize
-	GrowMemoryLimit wasm.MemorySize
+	FuncTypes       []wa.FuncType
+	InitMemorySize  wa.MemorySize
+	GrowMemoryLimit wa.MemorySize
 	Text            []byte
 	ROData          []byte
 	object.CallMap
@@ -60,7 +59,7 @@ func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj 
 		return
 	}
 
-	obj.FuncSigs = mod.FuncSigs()
+	obj.FuncTypes = mod.FuncTypes()
 	obj.InitMemorySize, obj.GrowMemoryLimit = mod.MemoryLimits()
 
 	var code = &compile.CodeConfig{

@@ -7,31 +7,31 @@ package initexpr
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/codegen"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
+	"github.com/tsavola/wag/wa"
 )
 
-func Read(m *module.M, load loader.L) (valueBits uint64, t abi.Type) {
+func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
 	op := codegen.Opcode(load.Byte())
 
 	switch op {
 	case codegen.OpcodeI32Const:
 		valueBits = uint64(int64(load.Varint32()))
-		t = abi.I32
+		t = wa.I32
 
 	case codegen.OpcodeI64Const:
 		valueBits = uint64(load.Varint64())
-		t = abi.I64
+		t = wa.I64
 
 	case codegen.OpcodeF32Const:
 		valueBits = uint64(load.Uint32())
-		t = abi.F32
+		t = wa.F32
 
 	case codegen.OpcodeF64Const:
 		valueBits = load.Uint64()
-		t = abi.F64
+		t = wa.F64
 
 	case codegen.OpcodeGetGlobal:
 		i := load.Varuint32()
@@ -55,7 +55,7 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t abi.Type) {
 
 func ReadOffset(m *module.M, load loader.L) uint32 {
 	offset, t := Read(m, load)
-	if t != abi.I32 {
+	if t != wa.I32 {
 		panic(fmt.Errorf("offset initializer expression has invalid type: %s", t))
 	}
 	return uint32(int32(int64(offset)))

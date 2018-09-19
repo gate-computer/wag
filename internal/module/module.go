@@ -7,7 +7,7 @@ package module
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -81,14 +81,14 @@ type ResizableLimits struct {
 }
 
 type Global struct {
-	Type    abi.Type
+	Type    wa.Type
 	Mutable bool
 	Init    uint64
 }
 
 type M struct {
-	Sigs              []abi.Sig
-	FuncSigs          []uint32
+	Types             []wa.FuncType
+	Funcs             []uint32
 	ImportFuncs       []ImportFunc
 	TableLimitValues  ResizableLimits
 	MemoryLimitValues ResizableLimits

@@ -5,13 +5,13 @@
 package x86
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/x86/in"
+	"github.com/tsavola/wag/wa"
 )
 
 // Select may allocate registers, use RegResult and update condition flags.
@@ -23,7 +23,7 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 	case storage.Stack:
 		in.POPo.RegScratch(&f.Text)
 		f.StackValueConsumed()
-		in.TEST.RegReg(&f.Text, abi.I32, RegScratch, RegScratch)
+		in.TEST.RegReg(&f.Text, wa.I32, RegScratch, RegScratch)
 		cond = condition.Ne
 
 	case storage.Imm:
@@ -37,8 +37,8 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 
 	case storage.Reg:
 		r := condOperand.Reg()
-		in.TEST.RegReg(&f.Text, abi.I32, r, r)
-		f.Regs.Free(abi.I32, r)
+		in.TEST.RegReg(&f.Text, wa.I32, r, r)
+		f.Regs.Free(wa.I32, r)
 		cond = condition.Ne
 
 	case storage.Flags:
@@ -48,7 +48,7 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 	targetReg, _ := allocResultReg(f, b)
 
 	switch a.Type.Category() {
-	case abi.Int:
+	case wa.Int:
 		insns := conditionInsns[cond]
 
 		switch a.Storage {
@@ -58,7 +58,7 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 			f.Regs.Free(a.Type, aReg)
 		}
 
-	case abi.Float:
+	case wa.Float:
 		var moveIt link.L
 		var end link.L
 

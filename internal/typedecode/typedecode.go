@@ -7,24 +7,24 @@ package typedecode
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/wa"
 )
 
-var valueTypes = []abi.Type{
-	abi.I32,
-	abi.I64,
-	abi.F32,
-	abi.F64,
+var valueTypes = [4]wa.Type{
+	wa.I32,
+	wa.I64,
+	wa.F32,
+	wa.F64,
 }
 
-func Value(x int8) abi.Type {
+func Value(x int8) wa.Type {
 	if i := uint(-1 - x); i < uint(len(valueTypes)) {
 		return valueTypes[i]
 	}
 	panic(fmt.Errorf("unknown value type %d", x))
 }
 
-func Block(x int8) (t abi.Type) {
+func Block(x int8) (t wa.Type) {
 	if x == -0x40 { // empty block type
 		return
 	}

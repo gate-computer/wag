@@ -7,9 +7,9 @@ package in
 import (
 	"encoding/binary"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/wa"
 )
 
 var nops = [4][4]byte{
@@ -18,8 +18,8 @@ var nops = [4][4]byte{
 	3: {0x0f, 0x1f, 0x00},
 }
 
-func typeScalarPrefix(t abi.Type) byte { return byte(t)>>2 | 0xf2 } // 0xf3 or 0xf2
-func typeRMISizeCode(t abi.Type) byte  { return byte(t)>>3 | 0x0a } // 0x0a or 0x0b
+func typeScalarPrefix(t wa.Type) byte { return byte(t)>>2 | 0xf2 } // 0xf3 or 0xf2
+func typeRMISizeCode(t wa.Type) byte  { return byte(t)>>3 | 0x0a } // 0x0a or 0x0b
 
 func addrDisp(currentAddr, insnSize, targetAddr int32) int32 {
 	if targetAddr != 0 {
@@ -105,7 +105,7 @@ func (o *output) int(val int32, size uint8) {
 
 type NP byte
 
-func (op NP) Type(text *code.Buf, t abi.Type) {
+func (op NP) Type(text *code.Buf, t wa.Type) {
 	var o output
 	o.rexIf(typeRexW(t))
 	o.byte(byte(op))
@@ -128,7 +128,7 @@ func (op O) RegZero(text *code.Buf)    { text.PutByte(byte(op) + byte(RegZero)) 
 
 type M uint16 // opcode byte and ModRO byte
 
-func (op M) Reg(text *code.Buf, t abi.Type, r reg.R) {
+func (op M) Reg(text *code.Buf, t wa.Type, r reg.R) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexB(r))
 	o.byte(byte(op >> 8))
@@ -153,7 +153,7 @@ func (op Mex2) OneSizeReg(text *code.Buf, r reg.R) {
 type RM byte    // opcode byte
 type RM2 uint16 // two opcode bytes
 
-func (op RM) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
+func (op RM) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(r2))
 	o.byte(byte(op))
@@ -161,7 +161,7 @@ func (op RM) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM2) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
+func (op RM2) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(r2))
 	o.word(uint16(op))
@@ -169,7 +169,7 @@ func (op RM2) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RM) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(reg.R(base)))
@@ -179,7 +179,7 @@ func (op RM) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp 
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM2) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RM2) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(reg.R(base)))
@@ -189,7 +189,7 @@ func (op RM2) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM) RegMemIndexDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, index reg.R, s Scale, disp int32) {
+func (op RM) RegMemIndexDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, index reg.R, s Scale, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexX(index) | regRexB(reg.R(base)))
@@ -200,7 +200,7 @@ func (op RM) RegMemIndexDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, 
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM2) RegStack(text *code.Buf, t abi.Type, r reg.R) {
+func (op RM2) RegStack(text *code.Buf, t wa.Type, r reg.R) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r))
 	o.word(uint16(op))
@@ -209,7 +209,7 @@ func (op RM2) RegStack(text *code.Buf, t abi.Type, r reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM) RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32) {
+func (op RM) RegStackDisp(text *code.Buf, t wa.Type, r reg.R, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r))
@@ -220,7 +220,7 @@ func (op RM) RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM2) RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32) {
+func (op RM2) RegStackDisp(text *code.Buf, t wa.Type, r reg.R, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r))
@@ -231,7 +231,7 @@ func (op RM2) RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM) RegStackDisp8(text *code.Buf, t abi.Type, r reg.R, disp int8) {
+func (op RM) RegStackDisp8(text *code.Buf, t wa.Type, r reg.R, disp int8) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r))
 	o.byte(byte(op))
@@ -241,7 +241,7 @@ func (op RM) RegStackDisp8(text *code.Buf, t abi.Type, r reg.R, disp int8) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM) RegStackStub32(text *code.Buf, t abi.Type, r reg.R) {
+func (op RM) RegStackStub32(text *code.Buf, t wa.Type, r reg.R) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r))
 	o.byte(byte(op))
@@ -257,7 +257,7 @@ type RMprefix uint16 // fixed-length prefix and second opcode byte
 type RMscalar byte   // second opcode byte; type-dependent fixed-length prefix
 type RMpacked byte   // second opcode byte; type-dependent variable-length prefix
 
-func (op RMprefix) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
+func (op RMprefix) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 	var o output
 	o.byte(byte(op >> 8))
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(r2))
@@ -267,7 +267,7 @@ func (op RMprefix) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMscalar) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
+func (op RMscalar) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 	var o output
 	o.byte(typeScalarPrefix(t))
 	o.rexIf(regRexR(r) | regRexB(r2))
@@ -277,9 +277,9 @@ func (op RMscalar) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMpacked) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
+func (op RMpacked) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 	var o output
-	o.byteIf(0x66, byte(t)&byte(abi.Size64) != 0)
+	o.byteIf(0x66, t&8 == 8)
 	o.rexIf(regRexR(r) | regRexB(r2))
 	o.byte(0x0f)
 	o.byte(byte(op))
@@ -287,7 +287,7 @@ func (op RMpacked) RegReg(text *code.Buf, t abi.Type, r, r2 reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMscalar) TypeRegReg(text *code.Buf, floatType, intType abi.Type, r, r2 reg.R) {
+func (op RMscalar) TypeRegReg(text *code.Buf, floatType, intType wa.Type, r, r2 reg.R) {
 	var o output
 	o.byte(typeScalarPrefix(floatType))
 	o.rexIf(typeRexW(intType) | regRexR(r) | regRexB(r2))
@@ -297,7 +297,7 @@ func (op RMscalar) TypeRegReg(text *code.Buf, floatType, intType abi.Type, r, r2
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMprefix) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RMprefix) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.byte(byte(op >> 8))
@@ -309,7 +309,7 @@ func (op RMprefix) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg,
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMscalar) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RMscalar) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.byte(typeScalarPrefix(t))
@@ -321,10 +321,10 @@ func (op RMscalar) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg,
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMpacked) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RMpacked) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
-	o.byteIf(0x66, byte(t)&byte(abi.Size64) != 0)
+	o.byteIf(0x66, t&8 == 8)
 	o.rexIf(regRexR(r) | regRexB(reg.R(base)))
 	o.byte(0x0f)
 	o.byte(byte(op))
@@ -333,7 +333,7 @@ func (op RMpacked) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg,
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMprefix) RegStack(text *code.Buf, t abi.Type, r reg.R) {
+func (op RMprefix) RegStack(text *code.Buf, t wa.Type, r reg.R) {
 	var o output
 	o.byte(byte(op >> 8))
 	o.rexIf(typeRexW(t) | regRexR(r))
@@ -344,7 +344,7 @@ func (op RMprefix) RegStack(text *code.Buf, t abi.Type, r reg.R) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RMprefix) RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32) {
+func (op RMprefix) RegStackDisp(text *code.Buf, t wa.Type, r reg.R, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.byte(byte(op >> 8))
@@ -361,7 +361,7 @@ func (op RMprefix) RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32)
 
 type RMdata8 byte // opcode byte
 
-func (op RMdata8) RegMemDisp(text *code.Buf, _ abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RMdata8) RegMemDisp(text *code.Buf, _ wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rex(regRexR(r) | regRexB(reg.R(base)))
@@ -375,7 +375,7 @@ func (op RMdata8) RegMemDisp(text *code.Buf, _ abi.Type, r reg.R, base BaseReg, 
 
 type RMdata16 byte // opcode byte
 
-func (op RMdata16) RegMemDisp(text *code.Buf, _ abi.Type, r reg.R, base BaseReg, disp int32) {
+func (op RMdata16) RegMemDisp(text *code.Buf, _ wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.byte(0x66)
@@ -414,7 +414,7 @@ func (op OI) RegImm64(text *code.Buf, r reg.R, val int64) {
 
 type MI uint32 // opcode bytes for 32-bit value and 8-bit value; and common ModRO byte
 
-func (ops MI) RegImm(text *code.Buf, t abi.Type, r reg.R, val int32) {
+func (ops MI) RegImm(text *code.Buf, t wa.Type, r reg.R, val int32) {
 	var op, valSize = immOpcodeSize(uint16(ops>>8), val)
 	var o output
 	o.rexIf(typeRexW(t) | regRexB(r))
@@ -424,7 +424,7 @@ func (ops MI) RegImm(text *code.Buf, t abi.Type, r reg.R, val int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op MI) RegImm8(text *code.Buf, t abi.Type, r reg.R, val int8) {
+func (op MI) RegImm8(text *code.Buf, t wa.Type, r reg.R, val int8) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexB(r))
 	o.byte(byte(op >> 8))
@@ -433,7 +433,7 @@ func (op MI) RegImm8(text *code.Buf, t abi.Type, r reg.R, val int8) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op MI) RegImm32(text *code.Buf, t abi.Type, r reg.R, val int32) {
+func (op MI) RegImm32(text *code.Buf, t wa.Type, r reg.R, val int32) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexB(r))
 	o.byte(byte(op >> 16))
@@ -442,7 +442,7 @@ func (op MI) RegImm32(text *code.Buf, t abi.Type, r reg.R, val int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op MI) StackDispImm32(text *code.Buf, t abi.Type, disp, val int32) {
+func (op MI) StackDispImm32(text *code.Buf, t wa.Type, disp, val int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t))
@@ -468,7 +468,7 @@ func (op MI8) OneSizeRegImm(text *code.Buf, r reg.R, val8 int64) {
 }
 
 // MemDispImm ignores the type argument.
-func (op MI8) MemDispImm(text *code.Buf, _ abi.Type, base BaseReg, disp int32, val8 int64) {
+func (op MI8) MemDispImm(text *code.Buf, _ wa.Type, base BaseReg, disp int32, val8 int64) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(regRexB(reg.R(base)))
@@ -484,7 +484,7 @@ func (op MI8) MemDispImm(text *code.Buf, _ abi.Type, base BaseReg, disp int32, v
 type MI16 uint16 // opcode byte and ModRO byte
 
 // MemDispImm ignores the type argument.
-func (op MI16) MemDispImm(text *code.Buf, _ abi.Type, base BaseReg, disp int32, val16 int64) {
+func (op MI16) MemDispImm(text *code.Buf, _ wa.Type, base BaseReg, disp int32, val16 int64) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.byte(0x66)
@@ -500,7 +500,7 @@ func (op MI16) MemDispImm(text *code.Buf, _ abi.Type, base BaseReg, disp int32, 
 
 type MI32 uint16 // opcode byte and ModRO byte
 
-func (op MI32) MemDispImm(text *code.Buf, t abi.Type, base BaseReg, disp int32, val32 int64) {
+func (op MI32) MemDispImm(text *code.Buf, t wa.Type, base BaseReg, disp int32, val32 int64) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
 	o.rexIf(typeRexW(t) | regRexB(reg.R(base)))
@@ -515,7 +515,7 @@ func (op MI32) MemDispImm(text *code.Buf, t abi.Type, base BaseReg, disp int32, 
 
 type RMIscalar byte // second opcode byte; uses constant fixed-length prefix
 
-func (op RMIscalar) RegRegImm8(text *code.Buf, t abi.Type, r, r2 reg.R, val int8) {
+func (op RMIscalar) RegRegImm8(text *code.Buf, t wa.Type, r, r2 reg.R, val int8) {
 	var o output
 	o.byte(0x66)
 	o.byte(0x0f)

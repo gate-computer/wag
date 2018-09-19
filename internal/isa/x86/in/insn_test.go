@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/wa"
 )
 
 var (
-	intTypes = []abi.Type{abi.I32, abi.I64}
+	intTypes = []wa.Type{wa.I32, wa.I64}
 
 	allRegs   = []reg.R{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	indexRegs = []reg.R{0, 1, 2, 3 /* skip stack */, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
@@ -25,14 +25,14 @@ var (
 	regNamesI32 = []string{"eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"}
 	regNamesI64 = []string{"rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"}
 
-	typeRegNames = map[abi.Type][]string{
-		abi.I32: regNamesI32,
-		abi.I64: regNamesI64,
+	typeRegNames = map[wa.Type][]string{
+		wa.I32: regNamesI32,
+		wa.I64: regNamesI64,
 	}
 
-	memSizes = map[abi.Type]string{
-		abi.I32: "dword",
-		abi.I64: "qword",
+	memSizes = map[wa.Type]string{
+		wa.I32: "dword",
+		wa.I64: "qword",
 	}
 
 	scales = []struct {
@@ -47,8 +47,8 @@ var (
 )
 
 func TestInsnNP(test *testing.T) {
-	testEncode(test, "cdq", "", func(text *code.Buf) { CDQ.Type(text, abi.I32) })
-	testEncode(test, "cqo", "", func(text *code.Buf) { CDQ.Type(text, abi.I64) })
+	testEncode(test, "cdq", "", func(text *code.Buf) { CDQ.Type(text, wa.I32) })
+	testEncode(test, "cqo", "", func(text *code.Buf) { CDQ.Type(text, wa.I64) })
 	testEncode(test, "ret", "", func(text *code.Buf) { RET.Simple(text) })
 }
 
@@ -144,7 +144,7 @@ func TestInsnRMint(test *testing.T) {
 		mr          bool
 		skipRegReg  bool
 		testMem16   bool
-		types       []abi.Type
+		types       []wa.Type
 		op2RegNames []string
 		memSize     string
 	}{
@@ -167,7 +167,7 @@ func TestInsnRMint(test *testing.T) {
 		{mn: "cmovle", op: CMOVLE},
 		{mn: "cmovg", op: CMOVG},
 		{mn: "movsxd", op: MOVSXD,
-			types:       []abi.Type{abi.I64},
+			types:       []wa.Type{wa.I64},
 			op2RegNames: regNamesI32,
 			memSize:     "dword"},
 		{mn: "test", op: TEST, mr: true},

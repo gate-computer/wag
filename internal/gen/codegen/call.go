@@ -7,24 +7,24 @@ package codegen
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/wa"
 )
 
 func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
-	if funcIndex >= uint32(len(f.Module.FuncSigs)) {
+	if funcIndex >= uint32(len(f.Module.Funcs)) {
 		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
-	sigIndex := f.Module.FuncSigs[funcIndex]
-	sig := f.Module.Sigs[sigIndex]
+	sigIndex := f.Module.Funcs[funcIndex]
+	sig := f.Module.Types[sigIndex]
 
 	opCall(f, &f.FuncLinks[funcIndex].L)
 	opFinalizeCall(f, sig)
@@ -33,15 +33,15 @@ func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
-	if sigIndex >= uint32(len(f.Module.Sigs)) {
+	if sigIndex >= uint32(len(f.Module.Types)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
 
-	sig := f.Module.Sigs[sigIndex]
+	sig := f.Module.Types[sigIndex]
 
 	load.Byte() // reserved
 
-	funcIndex := popOperand(f, abi.I32)
+	funcIndex := popOperand(f, wa.I32)
 
 	opSaveOperands(f)
 
@@ -58,10 +58,10 @@ func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deaden
 	return
 }
 
-func opFinalizeCall(f *gen.Func, sig abi.Sig) {
+func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
 	f.Regs.CheckNoneAllocated()
 
-	opDropCallOperands(f, len(sig.Args))
+	opDropCallOperands(f, len(sig.Params))
 	pushResultRegOperand(f, sig.Result, true)
 
 	// The called function's initial suspension point was certainly executed

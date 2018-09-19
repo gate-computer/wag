@@ -11,7 +11,7 @@ import (
 	"github.com/bnagy/gapstone"
 
 	"github.com/tsavola/wag"
-	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -42,12 +42,12 @@ func Fuzz(data []byte) int {
 
 type res struct{}
 
-func (res) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
+func (res) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
 	err = fmt.Errorf("import function %#v%#v %s", module, field, sig)
 	return
 }
 
-func (res) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
+func (res) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
 	err = fmt.Errorf("import %s global %#v %#v", t, module, field)
 	return
 }

@@ -5,7 +5,6 @@
 package gen
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
@@ -14,6 +13,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
+	"github.com/tsavola/wag/wa"
 )
 
 type Block struct {
@@ -23,7 +23,7 @@ type Block struct {
 type BranchTarget struct {
 	Label      link.L
 	StackDepth int
-	ValueType  abi.Type
+	ValueType  wa.Type
 	FuncEnd    bool
 
 	Block Block
@@ -58,8 +58,8 @@ type Func struct {
 
 	Regs regalloc.Allocator
 
-	ResultType abi.Type
-	LocalTypes []abi.Type
+	ResultType wa.Type
+	LocalTypes []wa.Type
 	NumParams  int
 	NumLocals  int // The non-param ones
 

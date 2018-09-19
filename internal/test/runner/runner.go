@@ -12,13 +12,12 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/test/runner/imports"
 	"github.com/tsavola/wag/object"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wa"
 )
 
 func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize, roDataBase uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
@@ -34,57 +33,57 @@ func importBenchmarkBarrier() uint64
 var importFuncs = map[string]map[string]imports.Func{
 	"spectest": {
 		"print": imports.Func{
+			Addr:     importSpectestPrint(),
 			Variadic: true,
-			AbsAddr:  importSpectestPrint(),
 		},
 	},
 	"wag": {
 		"get_arg": imports.Func{
-			Sig: abi.Sig{
-				Result: abi.I64,
+			Addr: importGetArg(),
+			FuncType: wa.FuncType{
+				Result: wa.I64,
 			},
-			AbsAddr: importGetArg(),
 		},
 		"snapshot": imports.Func{
-			Sig: abi.Sig{
-				Result: abi.I32,
+			Addr: importSnapshot(),
+			FuncType: wa.FuncType{
+				Result: wa.I32,
 			},
-			AbsAddr: importSnapshot(),
 		},
 	},
 	"env": {
 		"putns": imports.Func{
-			Sig: abi.Sig{
-				Args: []abi.Type{abi.I32, abi.I32},
+			Addr: importPutns(),
+			FuncType: wa.FuncType{
+				Params: []wa.Type{wa.I32, wa.I32},
 			},
-			AbsAddr: importPutns(),
 		},
 		"benchmark_begin": imports.Func{
-			Sig: abi.Sig{
-				Result: abi.I64,
+			Addr: importBenchmarkBegin(),
+			FuncType: wa.FuncType{
+				Result: wa.I64,
 			},
-			AbsAddr: importBenchmarkBegin(),
 		},
 		"benchmark_end": imports.Func{
-			Sig: abi.Sig{
-				Args:   []abi.Type{abi.I64},
-				Result: abi.I32,
+			Addr: importBenchmarkEnd(),
+			FuncType: wa.FuncType{
+				Params: []wa.Type{wa.I64},
+				Result: wa.I32,
 			},
-			AbsAddr: importBenchmarkEnd(),
 		},
 		"benchmark_barrier": imports.Func{
-			Sig: abi.Sig{
-				Args:   []abi.Type{abi.I64, abi.I64},
-				Result: abi.I64,
+			Addr: importBenchmarkBarrier(),
+			FuncType: wa.FuncType{
+				Params: []wa.Type{wa.I64, wa.I64},
+				Result: wa.I64,
 			},
-			AbsAddr: importBenchmarkBarrier(),
 		},
 	},
 }
 
 type res struct{}
 
-func (res) ResolveVariadicFunc(module, field string, sig abi.Sig) (variadic bool, addr uint64, err error) {
+func (res) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, addr uint64, err error) {
 	f, found := importFuncs[module][field]
 	if !found {
 		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
@@ -97,16 +96,16 @@ func (res) ResolveVariadicFunc(module, field string, sig abi.Sig) (variadic bool
 	}
 
 	variadic = f.Variadic
-	addr = f.AbsAddr
+	addr = f.Addr
 	return
 }
 
-func (r res) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
+func (r res) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
 	_, addr, err = r.ResolveVariadicFunc(module, field, sig)
 	return
 }
 
-func (res) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
+func (res) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
 	switch module {
 	case "spectest":
 		switch field {
@@ -126,7 +125,7 @@ type runnable interface {
 	getRODataAddr() uintptr
 	getData() ([]byte, int)
 	getStack() []byte
-	writeStacktraceTo(w io.Writer, funcSigs []abi.Sig, ns *section.NameSection, stack []byte) error
+	writeStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *section.NameSection, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
 }
 
@@ -230,7 +229,7 @@ type Runner struct {
 
 	globalsMemory []byte
 	memoryOffset  int
-	memorySize    wasm.MemorySize
+	memorySize    wa.MemorySize
 	stack         []byte
 
 	lastTrap     trap.Id
@@ -239,17 +238,17 @@ type Runner struct {
 	Snapshots []*Snapshot
 }
 
-func (p *Program) NewRunner(initMemorySize, growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
+func (p *Program) NewRunner(initMemorySize, growMemorySize wa.MemorySize, stackSize int) (r *Runner, err error) {
 	return newRunner(p, initMemorySize, growMemorySize, stackSize)
 }
 
-func newRunner(prog runnable, initMemorySize, growMemorySize wasm.MemorySize, stackSize int) (r *Runner, err error) {
-	if (initMemorySize & (wasm.Page - 1)) != 0 {
-		err = fmt.Errorf("initial memory size is not multiple of %d", wasm.Page)
+func newRunner(prog runnable, initMemorySize, growMemorySize wa.MemorySize, stackSize int) (r *Runner, err error) {
+	if (initMemorySize & (wa.Page - 1)) != 0 {
+		err = fmt.Errorf("initial memory size is not multiple of %d", wa.Page)
 		return
 	}
-	if (growMemorySize & (wasm.Page - 1)) != 0 {
-		err = fmt.Errorf("memory growth limit is not multiple of %d", wasm.Page)
+	if (growMemorySize & (wa.Page - 1)) != 0 {
+		err = fmt.Errorf("memory growth limit is not multiple of %d", wa.Page)
 		return
 	}
 
@@ -312,7 +311,7 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int64, sigs []abi.Sig, printer io.Writer) (result int32, err error) {
+func (r *Runner) Run(arg int64, sigs []wa.FuncType, printer io.Writer) (result int32, err error) {
 	e := Executor{
 		runner:  r,
 		arg:     arg,
@@ -329,7 +328,7 @@ type Executor struct {
 	runner *Runner
 
 	arg     int64
-	sigs    []abi.Sig
+	sigs    []wa.FuncType
 	printer io.Writer
 
 	cont chan struct{}
@@ -339,7 +338,7 @@ type Executor struct {
 	err    error
 }
 
-func (r *Runner) NewExecutor(sigs []abi.Sig, printer io.Writer) (e *Executor, eventHandler func(event.Event)) {
+func (r *Runner) NewExecutor(sigs []wa.FuncType, printer io.Writer) (e *Executor, eventHandler func(event.Event)) {
 	e = &Executor{
 		runner:  r,
 		sigs:    sigs,
@@ -414,7 +413,7 @@ func (e *Executor) run() {
 
 	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.prog.getRODataAddr(), e.runner.stack, stackOffset, resumeResult, fds[1], e.arg)
 
-	e.runner.memorySize = wasm.MemorySize(memorySize)
+	e.runner.memorySize = wa.MemorySize(memorySize)
 	e.runner.lastTrap = trap.Id(uint32(trapId))
 	e.runner.lastStackPtr = stackPtr
 

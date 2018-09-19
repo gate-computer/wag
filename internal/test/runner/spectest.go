@@ -10,22 +10,22 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/wa"
 )
 
-func spectestPrint(f io.Reader, sigs []abi.Sig, sigIndex int64, printer io.Writer) {
+func spectestPrint(f io.Reader, sigs []wa.FuncType, sigIndex int64, printer io.Writer) {
 	if sigIndex >= int64(len(sigs)) {
 		panic(fmt.Sprintf("0x%x", sigIndex))
 	}
 	sig := sigs[sigIndex]
 
-	args := make([]uint64, len(sig.Args))
+	args := make([]uint64, len(sig.Params))
 
 	if err := binary.Read(f, byteOrder, args); err != nil {
 		panic(err)
 	}
 
-	for i, t := range sig.Args {
+	for i, t := range sig.Params {
 		if i > 0 {
 			if _, err := fmt.Fprint(printer, " "); err != nil {
 				panic(err)
@@ -37,16 +37,16 @@ func spectestPrint(f io.Reader, sigs []abi.Sig, sigIndex int64, printer io.Write
 		var err error
 
 		switch t {
-		case abi.I32:
+		case wa.I32:
 			_, err = fmt.Fprintf(printer, "%d", int32(x))
 
-		case abi.I64:
+		case wa.I64:
 			_, err = fmt.Fprintf(printer, "%d", int64(x))
 
-		case abi.F32:
+		case wa.F32:
 			_, err = fmt.Fprintf(printer, "%f", math.Float32frombits(uint32(x)))
 
-		case abi.F64:
+		case wa.F64:
 			_, err = fmt.Fprintf(printer, "%f", math.Float64frombits(x))
 
 		default:

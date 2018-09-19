@@ -7,14 +7,14 @@ package codegen
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/wa"
 )
 
-func readLocalIndex(f *gen.Func, load loader.L, op Opcode) (index int, t abi.Type) {
+func readLocalIndex(f *gen.Func, load loader.L, op Opcode) (index int, t wa.Type) {
 	i := load.Varuint32()
 	if i >= uint32(len(f.LocalTypes)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, i))

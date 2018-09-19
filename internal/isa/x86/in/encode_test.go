@@ -11,34 +11,34 @@ import (
 	"testing"
 
 	"github.com/bnagy/gapstone"
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/static"
+	"github.com/tsavola/wag/wa"
 )
 
 type rmRegReg interface {
-	RegReg(text *code.Buf, t abi.Type, r, r2 reg.R)
+	RegReg(text *code.Buf, t wa.Type, r, r2 reg.R)
 }
 
 type rmRegMemDisp interface {
-	RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, disp int32)
+	RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32)
 }
 type rmRegMemIndexDisp interface {
-	RegMemIndexDisp(text *code.Buf, t abi.Type, r reg.R, base BaseReg, index reg.R, s Scale, disp int32)
+	RegMemIndexDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, index reg.R, s Scale, disp int32)
 }
 
 type rmRegStack interface {
-	RegStack(text *code.Buf, t abi.Type, r reg.R)
+	RegStack(text *code.Buf, t wa.Type, r reg.R)
 }
 type rmRegStackDisp interface {
-	RegStackDisp(text *code.Buf, t abi.Type, r reg.R, disp int32)
+	RegStackDisp(text *code.Buf, t wa.Type, r reg.R, disp int32)
 }
 type rmRegStackDisp8 interface {
-	RegStackDisp8(text *code.Buf, t abi.Type, r reg.R, disp int8)
+	RegStackDisp8(text *code.Buf, t wa.Type, r reg.R, disp int8)
 }
 type rmRegStackStub32 interface {
-	RegStackStub32(text *code.Buf, t abi.Type, r reg.R)
+	RegStackStub32(text *code.Buf, t wa.Type, r reg.R)
 }
 
 func init() {

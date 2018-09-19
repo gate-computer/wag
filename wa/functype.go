@@ -2,24 +2,24 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package abi
+package wa
 
-type Sig struct {
-	Args   []Type
+type FuncType struct {
+	Params []Type
 	Result Type
 }
 
-func (f1 Sig) Equal(f2 Sig) bool {
+func (f1 FuncType) Equal(f2 FuncType) bool {
 	if f1.Result != f2.Result {
 		return false
 	}
 
-	if len(f1.Args) != len(f2.Args) {
+	if len(f1.Params) != len(f2.Params) {
 		return false
 	}
 
-	for i := range f1.Args {
-		if f1.Args[i] != f2.Args[i] {
+	for i := range f1.Params {
+		if f1.Params[i] != f2.Params[i] {
 			return false
 		}
 	}
@@ -27,9 +27,9 @@ func (f1 Sig) Equal(f2 Sig) bool {
 	return true
 }
 
-func (f Sig) String() (s string) {
+func (f FuncType) String() (s string) {
 	s = "("
-	for i, t := range f.Args {
+	for i, t := range f.Params {
 		if i > 0 {
 			s += ", "
 		}

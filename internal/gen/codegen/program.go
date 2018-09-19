@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/data"
@@ -22,10 +21,11 @@ import (
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
+	"github.com/tsavola/wag/wa"
 )
 
 // alignType rounds up.
-func alignType(addr int, t abi.Type) int {
+func alignType(addr int, t wa.Type) int {
 	mask := int(t.Size()) - 1
 	return (addr + mask) &^ mask
 }
@@ -47,7 +47,7 @@ func GenProgram(
 		RODataAddr: roDataAddr,
 		Map:        objMap,
 
-		FuncLinks: make([]link.FuncL, len(m.FuncSigs)),
+		FuncLinks: make([]link.FuncL, len(m.Funcs)),
 	}
 
 	if debug.Enabled {
@@ -58,7 +58,7 @@ func GenProgram(
 	}
 
 	funcCodeCount := load.Varuint32()
-	if needed := len(m.FuncSigs) - len(m.ImportFuncs); funcCodeCount != uint32(needed) {
+	if needed := len(m.Funcs) - len(m.ImportFuncs); funcCodeCount != uint32(needed) {
 		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
@@ -85,7 +85,7 @@ func GenProgram(
 	// after init, execution proceeds to start func, main func, or exit trap
 
 	maxInitIndex := -1
-	mainResultType := abi.Void
+	mainResultType := wa.Void
 
 	if m.StartDefined {
 		maxInitIndex = int(m.StartIndex)
@@ -99,10 +99,10 @@ func GenProgram(
 			maxInitIndex = index
 		}
 
-		sigIndex := m.FuncSigs[m.EntryIndex]
-		sig := m.Sigs[sigIndex]
+		sigIndex := m.Funcs[m.EntryIndex]
+		sig := m.Types[sigIndex]
 
-		for i := range sig.Args {
+		for i := range sig.Params {
 			asm.PushImm(p, int64(entryArgs[i]))
 		}
 
@@ -112,7 +112,7 @@ func GenProgram(
 		mainResultType = sig.Result
 	}
 
-	if mainResultType != abi.I32 {
+	if mainResultType != wa.I32 {
 		asm.ClearIntResultReg(p)
 	}
 
@@ -133,7 +133,7 @@ func GenProgram(
 	if eventHandler != nil {
 		midpoint = maxInitIndex + 1
 	} else {
-		midpoint = len(m.FuncSigs)
+		midpoint = len(m.Funcs)
 	}
 
 	for i := len(m.ImportFuncs); i < midpoint; i++ {
@@ -156,8 +156,8 @@ func GenProgram(
 
 		sigIndex := uint32(math.MaxInt32) // invalid signature index by default
 
-		if funcIndex < uint32(len(m.FuncSigs)) {
-			sigIndex = m.FuncSigs[funcIndex]
+		if funcIndex < uint32(len(m.Funcs)) {
+			sigIndex = m.Funcs[funcIndex]
 		}
 
 		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(funcAddr))
@@ -166,10 +166,10 @@ func GenProgram(
 		debug.Printf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
 	}
 
-	if midpoint < len(m.FuncSigs) {
+	if midpoint < len(m.Funcs) {
 		eventHandler(event.Init)
 
-		for i := midpoint; i < len(m.FuncSigs); i++ {
+		for i := midpoint; i < len(m.Funcs); i++ {
 			genFunction(p, load, m, i)
 		}
 
@@ -177,7 +177,7 @@ func GenProgram(
 
 		roDataBuf := p.ROData.Bytes()
 
-		for i := midpoint; i < len(m.FuncSigs); i++ {
+		for i := midpoint; i < len(m.Funcs); i++ {
 			ln := &p.FuncLinks[i]
 			addr := uint32(ln.Addr)
 

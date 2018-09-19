@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/operand"
@@ -20,6 +19,7 @@ import (
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/typedecode"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -52,13 +52,13 @@ func pushOperand(f *gen.Func, x operand.O) {
 	f.Operands = append(f.Operands, x)
 }
 
-func pushResultRegOperand(f *gen.Func, t abi.Type, zeroExt bool) {
-	if t != abi.Void {
+func pushResultRegOperand(f *gen.Func, t wa.Type, zeroExt bool) {
+	if t != wa.Void {
 		pushOperand(f, operand.Reg(t, reg.Result, zeroExt))
 	}
 }
 
-func popOperand(f *gen.Func, t abi.Type) (x operand.O) {
+func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 	x = popAnyOperand(f)
 	if x.Type != t {
 		panic(fmt.Errorf("operand %s has wrong type; expected %s", x, t))
@@ -84,7 +84,7 @@ func popAnyOperand(f *gen.Func) (x operand.O) {
 	return
 }
 
-func popBlockResultOperand(f *gen.Func, t abi.Type, deadend bool) operand.O {
+func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	if !deadend {
 		return popOperand(f, t)
 	} else if len(f.Operands) > f.FrameBase {
@@ -116,8 +116,8 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 		Regs:   regalloc.Make(),
 	}
 
-	sigIndex := m.FuncSigs[funcIndex]
-	sig := m.Sigs[sigIndex]
+	sigIndex := m.Funcs[funcIndex]
+	sig := m.Types[sigIndex]
 
 	if debug.Enabled {
 		debug.Printf("function %d %s", funcIndex-len(m.ImportFuncs), sig)
@@ -133,7 +133,7 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 	stackCheckAddr := asm.SetupStackFrame(f)
 
 	f.ResultType = sig.Result
-	f.LocalTypes = sig.Args
+	f.LocalTypes = sig.Params
 
 	for range load.Count() {
 		count := load.Varuint32()
@@ -143,7 +143,7 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 
 		t := typedecode.Value(load.Varint7())
 
-		types := make([]abi.Type, len(f.LocalTypes), len(f.LocalTypes)+int(count))
+		types := make([]wa.Type, len(f.LocalTypes), len(f.LocalTypes)+int(count))
 		copy(types, f.LocalTypes)
 		for i := uint32(0); i < count; i++ {
 			types = append(types, t)
@@ -151,7 +151,7 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 		f.LocalTypes = types
 	}
 
-	f.NumParams = len(sig.Args)
+	f.NumParams = len(sig.Params)
 	f.NumLocals = len(f.LocalTypes) - f.NumParams
 
 	asm.PushZeros(p, f.NumLocals)
@@ -161,16 +161,16 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 	if deadend := genOps(f, load); !deadend {
 		var zeroExt bool
 
-		if f.ResultType != abi.Void {
+		if f.ResultType != wa.Void {
 			result := popOperand(f, f.ResultType)
 			zeroExt = asm.Move(f, reg.Result, result)
 		}
 
 		switch {
-		case f.ResultType == abi.I32 && !zeroExt:
+		case f.ResultType == wa.I32 && !zeroExt:
 			asm.ZeroExtendResultReg(p)
 
-		case f.ResultType == abi.Void || f.ResultType.Category() == abi.Float:
+		case f.ResultType == wa.Void || f.ResultType.Category() == wa.Float:
 			asm.ClearIntResultReg(p)
 		}
 
@@ -368,7 +368,7 @@ func opDropCallOperands(f *gen.Func, n int) {
 	return
 }
 
-func opStealOperandReg(f *gen.Func, t abi.Type) (r reg.R) {
+func opStealOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
 	r = opStealOperandRegBefore(f, t, len(f.Operands))
 	if r == reg.Result {
 		panic("registers not found in operand stack")
@@ -376,7 +376,7 @@ func opStealOperandReg(f *gen.Func, t abi.Type) (r reg.R) {
 	return
 }
 
-func opStealOperandRegBefore(f *gen.Func, t abi.Type, length int) (r reg.R) {
+func opStealOperandRegBefore(f *gen.Func, t wa.Type, length int) (r reg.R) {
 	cat := t.Category()
 
 	var i int
@@ -424,7 +424,7 @@ search:
 	return
 }
 
-func opAllocReg(f *gen.Func, t abi.Type) (r reg.R) {
+func opAllocReg(f *gen.Func, t wa.Type) (r reg.R) {
 	r = f.Regs.AllocResult(t)
 	if r == reg.Result {
 		r = opStealOperandReg(f, t)

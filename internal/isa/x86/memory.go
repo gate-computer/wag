@@ -5,7 +5,6 @@
 package x86
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -15,14 +14,14 @@ import (
 	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/isa/x86/in"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wa"
 )
 
 type regMemDispInsn interface {
-	RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32)
+	RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32)
 }
 type memDispImmInsn interface {
-	MemDispImm(text *code.Buf, t abi.Type, base in.BaseReg, disp int32, val int64)
+	MemDispImm(text *code.Buf, t wa.Type, base in.BaseReg, disp int32, val int64)
 }
 
 type opLoadInt32S struct{}
@@ -30,16 +29,16 @@ type opLoadInt32U struct{}
 type opStoreRegInt32 struct{}
 type opStoreImm struct{}
 
-func (opLoadInt32S) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32) {
-	in.MOVSXD.RegMemDisp(text, abi.I64, r, base, disp)
+func (opLoadInt32S) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32) {
+	in.MOVSXD.RegMemDisp(text, wa.I64, r, base, disp)
 }
-func (opLoadInt32U) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32) {
-	in.MOV.RegMemDisp(text, abi.I32, r, base, disp)
+func (opLoadInt32U) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32) {
+	in.MOV.RegMemDisp(text, wa.I32, r, base, disp)
 }
-func (opStoreRegInt32) RegMemDisp(text *code.Buf, t abi.Type, r reg.R, base in.BaseReg, disp int32) {
-	in.MOVmr.RegMemDisp(text, abi.I32, r, base, disp)
+func (opStoreRegInt32) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32) {
+	in.MOVmr.RegMemDisp(text, wa.I32, r, base, disp)
 }
-func (opStoreImm) MemDispImm(text *code.Buf, t abi.Type, base in.BaseReg, disp int32, val int64) {
+func (opStoreImm) MemDispImm(text *code.Buf, t wa.Type, base in.BaseReg, disp int32, val int64) {
 	switch {
 	case val == 0:
 		in.MOVmr.RegMemDisp(text, t, RegZero, base, disp)
@@ -80,7 +79,7 @@ var storeImmInsns = [5]memDispImmInsn{
 
 // Load may allocate registers, use RegResult and update condition flags.  The
 // index operand may be RegResult or the condition flags.
-func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType abi.Type, align, offset uint32) operand.O {
+func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
 	sizeReach := uint64(props >> 8)
 	base, disp := checkAccess(f, sizeReach, index, offset)
 
@@ -133,18 +132,18 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 			return
 		}
 
-		in.LEA.RegMemDisp(&f.Text, abi.I64, RegScratch, in.BaseMemory, int32(reachAddr))
+		in.LEA.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, int32(reachAddr))
 
 	default:
 		r, zeroExt := getScratchReg(f, index)
 		if !zeroExt {
-			in.MOV.RegReg(&f.Text, abi.I32, r, r)
+			in.MOV.RegReg(&f.Text, wa.I32, r, r)
 		}
-		in.LEA.RegMemIndexDisp(&f.Text, abi.I64, RegScratch, in.BaseMemory, r, in.Scale0, int32(reachOffset))
-		f.Regs.Free(abi.I32, r)
+		in.LEA.RegMemIndexDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, r, in.Scale0, int32(reachOffset))
+		f.Regs.Free(wa.I32, r)
 	}
 
-	in.CMP.RegReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
+	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
 
 	if addr := f.MemoryOutOfBounds.Addr(f); addr != 0 {
 		in.JGEcb.Addr8(&f.Text, addr)
@@ -177,11 +176,11 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 // QueryMemorySize may allocate registers, use RegResult and update condition
 // flags.
 func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
-	r := f.Regs.AllocResult(abi.I64)
-	in.MOV.RegReg(&f.Text, abi.I64, r, RegMemoryLimit)
-	in.SUB.RegReg(&f.Text, abi.I64, r, RegMemoryBase)
-	in.SHRi.RegImm8(&f.Text, abi.I64, r, wasm.PageBits)
-	return operand.Reg(abi.I32, r, true)
+	r := f.Regs.AllocResult(wa.I64)
+	in.MOV.RegReg(&f.Text, wa.I64, r, RegMemoryLimit)
+	in.SUB.RegReg(&f.Text, wa.I64, r, RegMemoryBase)
+	in.SHRi.RegImm8(&f.Text, wa.I64, r, wa.PageBits)
+	return operand.Reg(wa.I32, r, true)
 }
 
 // GrowMemory may allocate registers, use RegResult and update condition flags.
@@ -189,25 +188,25 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	var out link.L
 	var fail link.L
 
-	in.MOVDQmrMMX.RegReg(&f.Text, abi.I64, RegMemoryGrowLimitMMX, RegScratch)
+	in.MOVDQmrMMX.RegReg(&f.Text, wa.I64, RegMemoryGrowLimitMMX, RegScratch)
 
 	targetReg, zeroExt := allocResultReg(f, x)
 	if !zeroExt {
-		in.MOV.RegReg(&f.Text, abi.I32, targetReg, targetReg)
+		in.MOV.RegReg(&f.Text, wa.I32, targetReg, targetReg)
 	}
 
-	in.SHLi.RegImm8(&f.Text, abi.I64, targetReg, wasm.PageBits)
-	in.ADD.RegReg(&f.Text, abi.I64, targetReg, RegMemoryLimit) // new memory limit
-	in.CMP.RegReg(&f.Text, abi.I64, targetReg, RegScratch)
+	in.SHLi.RegImm8(&f.Text, wa.I64, targetReg, wa.PageBits)
+	in.ADD.RegReg(&f.Text, wa.I64, targetReg, RegMemoryLimit) // new memory limit
+	in.CMP.RegReg(&f.Text, wa.I64, targetReg, RegScratch)
 
 	in.JGcb.Stub8(&f.Text)
 	fail.AddSite(f.Text.Addr)
 
-	in.MOV.RegReg(&f.Text, abi.I64, RegScratch, RegMemoryLimit)
-	in.MOV.RegReg(&f.Text, abi.I64, RegMemoryLimit, targetReg)
-	in.SUB.RegReg(&f.Text, abi.I64, RegScratch, RegMemoryBase)
-	in.SHRi.RegImm8(&f.Text, abi.I64, RegScratch, wasm.PageBits) // value on success
-	in.MOV.RegReg(&f.Text, abi.I32, targetReg, RegScratch)
+	in.MOV.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
+	in.MOV.RegReg(&f.Text, wa.I64, RegMemoryLimit, targetReg)
+	in.SUB.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
+	in.SHRi.RegImm8(&f.Text, wa.I64, RegScratch, wa.PageBits) // value on success
+	in.MOV.RegReg(&f.Text, wa.I32, targetReg, RegScratch)
 
 	in.JMPcb.Stub8(&f.Text)
 	out.AddSite(f.Text.Addr)
@@ -215,10 +214,10 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	fail.Addr = f.Text.Addr
 	isa.UpdateNearBranches(f.Text.Bytes(), &fail)
 
-	in.MOVi.RegImm32(&f.Text, abi.I32, targetReg, -1) // value on failure
+	in.MOVi.RegImm32(&f.Text, wa.I32, targetReg, -1) // value on failure
 
 	out.Addr = f.Text.Addr
 	isa.UpdateNearBranches(f.Text.Bytes(), &out)
 
-	return operand.Reg(abi.I32, targetReg, true)
+	return operand.Reg(wa.I32, targetReg, true)
 }

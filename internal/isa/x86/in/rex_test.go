@@ -7,22 +7,22 @@ package in
 import (
 	"testing"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/wa"
 )
 
 func TestTypeRexW(t *testing.T) {
-	if bit := typeRexW(abi.I32); bit != 0 {
-		t.Errorf("typeRexW(abi.I32) = 0x%x", bit)
+	if bit := typeRexW(wa.I32); bit != 0 {
+		t.Errorf("typeRexW(wa.I32) = 0x%x", bit)
 	}
-	if bit := typeRexW(abi.I64); bit != RexW {
-		t.Errorf("typeRexW(abi.I64) = 0x%x", bit)
+	if bit := typeRexW(wa.I64); bit != RexW {
+		t.Errorf("typeRexW(wa.I64) = 0x%x", bit)
 	}
-	if bit := typeRexW(abi.F32); bit != 0 {
-		t.Errorf("typeRexW(abi.F32) = 0x%x", bit)
+	if bit := typeRexW(wa.F32); bit != 0 {
+		t.Errorf("typeRexW(wa.F32) = 0x%x", bit)
 	}
-	if bit := typeRexW(abi.F64); bit != RexW {
-		t.Errorf("typeRexW(abi.F64) = 0x%x", bit)
+	if bit := typeRexW(wa.F64); bit != RexW {
+		t.Errorf("typeRexW(wa.F64) = 0x%x", bit)
 	}
 }
 

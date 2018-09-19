@@ -7,12 +7,12 @@ package operand
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/condition"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/reglayout"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -22,12 +22,12 @@ const (
 
 type O struct {
 	Storage storage.Storage
-	Type    abi.Type
+	Type    wa.Type
 
 	payload uint64
 }
 
-func Placeholder(t abi.Type) (o O) {
+func Placeholder(t wa.Type) (o O) {
 	o.Storage = storage.Imm // Least dangerous
 	o.Type = t
 	if debug.Enabled {
@@ -36,11 +36,11 @@ func Placeholder(t abi.Type) (o O) {
 	return
 }
 
-func Imm(t abi.Type, value uint64) O {
+func Imm(t wa.Type, value uint64) O {
 	return O{storage.Imm, t, value}
 }
 
-func Reg(t abi.Type, r reg.R, zeroExt bool) O {
+func Reg(t wa.Type, r reg.R, zeroExt bool) O {
 	value := uint64(byte(r))
 	if zeroExt {
 		value |= payloadZeroExt
@@ -49,7 +49,7 @@ func Reg(t abi.Type, r reg.R, zeroExt bool) O {
 }
 
 func Flags(cond condition.C) O {
-	return O{storage.Flags, abi.I32, uint64(cond)}
+	return O{storage.Flags, wa.I32, uint64(cond)}
 }
 
 func (o *O) SetPlaceholder() {
@@ -72,7 +72,7 @@ func (o *O) SetStack() {
 }
 
 func (o O) ImmValue() int64 {
-	if o.Type.Size() == abi.Size32 {
+	if o.Type.Size() == 4 {
 		return int64(int32(uint32(o.payload)))
 	} else {
 		return int64(o.payload)
@@ -95,7 +95,7 @@ func (o O) String() string {
 
 	switch o.Storage {
 	case storage.Imm:
-		if o.Type.Category() == abi.Int {
+		if o.Type.Category() == wa.Int {
 			return fmt.Sprintf("constant %s 0x%x", o.Type, o.payload)
 		} else {
 			return fmt.Sprintf("constant %s bits 0x%x", o.Type, o.payload)

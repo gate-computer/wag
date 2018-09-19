@@ -71,7 +71,7 @@ func TestExec(t *testing.T) {
 	defer r.Close()
 
 	var printBuf bytes.Buffer
-	e, eventHandler := r.NewExecutor(mod.Sigs(), &printBuf)
+	e, eventHandler := r.NewExecutor(mod.Types(), &printBuf)
 
 	var data = &DataConfig{}
 	loadDataSection(data, wasm, mod)

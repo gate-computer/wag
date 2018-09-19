@@ -5,8 +5,8 @@
 package in
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/wa"
 )
 
 type Scale byte
@@ -24,6 +24,6 @@ const (
 	baseStack = Base(RegStack)
 )
 
-func TypeScale(t abi.Type) Scale { return Scale(t.Size()>>3|2) << 6 } // Scale2 or Scale3
-func regIndex(r reg.R) Index     { return Index((r & 7) << 3) }
-func regBase(r reg.R) Base       { return Base(r & 7) }
+func TypeScale(t wa.Type) Scale { return Scale(t.Size()>>3|2) << 6 } // Scale2 or Scale3
+func regIndex(r reg.R) Index    { return Index((r & 7) << 3) }
+func regBase(r reg.R) Base      { return Base(r & 7) }

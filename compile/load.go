@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"math"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/data"
@@ -25,7 +24,7 @@ import (
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/reader"
 	"github.com/tsavola/wag/internal/typedecode"
-	"github.com/tsavola/wag/wasm"
+	"github.com/tsavola/wag/wa"
 )
 
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
@@ -36,20 +35,20 @@ type DataBuffer = data.Buffer
 
 // ImportResolver maps symbols to function addresses and constant values.
 type ImportResolver interface {
-	ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error)
-	ResolveGlobal(module, field string, t abi.Type) (init uint64, err error)
+	ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error)
+	ResolveGlobal(module, field string, t wa.Type) (init uint64, err error)
 }
 
 type variadicImportResolver interface {
 	ImportResolver
-	ResolveVariadicFunc(module, field string, sig abi.Sig) (variadic bool, addr uint64, err error)
+	ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, addr uint64, err error)
 }
 
 const (
 	maxStringLen          = 255   // TODO
 	maxTableLimit         = 32768 // TODO
 	maxInitialMemoryLimit = 16384 // TODO
-	maxMaximumMemoryLimit = math.MaxInt32 >> wasm.PageBits
+	maxMaximumMemoryLimit = math.MaxInt32 >> wa.PageBits
 	maxGlobals            = 512 // 4096 bytes
 )
 
@@ -97,7 +96,7 @@ func readMemory(m *module.M, load loader.L) {
 		panic(errors.New("multiple memories not supported"))
 	}
 
-	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wasm.Page))
+	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wa.Page))
 }
 
 // Module contains a WebAssembly module's metadata.
@@ -184,23 +183,23 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 				panic(fmt.Errorf("unsupported function type form: %d", form))
 			}
 
-			var sig abi.Sig
+			var sig wa.FuncType
 
 			paramCount := load.Varuint32()
 			if paramCount > codegen.MaxFuncParams {
 				panic(fmt.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 			}
 
-			sig.Args = make([]abi.Type, paramCount)
-			for j := range sig.Args {
-				sig.Args[j] = typedecode.Value(load.Varint7())
+			sig.Params = make([]wa.Type, paramCount)
+			for j := range sig.Params {
+				sig.Params[j] = typedecode.Value(load.Varint7())
 			}
 
 			if returnCount1 := load.Varuint1(); returnCount1 {
 				sig.Result = typedecode.Value(load.Varint7())
 			}
 
-			m.m.Sigs = append(m.m.Sigs, sig)
+			m.m.Types = append(m.m.Types, sig)
 		}
 	},
 
@@ -225,11 +224,11 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 			switch kind {
 			case module.ExternalKindFunction:
 				sigIndex := load.Varuint32()
-				if sigIndex >= uint32(len(m.m.Sigs)) {
+				if sigIndex >= uint32(len(m.m.Types)) {
 					panic(fmt.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
 				}
 
-				m.m.FuncSigs = append(m.m.FuncSigs, sigIndex)
+				m.m.Funcs = append(m.m.Funcs, sigIndex)
 
 				m.m.ImportFuncs = append(m.m.ImportFuncs, module.ImportFunc{
 					Import: module.Import{
@@ -273,11 +272,11 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 	module.SectionFunction: func(_ uint32, m *Module, load loader.L) {
 		for range load.Count() {
 			sigIndex := load.Varuint32()
-			if sigIndex >= uint32(len(m.m.Sigs)) {
+			if sigIndex >= uint32(len(m.m.Types)) {
 				panic(fmt.Errorf("function type index out of bounds: %d", sigIndex))
 			}
 
-			m.m.FuncSigs = append(m.m.FuncSigs, sigIndex)
+			m.m.Funcs = append(m.m.Funcs, sigIndex)
 		}
 	},
 
@@ -325,13 +324,13 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 			switch kind {
 			case module.ExternalKindFunction:
 				if fieldLen > 0 && string(fieldStr) == m.EntrySymbol {
-					if index >= uint32(len(m.m.FuncSigs)) {
+					if index >= uint32(len(m.m.Funcs)) {
 						panic(fmt.Errorf("export function index out of bounds: %d", index))
 					}
 
-					sigIndex := m.m.FuncSigs[index]
-					sig := m.m.Sigs[sigIndex]
-					if len(sig.Args) > codegen.MaxFuncParams || len(m.EntryArgs) < len(sig.Args) || !(sig.Result == abi.Void || sig.Result == abi.I32) {
+					sigIndex := m.m.Funcs[index]
+					sig := m.m.Types[sigIndex]
+					if len(sig.Params) > codegen.MaxFuncParams || len(m.EntryArgs) < len(sig.Params) || !(sig.Result == wa.Void || sig.Result == wa.I32) {
 						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
 					}
 
@@ -349,13 +348,13 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 
 	module.SectionStart: func(_ uint32, m *Module, load loader.L) {
 		index := load.Varuint32()
-		if index >= uint32(len(m.m.FuncSigs)) {
+		if index >= uint32(len(m.m.Funcs)) {
 			panic(fmt.Errorf("start function index out of bounds: %d", index))
 		}
 
-		sigIndex := m.m.FuncSigs[index]
-		sig := m.m.Sigs[sigIndex]
-		if len(sig.Args) > 0 || sig.Result != abi.Void {
+		sigIndex := m.m.Funcs[index]
+		sig := m.m.Types[sigIndex]
+		if len(sig.Params) > 0 || sig.Result != wa.Void {
 			panic(fmt.Errorf("invalid start function signature: %s", sig))
 		}
 
@@ -390,7 +389,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 
 			for j := int(offset); j < int(needSize); j++ {
 				elem := load.Varuint32()
-				if elem >= uint32(len(m.m.FuncSigs)) {
+				if elem >= uint32(len(m.m.Funcs)) {
 					panic(fmt.Errorf("table element index out of bounds: %d", elem))
 				}
 
@@ -400,38 +399,38 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 	},
 }
 
-func (m *Module) Sigs() []abi.Sig {
-	return m.m.Sigs
+func (m *Module) Types() []wa.FuncType {
+	return m.m.Types
 }
 
-func (m *Module) FuncSigs() (funcSigs []abi.Sig) {
-	funcSigs = make([]abi.Sig, len(m.m.FuncSigs))
-	for i, sigIndex := range m.m.FuncSigs {
-		funcSigs[i] = m.m.Sigs[sigIndex]
+func (m *Module) FuncTypes() []wa.FuncType {
+	sigs := make([]wa.FuncType, len(m.m.Funcs))
+	for i, sigIndex := range m.m.Funcs {
+		sigs[i] = m.m.Types[sigIndex]
 	}
-	return
+	return sigs
 }
 
-func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
-	initial = wasm.MemorySize(m.m.MemoryLimitValues.Initial)
-	maximum = wasm.MemorySize(m.m.MemoryLimitValues.Maximum)
+func (m *Module) MemoryLimits() (initial, maximum wa.MemorySize) {
+	initial = wa.MemorySize(m.m.MemoryLimitValues.Initial)
+	maximum = wa.MemorySize(m.m.MemoryLimitValues.Maximum)
 	return
 }
 
 func (m *Module) NumImportFunc() int   { return len(m.m.ImportFuncs) }
 func (m *Module) NumImportGlobal() int { return len(m.m.ImportGlobals) }
 
-func (m *Module) ImportFunc(i int) (module, field string, sig abi.Sig) {
+func (m *Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	imp := m.m.ImportFuncs[i]
 	module = imp.Module
 	field = imp.Field
 
-	sigIndex := m.m.FuncSigs[i]
-	sig = m.m.Sigs[sigIndex]
+	sigIndex := m.m.Funcs[i]
+	sig = m.m.Types[sigIndex]
 	return
 }
 
-func (m *Module) ImportGlobal(i int) (module, field string, t abi.Type) {
+func (m *Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	imp := m.m.ImportGlobals[i]
 	module = imp.Module
 	field = imp.Field

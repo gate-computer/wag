@@ -5,8 +5,8 @@
 package in
 
 import (
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/wa"
 )
 
 type rexWRXB byte
@@ -20,14 +20,14 @@ const (
 )
 
 const (
-	OneSize = abi.Type(0) // for instructions which don't use RexW
+	OneSize = wa.Type(0) // for instructions which don't use RexW
 )
 
 const (
 	RexMemory = RexB // RegMemoryBase >= 8
 )
 
-func typeRexW(t abi.Type) rexWRXB { return rexWRXB(t) & rexWRXB(abi.Size64) } // RexW == abi.Size64
+func typeRexW(t wa.Type) rexWRXB { return rexWRXB(t & 8) } // RexW == 8
 
 func regRexR(r reg.R) rexWRXB { return rexWRXB(r>>3) << 2 } // 8..15 => 4
 func regRexX(r reg.R) rexWRXB { return rexWRXB(r>>3) << 1 } // 8..15 => 2

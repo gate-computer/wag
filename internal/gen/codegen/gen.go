@@ -7,7 +7,6 @@ package codegen
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/operand"
@@ -15,6 +14,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/trap"
+	"github.com/tsavola/wag/wa"
 )
 
 func genOps(f *gen.Func, load loader.L) (deadend bool) {
@@ -134,26 +134,26 @@ func opBinary(f *gen.Func, op Opcode, left, right operand.O, info opInfo) {
 }
 
 func genConstI32(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	opConst(f, abi.I32, uint64(int64(load.Varint32())))
+	opConst(f, wa.I32, uint64(int64(load.Varint32())))
 	return
 }
 
 func genConstI64(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	opConst(f, abi.I64, uint64(load.Varint64()))
+	opConst(f, wa.I64, uint64(load.Varint64()))
 	return
 }
 
 func genConstF32(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	opConst(f, abi.F32, uint64(load.Uint32()))
+	opConst(f, wa.F32, uint64(load.Uint32()))
 	return
 }
 
 func genConstF64(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	opConst(f, abi.F64, load.Uint64())
+	opConst(f, wa.F64, load.Uint64())
 	return
 }
 
-func opConst(f *gen.Func, t abi.Type, value uint64) {
+func opConst(f *gen.Func, t wa.Type, value uint64) {
 	pushOperand(f, operand.Imm(t, value))
 }
 
@@ -168,7 +168,7 @@ func genConvert(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 }
 
 func genLoad(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	index := popOperand(f, abi.I32)
+	index := popOperand(f, wa.I32)
 
 	opStabilizeOperands(f)
 
@@ -187,7 +187,7 @@ func genStore(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 	offset := load.Varuint32()
 
 	value := popOperand(f, info.primaryType())
-	index := popOperand(f, abi.I32)
+	index := popOperand(f, wa.I32)
 
 	asm.Store(f, info.props(), index, value, align, offset)
 	return
@@ -223,7 +223,7 @@ func genGrowMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend 
 
 	load.Byte() // reserved
 
-	x := popOperand(f, abi.I32)
+	x := popOperand(f, wa.I32)
 
 	result := asm.GrowMemory(f, x)
 	pushOperand(f, result)
@@ -235,7 +235,7 @@ func genNop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 }
 
 func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	if f.ResultType != abi.Void {
+	if f.ResultType != wa.Void {
 		result := popOperand(f, f.ResultType)
 		asm.Move(f, reg.Result, result)
 	}
@@ -246,7 +246,7 @@ func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 }
 
 func genSelect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	cond := popOperand(f, abi.I32)
+	cond := popOperand(f, wa.I32)
 
 	opStabilizeOperands(f)
 
@@ -268,14 +268,14 @@ func genUnreachable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend
 }
 
 func genWrap(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
-	x := popOperand(f, abi.I64)
+	x := popOperand(f, wa.I64)
 
 	switch x.Storage {
 	case storage.Reg:
-		x = operand.Reg(abi.I32, x.Reg(), false)
+		x = operand.Reg(wa.I32, x.Reg(), false)
 
 	default:
-		x.Type = abi.I32
+		x.Type = wa.I32
 	}
 
 	pushOperand(f, x)

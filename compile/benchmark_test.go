@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/static"
+	"github.com/tsavola/wag/wa"
 )
 
 type testDuration struct {
@@ -28,11 +28,11 @@ func (target *testDuration) set(d time.Duration) {
 
 type dummyReso struct{}
 
-func (*dummyReso) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
+func (*dummyReso) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
 	return
 }
 
-func (*dummyReso) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
+func (*dummyReso) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
 	return
 }
 

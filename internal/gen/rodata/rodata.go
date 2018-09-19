@@ -5,7 +5,7 @@
 package rodata
 
 import (
-	"github.com/tsavola/wag/abi"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -30,6 +30,6 @@ const (
 // MaskAddr calculates the absolute read-only data address for reading a mask
 // for the given type size.  maskBaseAddr should be one of the Mask*Base
 // constants.
-func MaskAddr(roDataAddr int32, maskBaseAddr MaskBaseAddr, t abi.Type) int32 {
+func MaskAddr(roDataAddr int32, maskBaseAddr MaskBaseAddr, t wa.Type) int32 {
 	return roDataAddr + int32(maskBaseAddr) + int32((t.Size()&8)<<1)
 }

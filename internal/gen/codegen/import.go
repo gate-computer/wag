@@ -14,9 +14,9 @@ func genImportTrampoline(p *gen.Prog, m *module.M, funcIndex int, imp module.Imp
 	addr = p.Text.Addr
 	p.Map.PutImportFuncAddr(addr)
 
-	sigIndex := m.FuncSigs[funcIndex]
-	sig := m.Sigs[sigIndex]
+	sigIndex := m.Funcs[funcIndex]
+	sig := m.Types[sigIndex]
 
-	asm.JumpToImportFunc(p, imp.Addr, imp.Variadic, len(sig.Args), int(sigIndex))
+	asm.JumpToImportFunc(p, imp.Addr, imp.Variadic, len(sig.Params), int(sigIndex))
 	return
 }

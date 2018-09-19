@@ -7,12 +7,12 @@ package regalloc
 import (
 	"testing"
 
-	"github.com/tsavola/wag/abi"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/isa/reglayout"
+	"github.com/tsavola/wag/wa"
 )
 
-func (a *Allocator) testAllocated(t abi.Type, r reg.R) bool {
+func (a *Allocator) testAllocated(t wa.Type, r reg.R) bool {
 	return a.categories[t.Category()].testAllocated(r)
 }
 
@@ -30,7 +30,7 @@ func TestRegAlloc(t *testing.T) {
 	)
 
 	for r0 := first; r0 <= last; r0++ {
-		r1 := a.AllocResult(abi.I32)
+		r1 := a.AllocResult(wa.I32)
 		if r1 == reg.Result {
 			t.Fatal(r0, "-", r1, "is result register")
 		}
@@ -39,7 +39,7 @@ func TestRegAlloc(t *testing.T) {
 		}
 
 		for r2 := first; r2 <= last; r2++ {
-			if a.testAllocated(abi.I32, r2) {
+			if a.testAllocated(wa.I32, r2) {
 				if r2 > r0 {
 					t.Fatal(r0, "-", r2, "allocated")
 				}
@@ -51,44 +51,44 @@ func TestRegAlloc(t *testing.T) {
 		}
 	}
 
-	if r := a.AllocResult(abi.I32); r != reg.Result {
+	if r := a.AllocResult(wa.I32); r != reg.Result {
 		t.Fatal("allocation succeeded:", r)
 	}
 
 	for r0 := first; r0 <= last; r0++ {
-		a.Free(abi.I32, r0)
-		if a.testAllocated(abi.I32, r0) {
+		a.Free(wa.I32, r0)
+		if a.testAllocated(wa.I32, r0) {
 			t.Fatal(r0, "is still allocated")
 		}
 
-		r1 := a.AllocResult(abi.I32)
+		r1 := a.AllocResult(wa.I32)
 		if r1 == reg.Result {
 			t.Fatal("allocation failed")
 		}
 		if r1 != first {
 			t.Fatal(r1, "is not", first)
 		}
-		a.Free(abi.I32, r1)
+		a.Free(wa.I32, r1)
 	}
 
 	a.CheckNoneAllocated()
 
-	r1 := a.AllocResult(abi.I32)
+	r1 := a.AllocResult(wa.I32)
 	if r1 == reg.Result {
 		t.Fatal("#1")
 	}
-	if !a.testAllocated(abi.I32, r1) {
+	if !a.testAllocated(wa.I32, r1) {
 		t.Fatal("#2")
 	}
 	if r1 != reglayout.AllocIntFirst {
 		t.Fatal("#3")
 	}
 
-	r2 := a.AllocResult(abi.I32)
+	r2 := a.AllocResult(wa.I32)
 	if r2 == reg.Result {
 		t.Fatal("#4")
 	}
-	if !a.testAllocated(abi.I32, r2) {
+	if !a.testAllocated(wa.I32, r2) {
 		t.Fatal("#5")
 	}
 	if r2 == r1 {
@@ -98,11 +98,11 @@ func TestRegAlloc(t *testing.T) {
 		t.Fatal("#7")
 	}
 
-	r1f := a.AllocResult(abi.F32)
+	r1f := a.AllocResult(wa.F32)
 	if r1f == reg.Result {
 		t.Fatal("#8")
 	}
-	if !a.testAllocated(abi.F32, r1f) {
+	if !a.testAllocated(wa.F32, r1f) {
 		t.Fatal("#9")
 	}
 	if r1f != reglayout.AllocFloatFirst {
