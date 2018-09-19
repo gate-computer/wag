@@ -38,7 +38,7 @@ const (
 	MinUnorderedOrCondition = UnorderedOrEq
 )
 
-var Inverted = []C{
+var Inverted = [22]C{
 	Eq:            Ne,
 	Ne:            Eq,
 	GeS:           LtS,
