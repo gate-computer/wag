@@ -26,17 +26,17 @@ func (target *testDuration) set(d time.Duration) {
 	}
 }
 
-type dummyEnv struct{}
+type dummyReso struct{}
 
-func (*dummyEnv) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
+func (*dummyReso) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
 	return
 }
 
-func (*dummyEnv) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error) {
+func (*dummyReso) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
 	return
 }
 
-var loadBenchmarkEnv Env = new(dummyEnv)
+var loadBenchmarkReso ImportResolver = new(dummyReso)
 
 const (
 	loadBenchmarkFilename      = "../testdata/large.wasm"
@@ -67,7 +67,8 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		roData        = make([]byte, loadBenchmarkMaxRODataSize)
 		globalsMemory = make([]byte, loadBenchmarkMaxDataSize)
 
-		elapMeta testDuration
+		elapInit testDuration
+		elapReso testDuration
 		elapCode testDuration
 		elapData testDuration
 	)
@@ -97,23 +98,27 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		b.StartTimer()
 
 		t0 := time.Now()
-		mod.loadInitialSections(r, loadBenchmarkEnv)
+		mod.loadInitialSections(r)
 		t1 := time.Now()
-		loadCodeSection(code, r, mod)
+		mod.defineImports(loadBenchmarkReso)
 		t2 := time.Now()
-		loadDataSection(data, r, mod)
+		loadCodeSection(code, r, mod)
 		t3 := time.Now()
+		loadDataSection(data, r, mod)
+		t4 := time.Now()
 
 		b.StopTimer()
 
-		elapMeta.set(t1.Sub(t0))
-		elapCode.set(t2.Sub(t1))
-		elapData.set(t3.Sub(t2))
+		elapInit.set(t1.Sub(t0))
+		elapReso.set(t2.Sub(t1))
+		elapCode.set(t3.Sub(t2))
+		elapData.set(t4.Sub(t3))
 
 		checkLoadBenchmarkOutput(b, code)
 	}
 
-	b.Logf("meta: %v", elapMeta)
+	b.Logf("init: %v", elapInit)
+	b.Logf("reso: %v", elapReso)
 	b.Logf("code: %v", elapCode)
 	b.Logf("data: %v", elapData)
 }

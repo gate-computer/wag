@@ -28,15 +28,15 @@ var (
 )
 
 type importFunc struct {
-	absAddr uint64
-	params  int
+	addr   uint64
+	params int
 }
 
 var importFuncs = make(map[string]importFunc)
 
-type env struct{}
+type resolver struct{}
 
-func (*env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
+func (resolver) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
 	if verbose {
 		log.Printf("import %s%s", field, sig)
 	}
@@ -47,7 +47,7 @@ func (*env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAdd
 	}
 
 	i := importFuncs[field]
-	if i.absAddr == 0 {
+	if i.addr == 0 {
 		err = fmt.Errorf("import function not supported: %s", field)
 		return
 	}
@@ -56,11 +56,11 @@ func (*env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAdd
 		return
 	}
 
-	absAddr = i.absAddr
+	addr = i.addr
 	return
 }
 
-func (*env) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error) {
+func (resolver) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
 	err = fmt.Errorf("imported global not supported: %s %s", module, field)
 	return
 }
@@ -137,7 +137,7 @@ func main() {
 		RODataAddr:      roDataAddr,
 		MemoryAlignment: os.Getpagesize(),
 	}
-	obj, err := wag.Compile(config, progReader, &env{})
+	obj, err := wag.Compile(config, progReader, resolver{})
 	if dumpText {
 		e := dump.Text(os.Stdout, obj.Text, textAddr, roDataAddr, obj.FuncAddrs, &obj.Names)
 		if err == nil {

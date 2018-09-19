@@ -19,7 +19,7 @@ const (
 )
 
 func Fuzz(data []byte) int {
-	obj, err := wag.Compile(&wag.Config{RODataAddr: roDataAddr}, bytes.NewReader(data), env{})
+	obj, err := wag.Compile(&wag.Config{RODataAddr: roDataAddr}, bytes.NewReader(data), res{})
 	if err != nil {
 		return 0
 	}
@@ -40,14 +40,14 @@ func Fuzz(data []byte) int {
 	return 1
 }
 
-type env struct{}
+type res struct{}
 
-func (env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
+func (res) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
 	err = fmt.Errorf("import function %#v%#v %s", module, field, sig)
 	return
 }
 
-func (env) ImportGlobal(module, field string, t abi.Type) (value uint64, err error) {
+func (res) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
 	err = fmt.Errorf("import %s global %#v %#v", t, module, field)
 	return
 }

@@ -472,11 +472,11 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 			}
 		)
 
-		mod.loadInitialSections(wasm, runner.Env)
+		mod.loadInitialSections(wasm)
+		mod.defineImports(runner.Resolver)
 		loadCodeSection(code, wasm, mod)
 		loadDataSection(data, wasm, mod)
 		loadUnknownSections(nameLoader, wasm)
-
 		p.Seal()
 		p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 		minMemorySize, maxMemorySize := mod.MemoryLimits()

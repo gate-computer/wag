@@ -45,7 +45,8 @@ func TestSnapshot(t *testing.T) {
 	var mod = &Module{
 		EntrySymbol: "main",
 	}
-	mod.loadInitialSections(wasm, runner.Env)
+	mod.loadInitialSections(wasm)
+	mod.defineImports(runner.Resolver)
 
 	var code = &CodeConfig{
 		Text:         static.Buf(p.Text),

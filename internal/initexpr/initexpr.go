@@ -35,7 +35,7 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t abi.Type) {
 
 	case codegen.OpcodeGetGlobal:
 		i := load.Varuint32()
-		if i >= uint32(m.NumImportGlobals) {
+		if i >= uint32(len(m.ImportGlobals)) {
 			panic(fmt.Errorf("import global index out of bounds in initializer expression: %d", i))
 		}
 		g := m.Globals[i]

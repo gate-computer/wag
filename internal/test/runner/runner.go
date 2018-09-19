@@ -82,9 +82,9 @@ var importFuncs = map[string]map[string]imports.Func{
 	},
 }
 
-type env struct{}
+type res struct{}
 
-func (env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error) {
+func (res) ResolveVariadicFunc(module, field string, sig abi.Sig) (variadic bool, addr uint64, err error) {
 	f, found := importFuncs[module][field]
 	if !found {
 		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
@@ -97,11 +97,16 @@ func (env) ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr
 	}
 
 	variadic = f.Variadic
-	absAddr = f.AbsAddr
+	addr = f.AbsAddr
 	return
 }
 
-func (env) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error) {
+func (r res) ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error) {
+	_, addr, err = r.ResolveVariadicFunc(module, field, sig)
+	return
+}
+
+func (res) ResolveGlobal(module, field string, t abi.Type) (init uint64, err error) {
 	switch module {
 	case "spectest":
 		switch field {
@@ -114,7 +119,7 @@ func (env) ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err
 	return
 }
 
-var Env env
+var Resolver res
 
 type runnable interface {
 	getText() []byte

@@ -71,7 +71,7 @@ func fuzz(t *testing.T, filename string) {
 		RODataAddr: p.RODataAddr(),
 	}
 
-	_, err = Compile(&config, bufio.NewReader(f), runner.Env)
+	_, err = Compile(&config, bufio.NewReader(f), runner.Resolver)
 	if err == nil {
 		t.Logf("%s: no error", filename)
 	} else {

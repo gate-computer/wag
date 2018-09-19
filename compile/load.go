@@ -28,18 +28,22 @@ import (
 	"github.com/tsavola/wag/wasm"
 )
 
-// Env knows what importable functions are available and where they are during
-// execution.  It also knows the values of importable globals.
-type Env interface {
-	ImportFunc(module, field string, sig abi.Sig) (variadic bool, absAddr uint64, err error)
-	ImportGlobal(module, field string, t abi.Type) (valueBits uint64, err error)
-}
-
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
 type Reader = reader.R
 
 type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
+
+// ImportResolver maps symbols to function addresses and constant values.
+type ImportResolver interface {
+	ResolveFunc(module, field string, sig abi.Sig) (addr uint64, err error)
+	ResolveGlobal(module, field string, t abi.Type) (init uint64, err error)
+}
+
+type variadicImportResolver interface {
+	ImportResolver
+	ResolveVariadicFunc(module, field string, sig abi.Sig) (variadic bool, addr uint64, err error)
+}
 
 const (
 	maxStringLen          = 255   // TODO
@@ -107,16 +111,16 @@ type Module struct {
 
 // LoadInitialSections reads all sections preceding code and data, initializing
 // the Module instance.
-func (m *Module) LoadInitialSections(r Reader, env Env) (err error) {
+func (m *Module) LoadInitialSections(r Reader) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	m.loadInitialSections(r, env)
+	m.loadInitialSections(r)
 	return
 }
 
-func (m *Module) loadInitialSections(r Reader, env Env) {
+func (m *Module) loadInitialSections(r Reader) {
 	load := loader.L{R: r}
 
 	var header module.Header
@@ -157,12 +161,12 @@ func (m *Module) loadInitialSections(r Reader, env Env) {
 		}
 
 		payloadLen := load.Varuint32()
-		metaSectionLoaders[id](payloadLen, m, load, env)
+		metaSectionLoaders[id](payloadLen, m, load)
 	}
 }
 
-var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L, Env){
-	module.SectionUnknown: func(payloadLen uint32, m *Module, load loader.L, _ Env) {
+var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L){
+	module.SectionUnknown: func(payloadLen uint32, m *Module, load loader.L) {
 		var err error
 		if m.UnknownSectionLoader != nil {
 			err = m.UnknownSectionLoader(load, payloadLen)
@@ -174,7 +178,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 		}
 	},
 
-	module.SectionType: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionType: func(_ uint32, m *Module, load loader.L) {
 		for i := range load.Count() {
 			if form := load.Varint7(); form != -0x20 {
 				panic(fmt.Errorf("unsupported function type form: %d", form))
@@ -200,7 +204,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 		}
 	},
 
-	module.SectionImport: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionImport: func(_ uint32, m *Module, load loader.L) {
 		for i := range load.Count() {
 			moduleLen := load.Varuint32()
 			if moduleLen > maxStringLen {
@@ -225,23 +229,13 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 					panic(fmt.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
 				}
 
-				sig := m.m.Sigs[sigIndex]
-				if n := len(sig.Args); n > codegen.MaxFuncParams {
-					panic(fmt.Errorf("import function #%d has too many parameters: %d", i, n))
-				}
-
-				funcIndex := len(m.m.FuncSigs)
 				m.m.FuncSigs = append(m.m.FuncSigs, sigIndex)
 
-				variadic, absAddr, err := env.ImportFunc(moduleStr, fieldStr, sig)
-				if err != nil {
-					panic(err)
-				}
-
 				m.m.ImportFuncs = append(m.m.ImportFuncs, module.ImportFunc{
-					FuncIndex: funcIndex,
-					Variadic:  variadic,
-					AbsAddr:   absAddr,
+					Import: module.Import{
+						Module: moduleStr,
+						Field:  fieldStr,
+					},
 				})
 
 			case module.ExternalKindTable:
@@ -257,31 +251,26 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 
 				t := typedecode.Value(load.Varint7())
 
-				mutable := load.Varuint1()
-				if mutable {
+				if mutable := load.Varuint1(); mutable {
 					panic(fmt.Errorf("unsupported mutable global in import #%d", i))
 				}
 
-				init, err := env.ImportGlobal(moduleStr, fieldStr, t)
-				if err != nil {
-					panic(err)
-				}
-
 				m.m.Globals = append(m.m.Globals, module.Global{
-					Type:    t,
-					Mutable: mutable,
-					Init:    init,
+					Type: t,
+				})
+
+				m.m.ImportGlobals = append(m.m.ImportGlobals, module.Import{
+					Module: moduleStr,
+					Field:  fieldStr,
 				})
 
 			default:
 				panic(fmt.Errorf("import kind not supported: %s", kind))
 			}
 		}
-
-		m.m.NumImportGlobals = len(m.m.Globals)
 	},
 
-	module.SectionFunction: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionFunction: func(_ uint32, m *Module, load loader.L) {
 		for range load.Count() {
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.m.Sigs)) {
@@ -292,19 +281,19 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 		}
 	},
 
-	module.SectionTable: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionTable: func(_ uint32, m *Module, load loader.L) {
 		for range load.Count() {
 			readTable(&m.m, load)
 		}
 	},
 
-	module.SectionMemory: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionMemory: func(_ uint32, m *Module, load loader.L) {
 		for range load.Count() {
 			readMemory(&m.m, load)
 		}
 	},
 
-	module.SectionGlobal: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionGlobal: func(_ uint32, m *Module, load loader.L) {
 		for range load.Count() {
 			if len(m.m.Globals) >= maxGlobals {
 				panic(errors.New("too many globals"))
@@ -322,7 +311,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 		}
 	},
 
-	module.SectionExport: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionExport: func(_ uint32, m *Module, load loader.L) {
 		for i := range load.Count() {
 			fieldLen := load.Varuint32()
 			if fieldLen > maxStringLen {
@@ -358,7 +347,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 		}
 	},
 
-	module.SectionStart: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionStart: func(_ uint32, m *Module, load loader.L) {
 		index := load.Varuint32()
 		if index >= uint32(len(m.m.FuncSigs)) {
 			panic(fmt.Errorf("start function index out of bounds: %d", index))
@@ -374,7 +363,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L,
 		m.m.StartDefined = true
 	},
 
-	module.SectionElement: func(_ uint32, m *Module, load loader.L, env Env) {
+	module.SectionElement: func(_ uint32, m *Module, load loader.L) {
 		for i := range load.Count() {
 			if index := load.Varuint32(); index != 0 {
 				panic(fmt.Errorf("unsupported table index: %d", index))
@@ -427,6 +416,65 @@ func (m *Module) MemoryLimits() (initial, maximum wasm.MemorySize) {
 	initial = wasm.MemorySize(m.m.MemoryLimitValues.Initial)
 	maximum = wasm.MemorySize(m.m.MemoryLimitValues.Maximum)
 	return
+}
+
+func (m *Module) NumImportFunc() int   { return len(m.m.ImportFuncs) }
+func (m *Module) NumImportGlobal() int { return len(m.m.ImportGlobals) }
+
+func (m *Module) ImportFunc(i int) (module, field string, sig abi.Sig) {
+	imp := m.m.ImportFuncs[i]
+	module = imp.Module
+	field = imp.Field
+
+	sigIndex := m.m.FuncSigs[i]
+	sig = m.m.Sigs[sigIndex]
+	return
+}
+
+func (m *Module) ImportGlobal(i int) (module, field string, t abi.Type) {
+	imp := m.m.ImportGlobals[i]
+	module = imp.Module
+	field = imp.Field
+
+	t = m.m.Globals[i].Type
+	return
+}
+
+func (m *Module) DefineImportFunc(i int, addr uint64)   { m.m.ImportFuncs[i].Addr = addr }
+func (m *Module) DefineImportGlobal(i int, init uint64) { m.m.Globals[i].Init = init }
+
+func (m *Module) DefineImports(res ImportResolver) (err error) {
+	if varRes, ok := res.(variadicImportResolver); ok {
+		for i := range m.m.ImportFuncs {
+			imp := &m.m.ImportFuncs[i]
+			imp.Variadic, imp.Addr, err = varRes.ResolveVariadicFunc(m.ImportFunc(i))
+			if err != nil {
+				return
+			}
+		}
+	} else {
+		for i := range m.m.ImportFuncs {
+			m.m.ImportFuncs[i].Addr, err = res.ResolveFunc(m.ImportFunc(i))
+			if err != nil {
+				return
+			}
+		}
+	}
+
+	for i := range m.m.ImportGlobals {
+		m.m.Globals[i].Init, err = res.ResolveGlobal(m.ImportGlobal(i))
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (m *Module) defineImports(res ImportResolver) {
+	if err := m.DefineImports(res); err != nil {
+		panic(err)
+	}
 }
 
 func (m *Module) GlobalsSize() int {

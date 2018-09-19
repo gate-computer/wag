@@ -63,10 +63,15 @@ func (kind ExternalKind) String() (s string) {
 	return
 }
 
+type Import struct {
+	Module string
+	Field  string
+}
+
 type ImportFunc struct {
-	FuncIndex int
-	Variadic  bool
-	AbsAddr   uint64
+	Import
+	Addr     uint64
+	Variadic bool
 }
 
 type ResizableLimits struct {
@@ -88,7 +93,7 @@ type M struct {
 	TableLimitValues  ResizableLimits
 	MemoryLimitValues ResizableLimits
 	Globals           []Global
-	NumImportGlobals  int
+	ImportGlobals     []Import
 	EntryIndex        uint32
 	EntryDefined      bool
 	StartIndex        uint32

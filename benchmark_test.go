@@ -50,7 +50,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		MemoryAlignment: os.Getpagesize(),
 	}
 
-	obj, err := Compile(&config, bytes.NewReader(data), runner.Env)
+	obj, err := Compile(&config, bytes.NewReader(data), runner.Resolver)
 	if err != nil {
 		t.Fatal(err)
 	}

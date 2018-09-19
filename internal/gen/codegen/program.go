@@ -124,7 +124,7 @@ func GenProgram(
 	}
 
 	for i, imp := range m.ImportFuncs {
-		addr := genImportTrampoline(p, m, imp)
+		addr := genImportTrampoline(p, m, i, imp)
 		p.FuncLinks[i].Addr = addr
 	}
 

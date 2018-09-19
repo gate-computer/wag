@@ -9,14 +9,14 @@ import (
 	"github.com/tsavola/wag/internal/module"
 )
 
-func genImportTrampoline(p *gen.Prog, m *module.M, imp module.ImportFunc) (addr int32) {
+func genImportTrampoline(p *gen.Prog, m *module.M, funcIndex int, imp module.ImportFunc) (addr int32) {
 	isa.AlignFunc(p)
 	addr = p.Text.Addr
 	p.Map.PutImportFuncAddr(addr)
 
-	sigIndex := m.FuncSigs[imp.FuncIndex]
+	sigIndex := m.FuncSigs[funcIndex]
 	sig := m.Sigs[sigIndex]
 
-	asm.JumpToImportFunc(p, imp.AbsAddr, imp.Variadic, len(sig.Args), int(sigIndex))
+	asm.JumpToImportFunc(p, imp.Addr, imp.Variadic, len(sig.Args), int(sigIndex))
 	return
 }

@@ -40,7 +40,7 @@ type Config struct {
 }
 
 // Compile a WebAssembly binary module into machine code.
-func Compile(config *Config, r compile.Reader, env compile.Env) (obj *Object, err error) {
+func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj *Object, err error) {
 	obj = new(Object)
 	nameLoader := section.UnknownLoaders{"name": obj.Names.Load}.Load
 
@@ -50,7 +50,12 @@ func Compile(config *Config, r compile.Reader, env compile.Env) (obj *Object, er
 		UnknownSectionLoader: nameLoader,
 	}
 
-	err = mod.LoadInitialSections(r, env)
+	err = mod.LoadInitialSections(r)
+	if err != nil {
+		return
+	}
+
+	err = mod.DefineImports(res)
 	if err != nil {
 		return
 	}
