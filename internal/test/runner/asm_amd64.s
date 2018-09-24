@@ -10,16 +10,43 @@ TEXT ·run(SB),NOSPLIT,$0-144
 	MOVQ	initialMemorySize+24(FP), R13
 	MOVQ	memoryAddr+32(FP), R14	// memory ptr
 	MOVQ	growMemorySize+40(FP), R11
-	ADDQ	R14, R13		// current memory limit
-	ADDQ	R14, R11		// memory growth limit
 	MOVQ	stack+56(FP), BX	// stack limit
 	MOVQ	stackOffset+80(FP), CX
+	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
+	MOVQ	slaveFd+96(FP), DI	// slave fd
+	MOVQ	arg+104(FP), DX		// arg
+	JMP	run<>(SB)
+
+// func ObjectRuntime() (slice []byte)
+TEXT ·ObjectRuntime(SB),$0-24
+	LEAQ	objectRuntimeStart<>(SB), AX
+	LEAQ	objectRuntimeEnd<>(SB), BX
+	SUBQ	AX, BX
+	MOVQ	AX, slice+0(FP)		// data
+	MOVQ	BX, slice+8(FP)		// len
+	MOVQ	BX, slice+16(FP)	// cap
+	RET
+
+TEXT objectRuntimeStart<>(SB),NOSPLIT,$0
+	XORL	AX, AX			// resume
+	MOVQ	SP, BX			// stack ptr
+	MOVQ	$0x100000, CX		// stack offset
+	SUBQ	CX, BX			// stack limit
+	XORL	DX, DX			// arg
+	MOVL	$1023, DI		// slave fd
+	MOVQ	$0x80000000, R11	// grow memory size
+	MOVQ	$0x1000000, R13		// init memory size
+	MOVQ	$0x300000000, R14	// memory
+	MOVQ	$0x200000000, R15	// text
+	JMP	run<>(SB)
+
+TEXT run<>(SB),NOSPLIT,$0-8
+	ADDQ	R14, R13		// current memory limit
+	ADDQ	R14, R11		// memory growth limit
 	ADDQ	BX, CX			// stack ptr
 	ADDQ	$128, BX		// for imports and traps
 	ADDQ	$16, BX			// call + stack check trap call
-	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
-	MOVQ	slaveFd+96(FP), M6	// slave fd
-	MOVQ	arg+104(FP), DX		// arg
+	MOVQ	DI, M6			// slave fd
 	LEAQ	trap<>(SB), R8
 	MOVQ	R8, M0			// trap handler
 	MOVQ	R11, M1			// memory growth limit
@@ -306,3 +333,5 @@ TEXT suspendNextCall<>(SB),NOSPLIT,$0
 fail:
 	MOVQ	$3002, AX
 	JMP	trap<>(SB)
+
+TEXT objectRuntimeEnd<>(SB),NOSPLIT,$0

@@ -1,0 +1,15 @@
+// Copyright (c) 2018 Timo Savola. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package internal
+
+// File represents a standalone executable program.
+type File struct {
+	Runtime       []byte // position-independent code
+	Text          []byte
+	ROData        []byte
+	RODataAddr    uintptr
+	GlobalsMemory []byte
+	MemoryOffset  int
+}
