@@ -8,10 +8,10 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
+	"github.com/tsavola/wag/internal/opcode"
 )
 
 func globalOffset(f *gen.Func, index uint32) int32 {

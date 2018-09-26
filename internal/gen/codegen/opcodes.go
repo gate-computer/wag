@@ -3,9 +3,9 @@
 package codegen
 
 import (
-	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/opcode"
 	"github.com/tsavola/wag/wa"
 )
 

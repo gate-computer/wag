@@ -6,8 +6,8 @@ package codegen
 
 import (
 	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/opcode"
 )
 
 func skipOps(load loader.L) {
