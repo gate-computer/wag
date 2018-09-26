@@ -8,16 +8,17 @@ import (
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 )
 
 type Prog struct {
+	Module     *module.M
 	Text       code.Buf
 	ROData     data.Buffer
 	RODataAddr int32
 	Map        obj.Map
-
-	FuncLinks []link.FuncL
-	TrapLinks [trap.NumTraps]link.L
+	FuncLinks  []link.FuncL
+	TrapLinks  [trap.NumTraps]link.L
 }

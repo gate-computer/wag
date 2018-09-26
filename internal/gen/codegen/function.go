@@ -16,7 +16,6 @@ import (
 	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wa"
@@ -109,25 +108,28 @@ func truncateBlockOperands(f *gen.Func) {
 	}
 }
 
-func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
-	f := &gen.Func{
-		Prog:   p,
-		Module: m,
-		Regs:   regalloc.Make(),
+func genFunction(f *gen.Func, load loader.L, funcIndex int) {
+	*f = gen.Func{
+		Prog: f.Prog,
+
+		Regs:          regalloc.Make(),
+		Operands:      f.Operands[:0],
+		BranchTargets: f.BranchTargets[:0],
+		BranchTables:  f.BranchTables[:0],
 	}
 
-	sigIndex := m.Funcs[funcIndex]
-	sig := m.Types[sigIndex]
+	sigIndex := f.Module.Funcs[funcIndex]
+	sig := f.Module.Types[sigIndex]
 
 	if debug.Enabled {
-		debug.Printf("function %d %s", funcIndex-len(m.ImportFuncs), sig)
+		debug.Printf("function %d %s", funcIndex-len(f.Module.ImportFuncs), sig)
 		debug.Depth++
 	}
 
 	load.Varuint32() // body size
 
-	isa.AlignFunc(p)
-	addr := p.Text.Addr
+	isa.AlignFunc(&f.Prog)
+	addr := f.Text.Addr
 	f.FuncLinks[funcIndex].Addr = addr
 	f.Map.PutFuncAddr(addr)
 	stackCheckAddr := asm.SetupStackFrame(f)
@@ -154,7 +156,7 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 	f.NumParams = len(sig.Params)
 	f.NumLocals = len(f.LocalTypes) - f.NumParams
 
-	asm.PushZeros(p, f.NumLocals)
+	asm.PushZeros(&f.Prog, f.NumLocals)
 
 	pushBranchTarget(f, f.ResultType, true)
 
@@ -168,10 +170,10 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 
 		switch {
 		case f.ResultType == wa.I32 && !zeroExt:
-			asm.ZeroExtendResultReg(p)
+			asm.ZeroExtendResultReg(&f.Prog)
 
 		case f.ResultType == wa.Void || f.ResultType.Category() == wa.Float:
-			asm.ClearIntResultReg(p)
+			asm.ClearIntResultReg(&f.Prog)
 		}
 
 		if len(f.Operands) != 0 {
@@ -185,15 +187,15 @@ func genFunction(p *gen.Prog, load loader.L, m *module.M, funcIndex int) {
 
 	end := popBranchTarget(f)
 	label(f, end)
-	isa.UpdateFarBranches(p.Text.Bytes(), end)
+	isa.UpdateFarBranches(f.Text.Bytes(), end)
 
-	asm.Return(p, f.NumLocals+f.StackDepth)
+	asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
 
 	if len(f.BranchTargets) != 0 {
 		panic("branch target stack is not empty at end of function")
 	}
 
-	isa.UpdateStackCheck(p.Text.Bytes(), stackCheckAddr, f.NumLocals+f.MaxStackDepth)
+	isa.UpdateStackCheck(f.Text.Bytes(), stackCheckAddr, f.NumLocals+f.MaxStackDepth)
 
 	roDataBuf := f.ROData.Bytes()
 
@@ -250,14 +252,14 @@ func opStabilizeOperands(f *gen.Func) {
 			debug.Printf("stabilize operand #%d: %s", i, *x)
 
 			r := opAllocReg(f, x.Type)
-			asm.MoveReg(f.Prog, x.Type, r, reg.Result)
+			asm.MoveReg(&f.Prog, x.Type, r, reg.Result)
 			x.SetReg(r, true)
 
 		case x.Storage == storage.Flags:
 			debug.Printf("stabilize operand #%d: %s", i, *x)
 
 			r := opAllocReg(f, x.Type)
-			asm.SetBool(f.Prog, r, x.FlagsCond())
+			asm.SetBool(&f.Prog, r, x.FlagsCond())
 			x.SetReg(r, true)
 		}
 	}
@@ -281,16 +283,16 @@ func opSaveSomeOperands(f *gen.Func, count int) {
 
 		switch x.Storage {
 		case storage.Imm:
-			asm.PushImm(f.Prog, x.ImmValue())
+			asm.PushImm(&f.Prog, x.ImmValue())
 			x.SetStack()
 
 		case storage.Reg:
-			asm.PushReg(f.Prog, x.Type, x.Reg())
+			asm.PushReg(&f.Prog, x.Type, x.Reg())
 			f.Regs.Free(x.Type, x.Reg())
 			x.SetStack()
 
 		case storage.Flags:
-			asm.PushCond(f.Prog, x.FlagsCond())
+			asm.PushCond(&f.Prog, x.FlagsCond())
 			x.SetStack()
 		}
 	}
@@ -328,7 +330,7 @@ func opDropOperand(f *gen.Func) {
 
 	switch x.Storage {
 	case storage.Stack:
-		asm.DropStackValues(f.Prog, 1)
+		asm.DropStackValues(&f.Prog, 1)
 		f.StackDepth--
 
 		debug.Printf("stack depth: %d (drop 1)", f.StackDepth)
@@ -354,7 +356,7 @@ func opDropCallOperands(f *gen.Func, n int) {
 		}
 	}
 
-	asm.DropStackValues(f.Prog, n)
+	asm.DropStackValues(&f.Prog, n)
 	f.StackDepth -= n
 
 	debug.Printf("stack depth: %d (drop %d)", f.StackDepth, n)
@@ -391,12 +393,12 @@ search:
 
 		switch x.Storage {
 		case storage.Imm:
-			asm.PushImm(f.Prog, x.ImmValue())
+			asm.PushImm(&f.Prog, x.ImmValue())
 			x.SetStack()
 
 		case storage.Reg:
 			r = x.Reg()
-			asm.PushReg(f.Prog, x.Type, r)
+			asm.PushReg(&f.Prog, x.Type, r)
 			x.SetStack()
 
 			if r != reg.Result {
@@ -410,7 +412,7 @@ search:
 			}
 
 		case storage.Flags:
-			asm.PushCond(f.Prog, x.FlagsCond())
+			asm.PushCond(&f.Prog, x.FlagsCond())
 			x.SetStack()
 		}
 	}

@@ -129,9 +129,9 @@ func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	debug.Printf("target stack depth: %d", target.StackDepth)
 
 	if target.FuncEnd {
-		asm.Return(f.Prog, f.NumLocals+f.StackDepth)
+		asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
 	} else {
-		asm.DropStackValues(f.Prog, f.StackDepth-target.StackDepth)
+		asm.DropStackValues(&f.Prog, f.StackDepth-target.StackDepth)
 
 		if b := getCurrentBlock(f); target.Label.Addr != 0 && !b.Suspension {
 			debug.Printf("loop")
@@ -159,7 +159,7 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 
 		if cond.Storage == storage.Reg && cond.Reg() == reg.Result {
 			r := opAllocReg(f, wa.I32)
-			asm.MoveReg(f.Prog, wa.I32, r, reg.Result)
+			asm.MoveReg(&f.Prog, wa.I32, r, reg.Result)
 			cond.SetReg(r, true)
 		}
 		valueZeroExt = asm.Move(f, reg.Result, value)
@@ -168,12 +168,12 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	drop := f.StackDepth - target.StackDepth
 
 	if target.Label.Addr == 0 {
-		asm.DropStackValues(f.Prog, drop)
+		asm.DropStackValues(&f.Prog, drop)
 
 		retAddrs := asm.BranchIfStub(f, cond, true, false)
 		target.Label.AddSites(retAddrs)
 
-		asm.DropStackValues(f.Prog, -drop)
+		asm.DropStackValues(&f.Prog, -drop)
 	} else if b := getCurrentBlock(f); !b.Suspension {
 		debug.Printf("loop")
 		if target.ValueType != wa.Void {
@@ -185,9 +185,9 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 		retAddrs := asm.BranchIfStub(f, cond, false, true)
 		skip.AddSites(retAddrs)
 
-		asm.DropStackValues(f.Prog, drop)
+		asm.DropStackValues(&f.Prog, drop)
 		asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
-		asm.Branch(f.Prog, target.Label.Addr)
+		asm.Branch(&f.Prog, target.Label.Addr)
 
 		skip.Addr = f.Text.Addr
 		isa.UpdateNearBranches(f.Text.Bytes(), &skip)
@@ -265,7 +265,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	if value.Type != wa.Void {
 		if index.Storage == storage.Reg && index.Reg() == reg.Result {
 			indexReg := allocStealDeadReg(f, wa.I32)
-			asm.MoveReg(f.Prog, wa.I32, indexReg, reg.Result)
+			asm.MoveReg(&f.Prog, wa.I32, indexReg, reg.Result)
 			index.SetReg(indexReg, true)
 		}
 		asm.Move(f, reg.Result, value)
@@ -281,7 +281,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 
 	defaultDrop := f.StackDepth - defaultTarget.StackDepth
 	debug.Printf("drop values from physical stack for default target: %d", defaultDrop)
-	asm.DropStackValues(f.Prog, defaultDrop)
+	asm.DropStackValues(&f.Prog, defaultDrop)
 
 	if b := getCurrentBlock(f); loop && !b.Suspension {
 		if value.Type != wa.Void {
@@ -297,11 +297,11 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	if tableType == wa.I32 {
 		drop := defaultTarget.StackDepth - commonStackDepth
 		debug.Printf("drop values from physical stack for dynamic target: %d", drop)
-		asm.DropStackValues(f.Prog, drop)
+		asm.DropStackValues(&f.Prog, drop)
 	} else {
 		debug.Printf("drop values from physical stack for dynamic target")
 		indexOnly := allocStealDeadReg(f, wa.I32)
-		asm.MoveReg(f.Prog, wa.I32, indexOnly, r)
+		asm.MoveReg(&f.Prog, wa.I32, indexOnly, r)
 		asm.AddToStackPtrUpper32(f, r)
 		r = indexOnly
 	}
@@ -428,14 +428,14 @@ func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 }
 
 func opBranch(f *gen.Func, l *link.L) {
-	retAddr := asm.Branch(f.Prog, l.Addr)
+	retAddr := asm.Branch(&f.Prog, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
 	}
 }
 
 func opBranchIfOutOfBounds(f *gen.Func, indexReg reg.R, upperBound int32, l *link.L) {
-	site := asm.BranchIfOutOfBounds(f.Prog, indexReg, upperBound, l.Addr)
+	site := asm.BranchIfOutOfBounds(&f.Prog, indexReg, upperBound, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(site)
 	}

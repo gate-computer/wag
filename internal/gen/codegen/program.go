@@ -41,14 +41,17 @@ func GenProgram(
 	entryArgs []uint64,
 	eventHandler func(event.Event),
 ) {
-	p := &gen.Prog{
-		Text:       code.Buf{Buffer: text},
-		ROData:     roData,
-		RODataAddr: roDataAddr,
-		Map:        objMap,
-
-		FuncLinks: make([]link.FuncL, len(m.Funcs)),
+	funcStorage := gen.Func{
+		Prog: gen.Prog{
+			Module:     m,
+			Text:       code.Buf{Buffer: text},
+			ROData:     roData,
+			RODataAddr: roDataAddr,
+			Map:        objMap,
+			FuncLinks:  make([]link.FuncL, len(m.Funcs)),
+		},
 	}
+	p := &funcStorage.Prog
 
 	if debug.Enabled {
 		if debug.Depth != 0 {
@@ -137,7 +140,7 @@ func GenProgram(
 	}
 
 	for i := len(m.ImportFuncs); i < midpoint; i++ {
-		genFunction(p, load, m, i)
+		genFunction(&funcStorage, load, i)
 		isa.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
@@ -170,7 +173,7 @@ func GenProgram(
 		eventHandler(event.Init)
 
 		for i := midpoint; i < len(m.Funcs); i++ {
-			genFunction(p, load, m, i)
+			genFunction(&funcStorage, load, i)
 		}
 
 		eventHandler(event.FunctionBarrier)

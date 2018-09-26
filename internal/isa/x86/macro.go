@@ -171,7 +171,7 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	var outOfBounds link.L
 	var checksOut link.L
 
-	compareBounds(f.Prog, funcIndexReg, int32(len(f.Module.TableFuncs))) // zero-extension
+	compareBounds(&f.Prog, funcIndexReg, int32(len(f.Module.TableFuncs))) // zero-extension
 	in.JLEcb.Stub8(&f.Text)
 	outOfBounds.AddSite(f.Text.Addr)
 
@@ -315,7 +315,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool
 			}
 
 		case storage.Flags:
-			setBool(f.Prog, x.FlagsCond())
+			setBool(&f.Prog, x.FlagsCond())
 			if target != RegScratch {
 				in.MOV.RegReg(&f.Text, wa.I32, target, RegScratch)
 			}
@@ -482,7 +482,7 @@ func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int
 // StoreStack has default restrictions.  The source operand is consumed.
 func (MacroAssembler) StoreStack(f *gen.Func, offset int32, x operand.O) {
 	r, _ := getScratchReg(f, x)
-	asm.StoreStackReg(f.Prog, x.Type, offset, r)
+	asm.StoreStackReg(&f.Prog, x.Type, offset, r)
 	f.Regs.Free(x.Type, r)
 }
 

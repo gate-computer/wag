@@ -48,12 +48,12 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 
 	case prop.FloatAbs:
 		r, _ := allocResultReg(f, x)
-		absFloatReg(f.Prog, x.Type, r)
+		absFloatReg(&f.Prog, x.Type, r)
 		return operand.Reg(x.Type, r, false)
 
 	case prop.FloatNeg:
 		r, _ := allocResultReg(f, x)
-		negFloatReg(f.Prog, x.Type, r)
+		negFloatReg(&f.Prog, x.Type, r)
 		return operand.Reg(x.Type, r, false)
 
 	case prop.FloatRoundOp:

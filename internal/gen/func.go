@@ -11,7 +11,6 @@ import (
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/wa"
 )
@@ -53,8 +52,7 @@ func (t *TrapTrampoline) Addr(f *Func) (addr int32) {
 }
 
 type Func struct {
-	*Prog
-	Module *module.M
+	Prog // initialized by GenProgram, preserved by GenFunction
 
 	Regs regalloc.Allocator
 
