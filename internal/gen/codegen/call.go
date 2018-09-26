@@ -9,13 +9,14 @@ import (
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/wa"
 )
 
-func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
@@ -31,7 +32,7 @@ func genCall(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func genCallIndirect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(f.Module.Types)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))

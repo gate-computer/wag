@@ -8,13 +8,14 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/wa"
 )
 
-func readLocalIndex(f *gen.Func, load loader.L, op Opcode) (index int, t wa.Type) {
+func readLocalIndex(f *gen.Func, load loader.L, op opcode.Opcode) (index int, t wa.Type) {
 	i := load.Varuint32()
 	if i >= uint32(len(f.LocalTypes)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, i))
@@ -25,7 +26,7 @@ func readLocalIndex(f *gen.Func, load loader.L, op Opcode) (index int, t wa.Type
 	return
 }
 
-func genGetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genGetLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	index, t := readLocalIndex(f, load, op)
 	r := opAllocReg(f, t)
 	asm.LoadStack(&f.Prog, t, r, f.LocalOffset(index))
@@ -33,14 +34,14 @@ func genGetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bo
 	return
 }
 
-func genSetLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genSetLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	index, t := readLocalIndex(f, load, op)
 	value := popOperand(f, t)
 	asm.StoreStack(f, f.LocalOffset(index), value)
 	return
 }
 
-func genTeeLocal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genTeeLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	index, t := readLocalIndex(f, load, op)
 	value := popOperand(f, t)
 

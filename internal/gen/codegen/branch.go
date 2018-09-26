@@ -11,6 +11,7 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
@@ -80,7 +81,7 @@ func label(f *gen.Func, l *link.L) {
 	l.Addr = f.Text.Addr
 }
 
-func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
+func genBlock(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	opSaveOperands(f)
 
 	blockType := typedecode.Block(load.Varint7())
@@ -114,7 +115,7 @@ func genBlock(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
 	return false
 }
 
-func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBr(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -146,7 +147,7 @@ func genBr(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -200,7 +201,7 @@ func genBrIf(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableSize) {
 		panic(fmt.Errorf("%s has too many targets: %d", op, targetCount))
@@ -325,7 +326,7 @@ func genBrTable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	return
 }
 
-func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
+func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	ifType := typedecode.Block(load.Varint7())
 
 	debug.Printf("type: %s", ifType)
@@ -392,7 +393,7 @@ func genIf(f *gen.Func, load loader.L, op Opcode, info opInfo) bool {
 	return false
 }
 
-func genLoop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genLoop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opSaveOperands(f)
 
 	blockType := typedecode.Block(load.Varint7())

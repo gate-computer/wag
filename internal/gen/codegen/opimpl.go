@@ -5,22 +5,11 @@
 package codegen
 
 import (
-	"fmt"
-
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/wa"
 )
-
-type Opcode byte
-
-func (op Opcode) String() (s string) {
-	s = opcodeStrings[op]
-	if s == "" {
-		s = fmt.Sprintf("0x%02x", byte(op))
-	}
-	return
-}
 
 type opInfo uint32
 
@@ -37,18 +26,18 @@ func (info opInfo) props() uint16 {
 }
 
 type opImpl struct {
-	gen  func(*gen.Func, loader.L, Opcode, opInfo) bool
+	gen  func(*gen.Func, loader.L, opcode.Opcode, opInfo) bool
 	info opInfo
 }
 
 func init() {
 	// avoid reference cycles by initializing some entries lazily:
 
-	opcodeImpls[OpcodeBlock].gen = genBlock
-	opcodeImpls[OpcodeLoop].gen = genLoop
-	opcodeImpls[OpcodeIf].gen = genIf
+	opcodeImpls[opcode.Block].gen = genBlock
+	opcodeImpls[opcode.Loop].gen = genLoop
+	opcodeImpls[opcode.If].gen = genIf
 
-	opcodeSkips[OpcodeBlock] = skipBlock
-	opcodeSkips[OpcodeLoop] = skipLoop
-	opcodeSkips[OpcodeIf] = skipIf
+	opcodeSkips[opcode.Block] = skipBlock
+	opcodeSkips[opcode.Loop] = skipLoop
+	opcodeSkips[opcode.If] = skipIf
 }

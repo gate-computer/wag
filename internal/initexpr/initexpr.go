@@ -7,33 +7,33 @@ package initexpr
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/internal/gen/codegen"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/wa"
 )
 
 func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
-	op := codegen.Opcode(load.Byte())
+	op := opcode.Opcode(load.Byte())
 
 	switch op {
-	case codegen.OpcodeI32Const:
+	case opcode.I32Const:
 		valueBits = uint64(int64(load.Varint32()))
 		t = wa.I32
 
-	case codegen.OpcodeI64Const:
+	case opcode.I64Const:
 		valueBits = uint64(load.Varint64())
 		t = wa.I64
 
-	case codegen.OpcodeF32Const:
+	case opcode.F32Const:
 		valueBits = uint64(load.Uint32())
 		t = wa.F32
 
-	case codegen.OpcodeF64Const:
+	case opcode.F64Const:
 		valueBits = load.Uint64()
 		t = wa.F64
 
-	case codegen.OpcodeGetGlobal:
+	case opcode.GetGlobal:
 		i := load.Varuint32()
 		if i >= uint32(len(m.ImportGlobals)) {
 			panic(fmt.Errorf("import global index out of bounds in initializer expression: %d", i))
@@ -46,7 +46,7 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
 		panic(fmt.Errorf("unsupported operation in initializer expression: %s", op))
 	}
 
-	if op := codegen.Opcode(load.Byte()); op != codegen.OpcodeEnd {
+	if op := opcode.Opcode(load.Byte()); op != opcode.End {
 		panic(fmt.Errorf("unexpected operation in initializer expression when expecting end: %s", op))
 	}
 

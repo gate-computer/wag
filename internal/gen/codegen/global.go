@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/obj"
@@ -17,7 +18,7 @@ func globalOffset(f *gen.Func, index uint32) int32 {
 	return (int32(index) - int32(len(f.Module.Globals))) * obj.Word
 }
 
-func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genGetGlobal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(f.Module.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))
@@ -30,7 +31,7 @@ func genGetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend b
 	return
 }
 
-func genSetGlobal(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genSetGlobal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(f.Module.Globals)) {
 		panic(fmt.Errorf("%s index out of bounds: %d", op, globalIndex))

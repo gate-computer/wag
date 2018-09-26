@@ -9,6 +9,7 @@ import (
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
+	"github.com/tsavola/wag/internal/gen/opcode"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
@@ -24,9 +25,9 @@ func genOps(f *gen.Func, load loader.L) (deadend bool) {
 	}
 
 	for {
-		op := Opcode(load.Byte())
+		op := opcode.Opcode(load.Byte())
 
-		if op == OpcodeEnd {
+		if op == opcode.End {
 			break
 		}
 
@@ -52,13 +53,13 @@ func genThenOps(f *gen.Func, load loader.L) (deadend, haveElse bool) {
 
 loop:
 	for {
-		op := Opcode(load.Byte())
+		op := opcode.Opcode(load.Byte())
 
 		switch op {
-		case OpcodeEnd:
+		case opcode.End:
 			break loop
 
-		case OpcodeElse:
+		case opcode.Else:
 			haveElse = true
 			break loop
 		}
@@ -77,7 +78,7 @@ loop:
 	return
 }
 
-func genOp(f *gen.Func, load loader.L, op Opcode) (deadend bool) {
+func genOp(f *gen.Func, load loader.L, op opcode.Opcode) (deadend bool) {
 	if debug.Enabled {
 		debug.Printf("%s op", op)
 		debug.Depth++
@@ -100,7 +101,7 @@ func genOp(f *gen.Func, load loader.L, op Opcode) (deadend bool) {
 	return
 }
 
-func genBinary(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBinary(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opStabilizeOperands(f)
 
 	right := popAnyOperand(f)
@@ -110,7 +111,7 @@ func genBinary(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 	return
 }
 
-func genBinaryCommute(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genBinaryCommute(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opStabilizeOperands(f)
 
 	right := popAnyOperand(f)
@@ -124,7 +125,7 @@ func genBinaryCommute(f *gen.Func, load loader.L, op Opcode, info opInfo) (deade
 	return
 }
 
-func opBinary(f *gen.Func, op Opcode, left, right operand.O, info opInfo) {
+func opBinary(f *gen.Func, op opcode.Opcode, left, right operand.O, info opInfo) {
 	if t := info.primaryType(); left.Type != t || right.Type != t {
 		panic(fmt.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}
@@ -133,22 +134,22 @@ func opBinary(f *gen.Func, op Opcode, left, right operand.O, info opInfo) {
 	pushOperand(f, result)
 }
 
-func genConstI32(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstI32(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opConst(f, wa.I32, uint64(int64(load.Varint32())))
 	return
 }
 
-func genConstI64(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstI64(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opConst(f, wa.I64, uint64(load.Varint64()))
 	return
 }
 
-func genConstF32(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstF32(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opConst(f, wa.F32, uint64(load.Uint32()))
 	return
 }
 
-func genConstF64(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConstF64(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opConst(f, wa.F64, load.Uint64())
 	return
 }
@@ -157,7 +158,7 @@ func opConst(f *gen.Func, t wa.Type, value uint64) {
 	pushOperand(f, operand.Imm(t, value))
 }
 
-func genConvert(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genConvert(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	x := popOperand(f, info.secondaryType())
 
 	opStabilizeOperands(f)
@@ -167,7 +168,7 @@ func genConvert(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend boo
 	return
 }
 
-func genLoad(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genLoad(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	index := popOperand(f, wa.I32)
 
 	opStabilizeOperands(f)
@@ -180,7 +181,7 @@ func genLoad(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func genStore(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genStore(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opStabilizeOperands(f)
 
 	align := load.Varuint32()
@@ -193,7 +194,7 @@ func genStore(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 	return
 }
 
-func genUnary(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genUnary(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	x := popOperand(f, info.primaryType())
 
 	opStabilizeOperands(f)
@@ -203,7 +204,7 @@ func genUnary(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool)
 	return
 }
 
-func genCurrentMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genCurrentMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opStabilizeOperands(f)
 
 	load.Byte() // reserved
@@ -213,12 +214,12 @@ func genCurrentMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deade
 	return
 }
 
-func genDrop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genDrop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opDropOperand(f)
 	return
 }
 
-func genGrowMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genGrowMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opStabilizeOperands(f)
 
 	load.Byte() // reserved
@@ -230,11 +231,11 @@ func genGrowMemory(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend 
 	return
 }
 
-func genNop(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genNop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	return
 }
 
-func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genReturn(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	if f.ResultType != wa.Void {
 		result := popOperand(f, f.ResultType)
 		asm.Move(f, reg.Result, result)
@@ -245,7 +246,7 @@ func genReturn(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 	return
 }
 
-func genSelect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genSelect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	cond := popOperand(f, wa.I32)
 
 	opStabilizeOperands(f)
@@ -261,13 +262,13 @@ func genSelect(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool
 	return
 }
 
-func genUnreachable(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genUnreachable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	asm.Trap(f, trap.Unreachable)
 	deadend = true
 	return
 }
 
-func genWrap(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func genWrap(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	x := popOperand(f, wa.I64)
 
 	switch x.Storage {
@@ -282,13 +283,13 @@ func genWrap(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) 
 	return
 }
 
-func badGen(f *gen.Func, load loader.L, op Opcode, info opInfo) (deadend bool) {
+func badGen(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	badOp(op)
 	return
 }
 
-func badOp(op Opcode) {
-	if s := opcodeStrings[op]; s != "" {
+func badOp(op opcode.Opcode) {
+	if s := opcode.Strings[op]; s != "" {
 		panic(fmt.Errorf("unexpected opcode: %s", s))
 	} else {
 		panic(fmt.Errorf("invalid opcode: 0x%02x", byte(op)))
