@@ -37,10 +37,7 @@ func TestExec(t *testing.T) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	var mod = &Module{
-		EntrySymbol: "main",
-	}
-	mod.loadInitialSections(wasm)
+	mod := loadInitialSections(&ModuleConfig{}, wasm)
 	mod.defineImports(runner.Resolver)
 
 	var codeBuf bytes.Buffer
@@ -73,6 +70,7 @@ func TestExec(t *testing.T) {
 	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 
 	var code = &CodeConfig{
+		EntrySymbol:  "main",
 		Text:         static.Buf(p.Text),
 		ROData:       static.Buf(p.ROData),
 		RODataAddr:   p.RODataAddr(),

@@ -100,27 +100,34 @@ func readMemory(m *module.M, load loader.L) {
 	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wa.Page))
 }
 
-// Module contains a WebAssembly module's metadata.
-type Module struct {
-	EntrySymbol          string   // Used to resolve the entry function during
-	EntryArgs            []uint64 // initial section loading.
+// Config for loading WebAssembly module sections.
+type Config struct {
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+}
 
+// ModuleConfig for a single compiler invocation.
+type ModuleConfig struct {
+	Config
+}
+
+// Module contains a WebAssembly module specification without code or data.
+type Module struct {
 	m module.M
 }
 
-// LoadInitialSections reads all sections preceding code and data, initializing
-// the Module instance.
-func (m *Module) LoadInitialSections(r Reader) (err error) {
+// LoadInitialSections reads module header and all sections preceding code and
+// data.
+func LoadInitialSections(config *ModuleConfig, r Reader) (m *Module, err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	m.loadInitialSections(r)
+	m = loadInitialSections(config, r)
 	return
 }
 
-func (m *Module) loadInitialSections(r Reader) {
+func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
+	m = new(Module)
 	load := loader.L{R: r}
 
 	var header module.Header
@@ -163,15 +170,15 @@ func (m *Module) loadInitialSections(r Reader) {
 		}
 
 		payloadLen := load.Varuint32()
-		metaSectionLoaders[id](payloadLen, m, load)
+		metaSectionLoaders[id](m, config, payloadLen, load)
 	}
 }
 
-var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L){
-	module.SectionUnknown: func(payloadLen uint32, m *Module, load loader.L) {
+var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, uint32, loader.L){
+	module.SectionUnknown: func(m *Module, config *ModuleConfig, payloadLen uint32, load loader.L) {
 		var err error
-		if m.UnknownSectionLoader != nil {
-			err = m.UnknownSectionLoader(load.R, payloadLen)
+		if config.UnknownSectionLoader != nil {
+			err = config.UnknownSectionLoader(load.R, payloadLen)
 		} else {
 			_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
 		}
@@ -180,7 +187,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		}
 	},
 
-	module.SectionType: func(_ uint32, m *Module, load loader.L) {
+	module.SectionType: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for i := range load.Count() {
 			if form := load.Varint7(); form != -0x20 {
 				panic(fmt.Errorf("unsupported function type form: %d", form))
@@ -206,7 +213,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		}
 	},
 
-	module.SectionImport: func(_ uint32, m *Module, load loader.L) {
+	module.SectionImport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for i := range load.Count() {
 			moduleLen := load.Varuint32()
 			if moduleLen > maxStringLen {
@@ -272,7 +279,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		}
 	},
 
-	module.SectionFunction: func(_ uint32, m *Module, load loader.L) {
+	module.SectionFunction: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for range load.Count() {
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.m.Types)) {
@@ -283,19 +290,19 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		}
 	},
 
-	module.SectionTable: func(_ uint32, m *Module, load loader.L) {
+	module.SectionTable: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for range load.Count() {
 			readTable(&m.m, load)
 		}
 	},
 
-	module.SectionMemory: func(_ uint32, m *Module, load loader.L) {
+	module.SectionMemory: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for range load.Count() {
 			readMemory(&m.m, load)
 		}
 	},
 
-	module.SectionGlobal: func(_ uint32, m *Module, load loader.L) {
+	module.SectionGlobal: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for range load.Count() {
 			if len(m.m.Globals) >= maxGlobals {
 				panic(errors.New("too many globals"))
@@ -313,7 +320,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		}
 	},
 
-	module.SectionExport: func(_ uint32, m *Module, load loader.L) {
+	module.SectionExport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for i := range load.Count() {
 			fieldLen := load.Varuint32()
 			if fieldLen > maxStringLen {
@@ -326,20 +333,14 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 
 			switch kind {
 			case module.ExternalKindFunction:
-				if fieldLen > 0 && string(fieldStr) == m.EntrySymbol {
-					if index >= uint32(len(m.m.Funcs)) {
-						panic(fmt.Errorf("export function index out of bounds: %d", index))
-					}
-
-					sigIndex := m.m.Funcs[index]
-					sig := m.m.Types[sigIndex]
-					if len(sig.Params) > codegen.MaxFuncParams || len(m.EntryArgs) < len(sig.Params) || !(sig.Result == wa.Void || sig.Result == wa.I32) {
-						panic(fmt.Errorf("invalid entry function signature: %s %s", m.EntrySymbol, sig))
-					}
-
-					m.m.EntryIndex = index
-					m.m.EntryDefined = true
+				if index >= uint32(len(m.m.Funcs)) {
+					panic(fmt.Errorf("export function index out of bounds: %d", index))
 				}
+
+				m.m.ExportFuncs = append(m.m.ExportFuncs, module.Export{
+					Field: string(fieldStr),
+					Index: index,
+				})
 
 			case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
 
@@ -349,7 +350,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		}
 	},
 
-	module.SectionStart: func(_ uint32, m *Module, load loader.L) {
+	module.SectionStart: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		index := load.Varuint32()
 		if index >= uint32(len(m.m.Funcs)) {
 			panic(fmt.Errorf("start function index out of bounds: %d", index))
@@ -365,7 +366,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 		m.m.StartDefined = true
 	},
 
-	module.SectionElement: func(_ uint32, m *Module, load loader.L) {
+	module.SectionElement: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		for i := range load.Count() {
 			if index := load.Varuint32(); index != 0 {
 				panic(fmt.Errorf("unsupported table index: %d", index))
@@ -493,12 +494,14 @@ func (m *Module) CopyGlobalsData(dest []byte) {
 
 // CodeConfig for a single compiler invocation.
 type CodeConfig struct {
-	Text                 CodeBuffer // Initialized with default implementation if nil.
-	ROData               DataBuffer // Initialized with default implementation if nil.
-	RODataAddr           uintptr
-	ObjectMapper         ObjectMap
-	EventHandler         func(event.Event)
-	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+	EntrySymbol  string
+	EntryArgs    []uint64
+	Text         CodeBuffer // Initialized with default implementation if nil.
+	ROData       DataBuffer // Initialized with default implementation if nil.
+	RODataAddr   uintptr
+	ObjectMapper ObjectMap
+	EventHandler func(event.Event)
+	Config
 }
 
 // LoadCodeSection reads a WebAssembly module's code section and generates
@@ -513,8 +516,26 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 }
 
 func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
-	if mod.EntrySymbol != "" && !mod.m.EntryDefined {
-		panic(fmt.Errorf("%s function not found in export section", mod.EntrySymbol))
+	entryIndex := -1
+
+	if config.EntrySymbol != "" {
+		for _, exp := range mod.m.ExportFuncs {
+			if exp.Field == config.EntrySymbol {
+				sigIndex := mod.m.Funcs[exp.Index]
+				sig := mod.m.Types[sigIndex]
+
+				if len(sig.Params) > codegen.MaxFuncParams || len(config.EntryArgs) < len(sig.Params) || !(sig.Result == wa.Void || sig.Result == wa.I32) {
+					panic(fmt.Errorf("invalid entry function signature: %s %s", config.EntrySymbol, sig))
+				}
+
+				entryIndex = int(exp.Index)
+				break
+			}
+		}
+
+		if entryIndex < 0 {
+			panic(fmt.Errorf("%s function not found in export section", config.EntrySymbol))
+		}
 	}
 
 	if config.Text == nil {
@@ -534,7 +555,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	switch id := section.Find(module.SectionCode, load, config.UnknownSectionLoader); id {
 	case module.SectionCode:
 		load.Varuint32() // payload len
-		codegen.GenProgram(config.Text, config.ROData, int32(config.RODataAddr), objMap, load, &mod.m, mod.EntrySymbol, mod.EntryArgs, config.EventHandler)
+		codegen.GenProgram(config.Text, config.ROData, int32(config.RODataAddr), objMap, load, &mod.m, entryIndex, config.EntryArgs, config.EventHandler)
 
 	case module.SectionData:
 		// no code section
@@ -549,9 +570,9 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 
 // DataConfig for a single compiler invocation.
 type DataConfig struct {
-	GlobalsMemory        DataBuffer // Initialized with default implementation if nil.
-	MemoryAlignment      int        // Initialized with minimal value if zero.
-	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+	GlobalsMemory   DataBuffer // Initialized with default implementation if nil.
+	MemoryAlignment int        // Initialized with minimal value if zero.
+	Config
 }
 
 // LoadDataSection reads a WebAssembly module's data section and generates
@@ -592,19 +613,19 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 
 // LoadUnknownSections reads a WebAssembly module's extension sections which
 // follow known sections.
-func LoadUnknownSections(unknownLoader func(r Reader, payloadLen uint32) error, r Reader) (err error) {
+func LoadUnknownSections(config *Config, r Reader) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	loadUnknownSections(unknownLoader, r)
+	loadUnknownSections(config, r)
 	return
 }
 
-func loadUnknownSections(unknownLoader func(Reader, uint32) error, r Reader) {
+func loadUnknownSections(config *Config, r Reader) {
 	load := loader.L{R: r}
 
-	if id := section.Find(0, load, unknownLoader); id != 0 {
+	if id := section.Find(0, load, config.UnknownSectionLoader); id != 0 {
 		panic(fmt.Errorf("unexpected section id: 0x%x (after all known sections)", id))
 	}
 }

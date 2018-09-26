@@ -41,15 +41,12 @@ type Config struct {
 // Compile a WebAssembly binary module into machine code.
 func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj *Object, err error) {
 	obj = new(Object)
-	nameLoader := section.UnknownLoaders{"name": obj.Names.Load}.Load
 
-	var mod = &compile.Module{
-		EntrySymbol:          config.EntrySymbol,
-		EntryArgs:            config.EntryArgs,
-		UnknownSectionLoader: nameLoader,
+	var common = compile.Config{
+		UnknownSectionLoader: section.UnknownLoaders{"name": obj.Names.Load}.Load,
 	}
 
-	err = mod.LoadInitialSections(r)
+	mod, err := compile.LoadInitialSections(&compile.ModuleConfig{Config: common}, r)
 	if err != nil {
 		return
 	}
@@ -63,11 +60,13 @@ func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj 
 	obj.InitMemorySize, obj.GrowMemoryLimit = mod.MemoryLimits()
 
 	var code = &compile.CodeConfig{
-		Text:                 config.Text,
-		ROData:               config.ROData,
-		RODataAddr:           config.RODataAddr,
-		ObjectMapper:         &obj.CallMap,
-		UnknownSectionLoader: nameLoader,
+		EntrySymbol:  config.EntrySymbol,
+		EntryArgs:    config.EntryArgs,
+		Text:         config.Text,
+		ROData:       config.ROData,
+		RODataAddr:   config.RODataAddr,
+		ObjectMapper: &obj.CallMap,
+		Config:       common,
 	}
 
 	err = compile.LoadCodeSection(code, r, mod)
@@ -81,9 +80,9 @@ func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj 
 	obj.ROData = code.ROData.Bytes()
 
 	var data = &compile.DataConfig{
-		GlobalsMemory:        config.GlobalsMemory,
-		MemoryAlignment:      config.MemoryAlignment,
-		UnknownSectionLoader: nameLoader,
+		GlobalsMemory:   config.GlobalsMemory,
+		MemoryAlignment: config.MemoryAlignment,
+		Config:          common,
 	}
 
 	err = compile.LoadDataSection(data, r, mod)
@@ -96,6 +95,6 @@ func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj 
 	obj.MemoryOffset = (mod.GlobalsSize() + (data.MemoryAlignment - 1)) &^ (data.MemoryAlignment - 1)
 	obj.GlobalsMemory = data.GlobalsMemory.Bytes()
 
-	err = compile.LoadUnknownSections(nameLoader, r)
+	err = compile.LoadUnknownSections(&common, r)
 	return
 }

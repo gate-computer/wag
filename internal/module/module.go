@@ -111,6 +111,11 @@ type Global struct {
 	Init    uint64
 }
 
+type Export struct {
+	Field string
+	Index uint32
+}
+
 type M struct {
 	Types             []wa.FuncType
 	Funcs             []uint32
@@ -121,6 +126,7 @@ type M struct {
 	ImportGlobals     []Import
 	EntryIndex        uint32
 	EntryDefined      bool
+	ExportFuncs       []Export
 	StartIndex        uint32
 	StartDefined      bool
 	TableFuncs        []uint32

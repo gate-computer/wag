@@ -454,29 +454,28 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		var (
 			nameSection section.NameSection
-			nameLoader  = section.UnknownLoaders{"name": nameSection.Load}.Load
 
-			mod = &Module{
-				EntrySymbol:          "test",
-				UnknownSectionLoader: nameLoader,
+			common = Config{
+				UnknownSectionLoader: section.UnknownLoaders{"name": nameSection.Load}.Load,
 			}
 			code = &CodeConfig{
-				Text:                 static.Buf(p.Text),
-				ROData:               static.Buf(p.ROData),
-				RODataAddr:           p.RODataAddr(),
-				ObjectMapper:         &p.ObjInfo,
-				UnknownSectionLoader: nameLoader,
+				EntrySymbol:  "test",
+				Text:         static.Buf(p.Text),
+				ROData:       static.Buf(p.ROData),
+				RODataAddr:   p.RODataAddr(),
+				ObjectMapper: &p.ObjInfo,
+				Config:       common,
 			}
 			data = &DataConfig{
-				UnknownSectionLoader: nameLoader,
+				Config: common,
 			}
 		)
 
-		mod.loadInitialSections(wasm)
+		mod := loadInitialSections(&ModuleConfig{common}, wasm)
 		mod.defineImports(runner.Resolver)
 		loadCodeSection(code, wasm, mod)
 		loadDataSection(data, wasm, mod)
-		loadUnknownSections(nameLoader, wasm)
+		loadUnknownSections(&common, wasm)
 		p.Seal()
 		p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 		minMemorySize, maxMemorySize := mod.MemoryLimits()

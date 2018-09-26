@@ -42,13 +42,11 @@ func TestSnapshot(t *testing.T) {
 	}
 	defer p.Close()
 
-	var mod = &Module{
-		EntrySymbol: "main",
-	}
-	mod.loadInitialSections(wasm)
+	mod := loadInitialSections(&ModuleConfig{}, wasm)
 	mod.defineImports(runner.Resolver)
 
 	var code = &CodeConfig{
+		EntrySymbol:  "main",
 		Text:         static.Buf(p.Text),
 		ROData:       static.Buf(p.ROData),
 		RODataAddr:   p.RODataAddr(),

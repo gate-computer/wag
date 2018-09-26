@@ -37,7 +37,7 @@ func GenProgram(
 	objMap obj.Map,
 	load loader.L,
 	m *module.M,
-	entrySymbol string,
+	entryIndex int,
 	entryArgs []uint64,
 	eventHandler func(event.Event),
 ) {
@@ -97,19 +97,19 @@ func GenProgram(
 		// start func returns here; execution proceeds to main func or exit trap
 	}
 
-	if m.EntryDefined {
-		if index := int(m.EntryIndex); index > maxInitIndex {
-			maxInitIndex = index
+	if entryIndex >= 0 {
+		if entryIndex > maxInitIndex {
+			maxInitIndex = entryIndex
 		}
 
-		sigIndex := m.Funcs[m.EntryIndex]
+		sigIndex := m.Funcs[entryIndex]
 		sig := m.Types[sigIndex]
 
 		for i := range sig.Params {
 			asm.PushImm(p, int64(entryArgs[i]))
 		}
 
-		opInitialCall(p, &p.FuncLinks[m.EntryIndex])
+		opInitialCall(p, &p.FuncLinks[entryIndex])
 		// main func returns here; execution proceeds to exit trap
 
 		mainResultType = sig.Result

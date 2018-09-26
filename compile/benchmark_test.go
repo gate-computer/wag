@@ -77,12 +77,9 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var mod = &Module{
-			EntrySymbol: loadBenchmarkEntrySymbol,
-			EntryArgs:   make([]uint64, loadBenchmarkEntryNumArgs),
-		}
-
 		var code = &CodeConfig{
+			EntrySymbol:  loadBenchmarkEntrySymbol,
+			EntryArgs:    make([]uint64, loadBenchmarkEntryNumArgs),
 			Text:         static.Buf(text),
 			ROData:       static.Buf(roData),
 			RODataAddr:   loadBenchmarkRODataAddr,
@@ -98,7 +95,7 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		b.StartTimer()
 
 		t0 := time.Now()
-		mod.loadInitialSections(r)
+		mod := loadInitialSections(&ModuleConfig{}, r)
 		t1 := time.Now()
 		mod.defineImports(loadBenchmarkReso)
 		t2 := time.Now()
