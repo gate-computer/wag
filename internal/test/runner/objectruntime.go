@@ -4,4 +4,4 @@
 
 package runner
 
-func ObjectRuntime() []byte
+func ObjectRuntime() (code []byte, addr uint64)

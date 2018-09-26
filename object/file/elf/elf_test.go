@@ -33,8 +33,11 @@ var testMemory = []byte{
 }
 
 func TestELF(t *testing.T) {
+	runtime, runtimeAddr := runner.ObjectRuntime()
+
 	ef := File{
-		Runtime:       runner.ObjectRuntime(),
+		Runtime:       runtime,
+		RuntimeAddr:   runtimeAddr,
 		Text:          testText(),
 		ROData:        testROData,
 		RODataAddr:    testRODataAddr,

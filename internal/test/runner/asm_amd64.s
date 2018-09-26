@@ -17,14 +17,15 @@ TEXT ·run(SB),NOSPLIT,$0-144
 	MOVQ	arg+104(FP), DX		// arg
 	JMP	run<>(SB)
 
-// func ObjectRuntime() (slice []byte)
-TEXT ·ObjectRuntime(SB),$0-24
+// func ObjectRuntime() (slice []byte, addr uint64)
+TEXT ·ObjectRuntime(SB),$0-32
 	LEAQ	objectRuntimeStart<>(SB), AX
 	LEAQ	objectRuntimeEnd<>(SB), BX
 	SUBQ	AX, BX
 	MOVQ	AX, slice+0(FP)		// data
 	MOVQ	BX, slice+8(FP)		// len
 	MOVQ	BX, slice+16(FP)	// cap
+	MOVQ	AX, addr+24(FP)
 	RET
 
 TEXT objectRuntimeStart<>(SB),NOSPLIT,$0

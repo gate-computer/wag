@@ -6,7 +6,8 @@ package internal
 
 // File represents a standalone executable program.
 type File struct {
-	Runtime       []byte // position-independent code
+	Runtime       []byte
+	RuntimeAddr   uint64
 	Text          []byte
 	ROData        []byte
 	RODataAddr    uintptr
