@@ -4,8 +4,6 @@
 
 package main
 
-//go:generate go run internal/cmd/syscalls/generate.go
-
 import (
 	"bytes"
 	"flag"

@@ -34,13 +34,13 @@ func (sc call) titleName() string {
 }
 
 func main() {
-	decl, err := os.Create("syscall.go")
+	decl, err := os.Create("cmd/wasys/syscall.go")
 	if err != nil {
 		log.Panic(err)
 	}
 	defer decl.Close()
 
-	impl, err := os.Create(fmt.Sprintf("syscall_%s.s", runtime.GOARCH))
+	impl, err := os.Create(fmt.Sprintf("cmd/wasys/syscall_%s.s", runtime.GOARCH))
 	if err != nil {
 		log.Panic(err)
 	}

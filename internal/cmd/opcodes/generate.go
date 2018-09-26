@@ -18,12 +18,12 @@ import (
 )
 
 func main() {
-	input, err := ioutil.ReadFile(os.Args[1])
+	input, err := ioutil.ReadFile("internal/design/BinaryEncoding.md")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := os.Create(os.Args[2])
+	output, err := os.Create("internal/gen/codegen/opcodes.go")
 	if err != nil {
 		log.Fatal(err)
 	}
