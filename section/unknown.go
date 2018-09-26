@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/reader"
 )
@@ -19,38 +18,34 @@ const (
 	maxSectionNameLen = 255 // TODO
 )
 
-type UnknownLoader func(string, reader.R) error
+type Reader = reader.R
+
+type UnknownLoader func(sectionName string, section Reader) error
 
 type UnknownLoaders map[string]UnknownLoader
 
-func (uls UnknownLoaders) Load(r reader.R, payloadLen uint32) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
-
-	// io.LimitedReader doesn't implement reader.R, so do this instead
+func (uls UnknownLoaders) Load(r Reader, payloadLen uint32) (err error) {
+	// io.LimitedReader doesn't implement Reader, so do this instead
 	payload := make([]byte, payloadLen)
-	if _, err := io.ReadFull(r, payload); err != nil {
-		panic(err)
+	_, err = io.ReadFull(r, payload)
+	if err != nil {
+		return
 	}
+
 	load := loader.L{R: bytes.NewReader(payload)}
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {
-		panic(errors.New("unknown section name is too long"))
+		err = errors.New("unknown section name is too long")
+		return
 	}
 
 	name := string(load.Bytes(nameLen))
 
 	if f := uls[name]; f != nil {
-		if err := f(name, load.R); err != nil { // avoid nested loaders
-			panic(err)
-		}
+		err = f(name, load.R)
 	} else {
-		if _, err := io.Copy(ioutil.Discard, load.R); err != nil {
-			panic(err)
-		}
+		_, err = io.Copy(ioutil.Discard, load.R)
 	}
-
 	return
 }

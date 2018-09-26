@@ -5,74 +5,60 @@
 package section
 
 import (
+	"encoding/binary"
 	"io"
-	"io/ioutil"
 
 	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/reader"
+	"github.com/tsavola/wag/internal/section"
 )
 
-// CopyCodeSection if there is one.  Unknown sections preceding the code
-// section are silently discarded.  If another known section type is found, it
-// is left untouched (the reader will be backed up before the section id).
-func CopyCodeSection(w io.Writer, r reader.R) (ok bool, err error) {
+// CopyKnownSection with the given type if one is found.  The returned length
+// includes the copied section's header and payload (everything that was
+// written).  Unknown sections preceding the known section are processed by
+// unknownLoader (or discarded if it's nil) - they are not included in the
+// returned length.  If another known section type is found, it is left
+// untouched (the reader will be backed up before the section id) and zero
+// length is returned.  If no known section is encountered, zero length and
+// io.EOF are returned.  io.EOF is returned only when it occurs between
+// sections.
+func CopyKnownSection(w io.Writer, r reader.R, id Id, unknownLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
 	defer func() {
-		err = errorpanic.Handle(recover())
+		if x := recover(); x != nil {
+			err = errorpanic.Handle(x)
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+		}
 	}()
 
-	ok = copySection(w, r, module.SectionCode)
-	return
-}
-
-func DiscardUnknownSections(r reader.R) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
-
-	copySection(ioutil.Discard, r, module.SectionUnknown)
-	return
-}
-
-func copySection(w io.Writer, r reader.R, expectId byte) (ok bool) {
-	store := storer{w}
 	load := loader.L{R: r}
 
-loop:
-	for {
-		id, err := load.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			panic(err)
-		}
+	switch section.Find(id, load, unknownLoader) {
+	case id:
+		length, err = copySection(w, id, load)
 
-		switch {
-		case id == module.SectionUnknown:
-			payloadLen := load.Varuint32()
-			if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
-				panic(err)
-			}
-
-		case id == expectId:
-			store.Byte(id)
-			break loop
-
-		default:
-			load.UnreadByte()
-			return
-		}
+	case 0:
+		err = io.EOF
 	}
+	return
+}
 
+func copySection(w io.Writer, id Id, load loader.L) (length int64, err error) {
 	payloadLen := load.Varuint32()
-	store.Varuint32(payloadLen)
 
-	if _, err := io.CopyN(store, load, int64(payloadLen)); err != nil {
-		panic(err)
+	head := make([]byte, 1+binary.MaxVarintLen32)
+	head[0] = byte(id)
+	n := binary.PutUvarint(head[1:], uint64(payloadLen))
+
+	n, err = w.Write(head[:1+n])
+	length += int64(n)
+	if err != nil {
+		return
 	}
 
-	ok = true
+	m, err := io.CopyN(w, load.R, int64(payloadLen))
+	length += m
 	return
 }

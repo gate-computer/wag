@@ -45,15 +45,10 @@ func TestExec(t *testing.T) {
 
 	var codeBuf bytes.Buffer
 
-	if ok, err := section.CopyCodeSection(&codeBuf, wasm); err != nil {
+	if n, err := section.CopyKnownSection(&codeBuf, wasm, section.Code, nil); err != nil {
 		t.Fatal(err)
-	} else if !ok {
-		t.Fatal(ok)
-	}
-
-	// skip name section
-	if err := section.DiscardUnknownSections(wasm); err != nil {
-		t.Fatal(err)
+	} else if n == 0 {
+		t.Fatal("not a code section")
 	}
 
 	minMemorySize, maxMemorySize := mod.MemoryLimits()

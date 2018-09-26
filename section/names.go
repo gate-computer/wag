@@ -40,7 +40,7 @@ func (ns *NameSection) Load(_ string, r reader.R) (err error) {
 	load := loader.L{R: r}
 
 	for {
-		idByte, err := load.ReadByte()
+		idByte, err := load.R.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				break

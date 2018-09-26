@@ -15,11 +15,11 @@ import (
 
 // L provides panicking alternatives for reader.R methods, and then some.
 type L struct {
-	reader.R
+	R reader.R
 }
 
 func (load L) Into(buf []byte) {
-	if _, err := io.ReadFull(load, buf); err != nil {
+	if _, err := io.ReadFull(load.R, buf); err != nil {
 		panic(err)
 	}
 }
@@ -31,7 +31,7 @@ func (load L) Bytes(n uint32) (data []byte) {
 }
 
 func (load L) Byte() byte {
-	x, err := load.ReadByte()
+	x, err := load.R.ReadByte()
 	if err != nil {
 		panic(err)
 	}
@@ -39,14 +39,14 @@ func (load L) Byte() byte {
 }
 
 func (load L) Uint32() (x uint32) {
-	if err := binary.Read(load, binary.LittleEndian, &x); err != nil {
+	if err := binary.Read(load.R, binary.LittleEndian, &x); err != nil {
 		panic(err)
 	}
 	return
 }
 
 func (load L) Uint64() (x uint64) {
-	if err := binary.Read(load, binary.LittleEndian, &x); err != nil {
+	if err := binary.Read(load.R, binary.LittleEndian, &x); err != nil {
 		panic(err)
 	}
 	return
@@ -76,7 +76,7 @@ func (load L) Varint64() (x int64) {
 }
 
 func (load L) Varuint1() bool {
-	x, err := load.ReadByte()
+	x, err := load.R.ReadByte()
 	if err != nil {
 		panic(err)
 	}
@@ -87,7 +87,7 @@ func (load L) Varuint1() bool {
 }
 
 func (load L) Varuint32() uint32 {
-	x, err := binary.ReadUvarint(load)
+	x, err := binary.ReadUvarint(load.R)
 	if err != nil {
 		panic(err)
 	}
@@ -98,7 +98,7 @@ func (load L) Varuint32() uint32 {
 }
 
 func (load L) Varuint64() (x uint64) {
-	x, err := binary.ReadUvarint(load)
+	x, err := binary.ReadUvarint(load.R)
 	if err != nil {
 		panic(err)
 	}

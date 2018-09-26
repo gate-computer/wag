@@ -23,6 +23,7 @@ import (
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/reader"
+	"github.com/tsavola/wag/internal/section"
 	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wa"
 )
@@ -123,7 +124,7 @@ func (m *Module) loadInitialSections(r Reader) {
 	load := loader.L{R: r}
 
 	var header module.Header
-	if err := binary.Read(load, binary.LittleEndian, &header); err != nil {
+	if err := binary.Read(load.R, binary.LittleEndian, &header); err != nil {
 		panic(err)
 	}
 	if header.MagicNumber != module.MagicNumber {
@@ -133,16 +134,18 @@ func (m *Module) loadInitialSections(r Reader) {
 		panic(fmt.Errorf("unsupported module version: %d", header.Version))
 	}
 
-	var seenId byte
+	var seenId module.SectionId
 
 	for {
-		id, err := load.ReadByte()
+		value, err := load.R.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return
 			}
 			panic(err)
 		}
+
+		id := module.SectionId(value)
 
 		if id != module.SectionUnknown {
 			if id <= seenId {
@@ -152,7 +155,7 @@ func (m *Module) loadInitialSections(r Reader) {
 		}
 
 		if id >= module.NumMetaSections {
-			load.UnreadByte()
+			load.R.UnreadByte()
 			if id >= module.NumSections {
 				panic(fmt.Errorf("unknown section id: 0x%x", id))
 			}
@@ -168,9 +171,9 @@ var metaSectionLoaders = [module.NumMetaSections]func(uint32, *Module, loader.L)
 	module.SectionUnknown: func(payloadLen uint32, m *Module, load loader.L) {
 		var err error
 		if m.UnknownSectionLoader != nil {
-			err = m.UnknownSectionLoader(load, payloadLen)
+			err = m.UnknownSectionLoader(load.R, payloadLen)
 		} else {
-			_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
+			_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
 		}
 		if err != nil {
 			panic(err)
@@ -528,8 +531,9 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 
 	load := loader.L{R: r}
 
-	switch id := findSection(module.SectionCode, load, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionCode, load, config.UnknownSectionLoader); id {
 	case module.SectionCode:
+		load.Varuint32() // payload len
 		codegen.GenProgram(config.Text, config.ROData, int32(config.RODataAddr), objMap, load, &mod.m, mod.EntrySymbol, mod.EntryArgs, config.EventHandler)
 
 	case module.SectionData:
@@ -573,8 +577,9 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 
 	load := loader.L{R: r}
 
-	switch id := findSection(module.SectionData, load, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionData, load, config.UnknownSectionLoader); id {
 	case module.SectionData:
+		load.Varuint32() // payload len
 		datalayout.ReadMemory(config.GlobalsMemory, load, &mod.m)
 
 	case 0:
@@ -599,41 +604,7 @@ func LoadUnknownSections(unknownLoader func(r Reader, payloadLen uint32) error, 
 func loadUnknownSections(unknownLoader func(Reader, uint32) error, r Reader) {
 	load := loader.L{R: r}
 
-	if id := findSection(0, load, unknownLoader); id != 0 {
+	if id := section.Find(0, load, unknownLoader); id != 0 {
 		panic(fmt.Errorf("unexpected section id: 0x%x (after all known sections)", id))
-	}
-}
-
-func findSection(findId byte, load loader.L, unknownLoader func(Reader, uint32) error) byte {
-	for {
-		id, err := load.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				return 0
-			}
-			panic(err)
-		}
-
-		switch id {
-		case module.SectionUnknown: // = 0
-			payloadLen := load.Varuint32()
-
-			if unknownLoader != nil {
-				err = unknownLoader(load, payloadLen)
-			} else {
-				_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
-			}
-			if err != nil {
-				panic(err)
-			}
-
-		case findId:
-			load.Varuint32() // payloadLen
-			return id
-
-		default:
-			load.UnreadByte()
-			return id
-		}
 	}
 }

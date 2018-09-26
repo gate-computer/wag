@@ -20,8 +20,10 @@ type Header struct {
 	Version     uint32
 }
 
+type SectionId byte
+
 const (
-	SectionUnknown = iota
+	SectionUnknown = SectionId(iota)
 	SectionType
 	SectionImport
 	SectionFunction
@@ -37,6 +39,29 @@ const (
 	NumSections
 	NumMetaSections = SectionElement + 1
 )
+
+var sectionNames = []string{
+	SectionUnknown:  "unknown",
+	SectionType:     "type",
+	SectionImport:   "import",
+	SectionFunction: "function",
+	SectionTable:    "table",
+	SectionMemory:   "memory",
+	SectionGlobal:   "global",
+	SectionExport:   "export",
+	SectionStart:    "start",
+	SectionElement:  "element",
+	SectionCode:     "code",
+	SectionData:     "data",
+}
+
+func (id SectionId) String() string {
+	if int(id) < len(sectionNames) {
+		return sectionNames[id]
+	} else {
+		return fmt.Sprintf("<id 0x%x>", byte(id))
+	}
+}
 
 type ExternalKind byte
 
