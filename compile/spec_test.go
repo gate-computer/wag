@@ -478,7 +478,8 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		loadUnknownSections(&common, wasm)
 		p.Seal()
 		p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
-		minMemorySize, maxMemorySize := mod.MemoryLimits()
+		minMemorySize := mod.InitialMemorySize()
+		maxMemorySize := mod.MemorySizeLimit()
 
 		if testing.Verbose() {
 			if dumpText {

@@ -153,8 +153,8 @@ func main() {
 	}
 
 	memoryAddr := memAddr(obj.GlobalsMemory) + uintptr(obj.MemoryOffset)
-	initMemoryEnd := memoryAddr + uintptr(obj.InitMemorySize)
-	growMemoryEnd := memoryAddr + uintptr(obj.GrowMemoryLimit)
+	initMemoryEnd := memoryAddr + uintptr(obj.InitialMemorySize)
+	growMemoryEnd := memoryAddr + uintptr(obj.MemorySizeLimit)
 
 	if err := syscall.Mprotect(roDataMem, syscall.PROT_READ); err != nil {
 		log.Fatal(err)

@@ -415,10 +415,12 @@ func (m *Module) FuncTypes() []wa.FuncType {
 	return sigs
 }
 
-func (m *Module) MemoryLimits() (initial, maximum wa.MemorySize) {
-	initial = wa.MemorySize(m.m.MemoryLimitValues.Initial)
-	maximum = wa.MemorySize(m.m.MemoryLimitValues.Maximum)
-	return
+func (m *Module) InitialMemorySize() wa.MemorySize {
+	return wa.MemorySize(m.m.MemoryLimitValues.Initial)
+}
+
+func (m *Module) MemorySizeLimit() wa.MemorySize {
+	return wa.MemorySize(m.m.MemoryLimitValues.Maximum)
 }
 
 func (m *Module) NumImportFunc() int   { return len(m.m.ImportFuncs) }

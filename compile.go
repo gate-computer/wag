@@ -15,11 +15,11 @@ import (
 // read-only data, initial global values, and initial linear memory contents
 // can be used to execute the program (the details are architecture-specific).
 type Object struct {
-	FuncTypes       []wa.FuncType
-	InitMemorySize  wa.MemorySize
-	GrowMemoryLimit wa.MemorySize
-	Text            []byte
-	ROData          []byte
+	FuncTypes         []wa.FuncType
+	InitialMemorySize wa.MemorySize
+	MemorySizeLimit   wa.MemorySize
+	Text              []byte
+	ROData            []byte
 	object.CallMap
 	MemoryOffset  int // Threshold between globals and memory.
 	GlobalsMemory []byte
@@ -57,7 +57,8 @@ func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj 
 	}
 
 	obj.FuncTypes = mod.FuncTypes()
-	obj.InitMemorySize, obj.GrowMemoryLimit = mod.MemoryLimits()
+	obj.InitialMemorySize = mod.InitialMemorySize()
+	obj.MemorySizeLimit = mod.MemorySizeLimit()
 
 	var code = &compile.CodeConfig{
 		EntrySymbol:  config.EntrySymbol,

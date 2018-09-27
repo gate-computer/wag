@@ -61,7 +61,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		dump.Text(os.Stdout, obj.Text, p.TextAddr(), p.RODataAddr(), obj.FuncAddrs, &obj.Names)
 	}
 
-	r, err := p.NewRunner(obj.InitMemorySize, obj.GrowMemoryLimit, stackSize)
+	r, err := p.NewRunner(obj.InitialMemorySize, obj.MemorySizeLimit, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}

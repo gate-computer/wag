@@ -59,7 +59,8 @@ func TestSnapshot(t *testing.T) {
 
 	p.Seal()
 	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
-	minMemorySize, maxMemorySize := mod.MemoryLimits()
+	minMemorySize := mod.InitialMemorySize()
+	maxMemorySize := mod.MemorySizeLimit()
 
 	if dumpText && testing.Verbose() {
 		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)

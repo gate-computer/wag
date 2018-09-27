@@ -48,7 +48,8 @@ func TestExec(t *testing.T) {
 		t.Fatal("not a code section")
 	}
 
-	minMemorySize, maxMemorySize := mod.MemoryLimits()
+	minMemorySize := mod.InitialMemorySize()
+	maxMemorySize := mod.MemorySizeLimit()
 
 	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
 	if err != nil {
