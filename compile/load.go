@@ -423,8 +423,8 @@ func (m *Module) MemorySizeLimit() wa.MemorySize {
 	return wa.MemorySize(m.m.MemoryLimitValues.Maximum)
 }
 
-func (m *Module) NumImportFunc() int   { return len(m.m.ImportFuncs) }
-func (m *Module) NumImportGlobal() int { return len(m.m.ImportGlobals) }
+func (m *Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
+func (m *Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }
 
 func (m *Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	imp := m.m.ImportFuncs[i]
