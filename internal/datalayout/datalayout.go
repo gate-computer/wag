@@ -28,16 +28,7 @@ func CopyGlobalsAlign(buffer data.Buffer, m *module.M, alignment int) {
 	}
 
 	b := buffer.ResizeBytes(offset + size)
-	copyGlobals(b[offset:], m)
-}
-
-func CopyGlobalsAtEnd(b []byte, m *module.M) {
-	size := len(m.Globals) * obj.Word
-	offset := len(b) - size
-	copyGlobals(b[offset:], m)
-}
-
-func copyGlobals(b []byte, m *module.M) {
+	b = b[offset:]
 	for _, global := range m.Globals {
 		binary.LittleEndian.PutUint64(b, global.Init)
 		b = b[obj.Word:]

@@ -488,12 +488,6 @@ func (m *Module) GlobalsSize() int {
 	return (size + mask) &^ mask        // have at least minimum alignment.
 }
 
-// CopyGlobalsData copies globals' initial values into dest, aligning them
-// against its end.  len(dest) must be at least m.GlobalsSize().
-func (m *Module) CopyGlobalsData(dest []byte) {
-	datalayout.CopyGlobalsAtEnd(dest, &m.m)
-}
-
 // CodeConfig for a single compiler invocation.
 type CodeConfig struct {
 	EntrySymbol  string
