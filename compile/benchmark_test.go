@@ -97,7 +97,7 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		t0 := time.Now()
 		mod := loadInitialSections(&ModuleConfig{}, r)
 		t1 := time.Now()
-		mod.defineImports(loadBenchmarkReso)
+		mod.setImportsUsing(loadBenchmarkReso)
 		t2 := time.Now()
 		loadCodeSection(code, r, mod)
 		t3 := time.Now()

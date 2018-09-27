@@ -472,7 +472,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		)
 
 		mod := loadInitialSections(&ModuleConfig{common}, wasm)
-		mod.defineImports(runner.Resolver)
+		mod.setImportsUsing(runner.Resolver)
 		loadCodeSection(code, wasm, mod)
 		loadDataSection(data, wasm, mod)
 		loadUnknownSections(&common, wasm)

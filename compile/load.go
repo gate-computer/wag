@@ -445,21 +445,21 @@ func (m *Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	return
 }
 
-func (m *Module) DefineImportFunc(i int, addr uint64)   { m.m.ImportFuncs[i].Addr = addr }
-func (m *Module) DefineImportGlobal(i int, init uint64) { m.m.Globals[i].Init = init }
+func (m *Module) SetImportFunc(i int, addr uint64)   { m.m.ImportFuncs[i].Addr = addr }
+func (m *Module) SetImportGlobal(i int, init uint64) { m.m.Globals[i].Init = init }
 
-func (m *Module) DefineImports(res ImportResolver) (err error) {
-	if varRes, ok := res.(variadicImportResolver); ok {
+func (m *Module) SetImportsUsing(reso ImportResolver) (err error) {
+	if variReso, ok := reso.(variadicImportResolver); ok {
 		for i := range m.m.ImportFuncs {
 			imp := &m.m.ImportFuncs[i]
-			imp.Variadic, imp.Addr, err = varRes.ResolveVariadicFunc(m.ImportFunc(i))
+			imp.Variadic, imp.Addr, err = variReso.ResolveVariadicFunc(m.ImportFunc(i))
 			if err != nil {
 				return
 			}
 		}
 	} else {
 		for i := range m.m.ImportFuncs {
-			m.m.ImportFuncs[i].Addr, err = res.ResolveFunc(m.ImportFunc(i))
+			m.m.ImportFuncs[i].Addr, err = reso.ResolveFunc(m.ImportFunc(i))
 			if err != nil {
 				return
 			}
@@ -467,7 +467,7 @@ func (m *Module) DefineImports(res ImportResolver) (err error) {
 	}
 
 	for i := range m.m.ImportGlobals {
-		m.m.Globals[i].Init, err = res.ResolveGlobal(m.ImportGlobal(i))
+		m.m.Globals[i].Init, err = reso.ResolveGlobal(m.ImportGlobal(i))
 		if err != nil {
 			return
 		}
@@ -476,8 +476,8 @@ func (m *Module) DefineImports(res ImportResolver) (err error) {
 	return
 }
 
-func (m *Module) defineImports(res ImportResolver) {
-	if err := m.DefineImports(res); err != nil {
+func (m *Module) setImportsUsing(reso ImportResolver) {
+	if err := m.SetImportsUsing(reso); err != nil {
 		panic(err)
 	}
 }

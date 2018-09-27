@@ -45,7 +45,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	defer p.Close()
 
 	mod := loadInitialSections(&ModuleConfig{}, wasm)
-	mod.defineImports(runner.Resolver)
+	mod.setImportsUsing(runner.Resolver)
 
 	var code = &CodeConfig{
 		Text:         static.Buf(p.Text),

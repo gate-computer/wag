@@ -39,7 +39,7 @@ type Config struct {
 }
 
 // Compile a WebAssembly binary module into machine code.
-func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj *Object, err error) {
+func Compile(config *Config, r compile.Reader, reso compile.ImportResolver) (obj *Object, err error) {
 	obj = new(Object)
 
 	var common = compile.Config{
@@ -51,7 +51,7 @@ func Compile(config *Config, r compile.Reader, res compile.ImportResolver) (obj 
 		return
 	}
 
-	err = mod.DefineImports(res)
+	err = mod.SetImportsUsing(reso)
 	if err != nil {
 		return
 	}

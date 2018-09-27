@@ -43,7 +43,7 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	mod := loadInitialSections(&ModuleConfig{}, wasm)
-	mod.defineImports(runner.Resolver)
+	mod.setImportsUsing(runner.Resolver)
 
 	var code = &CodeConfig{
 		EntrySymbol:  "main",
