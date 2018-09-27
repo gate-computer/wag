@@ -97,7 +97,7 @@ func readMemory(m *module.M, load loader.L) {
 		panic(errors.New("multiple memories not supported"))
 	}
 
-	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, int(wa.Page))
+	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, wa.PageSize)
 }
 
 // Config for loading WebAssembly module sections.
@@ -415,13 +415,8 @@ func (m *Module) FuncTypes() []wa.FuncType {
 	return sigs
 }
 
-func (m *Module) InitialMemorySize() wa.MemorySize {
-	return wa.MemorySize(m.m.MemoryLimitValues.Initial)
-}
-
-func (m *Module) MemorySizeLimit() wa.MemorySize {
-	return wa.MemorySize(m.m.MemoryLimitValues.Maximum)
-}
+func (m *Module) InitialMemorySize() int { return m.m.MemoryLimitValues.Initial }
+func (m *Module) MemorySizeLimit() int   { return m.m.MemoryLimitValues.Maximum }
 
 func (m *Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
 func (m *Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }

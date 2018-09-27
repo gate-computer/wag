@@ -16,8 +16,8 @@ import (
 // can be used to execute the program (the details are architecture-specific).
 type Object struct {
 	FuncTypes         []wa.FuncType
-	InitialMemorySize wa.MemorySize
-	MemorySizeLimit   wa.MemorySize
+	InitialMemorySize int
+	MemorySizeLimit   int
 	Text              []byte
 	ROData            []byte
 	object.CallMap

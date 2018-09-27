@@ -4,9 +4,7 @@
 
 package wa
 
-type MemorySize int
-
 const (
-	PageBits            = 16
-	Page     MemorySize = 1 << PageBits
+	PageBits = 16
+	PageSize = 1 << PageBits
 )

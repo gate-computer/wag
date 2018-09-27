@@ -229,7 +229,7 @@ type Runner struct {
 
 	globalsMemory []byte
 	memoryOffset  int
-	memorySize    wa.MemorySize
+	memorySize    int
 	stack         []byte
 
 	lastTrap     trap.Id
@@ -238,17 +238,17 @@ type Runner struct {
 	Snapshots []*Snapshot
 }
 
-func (p *Program) NewRunner(initMemorySize, growMemorySize wa.MemorySize, stackSize int) (r *Runner, err error) {
+func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
 	return newRunner(p, initMemorySize, growMemorySize, stackSize)
 }
 
-func newRunner(prog runnable, initMemorySize, growMemorySize wa.MemorySize, stackSize int) (r *Runner, err error) {
-	if (initMemorySize & (wa.Page - 1)) != 0 {
-		err = fmt.Errorf("initial memory size is not multiple of %d", wa.Page)
+func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+	if (initMemorySize & (wa.PageSize - 1)) != 0 {
+		err = fmt.Errorf("initial memory size is not multiple of %d", wa.PageSize)
 		return
 	}
-	if (growMemorySize & (wa.Page - 1)) != 0 {
-		err = fmt.Errorf("memory growth limit is not multiple of %d", wa.Page)
+	if (growMemorySize & (wa.PageSize - 1)) != 0 {
+		err = fmt.Errorf("memory growth limit is not multiple of %d", wa.PageSize)
 		return
 	}
 
@@ -413,7 +413,7 @@ func (e *Executor) run() {
 
 	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.prog.getRODataAddr(), e.runner.stack, stackOffset, resumeResult, fds[1], e.arg)
 
-	e.runner.memorySize = wa.MemorySize(memorySize)
+	e.runner.memorySize = memorySize
 	e.runner.lastTrap = trap.Id(uint32(trapId))
 	e.runner.lastStackPtr = stackPtr
 
