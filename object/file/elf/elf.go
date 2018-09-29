@@ -33,7 +33,7 @@ func (f *File) WriteTo(w io.Writer) (n int64, err error) {
 
 func (f *File) writeTo(b *bytes.Buffer) {
 	var (
-		phnum           = 6
+		phnum           = 5
 		headersSize     = roundSize(64+56*phnum, pageSize)
 		runtimePageAddr = f.RuntimeAddr &^ (pageSize - 1)
 		runtimePadding  = int(f.RuntimeAddr - runtimePageAddr)
@@ -41,13 +41,11 @@ func (f *File) writeTo(b *bytes.Buffer) {
 		runtimeOffset   = headersSize
 		textSize        = roundSize(len(f.Text), pageSize)
 		textOffset      = runtimeOffset + runtimeSize
-		roDataSize      = roundSize(len(f.ROData), pageSize)
-		roDataOffset    = textOffset + textSize
 		globalsSize     = roundSize(f.MemoryOffset, pageSize)
 		globalsPadding  = globalsSize - f.MemoryOffset
 		memorySize      = roundSize(len(f.GlobalsMemory)-f.MemoryOffset, pageSize)
 		dataAddr        = memoryAddr - globalsSize
-		dataOffset      = roDataOffset + roDataSize
+		dataOffset      = textOffset + textSize
 		dataSize        = globalsSize + memorySize
 	)
 
@@ -124,19 +122,7 @@ func (f *File) writeTo(b *bytes.Buffer) {
 		uint64(pageSize),            // align
 	})
 
-	// Program header #4: load read-only data
-	writeBinaryArray(b, []interface{}{
-		uint32(elf.PT_LOAD),  // type
-		uint32(elf.PF_R),     // flags
-		uint64(roDataOffset), // offset
-		uint64(f.RODataAddr), // vaddr
-		uint64(f.RODataAddr), // paddr
-		uint64(roDataSize),   // filesz
-		uint64(roDataSize),   // memsz
-		uint64(pageSize),     // align
-	})
-
-	// Program header #5: load globals and linear memory data
+	// Program header #4: load globals and linear memory data
 	writeBinaryArray(b, []interface{}{
 		uint32(elf.PT_LOAD),         // type
 		uint32(elf.PF_R | elf.PF_W), // flags
@@ -166,14 +152,6 @@ func (f *File) writeTo(b *bytes.Buffer) {
 		panic(b.Len())
 	}
 	b.Write(f.Text)
-
-	align(b, pageSize)
-
-	// Read-only data
-	if b.Len() != roDataOffset {
-		panic(b.Len())
-	}
-	b.Write(f.ROData)
 
 	align(b, pageSize)
 

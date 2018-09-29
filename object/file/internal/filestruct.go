@@ -9,8 +9,6 @@ type File struct {
 	Runtime       []byte
 	RuntimeAddr   uint64
 	Text          []byte
-	ROData        []byte
-	RODataAddr    uintptr
 	GlobalsMemory []byte
 	MemoryOffset  int
 }

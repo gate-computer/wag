@@ -185,7 +185,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 				if a.Type == wa.I32 {
 					in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
 				} else {
-					in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseZero, f.RODataAddr+rodata.Mask80Addr64)
+					in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseText, CommonRODataAddr+rodata.Mask80Offset64)
 				}
 
 				in.JNEcb.Stub8(&f.Text)
@@ -317,12 +317,12 @@ func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 
 	var done link.L
 
-	signMaskAddr := rodata.MaskAddr(f.RODataAddr, rodata.Mask80Base, a.Type)
+	signMaskAddr := rodata.MaskAddr(CommonRODataAddr, rodata.Mask80Base, a.Type)
 
 	in.MOVDQmr.RegReg(&f.Text, a.Type, sourceReg, RegScratch) // int <- float
-	in.AND.RegMemDisp(&f.Text, a.Type, RegScratch, in.BaseZero, signMaskAddr)
+	in.AND.RegMemDisp(&f.Text, a.Type, RegScratch, in.BaseText, signMaskAddr)
 	in.MOVDQmr.RegReg(&f.Text, a.Type, targetReg, RegResult) // int <- float
-	in.AND.RegMemDisp(&f.Text, a.Type, RegResult, in.BaseZero, signMaskAddr)
+	in.AND.RegMemDisp(&f.Text, a.Type, RegResult, in.BaseText, signMaskAddr)
 	in.CMP.RegReg(&f.Text, a.Type, RegResult, RegScratch)
 	in.JEcb.Stub8(&f.Text)
 	done.AddSite(f.Text.Addr)

@@ -254,9 +254,6 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	debug.Printf("table element type: %s", tableType)
 	debug.Printf("loop: %v", loop)
 
-	tableAddr := alignType(len(f.ROData.Bytes()), tableType)
-	f.ROData.ResizeBytes(tableAddr + len(targetTable)*int(tableType.Size()))
-
 	var value operand.O
 	if defaultTarget.ValueType != wa.Void {
 		value = popOperand(f, defaultTarget.ValueType)
@@ -293,7 +290,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	}
 
 	opBranchIfOutOfBounds(f, r, int32(len(targetTable)), &defaultTarget.Label)
-	asm.LoadIntROData(f, tableType, r, int32(tableAddr))
+	loadInsnAddr := asm.LoadIntStubNear(f, tableType, r)
 
 	if tableType == wa.I32 {
 		drop := defaultTarget.StackDepth - commonStackDepth
@@ -308,10 +305,18 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	}
 
 	asm.BranchIndirect(f, r)
+	deadend = true
+
+	isa.AlignData(&f.Prog, int(tableType.Size()))
+	tableAddr := f.Text.Addr
+	isa.UpdateNearLoad(f.Text.Bytes(), loadInsnAddr, tableAddr)
+	tableSize := len(targetTable) * int(tableType.Size())
+	f.Text.Extend(tableSize)
+	f.Map.PutDataBlock(tableAddr, tableSize)
 
 	table := gen.BranchTable{
-		RODataAddr: int32(tableAddr),
-		Targets:    targetTable,
+		Addr:    tableAddr,
+		Targets: targetTable,
 	}
 	if tableType == wa.I32 {
 		// Common operand count
@@ -321,8 +326,6 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 		table.StackDepth = defaultTarget.StackDepth
 	}
 	f.BranchTables = append(f.BranchTables, table)
-
-	deadend = true
 	return
 }
 

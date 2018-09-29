@@ -109,10 +109,6 @@ func (s *Snapshot) getText() []byte {
 	return s.prog.getText()
 }
 
-func (s *Snapshot) getRODataAddr() uintptr {
-	return s.prog.getRODataAddr()
-}
-
 func (s *Snapshot) getData() (data []byte, memoryOffset int) {
 	data = s.data
 	memoryOffset = s.memoryOffset

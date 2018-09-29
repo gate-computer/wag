@@ -9,6 +9,7 @@ package elf
 import (
 	"bytes"
 	"debug/elf"
+	"encoding/binary"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -19,10 +20,6 @@ import (
 )
 
 func testText() []byte
-
-var testROData = []byte{
-	syscall.SYS_EXIT_GROUP,
-}
 
 var testGlobals = []byte{
 	0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 33
@@ -35,12 +32,13 @@ var testMemory = []byte{
 func TestELF(t *testing.T) {
 	runtime, runtimeAddr := runner.ObjectRuntime()
 
+	text := append([]byte{}, testText()...)
+	binary.LittleEndian.PutUint32(text[8:], syscall.SYS_EXIT_GROUP)
+
 	ef := File{
 		Runtime:       runtime,
 		RuntimeAddr:   runtimeAddr,
-		Text:          testText(),
-		ROData:        testROData,
-		RODataAddr:    testRODataAddr,
+		Text:          text,
 		GlobalsMemory: append(append([]byte{}, testGlobals...), testMemory...),
 		MemoryOffset:  len(testGlobals),
 	}

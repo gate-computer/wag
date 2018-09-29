@@ -197,10 +197,10 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 
 	isa.UpdateStackCheck(f.Text.Bytes(), stackCheckAddr, f.NumLocals+f.MaxStackDepth)
 
-	roDataBuf := f.ROData.Bytes()
+	text := f.Text.Bytes()
 
 	for i, table := range f.BranchTables {
-		buf := roDataBuf[table.RODataAddr:]
+		buf := text[table.Addr:]
 		for j, target := range table.Targets {
 			targetAddr := uint32(target.Label.FinalAddr())
 			if table.StackDepth < 0 {

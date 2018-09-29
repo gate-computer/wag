@@ -39,12 +39,11 @@ func TestFuzz(t *testing.T) {
 
 func fuzz(t *testing.T, filename string) {
 	const (
-		maxTextSize   = 65536
-		maxRODataSize = 4096
-		stackSize     = 4096
+		maxTextSize = 65536
+		stackSize   = 4096
 	)
 
-	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
+	p, err := runner.NewProgram(maxTextSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,9 +65,7 @@ func fuzz(t *testing.T, filename string) {
 	}()
 
 	config := Config{
-		Text:       static.Buf(p.Text),
-		ROData:     static.Buf(p.ROData),
-		RODataAddr: p.RODataAddr(),
+		Text: static.Buf(p.Text),
 	}
 
 	_, err = Compile(&config, bufio.NewReader(f), runner.Resolver)

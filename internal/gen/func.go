@@ -29,7 +29,7 @@ type BranchTarget struct {
 }
 
 type BranchTable struct {
-	RODataAddr int32
+	Addr       int32
 	Targets    []*BranchTarget
 	StackDepth int // -1 indicates common depth among all targets
 }

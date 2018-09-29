@@ -4,4 +4,4 @@
 
 package main
 
-func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr, roDataBase uintptr)
+func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr uintptr)

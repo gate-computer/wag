@@ -11,7 +11,6 @@ import (
 
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/atomic"
 	"github.com/tsavola/wag/internal/gen/debug"
@@ -24,16 +23,8 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// alignType rounds up.
-func alignType(addr int, t wa.Type) int {
-	mask := int(t.Size()) - 1
-	return (addr + mask) &^ mask
-}
-
 func GenProgram(
 	text code.Buffer,
-	roData data.Buffer,
-	roDataAddr int32,
 	objMap obj.Map,
 	load loader.L,
 	m *module.M,
@@ -43,12 +34,10 @@ func GenProgram(
 ) {
 	funcStorage := gen.Func{
 		Prog: gen.Prog{
-			Module:     m,
-			Text:       code.Buf{Buffer: text},
-			ROData:     roData,
-			RODataAddr: roDataAddr,
-			Map:        objMap,
-			FuncLinks:  make([]link.FuncL, len(m.Funcs)),
+			Module:    m,
+			Text:      code.Buf{Buffer: text},
+			Map:       objMap,
+			FuncLinks: make([]link.FuncL, len(m.Funcs)),
 		},
 	}
 	p := &funcStorage.Prog
@@ -66,15 +55,6 @@ func GenProgram(
 	}
 
 	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
-
-	roTableSize := len(m.TableFuncs) * 8
-	buf := p.ROData.ResizeBytes(rodata.TableAddr + roTableSize)
-	binary.LittleEndian.PutUint32(buf[rodata.Mask7fAddr32:], 0x7fffffff)
-	binary.LittleEndian.PutUint64(buf[rodata.Mask7fAddr64:], 0x7fffffffffffffff)
-	binary.LittleEndian.PutUint32(buf[rodata.Mask80Addr32:], 0x80000000)
-	binary.LittleEndian.PutUint64(buf[rodata.Mask80Addr64:], 0x8000000000000000)
-	binary.LittleEndian.PutUint32(buf[rodata.Mask5f00Addr32:], 0x5f000000)
-	binary.LittleEndian.PutUint64(buf[rodata.Mask43e0Addr64:], 0x43e0000000000000)
 
 	asm.JumpToTrapHandler(p, trap.MissingFunction) // at zero address
 	if p.Text.Addr == 0 || p.Text.Addr > 16 {
@@ -105,6 +85,7 @@ func GenProgram(
 		sigIndex := m.Funcs[entryIndex]
 		sig := m.Types[sigIndex]
 
+		// TODO: move this out of codegen
 		for i := range sig.Params {
 			asm.PushImm(p, int64(entryArgs[i]))
 		}
@@ -121,7 +102,22 @@ func GenProgram(
 
 	asm.Exit(p)
 
+	if p.Text.Addr > int32(isa.CommonRODataAddr()) {
+		panic("text is too long before common read-only data")
+	}
+	isa.AlignData(p, isa.CommonRODataAddr())
+
+	roTableSize := len(m.TableFuncs) * 8
+	commonROData := p.Text.Extend(rodata.TableOffset + roTableSize)
+	binary.LittleEndian.PutUint32(commonROData[rodata.Mask7fOffset32:], 0x7fffffff)
+	binary.LittleEndian.PutUint64(commonROData[rodata.Mask7fOffset64:], 0x7fffffffffffffff)
+	binary.LittleEndian.PutUint32(commonROData[rodata.Mask80Offset32:], 0x80000000)
+	binary.LittleEndian.PutUint64(commonROData[rodata.Mask80Offset64:], 0x8000000000000000)
+	binary.LittleEndian.PutUint32(commonROData[rodata.Mask5f00Offset32:], 0x5f000000)
+	binary.LittleEndian.PutUint64(commonROData[rodata.Mask43e0Offset64:], 0x43e0000000000000)
+
 	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
+		isa.AlignFunc(p)
 		p.TrapLinks[id].Addr = p.Text.Addr
 		asm.JumpToTrapHandler(p, id)
 	}
@@ -144,7 +140,7 @@ func GenProgram(
 		isa.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
-	ptr := p.ROData.Bytes()[rodata.TableAddr:]
+	ptr := p.Text.Bytes()[isa.CommonRODataAddr()+rodata.TableOffset:]
 
 	for i, funcIndex := range m.TableFuncs {
 		var funcAddr uint32 // missing function trap by default
@@ -178,15 +174,15 @@ func GenProgram(
 
 		eventHandler(event.FunctionBarrier)
 
-		roDataBuf := p.ROData.Bytes()
+		roTable := p.Text.Bytes()[isa.CommonRODataAddr()+rodata.TableOffset:]
 
 		for i := midpoint; i < len(m.Funcs); i++ {
 			ln := &p.FuncLinks[i]
 			addr := uint32(ln.Addr)
 
 			for _, tableIndex := range ln.TableIndexes {
-				offset := rodata.TableAddr + tableIndex*8
-				atomic.PutUint32(roDataBuf[offset:offset+4], addr) // overwrite only function addr
+				offset := tableIndex * 8
+				atomic.PutUint32(roTable[offset:offset+4], addr) // overwrite only function addr
 			}
 
 			isa.UpdateCalls(p.Text.Bytes(), &ln.L)

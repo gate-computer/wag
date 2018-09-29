@@ -488,15 +488,13 @@ type CodeConfig struct {
 	EntrySymbol  string
 	EntryArgs    []uint64
 	Text         CodeBuffer // Initialized with default implementation if nil.
-	ROData       DataBuffer // Initialized with default implementation if nil.
-	RODataAddr   uintptr
 	ObjectMapper ObjectMap
 	EventHandler func(event.Event)
 	Config
 }
 
 // LoadCodeSection reads a WebAssembly module's code section and generates
-// machine code and read-only data.
+// machine code.
 func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
@@ -532,9 +530,6 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	if config.Text == nil {
 		config.Text = new(defaultBuffer)
 	}
-	if config.ROData == nil {
-		config.ROData = new(defaultBuffer)
-	}
 
 	objMap := config.ObjectMapper
 	if objMap == nil {
@@ -546,7 +541,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	switch id := section.Find(module.SectionCode, load, config.UnknownSectionLoader); id {
 	case module.SectionCode:
 		load.Varuint32() // payload len
-		codegen.GenProgram(config.Text, config.ROData, int32(config.RODataAddr), objMap, load, &mod.m, entryIndex, config.EntryArgs, config.EventHandler)
+		codegen.GenProgram(config.Text, objMap, load, &mod.m, entryIndex, config.EntryArgs, config.EventHandler)
 
 	case module.SectionData:
 		// no code section

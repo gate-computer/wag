@@ -175,7 +175,7 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	in.JLEcb.Stub8(&f.Text)
 	outOfBounds.AddSite(f.Text.Addr)
 
-	in.MOV.RegMemIndexDisp(&f.Text, wa.I64, RegResult, in.BaseZero, funcIndexReg, in.Scale3, f.RODataAddr+rodata.TableAddr)
+	in.MOV.RegMemIndexDisp(&f.Text, wa.I64, RegResult, in.BaseText, funcIndexReg, in.Scale3, CommonRODataAddr+rodata.TableOffset)
 	f.Regs.Free(wa.I64, funcIndexReg)
 	in.MOV.RegReg(&f.Text, wa.I32, RegScratch, RegResult) // zero-extended function address
 	in.SHRi.RegImm8(&f.Text, wa.I64, RegResult, 32)       // signature index
@@ -274,11 +274,13 @@ func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
-// LoadIntROData may update condition flags.  The register passed as argument
+// LoadIntStubNear may update condition flags.  The register passed as argument
 // is both the index (source) and the target register.  The index has been
 // zero-extended.
-func (MacroAssembler) LoadIntROData(f *gen.Func, indexType wa.Type, r reg.R, addr int32) {
-	in.MOV.RegMemIndexDisp(&f.Text, indexType, r, in.BaseZero, r, in.TypeScale(indexType), f.RODataAddr+addr)
+func (MacroAssembler) LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (insnAddr int32) {
+	// 32-bit displacement as placeholder
+	in.MOV.RegMemIndexDisp(&f.Text, indexType, r, in.BaseText, r, in.TypeScale(indexType), 0x7fffffff)
+	return f.Text.Addr
 }
 
 // Move MUST NOT update condition flags unless the operand is the condition

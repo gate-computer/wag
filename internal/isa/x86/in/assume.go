@@ -14,6 +14,7 @@ const (
 	RegZero       = reg.R(2)
 	RegStack      = reg.R(4)
 	RegMemoryBase = reg.R(14)
+	RegTextBase   = reg.R(15)
 )
 
 type BaseReg reg.R
@@ -22,4 +23,5 @@ const (
 	BaseScratch = BaseReg(RegScratch)
 	BaseZero    = BaseReg(RegZero)
 	BaseMemory  = BaseReg(RegMemoryBase)
+	BaseText    = BaseReg(RegTextBase)
 )

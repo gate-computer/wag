@@ -21,7 +21,7 @@ const (
 	padInsn  = gapstone.X86_INS_INT3
 )
 
-func rewriteText(insns []gapstone.Instruction, targets map[uint]string, firstFuncAddr uint, roDataAddr uintptr) {
+func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr uintptr, firstFuncAddr uint) {
 	sequence := 0
 
 	for i := range insns {
@@ -105,13 +105,6 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, firstFun
 			if id := trap.Id(n); id < trap.NumTraps {
 				targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
 			}
-			continue
-
-		case strings.HasPrefix(insn.OpStr, "0x") && strings.Contains(insn.OpStr, "(, r"):
-			var addr uintptr
-			fmt.Sscanf(insn.OpStr, "0x%x(, ", &addr)
-			relAddr := addr - uintptr(roDataAddr)
-			insn.OpStr = fmt.Sprintf("rodata+0x%x(%s", relAddr, strings.SplitN(insn.OpStr, " ", 2)[1])
 			continue
 
 		default:

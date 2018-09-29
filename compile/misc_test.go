@@ -22,9 +22,8 @@ func TestCallWithDuplicatedOperand(t *testing.T) {
 
 func misc(t *testing.T, filename, expectOutput string) {
 	const (
-		maxTextSize   = 65536
-		maxRODataSize = 4096
-		stackSize     = 4096
+		maxTextSize = 65536
+		stackSize   = 4096
 
 		dumpText = false
 	)
@@ -38,7 +37,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
+	p, err := runner.NewProgram(maxTextSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,9 +48,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 
 	var code = &CodeConfig{
 		Text:         static.Buf(p.Text),
-		ROData:       static.Buf(p.ROData),
-		RODataAddr:   p.RODataAddr(),
-		ObjectMapper: &p.ObjInfo,
+		ObjectMapper: &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)
 
@@ -64,7 +61,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	maxMemorySize := mod.MemorySizeLimit()
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, nil)
+		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, nil)
 	}
 
 	var printBuf bytes.Buffer

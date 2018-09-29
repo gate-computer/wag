@@ -10,26 +10,26 @@ import (
 
 const (
 	// Masks are 16-byte aligned for x86-64 SSE.
-	Mask7fAddr32 = iota * 16
-	Mask7fAddr64
-	Mask80Addr32
-	Mask80Addr64
-	Mask5f00Addr32 // 01011111000000000000000000000000
-	Mask43e0Addr64 // 0100001111100000000000000000000000000000000000000000000000000000
-	TableAddr
+	Mask7fOffset32 = iota * 16
+	Mask7fOffset64
+	Mask80Offset32
+	Mask80Offset64
+	Mask5f00Offset32 // 01011111000000000000000000000000
+	Mask43e0Offset64 // 0100001111100000000000000000000000000000000000000000000000000000
+	TableOffset
 )
 
-type MaskBaseAddr int32
+type MaskBaseOffset int32
 
 const (
-	Mask7fBase    = MaskBaseAddr(Mask7fAddr32)
-	Mask80Base    = MaskBaseAddr(Mask80Addr32)
-	MaskTruncBase = MaskBaseAddr(Mask5f00Addr32)
+	Mask7fBase    = MaskBaseOffset(Mask7fOffset32)
+	Mask80Base    = MaskBaseOffset(Mask80Offset32)
+	MaskTruncBase = MaskBaseOffset(Mask5f00Offset32)
 )
 
-// MaskAddr calculates the absolute read-only data address for reading a mask
-// for the given type size.  maskBaseAddr should be one of the Mask*Base
-// constants.
-func MaskAddr(roDataAddr int32, maskBaseAddr MaskBaseAddr, t wa.Type) int32 {
-	return roDataAddr + int32(maskBaseAddr) + int32((t.Size()&8)<<1)
+// MaskAddr calculates the text address for reading a mask for the given type
+// size.  maskBaseOffset should be one of the Mask*Base constants.
+// commonRODataAddr is the ISA-specific location of the common read-only data.
+func MaskAddr(commonRODataAddr int32, maskBaseOffset MaskBaseOffset, t wa.Type) int32 {
+	return commonRODataAddr + int32(maskBaseOffset) + int32((t.Size()&8)<<1)
 }

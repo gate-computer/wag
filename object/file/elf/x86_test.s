@@ -28,7 +28,7 @@ TEXT testText32<>(SB),NOSPLIT,$0	// offset 32
 	MOVQ	(R14), DI		// memory
 	SUBQ	$85400, DI
 	SUBQ	-8(R14), DI		// globals
-	MOVQ	0x10000, AX		// rodata
+	MOVL	8(R15), AX		// text+8
 	SYSCALL
 	HLT
 

@@ -8,10 +8,12 @@ import (
 	"github.com/tsavola/wag/object"
 )
 
-// Instruction mapping from machine code to WebAssembly.
+// Instruction mapping from machine code to WebAssembly.  SourceIndex is -1 if
+// ObjectOffset contains non-executable data interleaved with the code.
 type InsnMapping struct {
 	ObjectOffset int32 // Machine code byte position within a function
-	SourceIndex  int32 // WebAssembly instruction count within a function
+	SourceIndex  int32 // WebAssembly instruction index within a function
+	BlockLength  int   // Length of data block (when SourceIndex is -1)
 }
 
 // InsnMap implements compile.ObjectMap.  It stores everything.
@@ -37,15 +39,27 @@ func (m *InsnMap) PutFuncAddr(pos int32) {
 	m.ins = -1
 }
 
-func (m *InsnMap) PutInsnAddr(absPos int32) {
+func (m *InsnMap) PutInsnAddr(pos int32) {
 	m.ins++
+	m.putMapping(pos, m.ins, 0)
+}
+
+func (m *InsnMap) PutDataBlock(pos int32, length int) {
+	m.putMapping(pos, -1, length)
+}
+
+func (m *InsnMap) putMapping(absPos, sourceIndex int32, blockLength int) {
 	relPos := absPos - m.base
 
 	prev := len(m.FuncInsns[m.fun]) - 1
 	if prev >= 0 && m.FuncInsns[m.fun][prev].ObjectOffset == relPos {
 		// Replace previous mapping because no machine code was generated
-		m.FuncInsns[m.fun][prev].SourceIndex = m.ins
+		m.FuncInsns[m.fun][prev].SourceIndex = sourceIndex
+		m.FuncInsns[m.fun][prev].BlockLength = blockLength
 	} else {
-		m.FuncInsns[m.fun] = append(m.FuncInsns[m.fun], InsnMapping{relPos, m.ins})
+		m.FuncInsns[m.fun] = append(m.FuncInsns[m.fun], InsnMapping{relPos, sourceIndex, blockLength})
 	}
 }
+
+func (m *InsnMap) GetFuncAddrs() []int32         { return m.FuncAddrs }
+func (m *InsnMap) GetFuncInsns() [][]InsnMapping { return m.FuncInsns }

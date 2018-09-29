@@ -6,21 +6,20 @@ package wag
 
 import (
 	"github.com/tsavola/wag/compile"
-	"github.com/tsavola/wag/object"
+	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/wa"
 )
 
 // Object code with stack map and debug symbols.  The text (machine code),
-// read-only data, initial global values, and initial linear memory contents
-// can be used to execute the program (the details are architecture-specific).
+// initial global values, and initial linear memory contents can be used to
+// execute the program (the details are architecture-specific).
 type Object struct {
 	FuncTypes         []wa.FuncType
 	InitialMemorySize int
 	MemorySizeLimit   int
 	Text              []byte
-	ROData            []byte
-	object.CallMap
+	debug.InsnMap
 	MemoryOffset  int // Threshold between globals and memory.
 	GlobalsMemory []byte
 	Names         section.NameSection
@@ -32,8 +31,6 @@ type Config struct {
 	EntrySymbol     string
 	EntryArgs       []uint64
 	Text            compile.CodeBuffer
-	ROData          compile.DataBuffer
-	RODataAddr      uintptr
 	GlobalsMemory   compile.DataBuffer
 	MemoryAlignment int
 }
@@ -64,8 +61,6 @@ func Compile(config *Config, r compile.Reader, reso compile.ImportResolver) (obj
 		EntrySymbol:  config.EntrySymbol,
 		EntryArgs:    config.EntryArgs,
 		Text:         config.Text,
-		ROData:       config.ROData,
-		RODataAddr:   config.RODataAddr,
 		ObjectMapper: &obj.CallMap,
 		Config:       common,
 	}
@@ -76,9 +71,7 @@ func Compile(config *Config, r compile.Reader, reso compile.ImportResolver) (obj
 	}
 
 	config.Text = code.Text
-	config.ROData = code.ROData
 	obj.Text = code.Text.Bytes()
-	obj.ROData = code.ROData.Bytes()
 
 	var data = &compile.DataConfig{
 		GlobalsMemory:   config.GlobalsMemory,

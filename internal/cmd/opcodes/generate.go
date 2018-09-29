@@ -130,6 +130,7 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 
 	out(`import (`)
 	out(`    "github.com/tsavola/wag/wa"`)
+	out(`    "github.com/tsavola/wag/internal/gen"`)
 	out(`    "github.com/tsavola/wag/internal/isa/prop"`)
 	out(`    "github.com/tsavola/wag/internal/loader"`)
 	out(`    "github.com/tsavola/wag/internal/opcode"`)
@@ -199,7 +200,7 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 	}
 	out(`}`)
 
-	out(`var opcodeSkips = [256]func(loader.L, opcode.Opcode){`)
+	out(`var opcodeSkips = [256]func(*gen.Func, loader.L, opcode.Opcode){`)
 	for code, op := range opcodes {
 		switch op.name {
 		case "":

@@ -143,14 +143,12 @@ func spec(t *testing.T, name string) {
 func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []byte {
 	const (
 		maxTextSize   = 0x100000
-		maxRODataSize = 0x100000
 		maxMemorySize = 0x100000
 		stackSize     = 4096 // limit stacktrace length
 
 		timeout     = time.Second * 3
 		dumpExps    = false
 		dumpText    = false
-		dumpROData  = false
 		dumpGlobals = false
 		dumpMemory  = false
 	)
@@ -442,7 +440,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		var timedout bool
 
-		p, err := runner.NewProgram(maxTextSize, maxRODataSize)
+		p, err := runner.NewProgram(maxTextSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -461,9 +459,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 			code = &CodeConfig{
 				EntrySymbol:  "test",
 				Text:         static.Buf(p.Text),
-				ROData:       static.Buf(p.ROData),
-				RODataAddr:   p.RODataAddr(),
-				ObjectMapper: &p.ObjInfo,
+				ObjectMapper: &p.DebugMap,
 				Config:       common,
 			}
 			data = &DataConfig{
@@ -481,13 +477,8 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		minMemorySize := mod.InitialMemorySize()
 		maxMemorySize := mod.MemorySizeLimit()
 
-		if testing.Verbose() {
-			if dumpText {
-				dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.RODataAddr(), p.ObjInfo.FuncAddrs, &nameSection)
-			}
-			if dumpROData {
-				dump.ROData(os.Stdout, code.ROData.Bytes(), 0)
-			}
+		if dumpText && testing.Verbose() {
+			dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, &nameSection)
 		}
 
 		if dumpGlobals {

@@ -4,17 +4,17 @@
 
 #include "textflag.h"
 
-// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize, roDataBase uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),NOSPLIT,$0-144
+// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+TEXT ·run(SB),NOSPLIT,$0-136
 	MOVQ	text+0(FP), R15
 	MOVQ	initialMemorySize+24(FP), R13
 	MOVQ	memoryAddr+32(FP), R14	// memory ptr
 	MOVQ	growMemorySize+40(FP), R11
-	MOVQ	stack+56(FP), BX	// stack limit
-	MOVQ	stackOffset+80(FP), CX
-	MOVQ	resumeResult+88(FP), AX	// resume result (0 = don't resume)
-	MOVQ	slaveFd+96(FP), DI	// slave fd
-	MOVQ	arg+104(FP), DX		// arg
+	MOVQ	stack+48(FP), BX	// stack limit
+	MOVQ	stackOffset+72(FP), CX
+	MOVQ	resumeResult+80(FP), AX	// resume result (0 = don't resume)
+	MOVQ	slaveFd+88(FP), DI	// slave fd
+	MOVQ	arg+96(FP), DX		// arg
 	JMP	run<>(SB)
 
 // func ObjectRuntime() (slice []byte, addr uint64)
@@ -66,7 +66,7 @@ TEXT resume<>(SB),NOSPLIT,$0
 	ADDQ	$16, DI			// resume routine
 	JMP	DI
 
-TEXT trap<>(SB),NOSPLIT,$0-144
+TEXT trap<>(SB),NOSPLIT,$0-136
 	CMPL	AX, $3			// CallStackExhausted
 	JNE	skip
 	TESTB	$1, BX
@@ -79,10 +79,10 @@ skip:
 	MOVQ	SP, R11			// stack ptr
 	MOVQ	M7, SP			// original stack
 	ADDQ	$8, SP			// arg
-	MOVQ	AX, trapId+112(FP)
+	MOVQ	AX, trapId+104(FP)
 	SUBQ	R14, R13
-	MOVQ	R13, currentMemorySize+120(FP)
-	MOVQ	R11, stackPtr+128(FP)
+	MOVQ	R13, currentMemorySize+112(FP)
+	MOVQ	R11, stackPtr+120(FP)
 	RET				// return from run function
 
 pause:

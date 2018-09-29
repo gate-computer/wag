@@ -20,11 +20,7 @@ const (
 )
 
 const (
-	ModRMScratch = ModRM(RegScratch)
-	ModRMZero    = ModRM(RegZero)
-	ModRMSIB     = ModRM(4)
-	ModRMDisp32  = ModRM(5)
-	ModRMMemory  = ModRM(RegMemoryBase & 7)
+	ModRMSIB = ModRM(4)
 )
 
 func dispModSize(disp int32) (mod Mod, size uint8) {

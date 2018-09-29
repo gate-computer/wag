@@ -14,12 +14,8 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-const (
-	roDataAddr = 0x10000
-)
-
 func Fuzz(data []byte) int {
-	obj, err := wag.Compile(&wag.Config{RODataAddr: roDataAddr}, bytes.NewReader(data), res{})
+	obj, err := wag.Compile(&wag.Config{}, bytes.NewReader(data), res{})
 	if err != nil {
 		return 0
 	}

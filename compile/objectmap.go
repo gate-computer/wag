@@ -17,3 +17,4 @@ func (dummyMap) PutImportFuncAddr(int32)  {}
 func (dummyMap) PutFuncAddr(int32)        {}
 func (dummyMap) PutCallSite(int32, int32) {}
 func (dummyMap) PutInsnAddr(int32)        {}
+func (dummyMap) PutDataBlock(int32, int)  {}

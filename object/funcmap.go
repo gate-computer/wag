@@ -24,3 +24,4 @@ func (m *FuncMap) PutFuncAddr(addr int32) {
 
 func (*FuncMap) PutCallSite(int32, int32) {}
 func (*FuncMap) PutInsnAddr(int32)        {}
+func (*FuncMap) PutDataBlock(int32, int)  {}

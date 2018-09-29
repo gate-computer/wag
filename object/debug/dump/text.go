@@ -12,10 +12,16 @@ import (
 
 	"github.com/bnagy/gapstone"
 
+	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/section"
 )
 
-func Text(w io.Writer, text []byte, textAddr, roDataAddr uintptr, funcMap []int32, ns *section.NameSection) (err error) {
+type TextMap interface {
+	GetFuncAddrs() []int32
+	GetFuncInsns() [][]debug.InsnMapping
+}
+
+func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *section.NameSection) error {
 	var names []section.FuncName
 	if ns != nil {
 		names = ns.FuncNames
@@ -27,25 +33,43 @@ func Text(w io.Writer, text []byte, textAddr, roDataAddr uintptr, funcMap []int3
 	}
 	defer engine.Close()
 
-	err = engine.SetOption(gapstone.CS_OPT_SYNTAX, csSyntax)
-	if err != nil {
-		return
+	if err := engine.SetOption(gapstone.CS_OPT_SYNTAX, csSyntax); err != nil {
+		return err
 	}
 
-	insns, err := engine.Disasm(text, 0, 0)
-	if err != nil {
-		return
+	var insns []gapstone.Instruction
+
+	for offset := uint64(0); true; {
+		is, err := engine.Disasm(text[offset:], uint64(textAddr)+offset, 0)
+
+		if len(is) > 0 {
+			insns = append(insns, is...)
+
+			latest := is[len(is)-1]
+			offset = uint64(latest.Address+latest.Size) - uint64(textAddr)
+		}
+
+		if err != nil {
+			fmt.Fprintf(w, "Disassembly error at 0x%x\n", uint64(textAddr)+offset)
+		}
+
+		skipTo := (offset + 4) &^ 3 // try next 32-bit word
+		if skipTo >= uint64(len(text)) {
+			break
+		}
+		offset = skipTo
 	}
 
-	firstFuncAddr := uint(funcMap[0])
+	funcMap := textMap.GetFuncAddrs()
+	firstFuncAddr := uint(textAddr) + uint(funcMap[0])
 
 	targets := map[uint]string{
-		16: "resume",
-		32: "init",
+		uint(textAddr) + 16: "resume",
+		uint(textAddr) + 32: "init",
 	}
 
 	for i := 0; len(funcMap) > 0; i++ {
-		addr := funcMap[0]
+		addr := uint(textAddr) + uint(funcMap[0])
 		funcMap = funcMap[1:]
 
 		var name string
@@ -55,12 +79,12 @@ func Text(w io.Writer, text []byte, textAddr, roDataAddr uintptr, funcMap []int3
 			name = fmt.Sprintf("func.%d", i)
 		}
 
-		targets[uint(addr)] = name
+		targets[addr] = name
 	}
 
-	rewriteText(insns, targets, firstFuncAddr, roDataAddr)
+	rewriteText(insns, targets, textAddr, firstFuncAddr)
 
-	lastAddr := textAddr + uintptr(insns[len(insns)-1].Address)
+	lastAddr := uintptr(insns[len(insns)-1].Address)
 	addrWidth := (len(fmt.Sprintf("%x", lastAddr)) + 7) &^ 7
 
 	var addrFmt string
@@ -84,7 +108,7 @@ func Text(w io.Writer, text []byte, textAddr, roDataAddr uintptr, funcMap []int3
 			skipPad = false
 		}
 
-		addr := textAddr + uintptr(insn.Address)
+		addr := uintptr(insn.Address)
 
 		name, found := targets[insn.Address]
 		if found {
@@ -100,35 +124,35 @@ func Text(w io.Writer, text []byte, textAddr, roDataAddr uintptr, funcMap []int3
 		fmt.Fprint(w, "\t", strings.TrimSpace(fmt.Sprintf("%s\t%s", insn.Mnemonic, insn.OpStr)), "\n")
 	}
 
-	if false {
-		for {
-			insns, err := engine.Disasm(text, uint64(textAddr), 0)
-			if err != nil {
-				return err
-			}
+	fmt.Fprintln(w)
+	return nil
+}
 
-			for _, insn := range insns {
-				fmt.Fprintf(w, "%x", insn.Address)
-				fmt.Fprintln(w, "\t"+strings.TrimSpace(fmt.Sprintf("%s\t%s", insn.Mnemonic, insn.OpStr)))
-			}
+func roData(w io.Writer, roData []byte, roDataAddr uintptr) (err error) {
+	fmt.Fprintf(w, "rodata:\n")
 
-			text = text[len(insns)*4:]
-			textAddr += uintptr(len(insns) * 4)
-			if len(text) == 0 {
-				break
-			}
+	for addr := roDataAddr; len(roData) > 0; {
+		if roDataAddr == 0 { // relative
+			fmt.Fprintf(w, "%8x", addr)
+		} else {
+			fmt.Fprintf(w, "%08x", addr)
+		}
 
-			fmt.Fprintf(w, "%x", textAddr)
-			fmt.Fprintf(w, "\t; %08x\n", binary.LittleEndian.Uint32(text))
-
-			text = text[4:]
-			textAddr += 4
-			if len(text) == 0 {
-				break
+		for i := 0; i < 4 && len(roData) > 0; i++ {
+			if len(roData) >= 8 {
+				fmt.Fprintf(w, " %016x", binary.LittleEndian.Uint64(roData))
+				roData = roData[8:]
+				addr += 8
+			} else {
+				fmt.Fprintf(w, " ........%08x", binary.LittleEndian.Uint32(roData))
+				roData = roData[4:]
+				addr += 4
 			}
 		}
+
+		fmt.Fprintln(w)
 	}
 
 	fmt.Fprintln(w)
-	return nil
+	return
 }

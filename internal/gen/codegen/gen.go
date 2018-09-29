@@ -26,6 +26,7 @@ func genOps(f *gen.Func, load loader.L) (deadend bool) {
 
 	for {
 		op := opcode.Opcode(load.Byte())
+		f.Map.PutInsnAddr(f.Text.Addr)
 
 		if op == opcode.End {
 			break
@@ -33,7 +34,7 @@ func genOps(f *gen.Func, load loader.L) (deadend bool) {
 
 		deadend = genOp(f, load, op)
 		if deadend {
-			skipOps(load)
+			skipOps(f, load)
 			break
 		}
 	}
@@ -54,6 +55,7 @@ func genThenOps(f *gen.Func, load loader.L) (deadend, haveElse bool) {
 loop:
 	for {
 		op := opcode.Opcode(load.Byte())
+		f.Map.PutInsnAddr(f.Text.Addr)
 
 		switch op {
 		case opcode.End:
@@ -66,7 +68,7 @@ loop:
 
 		deadend = genOp(f, load, op)
 		if deadend {
-			haveElse = skipThenOps(load)
+			haveElse = skipThenOps(f, load)
 			break loop
 		}
 	}
@@ -83,8 +85,6 @@ func genOp(f *gen.Func, load loader.L, op opcode.Opcode) (deadend bool) {
 		debug.Printf("%s op", op)
 		debug.Depth++
 	}
-
-	f.Map.PutInsnAddr(f.Text.Addr)
 
 	impl := opcodeImpls[op]
 	deadend = impl.gen(f, load, op, impl.info)

@@ -5,26 +5,29 @@
 package codegen
 
 import (
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/opcode"
 )
 
-func skipOps(load loader.L) {
+func skipOps(f *gen.Func, load loader.L) {
 	for {
 		op := opcode.Opcode(load.Byte())
+		f.Map.PutInsnAddr(f.Text.Addr)
 
 		if op == opcode.End {
 			return
 		}
 
-		skipOp(load, op)
+		skipOp(f, load, op)
 	}
 }
 
-func skipThenOps(load loader.L) (haveElse bool) {
+func skipThenOps(f *gen.Func, load loader.L) (haveElse bool) {
 	for {
 		op := opcode.Opcode(load.Byte())
+		f.Map.PutInsnAddr(f.Text.Addr)
 
 		switch op {
 		case opcode.End:
@@ -35,54 +38,54 @@ func skipThenOps(load loader.L) (haveElse bool) {
 			return
 		}
 
-		skipOp(load, op)
+		skipOp(f, load, op)
 	}
 }
 
-func skipOp(load loader.L, op opcode.Opcode) {
+func skipOp(f *gen.Func, load loader.L, op opcode.Opcode) {
 	debug.Printf("skip %s", op)
-	opcodeSkips[op](load, op)
+	opcodeSkips[op](f, load, op)
 }
 
-func skipBlock(load loader.L, op opcode.Opcode) {
+func skipBlock(f *gen.Func, load loader.L, op opcode.Opcode) {
 	load.Varint7() // block type
-	skipOps(load)
+	skipOps(f, load)
 }
 
-func skipBrTable(load loader.L, op opcode.Opcode) {
+func skipBrTable(f *gen.Func, load loader.L, op opcode.Opcode) {
 	for range load.Count() {
 		load.Varuint32() // target
 	}
 	load.Varuint32() // default target
 }
 
-func skipCallIndirect(load loader.L, op opcode.Opcode) {
+func skipCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode) {
 	load.Varuint32() // type index
 	load.Byte()      // reserved
 }
 
-func skipIf(load loader.L, op opcode.Opcode) {
+func skipIf(f *gen.Func, load loader.L, op opcode.Opcode) {
 	load.Varint7() // block type
-	if haveElse := skipThenOps(load); haveElse {
-		skipOps(load)
+	if haveElse := skipThenOps(f, load); haveElse {
+		skipOps(f, load)
 	}
 }
 
-func skipLoop(load loader.L, op opcode.Opcode) {
+func skipLoop(f *gen.Func, load loader.L, op opcode.Opcode) {
 	load.Varint7() // block type
-	skipOps(load)
+	skipOps(f, load)
 }
 
-func skipMemoryImmediate(load loader.L, op opcode.Opcode) {
+func skipMemoryImmediate(f *gen.Func, load loader.L, op opcode.Opcode) {
 	load.Varuint32() // flags
 	load.Varuint32() // offset
 }
 
-func skipUint32(load loader.L, op opcode.Opcode)    { load.Uint32() }
-func skipUint64(load loader.L, op opcode.Opcode)    { load.Uint64() }
-func skipVarint32(load loader.L, op opcode.Opcode)  { load.Varint32() }
-func skipVarint64(load loader.L, op opcode.Opcode)  { load.Varint64() }
-func skipVaruint1(load loader.L, op opcode.Opcode)  { load.Varuint1() }
-func skipVaruint32(load loader.L, op opcode.Opcode) { load.Varuint32() }
-func skipNothing(load loader.L, op opcode.Opcode)   {}
-func badSkip(load loader.L, op opcode.Opcode)       { badOp(op) }
+func skipUint32(f *gen.Func, load loader.L, op opcode.Opcode)    { load.Uint32() }
+func skipUint64(f *gen.Func, load loader.L, op opcode.Opcode)    { load.Uint64() }
+func skipVarint32(f *gen.Func, load loader.L, op opcode.Opcode)  { load.Varint32() }
+func skipVarint64(f *gen.Func, load loader.L, op opcode.Opcode)  { load.Varint64() }
+func skipVaruint1(f *gen.Func, load loader.L, op opcode.Opcode)  { load.Varuint1() }
+func skipVaruint32(f *gen.Func, load loader.L, op opcode.Opcode) { load.Varuint32() }
+func skipNothing(f *gen.Func, load loader.L, op opcode.Opcode)   {}
+func badSkip(f *gen.Func, load loader.L, op opcode.Opcode)       { badOp(op) }

@@ -24,9 +24,8 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	const (
 		filename = "testdata/nqueens.wasm"
 
-		maxTextSize   = 65536
-		maxRODataSize = 4096
-		stackSize     = 65536
+		maxTextSize = 65536
+		stackSize   = 65536
 
 		dumpText = false
 	)
@@ -36,7 +35,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := runner.NewProgram(maxTextSize, maxRODataSize)
+	p, err := runner.NewProgram(maxTextSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +44,6 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	config := Config{
 		EntrySymbol:     "benchmark_main",
 		Text:            static.Buf(p.Text),
-		ROData:          static.Buf(p.ROData),
-		RODataAddr:      p.RODataAddr(),
 		MemoryAlignment: os.Getpagesize(),
 	}
 
@@ -58,7 +55,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	p.SetData(obj.GlobalsMemory, obj.MemoryOffset)
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, obj.Text, p.TextAddr(), p.RODataAddr(), obj.FuncAddrs, &obj.Names)
+		dump.Text(os.Stdout, obj.Text, p.TextAddr(), obj, &obj.Names)
 	}
 
 	r, err := p.NewRunner(obj.InitialMemorySize, obj.MemorySizeLimit, stackSize)

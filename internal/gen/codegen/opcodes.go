@@ -3,6 +3,7 @@
 package codegen
 
 import (
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/isa/prop"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/opcode"
@@ -268,7 +269,7 @@ var opcodeImpls = [256]opImpl{
 	0xff:                     {badGen, 0},
 }
 
-var opcodeSkips = [256]func(loader.L, opcode.Opcode){
+var opcodeSkips = [256]func(*gen.Func, loader.L, opcode.Opcode){
 	opcode.Unreachable:       skipNothing,
 	opcode.Nop:               skipNothing,
 	opcode.Block:             nil, // initialized by init()

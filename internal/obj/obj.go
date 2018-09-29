@@ -16,4 +16,5 @@ type Map interface {
 	PutFuncAddr(addr int32)
 	PutCallSite(returnAddr int32, stackOffset int32)
 	PutInsnAddr(addr int32)
+	PutDataBlock(addr int32, length int)
 }

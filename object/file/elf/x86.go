@@ -11,5 +11,3 @@ import (
 )
 
 const elfMachine = elf.EM_X86_64
-
-const testRODataAddr = 0x10000
