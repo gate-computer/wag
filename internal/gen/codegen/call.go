@@ -24,9 +24,7 @@ func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
-	sigIndex := f.Module.Funcs[funcIndex]
-	sig := f.Module.Types[sigIndex]
-
+	sig := checkCallOperandCount(f, f.Module.Funcs[funcIndex])
 	opCall(f, &f.FuncLinks[funcIndex].L)
 	opFinalizeCall(f, sig)
 	return
@@ -37,8 +35,6 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 	if sigIndex >= uint32(len(f.Module.Types)) {
 		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
-
-	sig := f.Module.Types[sigIndex]
 
 	load.Byte() // reserved
 
@@ -54,9 +50,18 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 		asm.Move(f, funcIndexReg, funcIndex)
 	}
 
+	sig := checkCallOperandCount(f, sigIndex)
 	opCallIndirect(f, int32(sigIndex), funcIndexReg)
 	opFinalizeCall(f, sig)
 	return
+}
+
+func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
+	sig := f.Module.Types[sigIndex]
+	if len(sig.Params) > f.StackDepth-f.FrameBase {
+		panic("call parameter count exceeds stack operand count")
+	}
+	return sig
 }
 
 func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
