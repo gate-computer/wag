@@ -8,6 +8,8 @@ package internal
 type File struct {
 	Runtime       []byte
 	RuntimeAddr   uint64
+	EntryAddr     int32
+	EntryArgs     []uint64
 	Text          []byte
 	GlobalsMemory []byte
 	MemoryOffset  int

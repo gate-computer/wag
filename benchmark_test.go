@@ -6,6 +6,7 @@ package wag
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -35,22 +36,23 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := runner.NewProgram(maxTextSize)
+	p, err := runner.NewProgram(maxTextSize, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer p.Close()
 
 	config := Config{
-		EntrySymbol:     "benchmark_main",
 		Text:            static.Buf(p.Text),
 		MemoryAlignment: os.Getpagesize(),
+		Entry:           "benchmark_main",
 	}
 
 	obj, err := Compile(&config, bytes.NewReader(data), runner.Resolver)
 	if err != nil {
 		t.Fatal(err)
 	}
+	p.SetEntryAddr(int32(binary.LittleEndian.Uint64(obj.StackFrame)))
 	p.Seal()
 	p.SetData(obj.GlobalsMemory, obj.MemoryOffset)
 

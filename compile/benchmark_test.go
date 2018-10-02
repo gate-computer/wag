@@ -28,7 +28,7 @@ func (target *testDuration) set(d time.Duration) {
 
 type dummyReso struct{}
 
-func (*dummyReso) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
+func (*dummyReso) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, index int, err error) {
 	return
 }
 
@@ -36,16 +36,15 @@ func (*dummyReso) ResolveGlobal(module, field string, t wa.Type) (init uint64, e
 	return
 }
 
-var loadBenchmarkReso ImportResolver = new(dummyReso)
+var loadBenchmarkReso = new(dummyReso)
 
 const (
-	loadBenchmarkFilename     = "../testdata/large.wasm"
-	loadBenchmarkEntrySymbol  = "run"
-	loadBenchmarkEntryNumArgs = 2
-	loadBenchmarkMaxTextSize  = 16 * 1024 * 1024
-	loadBenchmarkMaxDataSize  = 16 * 1024 * 1024
-	loadBenchmarkTextCRC32    = 0x7f815520
-	loadBenchmarkIgnoreCRC32  = false
+	loadBenchmarkFilename    = "../testdata/large.wasm"
+	loadBenchmarkEntrySymbol = "run"
+	loadBenchmarkMaxTextSize = 16 * 1024 * 1024
+	loadBenchmarkMaxDataSize = 16 * 1024 * 1024
+	loadBenchmarkTextCRC32   = 0x72a80c5c
+	loadBenchmarkIgnoreCRC32 = false
 )
 
 func BenchmarkLoad(b *testing.B)       { benchmarkLoad(b, nil) }
@@ -64,7 +63,7 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		globalsMemory = make([]byte, loadBenchmarkMaxDataSize)
 
 		elapInit testDuration
-		elapReso testDuration
+		elapBind testDuration
 		elapCode testDuration
 		elapData testDuration
 	)
@@ -74,8 +73,6 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 
 	for i := 0; i < b.N; i++ {
 		var code = &CodeConfig{
-			EntrySymbol:  loadBenchmarkEntrySymbol,
-			EntryArgs:    make([]uint64, loadBenchmarkEntryNumArgs),
 			Text:         static.Buf(text),
 			EventHandler: eventHandler,
 		}
@@ -91,8 +88,9 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		t0 := time.Now()
 		mod := loadInitialSections(&ModuleConfig{}, r)
 		t1 := time.Now()
-		mod.setImportsUsing(loadBenchmarkReso)
+		bindVariadicImports(mod, loadBenchmarkReso)
 		t2 := time.Now()
+		code.LastInitFunc, _, _ = mod.ExportFunc(loadBenchmarkEntrySymbol)
 		loadCodeSection(code, r, mod)
 		t3 := time.Now()
 		loadDataSection(data, r, mod)
@@ -101,7 +99,7 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		b.StopTimer()
 
 		elapInit.set(t1.Sub(t0))
-		elapReso.set(t2.Sub(t1))
+		elapBind.set(t2.Sub(t1))
 		elapCode.set(t3.Sub(t2))
 		elapData.set(t4.Sub(t3))
 
@@ -109,7 +107,7 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 	}
 
 	b.Logf("init: %v", elapInit)
-	b.Logf("reso: %v", elapReso)
+	b.Logf("bind: %v", elapBind)
 	b.Logf("code: %v", elapCode)
 	b.Logf("data: %v", elapData)
 }

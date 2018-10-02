@@ -41,37 +41,34 @@ const (
 )
 
 const (
-	RegTrapHandlerMMX     = reg.R(0) // mm0
 	RegMemoryGrowLimitMMX = reg.R(1) // mm1
 )
 
 const (
-	CommonRODataAddr = 64
-	FuncAlignment    = 16
-	PaddingByte      = 0xcc // INT3 instruction
+	FuncAlignment = 16
+	PaddingByte   = 0xcc // INT3 instruction
 )
 
 type ISA struct{}
 
 var isa ISA
 
-func (ISA) CommonRODataAddr() int {
-	return CommonRODataAddr
+func (ISA) PadUntil(p *gen.Prog, addr int32) {
+	pad(p, PaddingByte, int(addr)-int(p.Text.Addr))
 }
 
 func (ISA) AlignData(p *gen.Prog, alignment int) {
-	gap := p.Text.Extend((alignment - int(p.Text.Addr)) & (alignment - 1))
-	// Trap instructions between code and data:
-	for i := range gap {
-		gap[i] = PaddingByte
-	}
+	pad(p, PaddingByte, (alignment-int(p.Text.Addr))&(alignment-1))
 }
 
 func (ISA) AlignFunc(p *gen.Prog) {
-	gap := p.Text.Extend((FuncAlignment - int(p.Text.Addr)) & (FuncAlignment - 1))
-	// Trap instructions between functions:
+	pad(p, PaddingByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
+}
+
+func pad(p *gen.Prog, filler byte, length int) {
+	gap := p.Text.Extend(length)
 	for i := range gap {
-		gap[i] = PaddingByte
+		gap[i] = filler
 	}
 }
 

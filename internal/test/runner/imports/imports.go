@@ -11,6 +11,7 @@ import (
 )
 
 type Func struct {
+	VecIndex int
 	Addr     uint64
 	Variadic bool
 	wa.FuncType

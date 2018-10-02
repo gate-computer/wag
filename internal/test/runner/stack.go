@@ -97,23 +97,19 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 			return
 		}
 
-		_, start, ok := p.findCaller(int32(retAddr))
+		_, initial, ok := p.findCaller(int32(retAddr))
 		if !ok {
 			err = errors.New("function not found for return address")
 			return
 		}
 
-		//Q("tracing stack:", depth, start)
+		//Q("tracing stack:", depth, initial)
 		//Q("tracing stack:", depth, site.index)
 		//Q("tracing stack:", depth, site.stackOffset)
 
-		if start {
-			if site.stackOffset != 0 {
-				err = errors.New("start function call site stack offset is not zero")
-				return
-			}
-			if len(buf) != 8 {
-				err = errors.New("start function return address is not stored at start of stack")
+		if initial {
+			if site.stackOffset != 0 && (site.stackOffset < 8 || (site.stackOffset&7) != 0) {
+				err = errors.New("invalid stack offset")
 				return
 			}
 		} else {
@@ -125,7 +121,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 
 		byteOrder.PutUint64(buf[:8], site.index) // native address -> portable index
 
-		if start {
+		if initial {
 			buf = buf[:0]
 			return
 		}
@@ -136,7 +132,7 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 		//depth++
 	}
 
-	err = errors.New("ran out of stack before reaching start function call")
+	err = errors.New("ran out of stack before reaching initial function call")
 	return
 }
 

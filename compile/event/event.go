@@ -8,8 +8,13 @@ package event
 type Event int
 
 const (
-	// The init routine can be executed now.  It may cause MissingFunction
-	// traps.
+	// The init routine can be executed.  It may cause MissingFunction traps.
+	//
+	// The event handler is a good place to resolve the entry function address,
+	// because the compiler doesn't mutate the ObjectMapper during event
+	// handler invocation.  CodeConfig.LastInitFunc must be greater or equal to
+	// the entry function index - otherwise its address is not available during
+	// Init event handling.
 	//
 	// This event is not necessarily delivered.
 	Init = Event(iota)

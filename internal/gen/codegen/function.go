@@ -195,12 +195,12 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 		panic("branch target stack is not empty at end of function")
 	}
 
-	isa.UpdateStackCheck(f.Text.Bytes(), stackCheckAddr, f.NumLocals+f.MaxStackDepth)
+	fullText := f.Text.Bytes()
 
-	text := f.Text.Bytes()
+	isa.UpdateStackCheck(fullText, stackCheckAddr, f.NumLocals+f.MaxStackDepth)
 
 	for i, table := range f.BranchTables {
-		buf := text[table.Addr:]
+		buf := fullText[table.Addr:]
 		for j, target := range table.Targets {
 			targetAddr := uint32(target.Label.FinalAddr())
 			if table.StackDepth < 0 {

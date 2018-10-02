@@ -119,6 +119,10 @@ func (s *Snapshot) getStack() []byte {
 	return s.nativeStack
 }
 
+func (*Snapshot) getResume() int {
+	return -1 // resume; return this value to snapshot function caller
+}
+
 func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []wa.FuncType, ns *section.NameSection, stack []byte) (err error) {
 	return s.prog.writeStacktraceTo(w, sigs, ns, stack)
 }

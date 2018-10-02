@@ -29,7 +29,18 @@ TEXT ·ObjectRuntime(SB),$0-32
 	RET
 
 TEXT objectRuntimeStart<>(SB),NOSPLIT,$0
-	XORL	AX, AX			// resume
+	MOVQ	$0x300000000, AX
+	MOVQ	(AX), CX		// stack frame size
+	ADDQ	CX, AX			// at last item of stack frame data
+	SHRQ	$3, CX			// stack item count
+	JE	nocopy
+
+copy:	MOVQ	(AX), BX
+	SUBQ	$8, AX
+	PUSHQ	BX
+	LOOP	copy			// decrement CX and jump if not zero
+
+nocopy:	XORL	AX, AX			// resume
 	MOVQ	SP, BX			// stack ptr
 	MOVQ	$0x100000, CX		// stack offset
 	SUBQ	CX, BX			// stack limit
@@ -37,9 +48,16 @@ TEXT objectRuntimeStart<>(SB),NOSPLIT,$0
 	MOVL	$1023, DI		// slave fd
 	MOVQ	$0x80000000, R11	// grow memory size
 	MOVQ	$0x1000000, R13		// init memory size
-	MOVQ	$0x300000000, R14	// memory
+	MOVQ	$0x400000000, R14	// memory
 	MOVQ	$0x200000000, R15	// text
-	JMP	run<>(SB)
+
+	SUBQ	$256, SP		// space for args and results
+	CALL	run<>(SB)
+
+	MOVL	$0, DI			// exit status
+	MOVL	$231, AX		// exit_group syscall
+	SYSCALL
+	HLT
 
 TEXT run<>(SB),NOSPLIT,$0-8
 	ADDQ	R14, R13		// current memory limit
@@ -48,25 +66,27 @@ TEXT run<>(SB),NOSPLIT,$0-8
 	ADDQ	$128, BX		// for imports and traps
 	ADDQ	$16, BX			// call + stack check trap call
 	MOVQ	DI, M6			// slave fd
-	LEAQ	trap<>(SB), R8
-	MOVQ	R8, M0			// trap handler
 	MOVQ	R11, M1			// memory growth limit
 	PUSHQ	DX			// arg
 	MOVQ	SP, M7			// original stack
 	MOVQ	CX, SP			// stack ptr
-	MOVQ	R15, DI
-	ADDQ	$16, DI			// resume routine
+	LEAQ	16(R15), DI		// resume routine
 	TESTQ	AX, AX
 	JNE	resume
 	ADDQ	$16, DI			// init routine
 resume:	JMP	DI			// returns via trap handler
 
 TEXT resume<>(SB),NOSPLIT,$0
-	MOVQ	R15, DI
-	ADDQ	$16, DI			// resume routine
+	LEAQ	16(R15), DI		// resume routine
 	JMP	DI
 
-TEXT trap<>(SB),NOSPLIT,$0-136
+// func importTrapHandler() uint64
+TEXT ·importTrapHandler(SB),$0-8
+	LEAQ	trapHandler<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	RET
+
+TEXT trapHandler<>(SB),NOSPLIT,$0-136
 	CMPL	AX, $3			// CallStackExhausted
 	JNE	skip
 	TESTB	$1, BX
@@ -116,14 +136,12 @@ pause:
 
 fail:
 	MOVQ	$3003, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 // func importSpectestPrint() uint64
 TEXT ·importSpectestPrint(SB),$0-8
-	PUSHQ	AX
 	LEAQ	spectestPrint<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT spectestPrint<>(SB),NOSPLIT,$0
@@ -148,14 +166,12 @@ TEXT spectestPrint<>(SB),NOSPLIT,$0
 
 fail:
 	MOVQ	$3001, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 // func importPutns() uint64
 TEXT ·importPutns(SB),$0-8
-	PUSHQ	AX
 	LEAQ	putns<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT putns<>(SB),NOSPLIT,$0
@@ -196,26 +212,24 @@ TEXT putns<>(SB),NOSPLIT,$0
 
 fail1:
 	MOVQ	$3001, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 fail2:
 	MOVQ	$3002, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 fail3:
 	MOVQ	$3003, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 fail4:
 	MOVQ	$3004, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 // func importBenchmarkBegin() uint64
 TEXT ·importBenchmarkBegin(SB),$0-8
-	PUSHQ	AX
 	LEAQ	benchmarkBegin<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT benchmarkBegin<>(SB),NOSPLIT,$0
@@ -231,10 +245,8 @@ TEXT benchmarkBegin<>(SB),NOSPLIT,$0
 
 // func importBenchmarkEnd() uint64
 TEXT ·importBenchmarkEnd(SB),$0-8
-	PUSHQ	AX
 	LEAQ	benchmarkEnd<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT benchmarkEnd<>(SB),NOSPLIT,$0
@@ -254,10 +266,8 @@ TEXT benchmarkEnd<>(SB),NOSPLIT,$0
 
 // func importBenchmarkBarrier() uint64
 TEXT ·importBenchmarkBarrier(SB),$0-8
-	PUSHQ	AX
 	LEAQ	benchmarkBarrier<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT benchmarkBarrier<>(SB),NOSPLIT,$0
@@ -266,10 +276,8 @@ TEXT benchmarkBarrier<>(SB),NOSPLIT,$0
 
 // func importGetArg() uint64
 TEXT ·importGetArg(SB),$0-8
-	PUSHQ	AX
 	LEAQ	getArg<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT getArg<>(SB),NOSPLIT,$0
@@ -279,10 +287,8 @@ TEXT getArg<>(SB),NOSPLIT,$0
 
 // func importSnapshot() uint64
 TEXT ·importSnapshot(SB),$0-8
-	PUSHQ	AX
 	LEAQ	snapshot<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT snapshot<>(SB),NOSPLIT,$0
@@ -317,14 +323,12 @@ TEXT snapshot<>(SB),NOSPLIT,$0
 
 fail:
 	MOVQ	$3002, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 // func importSuspendNextCall() uint64
 TEXT ·importSuspendNextCall(SB),$0-8
-	PUSHQ	AX
 	LEAQ	suspendNextCall<>(SB), AX
 	MOVQ	AX, ret+0(FP)
-	POPQ	AX
 	RET
 
 TEXT suspendNextCall<>(SB),NOSPLIT,$0
@@ -333,6 +337,6 @@ TEXT suspendNextCall<>(SB),NOSPLIT,$0
 
 fail:
 	MOVQ	$3002, AX
-	JMP	trap<>(SB)
+	JMP	trapHandler<>(SB)
 
 TEXT objectRuntimeEnd<>(SB),NOSPLIT,$0

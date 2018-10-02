@@ -88,46 +88,42 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		insn.OpStr = strings.Replace(insn.OpStr, "%r14", "memory", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%r15", "text", -1)
 
-		insn.OpStr = strings.Replace(insn.OpStr, "%mm0", "traphandler", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%mm1", "memorygrowlimit", -1)
 
-		switch {
-		case insn.Mnemonic == "jmpq":
-			continue
-
-		case strings.HasPrefix(insn.Mnemonic, "j"):
-
-		case insn.Mnemonic == "callq" && strings.HasPrefix(insn.OpStr, "0x"):
-
-		case insn.Address < firstFuncAddr && (insn.Mnemonic == "movl" || insn.Mnemonic == "shlq") && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", result"):
+		if insn.Address < firstFuncAddr && (insn.Mnemonic == "movl" || insn.Mnemonic == "shlq") && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", result") {
 			var n uint
 			fmt.Sscanf(insn.OpStr, "$%d, %%eax", &n)
 			if id := trap.Id(n); id < trap.NumTraps {
 				targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
 			}
-			continue
-
-		default:
-			continue
 		}
+	}
 
-		addr, err := strconv.ParseUint(insn.OpStr, 0, 64)
-		if err != nil {
-			panic(err)
-		}
+	for i := range insns {
+		insn := &insns[i]
 
-		name, found := targets[uint(addr)]
-		if !found {
-			name = fmt.Sprintf(".%x", sequence%0x10000)
-			sequence++
-
-			if uint(addr) < insn.Address {
-				name += "\t\t\t; loop"
+		switch {
+		case strings.HasPrefix(insn.Mnemonic, "j") && insn.Mnemonic != "jmpq":
+			fallthrough
+		case insn.Mnemonic == "callq" && strings.HasPrefix(insn.OpStr, "0x"):
+			addr, err := strconv.ParseUint(insn.OpStr, 0, 64)
+			if err != nil {
+				panic(err)
 			}
 
-			targets[uint(addr)] = name
-		}
+			name, found := targets[uint(addr)]
+			if !found {
+				name = fmt.Sprintf(".%x", sequence%0x10000)
+				sequence++
 
-		insn.OpStr = name
+				if uint(addr) < insn.Address {
+					name += "\t\t\t; back"
+				}
+
+				targets[uint(addr)] = name
+			}
+
+			insn.OpStr = name
+		}
 	}
 }

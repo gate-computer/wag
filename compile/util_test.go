@@ -10,6 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"path"
+
+	"github.com/tsavola/wag/internal/data"
+	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/object/file"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -18,6 +23,41 @@ const (
 	dumpWAST = false
 	dumpWASM = false
 )
+
+type variadicImportResolver interface {
+	ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, index int, err error)
+	ResolveGlobal(module, field string, t wa.Type) (init uint64, err error)
+}
+
+func bindVariadicImports(mod *Module, reso variadicImportResolver) {
+	var err error
+
+	for i := range mod.m.ImportFuncs {
+		imp := &mod.m.ImportFuncs[i]
+		imp.Variadic, imp.VecIndex, err = reso.ResolveVariadicFunc(mod.ImportFunc(i))
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	for i := range mod.m.ImportGlobals {
+		mod.m.Globals[i].Init, err = reso.ResolveGlobal(mod.ImportGlobal(i))
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func findNiladicEntryFunc(mod *Module, name string) (funcIndex uint32) {
+	funcIndex, sig, found := mod.ExportFunc(name)
+	if !found {
+		panic("entry function not found")
+	}
+	if len(sig.Params) != 0 {
+		panic("entry function has parameters")
+	}
+	return
+}
 
 func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	f, err := ioutil.TempFile("", "")
@@ -92,4 +132,49 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 
 	return f2
+}
+
+func dumpExecutable(filename string, p *runner.Program, globalsMemory data.Buffer, memoryOffset int) {
+	runtime, runtimeAddr := runner.ObjectRuntime()
+	entryAddr, entryArgs := p.GetStackEntry()
+
+	objFile := file.File{
+		Runtime:       runtime,
+		RuntimeAddr:   runtimeAddr,
+		EntryAddr:     entryAddr,
+		EntryArgs:     entryArgs,
+		Text:          p.Text,
+		GlobalsMemory: globalsMemory.Bytes(),
+		MemoryOffset:  memoryOffset,
+	}
+
+	f, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	defer func() {
+		if err != nil {
+			os.Remove(filename)
+		}
+	}()
+
+	_, err = objFile.WriteTo(f)
+	if err != nil {
+		panic(err)
+	}
+
+	fi, err := f.Stat()
+	if err != nil {
+		panic(err)
+	}
+
+	mode := fi.Mode()
+	mode |= (mode & 0444) >> 2 // copy readable bits to executable bits
+
+	err = f.Chmod(mode)
+	if err != nil {
+		panic(err)
+	}
 }

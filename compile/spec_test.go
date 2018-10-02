@@ -438,9 +438,17 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		defer wasmReadCloser.Close()
 		wasm := bufio.NewReader(wasmReadCloser)
 
+		var nameSection section.NameSection
+		var common = Config{
+			UnknownSectionLoader: section.UnknownLoaders{"name": nameSection.Load}.Load,
+		}
+
+		mod := loadInitialSections(&ModuleConfig{common}, wasm)
+		bindVariadicImports(mod, runner.Resolver)
+
 		var timedout bool
 
-		p, err := runner.NewProgram(maxTextSize)
+		p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "test"), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -450,25 +458,15 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 			}
 		}()
 
-		var (
-			nameSection section.NameSection
+		var code = &CodeConfig{
+			Text:   static.Buf(p.Text),
+			Map:    &p.DebugMap,
+			Config: common,
+		}
+		var data = &DataConfig{
+			Config: common,
+		}
 
-			common = Config{
-				UnknownSectionLoader: section.UnknownLoaders{"name": nameSection.Load}.Load,
-			}
-			code = &CodeConfig{
-				EntrySymbol:  "test",
-				Text:         static.Buf(p.Text),
-				ObjectMapper: &p.DebugMap,
-				Config:       common,
-			}
-			data = &DataConfig{
-				Config: common,
-			}
-		)
-
-		mod := loadInitialSections(&ModuleConfig{common}, wasm)
-		mod.setImportsUsing(runner.Resolver)
 		loadCodeSection(code, wasm, mod)
 		loadDataSection(data, wasm, mod)
 		loadUnknownSections(&common, wasm)
@@ -496,6 +494,11 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		if dumpMemory {
 			t.Logf("memory: %#v", data.GlobalsMemory.Bytes()[mod.GlobalsSize():])
+		}
+
+		if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {
+			t.Logf("dumping executable: %s", filename)
+			dumpExecutable(filename, p, data.GlobalsMemory, mod.GlobalsSize())
 		}
 
 		memGrowSize := maxMemorySize

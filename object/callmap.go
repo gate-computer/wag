@@ -11,8 +11,8 @@ type CallSite struct {
 	StackOffset int32 // Calling function's stack usage at time of call
 }
 
-// CallMap implements compile.ObjectMap.  It stores all function addresses and
-// call sites, but no instruction information.
+// CallMap implements compile.ObjectMapper.  It stores all function addresses
+// and call sites, but no instruction information.
 type CallMap struct {
 	FuncMap
 	CallSites []CallSite

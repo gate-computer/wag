@@ -12,6 +12,7 @@ import (
 
 	"github.com/bnagy/gapstone"
 
+	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/section"
 )
@@ -64,8 +65,9 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 	firstFuncAddr := uint(textAddr) + uint(funcMap[0])
 
 	targets := map[uint]string{
-		uint(textAddr) + 16: "resume",
-		uint(textAddr) + 32: "init",
+		uint(textAddr) + obj.ResumeAddr:    "resume",
+		uint(textAddr) + obj.InitStartAddr: "init.start",
+		uint(textAddr) + obj.InitEntryAddr: "init.entry",
 	}
 
 	for i := 0; len(funcMap) > 0; i++ {
@@ -94,18 +96,12 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 		addrFmt = fmt.Sprintf("%%0%dx", addrWidth)
 	}
 
-	skipPad := false
+	prevWasPad := false
 
 	for _, insn := range insns {
-		switch insn.Id {
-		case padInsn:
-			if skipPad {
-				continue
-			}
-			skipPad = true
-
-		default:
-			skipPad = false
+		if insn.Id == padInsn {
+			prevWasPad = true
+			continue
 		}
 
 		addr := uintptr(insn.Address)
@@ -118,10 +114,16 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 				fmt.Fprintf(w, "\n%s:\n"+addrFmt, name, addr)
 			}
 		} else {
+			if prevWasPad {
+				fmt.Fprintln(w)
+			}
+
 			fmt.Fprintf(w, addrFmt, addr)
 		}
 
 		fmt.Fprint(w, "\t", strings.TrimSpace(fmt.Sprintf("%s\t%s", insn.Mnemonic, insn.OpStr)), "\n")
+
+		prevWasPad = false
 	}
 
 	fmt.Fprintln(w)

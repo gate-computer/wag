@@ -95,7 +95,7 @@ type Import struct {
 
 type ImportFunc struct {
 	Import
-	Addr     uint64
+	VecIndex int
 	Variadic bool
 }
 
@@ -111,11 +111,6 @@ type Global struct {
 	Init    uint64
 }
 
-type Export struct {
-	Field string
-	Index uint32
-}
-
 type M struct {
 	Types             []wa.FuncType
 	Funcs             []uint32
@@ -126,7 +121,7 @@ type M struct {
 	ImportGlobals     []Import
 	EntryIndex        uint32
 	EntryDefined      bool
-	ExportFuncs       []Export
+	ExportFuncs       map[string]uint32
 	StartIndex        uint32
 	StartDefined      bool
 	TableFuncs        []uint32

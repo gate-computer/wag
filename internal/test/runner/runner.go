@@ -5,6 +5,7 @@
 package runner
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -15,13 +16,17 @@ import (
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/test/runner/imports"
 	"github.com/tsavola/wag/object/debug"
+	"github.com/tsavola/wag/object/stack"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
 )
 
-func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+const signalStackReserve = 8192
 
+func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, testArg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+
+func importTrapHandler() uint64
 func importGetArg() uint64
 func importSnapshot() uint64
 func importSpectestPrint() uint64
@@ -33,19 +38,22 @@ func importBenchmarkBarrier() uint64
 var importFuncs = map[string]map[string]imports.Func{
 	"spectest": {
 		"print": imports.Func{
+			VecIndex: -2,
 			Addr:     importSpectestPrint(),
 			Variadic: true,
 		},
 	},
 	"wag": {
 		"get_arg": imports.Func{
-			Addr: importGetArg(),
+			VecIndex: -3,
+			Addr:     importGetArg(),
 			FuncType: wa.FuncType{
 				Result: wa.I64,
 			},
 		},
 		"snapshot": imports.Func{
-			Addr: importSnapshot(),
+			VecIndex: -4,
+			Addr:     importSnapshot(),
 			FuncType: wa.FuncType{
 				Result: wa.I32,
 			},
@@ -53,26 +61,30 @@ var importFuncs = map[string]map[string]imports.Func{
 	},
 	"env": {
 		"putns": imports.Func{
-			Addr: importPutns(),
+			VecIndex: -5,
+			Addr:     importPutns(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I32, wa.I32},
 			},
 		},
 		"benchmark_begin": imports.Func{
-			Addr: importBenchmarkBegin(),
+			VecIndex: -6,
+			Addr:     importBenchmarkBegin(),
 			FuncType: wa.FuncType{
 				Result: wa.I64,
 			},
 		},
 		"benchmark_end": imports.Func{
-			Addr: importBenchmarkEnd(),
+			VecIndex: -7,
+			Addr:     importBenchmarkEnd(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I64},
 				Result: wa.I32,
 			},
 		},
 		"benchmark_barrier": imports.Func{
-			Addr: importBenchmarkBarrier(),
+			VecIndex: -8,
+			Addr:     importBenchmarkBarrier(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I64, wa.I64},
 				Result: wa.I64,
@@ -81,9 +93,19 @@ var importFuncs = map[string]map[string]imports.Func{
 	},
 }
 
+func populateImportVector(b []byte) {
+	binary.LittleEndian.PutUint64(b[len(b)-8:], importTrapHandler())
+
+	for _, m := range importFuncs {
+		for _, f := range m {
+			binary.LittleEndian.PutUint64(b[len(b)+f.VecIndex*8:], f.Addr)
+		}
+	}
+}
+
 type res struct{}
 
-func (res) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, addr uint64, err error) {
+func (res) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, index int, err error) {
 	f, found := importFuncs[module][field]
 	if !found {
 		err = fmt.Errorf("imported function not found: %s %s %s", module, field, sig)
@@ -96,12 +118,12 @@ func (res) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic 
 	}
 
 	variadic = f.Variadic
-	addr = f.Addr
+	index = f.VecIndex
 	return
 }
 
-func (r res) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
-	_, addr, err = r.ResolveVariadicFunc(module, field, sig)
+func (r res) ResolveFunc(module, field string, sig wa.FuncType) (index int, err error) {
+	_, index, err = r.ResolveVariadicFunc(module, field, sig)
 	return
 }
 
@@ -124,13 +146,21 @@ type runnable interface {
 	getText() []byte
 	getData() ([]byte, int)
 	getStack() []byte
+	getResume() int
 	writeStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *section.NameSection, stack []byte) error
 	exportStack(native []byte) (portable []byte, err error)
 }
 
 type Program struct {
+	vecText []byte
+	vec     []byte
+
 	Text     []byte
 	DebugMap debug.InsnMap
+
+	entryFunc uint32
+	entryArgs []uint64
+	entryAddr int32
 
 	data         []byte
 	memoryOffset int
@@ -139,15 +169,24 @@ type Program struct {
 	callSites map[int]callSite
 }
 
-func NewProgram(maxTextSize int) (p *Program, err error) {
-	p = &Program{}
+func NewProgram(maxTextSize int, entryFunc uint32, entryArgs []uint64) (p *Program, err error) {
+	p = &Program{
+		entryFunc: entryFunc,
+		entryArgs: entryArgs,
+	}
 
-	p.Text, err = makeMemory(maxTextSize, syscall.PROT_EXEC, 0)
+	const vecSize = 4096
+
+	p.vecText, err = makeMemory(vecSize+maxTextSize, syscall.PROT_EXEC, 0)
 	if err != nil {
 		p.Close()
 		return
 	}
 
+	p.vec = p.vecText[:vecSize]
+	p.Text = p.vecText[vecSize:]
+
+	populateImportVector(p.vec)
 	return
 }
 
@@ -161,6 +200,13 @@ func (p *Program) SetData(data []byte, memoryOffset int) {
 }
 
 func (p *Program) Seal() (err error) {
+	if p.vec != nil {
+		err = syscall.Mprotect(p.vec, syscall.PROT_READ)
+		if err != nil {
+			return
+		}
+	}
+
 	if p.Text != nil {
 		err = syscall.Mprotect(p.Text, syscall.PROT_READ|syscall.PROT_EXEC)
 		if err != nil {
@@ -172,8 +218,8 @@ func (p *Program) Seal() (err error) {
 }
 
 func (p *Program) Close() (first error) {
-	if p.Text != nil {
-		if err := syscall.Munmap(p.Text); err != nil && first == nil {
+	if p.vecText != nil {
+		if err := syscall.Munmap(p.vecText); err != nil && first == nil {
 			first = err
 		}
 	}
@@ -191,12 +237,41 @@ func (p *Program) getData() (data []byte, memoryOffset int) {
 	return
 }
 
+func (p *Program) SetEntryAddr(addr int32) {
+	p.entryAddr = addr
+}
+
+func (p *Program) resolveEntry() {
+	if p.entryFunc == 0 || p.entryAddr != 0 {
+		return
+	}
+
+	p.entryAddr = p.DebugMap.FuncAddrs[p.entryFunc]
+}
+
+func (p *Program) GetStackEntry() (addr int32, args []uint64) {
+	p.getStack()
+	addr = p.entryAddr
+	args = p.entryArgs
+	return
+}
+
 func (p *Program) getStack() []byte {
-	return nil
+	if p.entryFunc != 0 && p.entryAddr == 0 {
+		p.resolveEntry()
+	}
+
+	return stack.EntryFrame(p.entryAddr, p.entryArgs)
+}
+
+func (*Program) getResume() int {
+	return 0 // no resume
 }
 
 type Runner struct {
 	prog runnable
+
+	resolveEntry func()
 
 	globalsMemory []byte
 	memoryOffset  int
@@ -210,7 +285,13 @@ type Runner struct {
 }
 
 func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
-	return newRunner(p, initMemorySize, growMemorySize, stackSize)
+	r, err = newRunner(p, initMemorySize, growMemorySize, stackSize)
+	if err != nil {
+		return
+	}
+
+	r.resolveEntry = p.resolveEntry
+	return
 }
 
 func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
@@ -257,12 +338,13 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 
 	copy(r.globalsMemory, data)
 
-	r.stack, err = makeMemory(stackSize, 0, 0)
+	r.stack, err = makeMemory(signalStackReserve+stackSize, 0, 0)
 	if err != nil {
 		r.Close()
 		return
 	}
 
+	r.resolveEntry = func() {}
 	return
 }
 
@@ -282,10 +364,10 @@ func (r *Runner) Close() (first error) {
 	return
 }
 
-func (r *Runner) Run(arg int64, sigs []wa.FuncType, printer io.Writer) (result int32, err error) {
+func (r *Runner) Run(testArg int64, sigs []wa.FuncType, printer io.Writer) (result int32, err error) {
 	e := Executor{
 		runner:  r,
-		arg:     arg,
+		testArg: testArg,
 		sigs:    sigs,
 		printer: printer,
 	}
@@ -298,7 +380,7 @@ func (r *Runner) Run(arg int64, sigs []wa.FuncType, printer io.Writer) (result i
 type Executor struct {
 	runner *Runner
 
-	arg     int64
+	testArg int64
 	sigs    []wa.FuncType
 	printer io.Writer
 
@@ -325,6 +407,7 @@ func (r *Runner) NewExecutor(sigs []wa.FuncType, printer io.Writer) (e *Executor
 		case <-start:
 		case <-e.cont:
 		}
+		r.resolveEntry() // if event handler was not invoked
 		fmt.Fprintf(e.printer, "--- execution starting ---\n")
 		defer close(e.done)
 		e.run()
@@ -333,6 +416,7 @@ func (r *Runner) NewExecutor(sigs []wa.FuncType, printer io.Writer) (e *Executor
 	eventHandler = func(e event.Event) {
 		fmt.Fprintf(printer, "--- event: %s ---\n", e)
 		if e == event.Init {
+			r.resolveEntry()
 			close(start)
 		}
 	}
@@ -352,14 +436,12 @@ func (e *Executor) Wait() (result int32, err error) {
 }
 
 func (e *Executor) run() {
+	stack := e.runner.stack[signalStackReserve:]
 	stackState := e.runner.prog.getStack()
-	stackOffset := len(e.runner.stack) - len(stackState)
-	copy(e.runner.stack[stackOffset:], stackState)
+	stackOffset := len(stack) - len(stackState)
+	copy(stack[stackOffset:], stackState)
 
-	resumeResult := 0 // don't resume
-	if len(stackState) > 0 {
-		resumeResult = -1 // resume; return this value to snapshot function caller
-	}
+	resumeResult := e.runner.prog.getResume()
 
 	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
@@ -382,7 +464,7 @@ func (e *Executor) run() {
 	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
 	growMemorySize := len(e.runner.globalsMemory) - e.runner.memoryOffset
 
-	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), e.runner.stack, stackOffset, resumeResult, fds[1], e.arg)
+	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), stack, stackOffset, resumeResult, fds[1], e.testArg)
 
 	e.runner.memorySize = memorySize
 	e.runner.lastTrap = trap.Id(uint32(trapId))

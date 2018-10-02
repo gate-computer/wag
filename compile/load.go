@@ -34,17 +34,6 @@ type Reader = reader.R
 type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
 
-// ImportResolver maps symbols to function addresses and constant values.
-type ImportResolver interface {
-	ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error)
-	ResolveGlobal(module, field string, t wa.Type) (init uint64, err error)
-}
-
-type variadicImportResolver interface {
-	ImportResolver
-	ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, addr uint64, err error)
-}
-
 const (
 	maxStringLen          = 255   // TODO
 	maxTableLimit         = 32768 // TODO
@@ -321,6 +310,8 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionExport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+		m.m.ExportFuncs = make(map[string]uint32)
+
 		for i := range load.Count() {
 			fieldLen := load.Varuint32()
 			if fieldLen > maxStringLen {
@@ -336,11 +327,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 				if index >= uint32(len(m.m.Funcs)) {
 					panic(fmt.Errorf("export function index out of bounds: %d", index))
 				}
-
-				m.m.ExportFuncs = append(m.m.ExportFuncs, module.Export{
-					Field: string(fieldStr),
-					Index: index,
-				})
+				m.m.ExportFuncs[string(fieldStr)] = index
 
 			case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
 
@@ -403,9 +390,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 }
 
-func (m *Module) Types() []wa.FuncType {
-	return m.m.Types
-}
+func (m *Module) Types() []wa.FuncType { return m.m.Types }
 
 func (m *Module) FuncTypes() []wa.FuncType {
 	sigs := make([]wa.FuncType, len(m.m.Funcs))
@@ -440,42 +425,8 @@ func (m *Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	return
 }
 
-func (m *Module) SetImportFunc(i int, addr uint64)   { m.m.ImportFuncs[i].Addr = addr }
+func (m *Module) SetImportFunc(i int, vecIndex int)  { m.m.ImportFuncs[i].VecIndex = vecIndex }
 func (m *Module) SetImportGlobal(i int, init uint64) { m.m.Globals[i].Init = init }
-
-func (m *Module) SetImportsUsing(reso ImportResolver) (err error) {
-	if variReso, ok := reso.(variadicImportResolver); ok {
-		for i := range m.m.ImportFuncs {
-			imp := &m.m.ImportFuncs[i]
-			imp.Variadic, imp.Addr, err = variReso.ResolveVariadicFunc(m.ImportFunc(i))
-			if err != nil {
-				return
-			}
-		}
-	} else {
-		for i := range m.m.ImportFuncs {
-			m.m.ImportFuncs[i].Addr, err = reso.ResolveFunc(m.ImportFunc(i))
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	for i := range m.m.ImportGlobals {
-		m.m.Globals[i].Init, err = reso.ResolveGlobal(m.ImportGlobal(i))
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-func (m *Module) setImportsUsing(reso ImportResolver) {
-	if err := m.SetImportsUsing(reso); err != nil {
-		panic(err)
-	}
-}
 
 func (m *Module) GlobalsSize() int {
 	size := len(m.m.Globals) * obj.Word
@@ -483,13 +434,23 @@ func (m *Module) GlobalsSize() int {
 	return (size + mask) &^ mask        // have at least minimum alignment.
 }
 
+func (m *Module) ExportFuncs() map[string]uint32 { return m.m.ExportFuncs }
+
+func (m *Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
+	funcIndex, found = m.m.ExportFuncs[field]
+	if found {
+		sigIndex := m.m.Funcs[funcIndex]
+		sig = m.m.Types[sigIndex]
+	}
+	return
+}
+
 // CodeConfig for a single compiler invocation.
 type CodeConfig struct {
-	EntrySymbol  string
-	EntryArgs    []uint64
 	Text         CodeBuffer // Initialized with default implementation if nil.
-	ObjectMapper ObjectMap
+	Map          ObjectMapper
 	EventHandler func(event.Event)
+	LastInitFunc uint32
 	Config
 }
 
@@ -505,33 +466,11 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 }
 
 func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
-	entryIndex := -1
-
-	if config.EntrySymbol != "" {
-		for _, exp := range mod.m.ExportFuncs {
-			if exp.Field == config.EntrySymbol {
-				sigIndex := mod.m.Funcs[exp.Index]
-				sig := mod.m.Types[sigIndex]
-
-				if len(sig.Params) > codegen.MaxFuncParams || len(config.EntryArgs) < len(sig.Params) || !(sig.Result == wa.Void || sig.Result == wa.I32) {
-					panic(fmt.Errorf("invalid entry function signature: %s %s", config.EntrySymbol, sig))
-				}
-
-				entryIndex = int(exp.Index)
-				break
-			}
-		}
-
-		if entryIndex < 0 {
-			panic(fmt.Errorf("%s function not found in export section", config.EntrySymbol))
-		}
-	}
-
 	if config.Text == nil {
 		config.Text = new(defaultBuffer)
 	}
 
-	objMap := config.ObjectMapper
+	objMap := config.Map
 	if objMap == nil {
 		objMap = dummyMap{}
 	}
@@ -541,7 +480,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	switch id := section.Find(module.SectionCode, load, config.UnknownSectionLoader); id {
 	case module.SectionCode:
 		load.Varuint32() // payload len
-		codegen.GenProgram(config.Text, objMap, load, &mod.m, entryIndex, config.EntryArgs, config.EventHandler)
+		codegen.GenProgram(config.Text, objMap, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
 
 	case module.SectionData:
 		// no code section

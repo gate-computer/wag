@@ -38,7 +38,7 @@ func Fuzz(data []byte) int {
 
 type res struct{}
 
-func (res) ResolveFunc(module, field string, sig wa.FuncType) (addr uint64, err error) {
+func (res) ResolveFunc(module, field string, sig wa.FuncType) (index int, err error) {
 	err = fmt.Errorf("import function %#v%#v %s", module, field, sig)
 	return
 }

@@ -43,7 +43,7 @@ func fuzz(t *testing.T, filename string) {
 		stackSize   = 4096
 	)
 
-	p, err := runner.NewProgram(maxTextSize)
+	p, err := runner.NewProgram(maxTextSize, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

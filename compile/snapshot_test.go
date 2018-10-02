@@ -35,19 +35,18 @@ func TestSnapshot(t *testing.T) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	p, err := runner.NewProgram(maxTextSize)
+	mod := loadInitialSections(&ModuleConfig{}, wasm)
+	bindVariadicImports(mod, runner.Resolver)
+
+	p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "main"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer p.Close()
 
-	mod := loadInitialSections(&ModuleConfig{}, wasm)
-	mod.setImportsUsing(runner.Resolver)
-
 	var code = &CodeConfig{
-		EntrySymbol:  "main",
-		Text:         static.Buf(p.Text),
-		ObjectMapper: &p.DebugMap,
+		Text: static.Buf(p.Text),
+		Map:  &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)
 
@@ -61,6 +60,11 @@ func TestSnapshot(t *testing.T) {
 
 	if dumpText && testing.Verbose() {
 		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, nil)
+	}
+
+	if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {
+		t.Logf("dumping executable: %s", filename)
+		dumpExecutable(filename, p, data.GlobalsMemory, mod.GlobalsSize())
 	}
 
 	var printBuf bytes.Buffer

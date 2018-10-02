@@ -8,9 +8,15 @@ const (
 	Word = 8 // stack entry size
 )
 
-// Map gathers information about positions of (WebAssembly) functions, function
-// calls and instructions within the text (machine code) section.
-type Map interface {
+const (
+	ResumeAddr    = 16 // return from import function or trap call
+	InitStartAddr = 32 // init, call start and entry functions, and exit
+	InitEntryAddr = 48 // init, call entry function, and exit
+)
+
+// ObjectMapper gathers information about positions of (WebAssembly) functions,
+// function calls and instructions within the text (machine code) section.
+type ObjectMapper interface {
 	InitObjectMap(numImportFuncs, numOtherFuncs int)
 	PutImportFuncAddr(addr int32)
 	PutFuncAddr(addr int32)

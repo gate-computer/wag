@@ -15,7 +15,7 @@ import (
 type Prog struct {
 	Module    *module.M
 	Text      code.Buf
-	Map       obj.Map
+	Map       obj.ObjectMapper
 	FuncLinks []link.FuncL
 	TrapLinks [trap.NumTraps]link.L
 }

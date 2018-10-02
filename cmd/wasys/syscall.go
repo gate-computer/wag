@@ -2,6 +2,8 @@
 
 package main
 
+import "encoding/binary"
+
 func importRead() uint64
 func importWrite() uint64
 func importClose() uint64
@@ -55,55 +57,108 @@ func importDup3() uint64
 func importPipe2() uint64
 
 func init() {
-	importFuncs["read"] = importFunc{importRead(), 3}
-	importFuncs["write"] = importFunc{importWrite(), 3}
-	importFuncs["close"] = importFunc{importClose(), 1}
-	importFuncs["lseek"] = importFunc{importLseek(), 3}
-	importFuncs["pread"] = importFunc{importPread(), 4}
-	importFuncs["pwrite"] = importFunc{importPwrite(), 4}
-	importFuncs["dup"] = importFunc{importDup(), 1}
-	importFuncs["getpid"] = importFunc{importGetpid(), 0}
-	importFuncs["sendfile"] = importFunc{importSendfile(), 4}
-	importFuncs["shutdown"] = importFunc{importShutdown(), 2}
-	importFuncs["socketpair"] = importFunc{importSocketpair(), 4}
-	importFuncs["flock"] = importFunc{importFlock(), 2}
-	importFuncs["fsync"] = importFunc{importFsync(), 1}
-	importFuncs["fdatasync"] = importFunc{importFdatasync(), 1}
-	importFuncs["truncate"] = importFunc{importTruncate(), 2}
-	importFuncs["ftruncate"] = importFunc{importFtruncate(), 2}
-	importFuncs["getcwd"] = importFunc{importGetcwd(), 2}
-	importFuncs["chdir"] = importFunc{importChdir(), 1}
-	importFuncs["fchdir"] = importFunc{importFchdir(), 1}
-	importFuncs["fchmod"] = importFunc{importFchmod(), 2}
-	importFuncs["fchown"] = importFunc{importFchown(), 3}
-	importFuncs["lchown"] = importFunc{importLchown(), 3}
-	importFuncs["umask"] = importFunc{importUmask(), 1}
-	importFuncs["getuid"] = importFunc{importGetuid(), 0}
-	importFuncs["getgid"] = importFunc{importGetgid(), 0}
-	importFuncs["vhangup"] = importFunc{importVhangup(), 0}
-	importFuncs["sync"] = importFunc{importSync(), 0}
-	importFuncs["gettid"] = importFunc{importGettid(), 0}
-	importFuncs["time"] = importFunc{importTime(), 1}
-	importFuncs["posix_fadvise"] = importFunc{importPosixFadvise(), 4}
-	importFuncs["_exit"] = importFunc{importExit(), 1}
-	importFuncs["inotify_init1"] = importFunc{importInotifyInit1(), 0}
-	importFuncs["inotify_add_watch"] = importFunc{importInotifyAddWatch(), 3}
-	importFuncs["inotify_rm_watch"] = importFunc{importInotifyRmWatch(), 2}
-	importFuncs["openat"] = importFunc{importOpenat(), 4}
-	importFuncs["mkdirat"] = importFunc{importMkdirat(), 3}
-	importFuncs["fchownat"] = importFunc{importFchownat(), 5}
-	importFuncs["unlinkat"] = importFunc{importUnlinkat(), 3}
-	importFuncs["renameat"] = importFunc{importRenameat(), 4}
-	importFuncs["linkat"] = importFunc{importLinkat(), 5}
-	importFuncs["symlinkat"] = importFunc{importSymlinkat(), 3}
-	importFuncs["readlinkat"] = importFunc{importReadlinkat(), 4}
-	importFuncs["fchmodat"] = importFunc{importFchmodat(), 4}
-	importFuncs["faccessat"] = importFunc{importFaccessat(), 4}
-	importFuncs["splice"] = importFunc{importSplice(), 6}
-	importFuncs["tee"] = importFunc{importTee(), 4}
-	importFuncs["sync_file_range"] = importFunc{importSyncFileRange(), 4}
-	importFuncs["fallocate"] = importFunc{importFallocate(), 4}
-	importFuncs["eventfd"] = importFunc{importEventfd(), 2}
-	importFuncs["dup3"] = importFunc{importDup3(), 3}
-	importFuncs["pipe2"] = importFunc{importPipe2(), 2}
+	importVector = make([]byte, 416)
+	binary.LittleEndian.PutUint64(importVector[408:], importTrapHandler())
+	binary.LittleEndian.PutUint64(importVector[400:], importRead())
+	binary.LittleEndian.PutUint64(importVector[392:], importWrite())
+	binary.LittleEndian.PutUint64(importVector[384:], importClose())
+	binary.LittleEndian.PutUint64(importVector[376:], importLseek())
+	binary.LittleEndian.PutUint64(importVector[368:], importPread())
+	binary.LittleEndian.PutUint64(importVector[360:], importPwrite())
+	binary.LittleEndian.PutUint64(importVector[352:], importDup())
+	binary.LittleEndian.PutUint64(importVector[344:], importGetpid())
+	binary.LittleEndian.PutUint64(importVector[336:], importSendfile())
+	binary.LittleEndian.PutUint64(importVector[328:], importShutdown())
+	binary.LittleEndian.PutUint64(importVector[320:], importSocketpair())
+	binary.LittleEndian.PutUint64(importVector[312:], importFlock())
+	binary.LittleEndian.PutUint64(importVector[304:], importFsync())
+	binary.LittleEndian.PutUint64(importVector[296:], importFdatasync())
+	binary.LittleEndian.PutUint64(importVector[288:], importTruncate())
+	binary.LittleEndian.PutUint64(importVector[280:], importFtruncate())
+	binary.LittleEndian.PutUint64(importVector[272:], importGetcwd())
+	binary.LittleEndian.PutUint64(importVector[264:], importChdir())
+	binary.LittleEndian.PutUint64(importVector[256:], importFchdir())
+	binary.LittleEndian.PutUint64(importVector[248:], importFchmod())
+	binary.LittleEndian.PutUint64(importVector[240:], importFchown())
+	binary.LittleEndian.PutUint64(importVector[232:], importLchown())
+	binary.LittleEndian.PutUint64(importVector[224:], importUmask())
+	binary.LittleEndian.PutUint64(importVector[216:], importGetuid())
+	binary.LittleEndian.PutUint64(importVector[208:], importGetgid())
+	binary.LittleEndian.PutUint64(importVector[200:], importVhangup())
+	binary.LittleEndian.PutUint64(importVector[192:], importSync())
+	binary.LittleEndian.PutUint64(importVector[184:], importGettid())
+	binary.LittleEndian.PutUint64(importVector[176:], importTime())
+	binary.LittleEndian.PutUint64(importVector[168:], importPosixFadvise())
+	binary.LittleEndian.PutUint64(importVector[160:], importExit())
+	binary.LittleEndian.PutUint64(importVector[152:], importInotifyInit1())
+	binary.LittleEndian.PutUint64(importVector[144:], importInotifyAddWatch())
+	binary.LittleEndian.PutUint64(importVector[136:], importInotifyRmWatch())
+	binary.LittleEndian.PutUint64(importVector[128:], importOpenat())
+	binary.LittleEndian.PutUint64(importVector[120:], importMkdirat())
+	binary.LittleEndian.PutUint64(importVector[112:], importFchownat())
+	binary.LittleEndian.PutUint64(importVector[104:], importUnlinkat())
+	binary.LittleEndian.PutUint64(importVector[96:], importRenameat())
+	binary.LittleEndian.PutUint64(importVector[88:], importLinkat())
+	binary.LittleEndian.PutUint64(importVector[80:], importSymlinkat())
+	binary.LittleEndian.PutUint64(importVector[72:], importReadlinkat())
+	binary.LittleEndian.PutUint64(importVector[64:], importFchmodat())
+	binary.LittleEndian.PutUint64(importVector[56:], importFaccessat())
+	binary.LittleEndian.PutUint64(importVector[48:], importSplice())
+	binary.LittleEndian.PutUint64(importVector[40:], importTee())
+	binary.LittleEndian.PutUint64(importVector[32:], importSyncFileRange())
+	binary.LittleEndian.PutUint64(importVector[24:], importFallocate())
+	binary.LittleEndian.PutUint64(importVector[16:], importEventfd())
+	binary.LittleEndian.PutUint64(importVector[8:], importDup3())
+	binary.LittleEndian.PutUint64(importVector[0:], importPipe2())
+	importFuncs["read"] = importFunc{-2, 3}
+	importFuncs["write"] = importFunc{-3, 3}
+	importFuncs["close"] = importFunc{-4, 1}
+	importFuncs["lseek"] = importFunc{-5, 3}
+	importFuncs["pread"] = importFunc{-6, 4}
+	importFuncs["pwrite"] = importFunc{-7, 4}
+	importFuncs["dup"] = importFunc{-8, 1}
+	importFuncs["getpid"] = importFunc{-9, 0}
+	importFuncs["sendfile"] = importFunc{-10, 4}
+	importFuncs["shutdown"] = importFunc{-11, 2}
+	importFuncs["socketpair"] = importFunc{-12, 4}
+	importFuncs["flock"] = importFunc{-13, 2}
+	importFuncs["fsync"] = importFunc{-14, 1}
+	importFuncs["fdatasync"] = importFunc{-15, 1}
+	importFuncs["truncate"] = importFunc{-16, 2}
+	importFuncs["ftruncate"] = importFunc{-17, 2}
+	importFuncs["getcwd"] = importFunc{-18, 2}
+	importFuncs["chdir"] = importFunc{-19, 1}
+	importFuncs["fchdir"] = importFunc{-20, 1}
+	importFuncs["fchmod"] = importFunc{-21, 2}
+	importFuncs["fchown"] = importFunc{-22, 3}
+	importFuncs["lchown"] = importFunc{-23, 3}
+	importFuncs["umask"] = importFunc{-24, 1}
+	importFuncs["getuid"] = importFunc{-25, 0}
+	importFuncs["getgid"] = importFunc{-26, 0}
+	importFuncs["vhangup"] = importFunc{-27, 0}
+	importFuncs["sync"] = importFunc{-28, 0}
+	importFuncs["gettid"] = importFunc{-29, 0}
+	importFuncs["time"] = importFunc{-30, 1}
+	importFuncs["posix_fadvise"] = importFunc{-31, 4}
+	importFuncs["_exit"] = importFunc{-32, 1}
+	importFuncs["inotify_init1"] = importFunc{-33, 0}
+	importFuncs["inotify_add_watch"] = importFunc{-34, 3}
+	importFuncs["inotify_rm_watch"] = importFunc{-35, 2}
+	importFuncs["openat"] = importFunc{-36, 4}
+	importFuncs["mkdirat"] = importFunc{-37, 3}
+	importFuncs["fchownat"] = importFunc{-38, 5}
+	importFuncs["unlinkat"] = importFunc{-39, 3}
+	importFuncs["renameat"] = importFunc{-40, 4}
+	importFuncs["linkat"] = importFunc{-41, 5}
+	importFuncs["symlinkat"] = importFunc{-42, 3}
+	importFuncs["readlinkat"] = importFunc{-43, 4}
+	importFuncs["fchmodat"] = importFunc{-44, 4}
+	importFuncs["faccessat"] = importFunc{-45, 4}
+	importFuncs["splice"] = importFunc{-46, 6}
+	importFuncs["tee"] = importFunc{-47, 4}
+	importFuncs["sync_file_range"] = importFunc{-48, 4}
+	importFuncs["fallocate"] = importFunc{-49, 4}
+	importFuncs["eventfd"] = importFunc{-50, 2}
+	importFuncs["dup3"] = importFunc{-51, 3}
+	importFuncs["pipe2"] = importFunc{-52, 2}
 }

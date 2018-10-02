@@ -11,13 +11,17 @@ import (
 	"io"
 
 	"github.com/tsavola/wag/object/file/internal"
+	"github.com/tsavola/wag/object/stack"
 )
 
 const (
 	headersAddr = 0x100000000
 	textAddr    = 0x200000000
-	memoryAddr  = 0x300000000
-	pageSize    = 4096
+	stackAddr   = 0x300000000
+	memoryAddr  = 0x400000000
+
+	pageSize      = 4096
+	maxMemorySize = 0x80000000
 )
 
 type File internal.File
@@ -32,8 +36,13 @@ func (f *File) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 func (f *File) writeTo(b *bytes.Buffer) {
+	stackFrame := stack.EntryFrame(f.EntryAddr, f.EntryArgs)
+	stackData := make([]byte, 8+len(stackFrame))
+	binary.LittleEndian.PutUint64(stackData, uint64(len(stackFrame)))
+	copy(stackData[8:], stackFrame)
+
 	var (
-		phnum           = 5
+		phnum           = 6
 		headersSize     = roundSize(64+56*phnum, pageSize)
 		runtimePageAddr = f.RuntimeAddr &^ (pageSize - 1)
 		runtimePadding  = int(f.RuntimeAddr - runtimePageAddr)
@@ -41,11 +50,13 @@ func (f *File) writeTo(b *bytes.Buffer) {
 		runtimeOffset   = headersSize
 		textSize        = roundSize(len(f.Text), pageSize)
 		textOffset      = runtimeOffset + runtimeSize
+		stackSize       = roundSize(len(stackData), pageSize)
+		stackOffset     = textOffset + textSize
 		globalsSize     = roundSize(f.MemoryOffset, pageSize)
 		globalsPadding  = globalsSize - f.MemoryOffset
 		memorySize      = roundSize(len(f.GlobalsMemory)-f.MemoryOffset, pageSize)
 		dataAddr        = memoryAddr - globalsSize
-		dataOffset      = textOffset + textSize
+		dataOffset      = stackOffset + stackSize
 		dataSize        = globalsSize + memorySize
 	)
 
@@ -122,16 +133,28 @@ func (f *File) writeTo(b *bytes.Buffer) {
 		uint64(pageSize),            // align
 	})
 
-	// Program header #4: load globals and linear memory data
+	// Program header #4: stack entry frame contents
 	writeBinaryArray(b, []interface{}{
-		uint32(elf.PT_LOAD),         // type
-		uint32(elf.PF_R | elf.PF_W), // flags
-		uint64(dataOffset),          // offset
-		uint64(dataAddr),            // vaddr
-		uint64(dataAddr),            // paddr
-		uint64(dataSize),            // filesz
-		uint64(dataSize),            // memsz
-		uint64(pageSize),            // align
+		uint32(elf.PT_LOAD), // type
+		uint32(elf.PF_R),    // flags
+		uint64(stackOffset), // offset
+		uint64(stackAddr),   // vaddr
+		uint64(stackAddr),   // paddr
+		uint64(stackSize),   // filesz
+		uint64(stackSize),   // memsz
+		uint64(pageSize),    // align
+	})
+
+	// Program header #5: load globals and linear memory data
+	writeBinaryArray(b, []interface{}{
+		uint32(elf.PT_LOAD),                 // type
+		uint32(elf.PF_R | elf.PF_W),         // flags
+		uint64(dataOffset),                  // offset
+		uint64(dataAddr),                    // vaddr
+		uint64(dataAddr),                    // paddr
+		uint64(dataSize),                    // filesz
+		uint64(globalsSize + maxMemorySize), // memsz
+		uint64(pageSize),                    // align
 	})
 
 	align(b, pageSize)
@@ -152,6 +175,14 @@ func (f *File) writeTo(b *bytes.Buffer) {
 		panic(b.Len())
 	}
 	b.Write(f.Text)
+
+	align(b, pageSize)
+
+	// Stack
+	if b.Len() != stackOffset {
+		panic(b.Len())
+	}
+	b.Write(stackData)
 
 	align(b, pageSize)
 

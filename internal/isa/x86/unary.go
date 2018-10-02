@@ -71,12 +71,12 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 
 // absFloatReg in-place.
 func absFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
-	absMaskAddr := rodata.MaskAddr(CommonRODataAddr, rodata.Mask7fBase, t)
+	absMaskAddr := rodata.MaskAddr(rodata.Mask7fBase, t)
 	in.ANDPSD.RegMemDisp(&p.Text, t, r, in.BaseText, absMaskAddr)
 }
 
 // negFloatReg in-place.
 func negFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
-	signMaskAddr := rodata.MaskAddr(CommonRODataAddr, rodata.Mask80Base, t)
+	signMaskAddr := rodata.MaskAddr(rodata.Mask80Base, t)
 	in.XORPSD.RegMemDisp(&p.Text, t, r, in.BaseText, signMaskAddr)
 }

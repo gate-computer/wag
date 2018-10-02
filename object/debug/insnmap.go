@@ -16,7 +16,7 @@ type InsnMapping struct {
 	BlockLength  int   // Length of data block (when SourceIndex is -1)
 }
 
-// InsnMap implements compile.ObjectMap.  It stores everything.
+// InsnMap implements compile.ObjectMapper.  It stores everything.
 type InsnMap struct {
 	object.CallMap
 	FuncInsns [][]InsnMapping

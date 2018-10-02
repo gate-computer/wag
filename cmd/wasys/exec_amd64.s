@@ -13,8 +13,6 @@ TEXT ·exec(SB),NOSPLIT,$0-56
 	MOVQ	memoryGrowLimit+32(FP), BP
 	MOVQ	stackPtr+40(FP), CX
 
-	LEAQ	traphandler<>(SB), AX
-	MOVQ	AX, M0			// trap handler
 	MOVQ	BP, M1			// memory grow limit
 	MOVQ	CX, SP			// stack ptr
 
@@ -33,7 +31,13 @@ TEXT ·exec(SB),NOSPLIT,$0-56
 	ADDQ	$32, DX			// init routine
 	JMP	DX
 
-TEXT traphandler<>(SB),NOSPLIT,$0
+// func importTrapHandler() uint64
+TEXT ·importTrapHandler(SB),$0-8
+	LEAQ	trapHandler<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	RET
+
+TEXT trapHandler<>(SB),NOSPLIT,$0
 	CMPL	AX, $0			// exit trap (lower 32 bits)
 	JE	exittrap
 	ADDL	$100, AX		// 100 + trap id

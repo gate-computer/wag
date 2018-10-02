@@ -18,6 +18,10 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
+const (
+	NopByte = 0x90
+)
+
 var conditionInsns = [22]in.CCInsn{
 	condition.Eq:            in.InsnEq,
 	condition.Ne:            in.InsnNe,
@@ -175,7 +179,7 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	in.JLEcb.Stub8(&f.Text)
 	outOfBounds.AddSite(f.Text.Addr)
 
-	in.MOV.RegMemIndexDisp(&f.Text, wa.I64, RegResult, in.BaseText, funcIndexReg, in.Scale3, CommonRODataAddr+rodata.TableOffset)
+	in.MOV.RegMemIndexDisp(&f.Text, wa.I64, RegResult, in.BaseText, funcIndexReg, in.Scale3, rodata.TableAddr)
 	f.Regs.Free(wa.I64, funcIndexReg)
 	in.MOV.RegReg(&f.Text, wa.I32, RegScratch, RegResult) // zero-extended function address
 	in.SHRi.RegImm8(&f.Text, wa.I64, RegResult, 32)       // signature index
@@ -206,7 +210,7 @@ func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 // Exit may use RegResult and update condition flags.
 func (MacroAssembler) Exit(p *gen.Prog) {
 	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
-	in.MOVDQmrMMX.RegReg(&p.Text, wa.I64, RegTrapHandlerMMX, RegScratch)
+	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, -obj.Word)
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
@@ -250,19 +254,45 @@ func (MacroAssembler) Resume(p *gen.Prog) {
 // Init may use RegResult and update condition flags.
 func (MacroAssembler) Init(p *gen.Prog) {
 	isa.AlignFunc(p)
+	reinit(p)
+}
+
+// InitCallEntry may use RegResult and update condition flags.
+func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
+	pad(p, NopByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
+	reinit(p)
+
+	var null link.L
+
+	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero) // result if no entry func
+
+	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // entry func text addr
+	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
+	in.JEcb.Stub8(&p.Text)
+	null.AddSite(p.Text.Addr)
+
+	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
+	in.CALL.Reg(&p.Text, in.OneSize, RegScratch)
+	retAddr = p.Text.Addr
+
+	null.Addr = p.Text.Addr
+	isa.UpdateNearBranches(p.Text.Bytes(), &null)
+	return
+}
+
+func reinit(p *gen.Prog) {
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 }
 
 // JumpToImportFunc may use RegResult and update condition flags.
 //
-// Import function implementations must make sure that RDX is zero when they
-// return.  Void functions must also make sure that they don't return any
-// sensitive information in RAX.
-func (MacroAssembler) JumpToImportFunc(p *gen.Prog, addr uint64, variadic bool, argCount, sigIndex int) {
+// Void functions must make sure that they don't return any sensitive
+// information in RAX.
+func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int) {
 	if variadic {
 		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
-	in.MOV64i.RegImm64(&p.Text, RegScratch, int64(addr))
+	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, int32(vecIndex*8))
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
@@ -270,7 +300,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, addr uint64, variadic bool, 
 // generate over 16 bytes of code.
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
-	in.MOVDQmrMMX.RegReg(&p.Text, wa.I64, RegTrapHandlerMMX, RegScratch)
+	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, -obj.Word)
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 

@@ -20,17 +20,15 @@ import (
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
 )
 
 func GenProgram(
 	text code.Buffer,
-	objMap obj.Map,
+	objMap obj.ObjectMapper,
 	load loader.L,
 	m *module.M,
-	entryIndex int,
-	entryArgs []uint64,
 	eventHandler func(event.Event),
+	initFuncCount int,
 ) {
 	funcStorage := gen.Func{
 		Prog: gen.Prog{
@@ -56,65 +54,41 @@ func GenProgram(
 
 	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
-	asm.JumpToTrapHandler(p, trap.MissingFunction) // at zero address
-	if p.Text.Addr == 0 || p.Text.Addr > 16 {
-		panic("bad address after MissingFunction trap handler")
+	if p.Text.Addr != 0 {
+		panic("initial text address is non-zero")
+	}
+	asm.JumpToTrapHandler(p, trap.MissingFunction)
+
+	if p.Text.Addr == 0 || p.Text.Addr > obj.ResumeAddr {
+		panic("bad text address after MissingFunction trap handler")
 	}
 	asm.Resume(p)
-	if p.Text.Addr <= 16 || p.Text.Addr > 32 {
-		panic("bad address after resume routine")
+
+	if p.Text.Addr <= obj.ResumeAddr || p.Text.Addr > obj.InitStartAddr {
+		panic("bad text address after resume routine")
 	}
 	asm.Init(p)
-	// after init, execution proceeds to start func, main func, or exit trap
-
-	maxInitIndex := -1
-	mainResultType := wa.Void
 
 	if m.StartDefined {
-		maxInitIndex = int(m.StartIndex)
-
-		opInitialCall(p, &p.FuncLinks[m.StartIndex])
-		// start func returns here; execution proceeds to main func or exit trap
-	}
-
-	if entryIndex >= 0 {
-		if entryIndex > maxInitIndex {
-			maxInitIndex = entryIndex
+		if int(m.StartIndex) >= initFuncCount {
+			initFuncCount = int(m.StartIndex) + 1
 		}
-
-		sigIndex := m.Funcs[entryIndex]
-		sig := m.Types[sigIndex]
-
-		// TODO: move this out of codegen
-		for i := range sig.Params {
-			asm.PushImm(p, int64(entryArgs[i]))
-		}
-
-		opInitialCall(p, &p.FuncLinks[entryIndex])
-		// main func returns here; execution proceeds to exit trap
-
-		mainResultType = sig.Result
+		retAddr := asm.CallMissing(p)
+		p.Map.PutCallSite(retAddr, obj.Word*2) // stack depth excluding entry args (including link addr)
+		p.FuncLinks[m.StartIndex].AddSite(retAddr)
 	}
 
-	if mainResultType != wa.I32 {
-		asm.ClearIntResultReg(p)
+	if p.Text.Addr <= obj.InitStartAddr || p.Text.Addr > obj.InitEntryAddr {
+		panic("bad text address after init routine and start function call")
 	}
-
+	retAddr := asm.InitCallEntry(p)
+	p.Map.PutCallSite(retAddr, obj.Word) // stack depth excluding entry args (including link addr)
 	asm.Exit(p)
 
-	if p.Text.Addr > int32(isa.CommonRODataAddr()) {
-		panic("text is too long before common read-only data")
+	if p.Text.Addr > rodata.CommonsAddr {
+		panic("bad text address after init routines")
 	}
-	isa.AlignData(p, isa.CommonRODataAddr())
-
-	roTableSize := len(m.TableFuncs) * 8
-	commonROData := p.Text.Extend(rodata.TableOffset + roTableSize)
-	binary.LittleEndian.PutUint32(commonROData[rodata.Mask7fOffset32:], 0x7fffffff)
-	binary.LittleEndian.PutUint64(commonROData[rodata.Mask7fOffset64:], 0x7fffffffffffffff)
-	binary.LittleEndian.PutUint32(commonROData[rodata.Mask80Offset32:], 0x80000000)
-	binary.LittleEndian.PutUint64(commonROData[rodata.Mask80Offset64:], 0x8000000000000000)
-	binary.LittleEndian.PutUint32(commonROData[rodata.Mask5f00Offset32:], 0x5f000000)
-	binary.LittleEndian.PutUint64(commonROData[rodata.Mask43e0Offset64:], 0x43e0000000000000)
+	genCommons(p)
 
 	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
 		isa.AlignFunc(p)
@@ -127,20 +101,16 @@ func GenProgram(
 		p.FuncLinks[i].Addr = addr
 	}
 
-	var midpoint int
-
-	if eventHandler != nil {
-		midpoint = maxInitIndex + 1
-	} else {
-		midpoint = len(m.Funcs)
+	if eventHandler == nil {
+		initFuncCount = len(m.Funcs)
 	}
 
-	for i := len(m.ImportFuncs); i < midpoint; i++ {
+	for i := len(m.ImportFuncs); i < initFuncCount; i++ {
 		genFunction(&funcStorage, load, i)
 		isa.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
-	ptr := p.Text.Bytes()[isa.CommonRODataAddr()+rodata.TableOffset:]
+	ptr := p.Text.Bytes()[rodata.TableAddr:]
 
 	for i, funcIndex := range m.TableFuncs {
 		var funcAddr uint32 // missing function trap by default
@@ -165,24 +135,24 @@ func GenProgram(
 		debug.Printf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
 	}
 
-	if midpoint < len(m.Funcs) {
+	if initFuncCount < len(m.Funcs) {
 		eventHandler(event.Init)
 
-		for i := midpoint; i < len(m.Funcs); i++ {
+		for i := initFuncCount; i < len(m.Funcs); i++ {
 			genFunction(&funcStorage, load, i)
 		}
 
 		eventHandler(event.FunctionBarrier)
 
-		roTable := p.Text.Bytes()[isa.CommonRODataAddr()+rodata.TableOffset:]
+		table := p.Text.Bytes()[rodata.TableAddr:]
 
-		for i := midpoint; i < len(m.Funcs); i++ {
+		for i := initFuncCount; i < len(m.Funcs); i++ {
 			ln := &p.FuncLinks[i]
 			addr := uint32(ln.Addr)
 
 			for _, tableIndex := range ln.TableIndexes {
 				offset := tableIndex * 8
-				atomic.PutUint32(roTable[offset:offset+4], addr) // overwrite only function addr
+				atomic.PutUint32(table[offset:offset+4], addr) // overwrite only function addr
 			}
 
 			isa.UpdateCalls(p.Text.Bytes(), &ln.L)
@@ -190,8 +160,23 @@ func GenProgram(
 	}
 }
 
-func opInitialCall(p *gen.Prog, l *link.FuncL) {
-	retAddr := asm.CallMissing(p)
-	p.Map.PutCallSite(retAddr, 0) // initial stack frame
-	l.AddSite(retAddr)
+// genCommons except the contents of the table.
+func genCommons(p *gen.Prog) {
+	isa.PadUntil(p, rodata.CommonsAddr)
+
+	var (
+		tableSize   = len(p.Module.TableFuncs) * 8
+		commonsEnd  = rodata.TableAddr + tableSize
+		commonsSize = commonsEnd - rodata.CommonsAddr
+	)
+
+	p.Text.Extend(commonsSize)
+	text := p.Text.Bytes()
+
+	binary.LittleEndian.PutUint32(text[rodata.Mask7fAddr32:], 0x7fffffff)
+	binary.LittleEndian.PutUint64(text[rodata.Mask7fAddr64:], 0x7fffffffffffffff)
+	binary.LittleEndian.PutUint32(text[rodata.Mask80Addr32:], 0x80000000)
+	binary.LittleEndian.PutUint64(text[rodata.Mask80Addr64:], 0x8000000000000000)
+	binary.LittleEndian.PutUint32(text[rodata.Mask5f00Addr32:], 0x5f000000)
+	binary.LittleEndian.PutUint64(text[rodata.Mask43e0Addr64:], 0x43e0000000000000)
 }

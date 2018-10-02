@@ -37,7 +37,7 @@ func TestExec(t *testing.T) {
 	wasm := bufio.NewReader(wasmReadCloser)
 
 	mod := loadInitialSections(&ModuleConfig{}, wasm)
-	mod.setImportsUsing(runner.Resolver)
+	bindVariadicImports(mod, runner.Resolver)
 
 	var codeBuf bytes.Buffer
 
@@ -50,7 +50,9 @@ func TestExec(t *testing.T) {
 	minMemorySize := mod.InitialMemorySize()
 	maxMemorySize := mod.MemorySizeLimit()
 
-	p, err := runner.NewProgram(maxTextSize)
+	entryFunc := findNiladicEntryFunc(mod, "main")
+
+	p, err := runner.NewProgram(maxTextSize, entryFunc, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +72,10 @@ func TestExec(t *testing.T) {
 	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 
 	var code = &CodeConfig{
-		EntrySymbol:  "main",
 		Text:         static.Buf(p.Text),
-		ObjectMapper: &p.DebugMap,
+		Map:          &p.DebugMap,
 		EventHandler: eventHandler,
+		LastInitFunc: entryFunc,
 	}
 	loadCodeSection(code, &codeBuf, mod)
 	p.Seal()

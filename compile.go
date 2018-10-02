@@ -2,93 +2,187 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package wag provides a high-level WebAssembly compiler API.
+//
+// See the Compile function's source code for an example of how to use the
+// low-level compiler APIs (implemented in submodules).
 package wag
 
 import (
+	"github.com/tsavola/wag/binding"
 	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/object/debug"
+	"github.com/tsavola/wag/object/stack"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/wa"
 )
 
-// Object code with stack map and debug symbols.  The text (machine code),
-// initial global values, and initial linear memory contents can be used to
-// execute the program (the details are architecture-specific).
-type Object struct {
-	FuncTypes         []wa.FuncType
-	InitialMemorySize int
-	MemorySizeLimit   int
-	Text              []byte
-	debug.InsnMap
-	MemoryOffset  int // Threshold between globals and memory.
-	GlobalsMemory []byte
-	Names         section.NameSection
-}
+// EntryPolicy validates an entry function's signature while looking it up from
+// a module's exported functions.
+type EntryPolicy func(m *compile.Module, symbol string) (globalIndex uint32, sig wa.FuncType, err error)
 
 // Config for a single compiler invocation.  Zero values are replaced with
 // effective defaults during compilation.
 type Config struct {
-	EntrySymbol     string
-	EntryArgs       []uint64
-	Text            compile.CodeBuffer
-	GlobalsMemory   compile.DataBuffer
-	MemoryAlignment int
+	Text            compile.CodeBuffer // Defaults to dynamically sized buffer.
+	GlobalsMemory   compile.DataBuffer // Defaults to dynamically sized buffer.
+	MemoryAlignment int                // Defaults to minimal valid alignment.
+	Entry           string             // No entry function by default.
+	EntryPolicy     EntryPolicy        // Defaults to binding.GetMainFunc.
+	EntryArgs       []uint64           // Defaults to zeros (subject to policy).
 }
 
-// Compile a WebAssembly binary module into machine code.
-func Compile(config *Config, r compile.Reader, reso compile.ImportResolver) (obj *Object, err error) {
-	obj = new(Object)
+// Object code with debug information.  The fields are roughly in the order of
+// appearance during compilation.  (The NameSection is populated at an
+// unpredicatable stage.)
+//
+// Executing the code is possible using a platform-specific mechanism; it's not
+// supported by this package.
+type Object struct {
+	FuncTypes         []wa.FuncType       // Signatures for debug output.
+	InitialMemorySize int                 // Current memory allocation.
+	MemorySizeLimit   int                 // Maximum valid value if not limited.
+	Text              []byte              // Machine code and read-only data.
+	debug.InsnMap                         // Stack unwinding and debug metadata.
+	MemoryOffset      int                 // Threshold between globals and memory.
+	GlobalsMemory     []byte              // Global values and memory contents.
+	StackFrame        []byte              // Entry function address and arguments.
+	Names             section.NameSection // Symbols for debug output.
+}
 
-	var common = compile.Config{
-		UnknownSectionLoader: section.UnknownLoaders{"name": obj.Names.Load}.Load,
+// Compile a WebAssembly binary module into machine code.  The Object is
+// constructed incrementally so that populated fields may be inspected on
+// error.
+//
+// See the source code for examples of how to use the lower-level APIs.
+func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResolver) (object *Object, err error) {
+	object = new(Object)
+
+	// The name section loader needs to be available at every step, as unknown
+	// sections might appear at any position in the binary module.
+
+	var unknowns = section.UnknownLoaders{
+		"name": object.Names.Load,
 	}
 
-	mod, err := compile.LoadInitialSections(&compile.ModuleConfig{Config: common}, r)
+	var loadConfig = compile.Config{
+		UnknownSectionLoader: unknowns.Load,
+	}
+
+	// Parse the module specification while reading the WebAssembly sections
+	// preceding the actual program code.  (The Module object needs to be
+	// available during compilation and when looking up entry functions, but
+	// the program can be executed without it.)
+
+	var moduleConfig = &compile.ModuleConfig{
+		Config: loadConfig,
+	}
+
+	module, err := compile.LoadInitialSections(moduleConfig, r)
 	if err != nil {
 		return
 	}
 
-	err = mod.SetImportsUsing(reso)
+	object.FuncTypes = module.FuncTypes()
+	object.InitialMemorySize = module.InitialMemorySize()
+	object.MemorySizeLimit = module.MemorySizeLimit()
+
+	// Fill in host function addresses and global variables' values.
+
+	err = binding.BindImports(module, imports)
 	if err != nil {
 		return
 	}
 
-	obj.FuncTypes = mod.FuncTypes()
-	obj.InitialMemorySize = mod.InitialMemorySize()
-	obj.MemorySizeLimit = mod.MemorySizeLimit()
+	// Generate executable code and debug information while reading the
+	// WebAssembly code section.  Text encodes the import function vector
+	// indexes, but not the function addresses (the vector can be mapped
+	// separately during execution).  It is also independent of entry function
+	// choice and program state.
 
-	var code = &compile.CodeConfig{
-		EntrySymbol:  config.EntrySymbol,
-		EntryArgs:    config.EntryArgs,
-		Text:         config.Text,
-		ObjectMapper: &obj.CallMap,
-		Config:       common,
+	var codeConfig = &compile.CodeConfig{
+		Text:   objectConfig.Text,
+		Map:    &object.CallMap,
+		Config: loadConfig,
 	}
 
-	err = compile.LoadCodeSection(code, r, mod)
+	err = compile.LoadCodeSection(codeConfig, r, module)
 	if err != nil {
 		return
 	}
 
-	config.Text = code.Text
-	obj.Text = code.Text.Bytes()
+	objectConfig.Text = codeConfig.Text
+	object.Text = codeConfig.Text.Bytes()
 
-	var data = &compile.DataConfig{
-		GlobalsMemory:   config.GlobalsMemory,
-		MemoryAlignment: config.MemoryAlignment,
-		Config:          common,
+	// Generate initial linear memory contents while reading the WebAssembly
+	// data section.  This step also copies the global variables' initial
+	// values into the same buffer, just before the memory contents.
+	// MemoryAlignment causes padding to be inserted before the globals.
+
+	var dataConfig = &compile.DataConfig{
+		GlobalsMemory:   objectConfig.GlobalsMemory,
+		MemoryAlignment: objectConfig.MemoryAlignment,
+		Config:          loadConfig,
 	}
 
-	err = compile.LoadDataSection(data, r, mod)
+	err = compile.LoadDataSection(dataConfig, r, module)
 	if err != nil {
 		return
 	}
 
-	config.GlobalsMemory = data.GlobalsMemory
-	config.MemoryAlignment = data.MemoryAlignment
-	obj.MemoryOffset = (mod.GlobalsSize() + (data.MemoryAlignment - 1)) &^ (data.MemoryAlignment - 1)
-	obj.GlobalsMemory = data.GlobalsMemory.Bytes()
+	objectConfig.GlobalsMemory = dataConfig.GlobalsMemory
+	objectConfig.MemoryAlignment = dataConfig.MemoryAlignment
+	object.MemoryOffset = alignSize(module.GlobalsSize(), dataConfig.MemoryAlignment)
+	object.GlobalsMemory = dataConfig.GlobalsMemory.Bytes()
 
-	err = compile.LoadUnknownSections(&common, r)
+	// Find the export function which will be used as the optional entry point.
+	// (It is executed after the start function which is defined by the module
+	// specification.)  CallMap is used to look up the address.
+
+	var (
+		entryIndex uint32
+		entryType  wa.FuncType
+		entryAddr  int32
+	)
+
+	if objectConfig.Entry != "" {
+		if objectConfig.EntryPolicy == nil {
+			objectConfig.EntryPolicy = binding.GetMainFunc
+		}
+
+		entryIndex, entryType, err = objectConfig.EntryPolicy(module, objectConfig.Entry)
+		if err != nil {
+			return
+		}
+
+		entryAddr = object.FuncAddrs[entryIndex]
+	}
+
+	// Form a stack frame for the init routine which calls the entry function.
+	// Add zeros if all arguments weren't provided but the policy was lenient.
+
+	var entryArgs []uint64
+
+	if n := len(entryType.Params); len(objectConfig.EntryArgs) >= n {
+		entryArgs = objectConfig.EntryArgs[:n]
+	} else {
+		entryArgs = make([]uint64, n)
+		copy(entryArgs, objectConfig.EntryArgs)
+	}
+
+	object.StackFrame = stack.EntryFrame(entryAddr, entryArgs)
+
+	// Read the whole WebAssembly module; the name section may be at the end.
+
+	err = compile.LoadUnknownSections(&loadConfig, r)
+	if err != nil {
+		return
+	}
+
 	return
+}
+
+// alignSize rounds up.
+func alignSize(size, alignment int) int {
+	return (size + (alignment - 1)) &^ (alignment - 1)
 }

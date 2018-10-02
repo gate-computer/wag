@@ -37,18 +37,18 @@ func misc(t *testing.T, filename, expectOutput string) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	p, err := runner.NewProgram(maxTextSize)
+	p, err := runner.NewProgram(maxTextSize, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer p.Close()
 
 	mod := loadInitialSections(&ModuleConfig{}, wasm)
-	mod.setImportsUsing(runner.Resolver)
+	bindVariadicImports(mod, runner.Resolver)
 
 	var code = &CodeConfig{
-		Text:         static.Buf(p.Text),
-		ObjectMapper: &p.DebugMap,
+		Text: static.Buf(p.Text),
+		Map:  &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)
 
@@ -62,6 +62,11 @@ func misc(t *testing.T, filename, expectOutput string) {
 
 	if dumpText && testing.Verbose() {
 		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, nil)
+	}
+
+	if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {
+		t.Logf("dumping executable: %s", filename)
+		dumpExecutable(filename, p, data.GlobalsMemory, mod.GlobalsSize())
 	}
 
 	var printBuf bytes.Buffer
