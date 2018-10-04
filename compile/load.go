@@ -587,6 +587,32 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 	}
 }
 
+// ValidateDataSection reads a WebAssembly module's data section.
+func ValidateDataSection(config *Config, r Reader, mod *Module) (err error) {
+	defer func() {
+		err = errorpanic.Handle(recover())
+	}()
+
+	validateDataSection(config, r, mod)
+	return
+}
+
+func validateDataSection(config *Config, r Reader, mod *Module) {
+	load := loader.L{R: r}
+
+	switch id := section.Find(module.SectionData, load, config.UnknownSectionLoader); id {
+	case module.SectionData:
+		load.Varuint32() // payload len
+		datalayout.ValidateMemory(load, &mod.m)
+
+	case 0:
+		// no data section
+
+	default:
+		panic(fmt.Errorf("unexpected section id: 0x%x (looking for data section)", id))
+	}
+}
+
 // LoadUnknownSections reads a WebAssembly module's extension sections which
 // follow known sections.
 func LoadUnknownSections(config *Config, r Reader) (err error) {
