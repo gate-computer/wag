@@ -45,6 +45,28 @@ func CopyKnownSection(w io.Writer, r reader.R, id Id, unknownLoader func(r Reade
 	return
 }
 
+// SkipUnknownSections until the next known section.  The skipped sections are
+// processed by unknownLoader (or discarded if it's nil).  If no known section
+// is encountered, io.EOF is returned.  io.EOF is returned only when it occurs
+// between sections.
+func SkipUnknownSections(r reader.R, unknownLoader func(Reader, uint32) error) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			err = errorpanic.Handle(x)
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+		}
+	}()
+
+	load := loader.L{R: r}
+
+	if section.Find(0, load, unknownLoader) == 0 {
+		err = io.EOF
+	}
+	return
+}
+
 func copySection(w io.Writer, id Id, load loader.L) (length int64, err error) {
 	payloadLen := load.Varuint32()
 
