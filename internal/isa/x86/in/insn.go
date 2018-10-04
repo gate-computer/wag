@@ -126,9 +126,6 @@ const (
 	JPc  = D12(JPcd)<<16 | D12(JPcb)
 	JLEc = D12(JLEcd)<<16 | D12(JLEcb)
 
-	// GP/MMX opcodes
-	MOVDQmrMMX = RM2(0x0f<<8 | 0x7e) // register parameters reversed
-
 	// GP/SSE opcodes
 	CVTSI2SSD  = RMscalar(0x2a)           // CVTSI2SS or CVTSI2SD
 	CVTTSSD2SI = RMscalar(0x2c)           // CVTTSS2SI or CVTTSD2SI

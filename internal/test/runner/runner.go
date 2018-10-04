@@ -24,7 +24,7 @@ import (
 
 const signalStackReserve = 8192
 
-func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, testArg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, testArg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
 
 func importTrapHandler() uint64
 func importGetArg() uint64
@@ -38,21 +38,21 @@ func importBenchmarkBarrier() uint64
 var importFuncs = map[string]map[string]imports.Func{
 	"spectest": {
 		"print": imports.Func{
-			VecIndex: -2,
+			VecIndex: -3,
 			Addr:     importSpectestPrint(),
 			Variadic: true,
 		},
 	},
 	"wag": {
 		"get_arg": imports.Func{
-			VecIndex: -3,
+			VecIndex: -4,
 			Addr:     importGetArg(),
 			FuncType: wa.FuncType{
 				Result: wa.I64,
 			},
 		},
 		"snapshot": imports.Func{
-			VecIndex: -4,
+			VecIndex: -5,
 			Addr:     importSnapshot(),
 			FuncType: wa.FuncType{
 				Result: wa.I32,
@@ -61,21 +61,21 @@ var importFuncs = map[string]map[string]imports.Func{
 	},
 	"env": {
 		"putns": imports.Func{
-			VecIndex: -5,
+			VecIndex: -6,
 			Addr:     importPutns(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I32, wa.I32},
 			},
 		},
 		"benchmark_begin": imports.Func{
-			VecIndex: -6,
+			VecIndex: -7,
 			Addr:     importBenchmarkBegin(),
 			FuncType: wa.FuncType{
 				Result: wa.I64,
 			},
 		},
 		"benchmark_end": imports.Func{
-			VecIndex: -7,
+			VecIndex: -8,
 			Addr:     importBenchmarkEnd(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I64},
@@ -83,7 +83,7 @@ var importFuncs = map[string]map[string]imports.Func{
 			},
 		},
 		"benchmark_barrier": imports.Func{
-			VecIndex: -8,
+			VecIndex: -9,
 			Addr:     importBenchmarkBarrier(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I64, wa.I64},
@@ -94,7 +94,8 @@ var importFuncs = map[string]map[string]imports.Func{
 }
 
 func populateImportVector(b []byte) {
-	binary.LittleEndian.PutUint64(b[len(b)-8:], importTrapHandler())
+	binary.LittleEndian.PutUint64(b[len(b)-16:], importTrapHandler())
+	// set grow memory limit later
 
 	for _, m := range importFuncs {
 		for _, f := range m {
@@ -200,13 +201,6 @@ func (p *Program) SetData(data []byte, memoryOffset int) {
 }
 
 func (p *Program) Seal() (err error) {
-	if p.vec != nil {
-		err = syscall.Mprotect(p.vec, syscall.PROT_READ)
-		if err != nil {
-			return
-		}
-	}
-
 	if p.Text != nil {
 		err = syscall.Mprotect(p.Text, syscall.PROT_READ|syscall.PROT_EXEC)
 		if err != nil {
@@ -285,6 +279,13 @@ type Runner struct {
 }
 
 func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+	binary.LittleEndian.PutUint64(p.vec[len(p.vec)-8:], uint64(growMemorySize))
+
+	err = syscall.Mprotect(p.vec, syscall.PROT_READ)
+	if err != nil {
+		return
+	}
+
 	r, err = newRunner(p, initMemorySize, growMemorySize, stackSize)
 	if err != nil {
 		return
@@ -462,9 +463,8 @@ func (e *Executor) run() {
 
 	globalsMemoryAddr := (*reflect.SliceHeader)(unsafe.Pointer(&e.runner.globalsMemory)).Data
 	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
-	growMemorySize := len(e.runner.globalsMemory) - e.runner.memoryOffset
 
-	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, uintptr(growMemorySize), stack, stackOffset, resumeResult, fds[1], e.testArg)
+	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, stack, stackOffset, resumeResult, fds[1], e.testArg)
 
 	e.runner.memorySize = memorySize
 	e.runner.lastTrap = trap.Id(uint32(trapId))

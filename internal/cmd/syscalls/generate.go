@@ -62,7 +62,8 @@ func main() {
 	}
 
 	fmt.Fprintf(decl, "\nfunc init() {\n")
-	fmt.Fprintf(decl, "\timportVector = make([]byte, %d)\n", len(syscalls)*8+8)
+	fmt.Fprintf(decl, "\timportVector = make([]byte, %d)\n", len(syscalls)*8+8+8)
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], 0x7fff0000)\n", len(syscalls)*8+8)
 	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importTrapHandler())\n", len(syscalls)*8)
 
 	for i, sc := range syscalls {
@@ -71,7 +72,7 @@ func main() {
 	}
 
 	for i, sc := range syscalls {
-		index := -i - 2
+		index := -i - 3
 		fmt.Fprintf(decl, "\timportFuncs[\"%s\"] = importFunc{%d, %d}\n", sc.name, index, sc.params)
 	}
 

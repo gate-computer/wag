@@ -4,17 +4,16 @@
 
 #include "textflag.h"
 
-// func run(text []byte, initialMemorySize int, memoryAddr, growMemorySize uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),NOSPLIT,$0-136
+// func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+TEXT ·run(SB),NOSPLIT,$0-128
 	MOVQ	text+0(FP), R15
 	MOVQ	initialMemorySize+24(FP), R13
 	MOVQ	memoryAddr+32(FP), R14	// memory ptr
-	MOVQ	growMemorySize+40(FP), R11
-	MOVQ	stack+48(FP), BX	// stack limit
-	MOVQ	stackOffset+72(FP), CX
-	MOVQ	resumeResult+80(FP), AX	// resume result (0 = don't resume)
-	MOVQ	slaveFd+88(FP), DI	// slave fd
-	MOVQ	arg+96(FP), DX		// arg
+	MOVQ	stack+40(FP), BX	// stack limit
+	MOVQ	stackOffset+64(FP), CX
+	MOVQ	resumeResult+72(FP), AX	// resume result (0 = don't resume)
+	MOVQ	slaveFd+80(FP), DI	// slave fd
+	MOVQ	arg+88(FP), DX		// arg
 	JMP	run<>(SB)
 
 // func ObjectRuntime() (slice []byte, addr uint64)
@@ -46,7 +45,6 @@ nocopy:	XORL	AX, AX			// resume
 	SUBQ	CX, BX			// stack limit
 	XORL	DX, DX			// arg
 	MOVL	$1023, DI		// slave fd
-	MOVQ	$0x80000000, R11	// grow memory size
 	MOVQ	$0x1000000, R13		// init memory size
 	MOVQ	$0x400000000, R14	// memory
 	MOVQ	$0x200000000, R15	// text
@@ -61,12 +59,10 @@ nocopy:	XORL	AX, AX			// resume
 
 TEXT run<>(SB),NOSPLIT,$0-8
 	ADDQ	R14, R13		// current memory limit
-	ADDQ	R14, R11		// memory growth limit
 	ADDQ	BX, CX			// stack ptr
 	ADDQ	$128, BX		// for imports and traps
 	ADDQ	$16, BX			// call + stack check trap call
 	MOVQ	DI, M6			// slave fd
-	MOVQ	R11, M1			// memory growth limit
 	PUSHQ	DX			// arg
 	MOVQ	SP, M7			// original stack
 	MOVQ	CX, SP			// stack ptr
@@ -86,7 +82,7 @@ TEXT ·importTrapHandler(SB),$0-8
 	MOVQ	AX, ret+0(FP)
 	RET
 
-TEXT trapHandler<>(SB),NOSPLIT,$0-136
+TEXT trapHandler<>(SB),NOSPLIT,$0-128
 	CMPL	AX, $3			// CallStackExhausted
 	JNE	skip
 	TESTB	$1, BX
@@ -99,10 +95,10 @@ skip:
 	MOVQ	SP, R11			// stack ptr
 	MOVQ	M7, SP			// original stack
 	ADDQ	$8, SP			// arg
-	MOVQ	AX, trapId+104(FP)
+	MOVQ	AX, trapId+96(FP)
 	SUBQ	R14, R13
-	MOVQ	R13, currentMemorySize+112(FP)
-	MOVQ	R11, stackPtr+120(FP)
+	MOVQ	R13, currentMemorySize+104(FP)
+	MOVQ	R11, stackPtr+112(FP)
 	RET				// return from run function
 
 pause:

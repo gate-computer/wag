@@ -41,7 +41,8 @@ const (
 )
 
 const (
-	RegMemoryGrowLimitMMX = reg.R(1) // mm1
+	VectorOffsetTrapHandler     = -2 * obj.Word
+	VectorOffsetGrowMemoryLimit = -1 * obj.Word
 )
 
 const (

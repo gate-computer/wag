@@ -210,7 +210,7 @@ func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 // Exit may use RegResult and update condition flags.
 func (MacroAssembler) Exit(p *gen.Prog) {
 	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
-	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, -obj.Word)
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, VectorOffsetTrapHandler)
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
@@ -300,7 +300,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 // generate over 16 bytes of code.
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
-	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, -obj.Word)
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, VectorOffsetTrapHandler)
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 

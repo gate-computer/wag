@@ -10,13 +10,24 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// ImportResolver maps symbols to function vector indexes and constant values.
+// Well-known indexes of the import vector.  Import function addresses precede
+// the trap handler address and the memory growth limit.
+const (
+	VectorIndexLastImportFunc  = -3
+	VectorIndexTrapHandler     = -2
+	VectorIndexGrowMemoryLimit = -1
+)
+
+// ImportResolver maps symbols to vector indexes and constant values.
 //
-// ResolveFunc returns negative indexes; the vector is addressed from the end.
-// Index -1 refers always to the trap handler, so the largest valid value that
-// ResolveFunc can return is -2.
+// ResolveFunc returns a negative indexes; the vector is addressed from the
+// end.  VectorIndexLastImportFunc is the largest valid index which ResolveFunc
+// can return.
+//
+// ResolveGlobal returns a bit pattern the interpretation of which depends on
+// the scalar type.
 type ImportResolver interface {
-	ResolveFunc(module, field string, sig wa.FuncType) (vecIndex int, err error)
+	ResolveFunc(module, field string, sig wa.FuncType) (vectorIndex int, err error)
 	ResolveGlobal(module, field string, t wa.Type) (init uint64, err error)
 }
 
