@@ -17,8 +17,8 @@ import (
 	"unsafe"
 
 	"github.com/tsavola/wag"
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/object/debug/dump"
-	"github.com/tsavola/wag/static"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -131,7 +131,7 @@ func main() {
 
 	textMem := vecTextMem[vecSize:]
 	textAddr := memAddr(textMem)
-	textBuf := static.Buf(textMem)
+	textBuf := buffer.NewStatic(textMem)
 
 	config := &wag.Config{
 		Text:            textBuf,

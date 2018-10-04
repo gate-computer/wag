@@ -19,16 +19,20 @@ const (
 	MinAlignment = 16 // for x86-64 SSE
 )
 
-func CopyGlobalsAlign(buffer data.Buffer, m *module.M, alignment int) {
-	size := len(m.Globals) * obj.Word
+func MemoryOffset(m *module.M, alignment int) int {
+	globalsSize := len(m.Globals) * obj.Word
 
-	offset := 0
-	if n := size & (alignment - 1); n > 0 {
-		offset = alignment - n
-	}
+	mask := alignment - 1
+	return (globalsSize + mask) &^ mask
+}
 
-	b := buffer.ResizeBytes(offset + size)
-	b = b[offset:]
+func CopyGlobalsAlign(buffer data.Buffer, m *module.M, memoryOffset int) {
+	globalsSize := len(m.Globals) * obj.Word
+	globalsOffset := memoryOffset - globalsSize
+
+	b := buffer.ResizeBytes(memoryOffset)
+	b = b[globalsOffset:]
+
 	for _, global := range m.Globals {
 		binary.LittleEndian.PutUint64(b, global.Init)
 		b = b[obj.Word:]

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/static"
 )
 
 const (
@@ -65,7 +65,7 @@ func fuzz(t *testing.T, filename string) {
 	}()
 
 	config := Config{
-		Text: static.Buf(p.Text),
+		Text: buffer.NewStatic(p.Text),
 	}
 
 	_, err = Compile(&config, bufio.NewReader(f), runner.Resolver)

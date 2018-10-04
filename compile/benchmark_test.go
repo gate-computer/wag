@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/compile/event"
-	"github.com/tsavola/wag/static"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -73,12 +73,12 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 
 	for i := 0; i < b.N; i++ {
 		var code = &CodeConfig{
-			Text:         static.Buf(text),
+			Text:         buffer.NewStatic(text),
 			EventHandler: eventHandler,
 		}
 
 		var data = &DataConfig{
-			GlobalsMemory: static.Buf(globalsMemory),
+			GlobalsMemory: buffer.NewStatic(globalsMemory),
 		}
 
 		r := bytes.NewReader(wasm)

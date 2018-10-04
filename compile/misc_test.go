@@ -11,9 +11,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/object/debug/dump"
-	"github.com/tsavola/wag/static"
 )
 
 func TestCallWithDuplicatedOperand(t *testing.T) {
@@ -47,7 +47,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	bindVariadicImports(mod, runner.Resolver)
 
 	var code = &CodeConfig{
-		Text: static.Buf(p.Text),
+		Text: buffer.NewStatic(p.Text),
 		Map:  &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)

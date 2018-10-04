@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/static"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -459,7 +459,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		}()
 
 		var code = &CodeConfig{
-			Text:   static.Buf(p.Text),
+			Text:   buffer.NewStatic(p.Text),
 			Map:    &p.DebugMap,
 			Config: common,
 		}

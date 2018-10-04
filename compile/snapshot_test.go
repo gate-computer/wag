@@ -11,9 +11,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/object/debug/dump"
-	"github.com/tsavola/wag/static"
 )
 
 func TestSnapshot(t *testing.T) {
@@ -45,7 +45,7 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	var code = &CodeConfig{
-		Text: static.Buf(p.Text),
+		Text: buffer.NewStatic(p.Text),
 		Map:  &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)

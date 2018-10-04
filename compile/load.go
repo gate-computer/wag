@@ -6,6 +6,7 @@
 package compile
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"io/ioutil"
 	"math"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/data"
@@ -28,6 +30,18 @@ import (
 	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wa"
 )
+
+const (
+	DefaultMaxTextSize = 0x7fff0000 // below 2 GB to mitigate address calculation bugs
+
+	defaultTextBufferSize   = wa.PageSize // arbitrary
+	defaultMemoryBufferSize = wa.PageSize // arbitrary
+)
+
+var emptyCodeSection = []byte{
+	1, // payload length
+	0, // function count
+}
 
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
 type Reader = reader.R
@@ -446,8 +460,10 @@ func (m *Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fo
 	return
 }
 
-// CodeConfig for a single compiler invocation.
+// CodeConfig for a single compiler invocation.  Either MaxTextSize or Text
+// should be specified, but not both.
 type CodeConfig struct {
+	MaxTextSize  int        // Effective if Text is nil; defaults to 0x7fff0000.
 	Text         CodeBuffer // Initialized with default implementation if nil.
 	Map          ObjectMapper
 	EventHandler func(event.Event)
@@ -467,35 +483,50 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 }
 
 func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
-	if config.Text == nil {
-		config.Text = new(defaultBuffer)
-	}
-
-	objMap := config.Map
-	if objMap == nil {
-		objMap = dummyMap{}
-	}
-
 	load := loader.L{R: r}
 
 	switch id := section.Find(module.SectionCode, load, config.UnknownSectionLoader); id {
-	case module.SectionCode:
-		load.Varuint32() // payload len
-		codegen.GenProgram(config.Text, objMap, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
-
-	case module.SectionData:
+	case module.SectionData, 0:
 		// no code section
 
-	case 0:
-		// no sections
+		load = loader.L{R: bytes.NewReader(emptyCodeSection)}
+		fallthrough
+
+	case module.SectionCode:
+		payloadLen := load.Varuint32()
+
+		if config.Text == nil {
+			if config.MaxTextSize == 0 {
+				config.MaxTextSize = DefaultMaxTextSize
+			}
+
+			alloc := defaultTextBufferSize
+			if alloc > config.MaxTextSize {
+				alloc = config.MaxTextSize
+			}
+			if guess := 512 + uint64(payloadLen)*8; guess < uint64(alloc) { // citation needed
+				alloc = int(guess)
+			}
+
+			config.Text = buffer.NewLimited(make([]byte, alloc), config.MaxTextSize)
+		}
+
+		objMap := config.Map
+		if objMap == nil {
+			objMap = dummyMap{}
+		}
+
+		codegen.GenProgram(config.Text, objMap, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
 
 	default:
 		panic(fmt.Errorf("unexpected section id: 0x%x (looking for code section)", id))
 	}
 }
 
-// DataConfig for a single compiler invocation.
+// DataConfig for a single compiler invocation.  Either MaxMemorySize or
+// GlobalsMemory should be specified, but not both.
 type DataConfig struct {
+	MaxMemorySize   int        // Effective if GlobalsMemory is nil; defaults to Module.MemorySizeLimit.
 	GlobalsMemory   DataBuffer // Initialized with default implementation if nil.
 	MemoryAlignment int        // Initialized with minimal value if zero.
 	Config
@@ -513,24 +544,43 @@ func LoadDataSection(config *DataConfig, r Reader, mod *Module) (err error) {
 }
 
 func loadDataSection(config *DataConfig, r Reader, mod *Module) {
-	if config.GlobalsMemory == nil {
-		config.GlobalsMemory = new(defaultBuffer)
-	}
 	if config.MemoryAlignment == 0 {
 		config.MemoryAlignment = datalayout.MinAlignment
 	}
-
-	datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, config.MemoryAlignment)
+	memoryOffset := datalayout.MemoryOffset(&mod.m, config.MemoryAlignment)
 
 	load := loader.L{R: r}
 
 	switch id := section.Find(module.SectionData, load, config.UnknownSectionLoader); id {
 	case module.SectionData:
-		load.Varuint32() // payload len
+		payloadLen := load.Varuint32()
+
+		if config.GlobalsMemory == nil {
+			if config.MaxMemorySize == 0 {
+				config.MaxMemorySize = mod.MemorySizeLimit()
+			}
+
+			memAlloc := defaultMemoryBufferSize
+			if payloadLen < uint32(memAlloc) {
+				memAlloc = int(payloadLen) // hope for dense packing
+			}
+
+			alloc := uint64(memoryOffset) + uint64(memAlloc)
+
+			config.GlobalsMemory = buffer.NewDynamic(make([]byte, alloc))
+		}
+
+		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)
 		datalayout.ReadMemory(config.GlobalsMemory, load, &mod.m)
 
 	case 0:
-		// no sections
+		// no data section
+
+		if config.GlobalsMemory == nil {
+			config.GlobalsMemory = buffer.NewStatic(make([]byte, memoryOffset))
+		}
+
+		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)
 
 	default:
 		panic(fmt.Errorf("unexpected section id: 0x%x (looking for data section)", id))

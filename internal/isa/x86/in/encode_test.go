@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/bnagy/gapstone"
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/static"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -92,7 +92,7 @@ func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm i
 	t.Helper()
 
 	text := code.Buf{
-		Buffer: static.Buf(make([]byte, 16)),
+		Buffer: buffer.NewLimited(nil, 16),
 	}
 
 	encodeInsn(&text)

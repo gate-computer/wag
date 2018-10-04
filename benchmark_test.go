@@ -12,9 +12,9 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/object/debug/dump"
-	"github.com/tsavola/wag/static"
 )
 
 func TestBenchmarkRunNqueens(t *testing.T) {
@@ -43,7 +43,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	defer p.Close()
 
 	config := Config{
-		Text:            static.Buf(p.Text),
+		Text:            buffer.NewStatic(p.Text),
 		MemoryAlignment: os.Getpagesize(),
 		Entry:           "benchmark_main",
 	}
