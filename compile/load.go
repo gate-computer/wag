@@ -463,7 +463,7 @@ func (m *Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fo
 // CodeConfig for a single compiler invocation.  Either MaxTextSize or Text
 // should be specified, but not both.
 type CodeConfig struct {
-	MaxTextSize  int        // Effective if Text is nil; defaults to 0x7fff0000.
+	MaxTextSize  int        // Effective if Text is nil; defaults to DefaultMaxTextSize.
 	Text         CodeBuffer // Initialized with default implementation if nil.
 	Map          ObjectMapper
 	EventHandler func(event.Event)
@@ -523,10 +523,8 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	}
 }
 
-// DataConfig for a single compiler invocation.  Either MaxMemorySize or
-// GlobalsMemory should be specified, but not both.
+// DataConfig for a single compiler invocation.
 type DataConfig struct {
-	MaxMemorySize   int        // Effective if GlobalsMemory is nil; defaults to Module.MemorySizeLimit.
 	GlobalsMemory   DataBuffer // Initialized with default implementation if nil.
 	MemoryAlignment int        // Initialized with minimal value if zero.
 	Config
@@ -556,18 +554,18 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 		payloadLen := load.Varuint32()
 
 		if config.GlobalsMemory == nil {
-			if config.MaxMemorySize == 0 {
-				config.MaxMemorySize = mod.MemorySizeLimit()
-			}
-
 			memAlloc := defaultMemoryBufferSize
 			if payloadLen < uint32(memAlloc) {
 				memAlloc = int(payloadLen) // hope for dense packing
 			}
 
-			alloc := uint64(memoryOffset) + uint64(memAlloc)
+			limit := memoryOffset + mod.InitialMemorySize()
+			alloc := memoryOffset + memAlloc
+			if alloc > limit {
+				alloc = limit
+			}
 
-			config.GlobalsMemory = buffer.NewDynamic(make([]byte, alloc))
+			config.GlobalsMemory = buffer.NewDynamicHint(make([]byte, alloc), limit)
 		}
 
 		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)

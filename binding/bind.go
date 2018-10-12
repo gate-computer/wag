@@ -20,9 +20,9 @@ const (
 
 // ImportResolver maps symbols to vector indexes and constant values.
 //
-// ResolveFunc returns a negative indexes; the vector is addressed from the
-// end.  VectorIndexLastImportFunc is the largest valid index which ResolveFunc
-// can return.
+// ResolveFunc returns a negative index; the vector is addressed from the end.
+// VectorIndexLastImportFunc is the largest valid index which ResolveFunc can
+// return.
 //
 // ResolveGlobal returns a bit pattern the interpretation of which depends on
 // the scalar type.
