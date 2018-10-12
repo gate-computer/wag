@@ -131,6 +131,10 @@ func LoadInitialSections(config *ModuleConfig, r Reader) (m *Module, err error) 
 }
 
 func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
+	if config == nil {
+		config = new(ModuleConfig)
+	}
+
 	m = new(Module)
 	load := loader.L{R: r}
 
@@ -596,6 +600,10 @@ func ValidateDataSection(config *Config, r Reader, mod *Module) (err error) {
 }
 
 func validateDataSection(config *Config, r Reader, mod *Module) {
+	if config == nil {
+		config = new(Config)
+	}
+
 	load := loader.L{R: r}
 
 	switch id := section.Find(module.SectionData, load, config.UnknownSectionLoader); id {
@@ -623,6 +631,10 @@ func LoadUnknownSections(config *Config, r Reader) (err error) {
 }
 
 func loadUnknownSections(config *Config, r Reader) {
+	if config == nil {
+		config = new(Config)
+	}
+
 	load := loader.L{R: r}
 
 	if id := section.Find(0, load, config.UnknownSectionLoader); id != 0 {

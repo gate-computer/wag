@@ -86,7 +86,7 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 		b.StartTimer()
 
 		t0 := time.Now()
-		mod := loadInitialSections(&ModuleConfig{}, r)
+		mod := loadInitialSections(nil, r)
 		t1 := time.Now()
 		bindVariadicImports(mod, loadBenchmarkReso)
 		t2 := time.Now()
