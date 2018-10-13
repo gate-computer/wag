@@ -50,7 +50,7 @@ var conditionInsns = [22]in.CCInsn{
 // MacroAssembler methods by default MUST NOT update condition flags, use
 // RegResult or allocate registers.
 //
-// Methods which return an operand (and can are allowed to do things) may
+// Methods which return an operand (and are allowed to do such things) may
 // return either an allocated register or RegResult.
 //
 // Some methods which can use RegResult or update condition flags may need to
@@ -210,7 +210,7 @@ func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 // Exit may use RegResult and update condition flags.
 func (MacroAssembler) Exit(p *gen.Prog) {
 	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
-	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, VectorOffsetTrapHandler)
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
@@ -300,7 +300,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 // generate over 16 bytes of code.
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
-	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, VectorOffsetTrapHandler)
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 

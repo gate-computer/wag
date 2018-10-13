@@ -12,6 +12,11 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
+const (
+	VectorOffsetTrapHandler     = -2 * obj.Word
+	VectorOffsetGrowMemoryLimit = -1 * obj.Word
+)
+
 type Prog struct {
 	Module    *module.M
 	Text      code.Buf

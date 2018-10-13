@@ -134,7 +134,7 @@ const (
 
 	// SSE opcodes
 	MOVSSD   = RMscalar(0x10)  // MOVSS or MOVSD
-	MOVSSDmr = RMscalar(0x11)  // // RegReg is redundant
+	MOVSSDmr = RMscalar(0x11)  // RegReg is redundant
 	MOVAPSD  = RMpacked(0x28)  // MOVAPS or MOVAPD
 	UCOMISSD = RMpacked(0x2e)  // UCOMISS or UCOMISD
 	ROUNDSSD = RMIscalar(0x3a) // ROUNDSS or ROUNDSD

@@ -188,7 +188,7 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	var out link.L
 	var fail link.L
 
-	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, VectorOffsetGrowMemoryLimit)
+	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemoryLimit)
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
 
 	targetReg, zeroExt := allocResultReg(f, x)

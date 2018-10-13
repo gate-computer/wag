@@ -33,6 +33,7 @@ func Make() (a Allocator) {
 	return
 }
 
+// AllocResult allocates a register, or returns reg.Result.
 func (a *Allocator) AllocResult(t wa.Type) (r reg.R) {
 	r = a.categories[t.Category()].allocResult()
 
@@ -45,7 +46,7 @@ func (a *Allocator) AllocResult(t wa.Type) (r reg.R) {
 	return
 }
 
-// Free can be called with reg.Result or reg.ScratchISA.
+// Free can be called also with reg.Result or reg.ScratchISA.
 func (a *Allocator) Free(t wa.Type, r reg.R) {
 	debug.Printf("free %s register: %s", t.Category(), r)
 

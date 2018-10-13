@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	MaxFuncParams      = 255   // index+1 must fit in uint8
+	MaxFuncParams      = 255
 	MaxFuncLocals      = 8191  // index must fit in uint16; TODO
 	MaxBranchTableSize = 32768 // TODO
 )

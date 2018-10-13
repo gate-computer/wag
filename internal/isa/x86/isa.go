@@ -26,23 +26,18 @@ const (
 	RegStackLimit     = reg.R(3)         // rbx
 	RegSuspendBit     = reg.R(3)         // rbx
 	RegStackPtr       = reg.R(4)         // rsp
-	RegImportVariadic = reg.R(5)         // rbp       <- AllocIntFirst   (problematic base reg)
+	RegImportVariadic = reg.R(5)         // rbp       <- AllocIntFirst
 	_                 = reg.R(6)         // rsi
 	_                 = reg.R(7)         // rdi
 	_                 = reg.R(8)         // r8
 	_                 = reg.R(9)         // r9
 	_                 = reg.R(10)        // r10
 	_                 = reg.R(11)        // r11
-	_                 = reg.R(12)        // r12       <- AllocIntLast    (problematic base reg)
-	RegMemoryLimit    = reg.R(13)        // r13                          (problematic base reg)
+	_                 = reg.R(12)        // r12       <- AllocIntLast
+	RegMemoryLimit    = reg.R(13)        // r13
 	RegMemoryBase     = in.RegMemoryBase // r14
 	RegTextBase       = in.RegTextBase   // r15
 	_                 = reg.R(15)        //     xmm15 <- AllocFloatLast
-)
-
-const (
-	VectorOffsetTrapHandler     = -2 * obj.Word
-	VectorOffsetGrowMemoryLimit = -1 * obj.Word
 )
 
 const (
