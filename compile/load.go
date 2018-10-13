@@ -106,6 +106,13 @@ func readMemory(m *module.M, load loader.L) {
 
 // Config for loading WebAssembly module sections.
 type Config struct {
+	// SectionMapper is invoked for every section (known or unknown), just
+	// before the payload is read.
+	SectionMapper func(sectionId byte, payloadLen uint32)
+
+	// UnknownSectionLoader is invoked for every unknown section.  It must read
+	// exactly payloadLen bytes, or return an error.  SectionMapper (if
+	// configured) has been invoked just before it.
 	UnknownSectionLoader func(r Reader, payloadLen uint32) error
 }
 
@@ -152,7 +159,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 	var seenId module.SectionId
 
 	for {
-		value, err := load.R.ReadByte()
+		sectionId, err := load.R.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -160,7 +167,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 			panic(err)
 		}
 
-		id := module.SectionId(value)
+		id := module.SectionId(sectionId)
 
 		if id != module.SectionUnknown {
 			if id <= seenId {
@@ -178,6 +185,11 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 		}
 
 		payloadLen := load.Varuint32()
+
+		if config.SectionMapper != nil {
+			config.SectionMapper(sectionId, payloadLen)
+		}
+
 		metaSectionLoaders[id](m, config, payloadLen, load)
 	}
 }
@@ -477,6 +489,8 @@ type CodeConfig struct {
 
 // LoadCodeSection reads a WebAssembly module's code section and generates
 // machine code.
+//
+// If CodeBuffer panics with an error, it will be returned by this function.
 func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
@@ -489,7 +503,7 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	load := loader.L{R: r}
 
-	switch id := section.Find(module.SectionCode, load, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionCode, load, config.SectionMapper, config.UnknownSectionLoader); id {
 	case module.SectionData, 0:
 		// no code section
 
@@ -498,6 +512,10 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 
 	case module.SectionCode:
 		payloadLen := load.Varuint32()
+
+		if config.SectionMapper != nil {
+			config.SectionMapper(byte(id), payloadLen)
+		}
 
 		if config.Text == nil {
 			if config.MaxTextSize == 0 {
@@ -536,6 +554,8 @@ type DataConfig struct {
 
 // LoadDataSection reads a WebAssembly module's data section and generates
 // initial contents of mutable program state (globals and linear memory).
+//
+// If DataBuffer panics with an error, it will be returned by this function.
 func LoadDataSection(config *DataConfig, r Reader, mod *Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
@@ -553,9 +573,13 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 
 	load := loader.L{R: r}
 
-	switch id := section.Find(module.SectionData, load, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.UnknownSectionLoader); id {
 	case module.SectionData:
 		payloadLen := load.Varuint32()
+
+		if config.SectionMapper != nil {
+			config.SectionMapper(byte(id), payloadLen)
+		}
 
 		if config.GlobalsMemory == nil {
 			memAlloc := defaultMemoryBufferSize
@@ -606,9 +630,14 @@ func validateDataSection(config *Config, r Reader, mod *Module) {
 
 	load := loader.L{R: r}
 
-	switch id := section.Find(module.SectionData, load, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.UnknownSectionLoader); id {
 	case module.SectionData:
-		load.Varuint32() // payload len
+		payloadLen := load.Varuint32()
+
+		if config.SectionMapper != nil {
+			config.SectionMapper(byte(id), payloadLen)
+		}
+
 		datalayout.ValidateMemory(load, &mod.m)
 
 	case 0:
@@ -637,7 +666,7 @@ func loadUnknownSections(config *Config, r Reader) {
 
 	load := loader.L{R: r}
 
-	if id := section.Find(0, load, config.UnknownSectionLoader); id != 0 {
+	if id := section.Find(0, load, config.SectionMapper, config.UnknownSectionLoader); id != 0 {
 		panic(fmt.Errorf("unexpected section id: 0x%x (after all known sections)", id))
 	}
 }

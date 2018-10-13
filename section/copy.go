@@ -35,7 +35,7 @@ func CopyKnownSection(w io.Writer, r reader.R, id Id, unknownLoader func(r Reade
 
 	load := loader.L{R: r}
 
-	switch section.Find(id, load, unknownLoader) {
+	switch section.Find(id, load, nil, unknownLoader) {
 	case id:
 		length, err = copySection(w, id, load)
 
@@ -61,7 +61,7 @@ func SkipUnknownSections(r reader.R, unknownLoader func(Reader, uint32) error) (
 
 	load := loader.L{R: r}
 
-	if section.Find(0, load, unknownLoader) == 0 {
+	if section.Find(0, load, nil, unknownLoader) == 0 {
 		err = io.EOF
 	}
 	return

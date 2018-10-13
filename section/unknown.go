@@ -49,3 +49,14 @@ func (uls UnknownLoaders) Load(r Reader, payloadLen uint32) (err error) {
 	}
 	return
 }
+
+type UnknownMapping ByteRange
+
+// Loader of any custom section.  Saves position and discards content.
+func (target *UnknownMapping) Loader(sectionMap *Map) func(string, reader.R) error {
+	return func(_ string, r reader.R) (err error) {
+		*target = UnknownMapping(sectionMap.Sections[Unknown]) // The latest one.
+		_, err = io.Copy(ioutil.Discard, r)
+		return
+	}
+}

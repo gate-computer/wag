@@ -89,3 +89,17 @@ func (ns *NameSection) Load(_ string, r reader.R) (err error) {
 
 	return
 }
+
+type MappedNameSection struct {
+	NameSection
+	Mapping ByteRange
+}
+
+// Loader of "name" custom section.  Stores its offset and size within the
+// WebAssembly binary module.
+func (ns *MappedNameSection) Loader(sectionMap *Map) func(string, reader.R) error {
+	return func(sectionName string, r reader.R) error {
+		ns.Mapping = sectionMap.Sections[Unknown] // The latest one.
+		return ns.NameSection.Load(sectionName, r)
+	}
+}

@@ -13,9 +13,14 @@ import (
 	"github.com/tsavola/wag/internal/reader"
 )
 
-func Find(findId module.SectionId, load loader.L, unknownLoader func(reader.R, uint32) error) module.SectionId {
+func Find(
+	findId module.SectionId,
+	load loader.L,
+	sectionMapper func(sectionId byte, payloadLen uint32),
+	unknownLoader func(reader.R, uint32) error,
+) module.SectionId {
 	for {
-		value, err := load.R.ReadByte()
+		sectionId, err := load.R.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return 0
@@ -23,11 +28,15 @@ func Find(findId module.SectionId, load loader.L, unknownLoader func(reader.R, u
 			panic(err)
 		}
 
-		id := module.SectionId(value)
+		id := module.SectionId(sectionId)
 
 		switch {
 		case id == module.SectionUnknown:
 			payloadLen := load.Varuint32()
+
+			if sectionMapper != nil {
+				sectionMapper(sectionId, payloadLen)
+			}
 
 			if unknownLoader != nil {
 				err = unknownLoader(load.R, payloadLen)
