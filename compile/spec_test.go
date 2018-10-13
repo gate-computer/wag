@@ -440,7 +440,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		var nameSection section.NameSection
 		var common = Config{
-			UnknownSectionLoader: section.UnknownLoaders{"name": nameSection.Load}.Load,
+			CustomSectionLoader: section.CustomLoaders{"name": nameSection.Load}.Load,
 		}
 
 		mod := loadInitialSections(&ModuleConfig{common}, wasm)
@@ -469,7 +469,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		loadCodeSection(code, wasm, mod)
 		loadDataSection(data, wasm, mod)
-		loadUnknownSections(&common, wasm)
+		loadCustomSections(&common, wasm)
 		p.Seal()
 		p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 		minMemorySize := mod.InitialMemorySize()

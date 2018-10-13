@@ -20,11 +20,9 @@ const (
 
 type Reader = reader.R
 
-type UnknownLoader func(sectionName string, section Reader) error
+type CustomLoaders map[string]func(sectionName string, section Reader) error
 
-type UnknownLoaders map[string]UnknownLoader
-
-func (uls UnknownLoaders) Load(r Reader, payloadLen uint32) (err error) {
+func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 	// io.LimitedReader doesn't implement Reader, so do this instead
 	payload := make([]byte, payloadLen)
 	_, err = io.ReadFull(r, payload)
@@ -36,7 +34,7 @@ func (uls UnknownLoaders) Load(r Reader, payloadLen uint32) (err error) {
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {
-		err = errors.New("unknown section name is too long")
+		err = errors.New("custom section name is too long")
 		return
 	}
 
@@ -50,12 +48,12 @@ func (uls UnknownLoaders) Load(r Reader, payloadLen uint32) (err error) {
 	return
 }
 
-type UnknownMapping ByteRange
+type CustomMapping ByteRange
 
 // Loader of any custom section.  Saves position and discards content.
-func (target *UnknownMapping) Loader(sectionMap *Map) func(string, reader.R) error {
+func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R) error {
 	return func(_ string, r reader.R) (err error) {
-		*target = UnknownMapping(sectionMap.Sections[Unknown]) // The latest one.
+		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
 		_, err = io.Copy(ioutil.Discard, r)
 		return
 	}

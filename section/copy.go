@@ -14,16 +14,16 @@ import (
 	"github.com/tsavola/wag/internal/section"
 )
 
-// CopyKnownSection with the given type if one is found.  The returned length
-// includes the copied section's header and payload (everything that was
-// written).  Unknown sections preceding the known section are processed by
-// unknownLoader (or discarded if it's nil) - they are not included in the
-// returned length.  If another known section type is found, it is left
+// CopyStandardSection with the given type if one is found.  The returned
+// length includes the copied section's header and payload (everything that was
+// written).  Custom sections preceding the standard section are processed by
+// customLoader (or discarded if it's nil) - they are not included in the
+// returned length.  If another standard section type is found, it is left
 // untouched (the reader will be backed up before the section id) and zero
-// length is returned.  If no known section is encountered, zero length and
+// length is returned.  If no standard section is encountered, zero length and
 // io.EOF are returned.  io.EOF is returned only when it occurs between
 // sections.
-func CopyKnownSection(w io.Writer, r reader.R, id Id, unknownLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
+func CopyStandardSection(w io.Writer, r reader.R, id Id, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)
@@ -35,7 +35,7 @@ func CopyKnownSection(w io.Writer, r reader.R, id Id, unknownLoader func(r Reade
 
 	load := loader.L{R: r}
 
-	switch section.Find(id, load, nil, unknownLoader) {
+	switch section.Find(id, load, nil, customLoader) {
 	case id:
 		length, err = copySection(w, id, load)
 
@@ -45,11 +45,11 @@ func CopyKnownSection(w io.Writer, r reader.R, id Id, unknownLoader func(r Reade
 	return
 }
 
-// SkipUnknownSections until the next known section.  The skipped sections are
-// processed by unknownLoader (or discarded if it's nil).  If no known section
-// is encountered, io.EOF is returned.  io.EOF is returned only when it occurs
-// between sections.
-func SkipUnknownSections(r reader.R, unknownLoader func(Reader, uint32) error) (err error) {
+// SkipCustomSections until the next standard section.  The skipped sections
+// are processed by customLoader (or discarded if it's nil).  If no standard
+// section is encountered, io.EOF is returned.  io.EOF is returned only when it
+// occurs between sections.
+func SkipCustomSections(r reader.R, customLoader func(Reader, uint32) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)
@@ -61,7 +61,7 @@ func SkipUnknownSections(r reader.R, unknownLoader func(Reader, uint32) error) (
 
 	load := loader.L{R: r}
 
-	if section.Find(0, load, nil, unknownLoader) == 0 {
+	if section.Find(0, load, nil, customLoader) == 0 {
 		err = io.EOF
 	}
 	return

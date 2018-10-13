@@ -58,15 +58,15 @@ type Object struct {
 func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResolver) (object *Object, err error) {
 	object = new(Object)
 
-	// The name section loader needs to be available at every step, as unknown
+	// The name section loader needs to be available at every step, as custom
 	// sections might appear at any position in the binary module.
 
-	var unknowns = section.UnknownLoaders{
+	var customs = section.CustomLoaders{
 		"name": object.Names.Load,
 	}
 
 	var loadConfig = compile.Config{
-		UnknownSectionLoader: unknowns.Load,
+		CustomSectionLoader: customs.Load,
 	}
 
 	// Parse the module specification while reading the WebAssembly sections
@@ -174,7 +174,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 
 	// Read the whole WebAssembly module; the name section may be at the end.
 
-	err = compile.LoadUnknownSections(&loadConfig, r)
+	err = compile.LoadCustomSections(&loadConfig, r)
 	if err != nil {
 		return
 	}

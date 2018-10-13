@@ -41,7 +41,7 @@ func TestExec(t *testing.T) {
 
 	var codeBuf bytes.Buffer
 
-	if n, err := section.CopyKnownSection(&codeBuf, wasm, section.Code, nil); err != nil {
+	if n, err := section.CopyStandardSection(&codeBuf, wasm, section.Code, nil); err != nil {
 		t.Fatal(err)
 	} else if n == 0 {
 		t.Fatal("not a code section")

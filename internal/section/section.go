@@ -17,7 +17,7 @@ func Find(
 	findId module.SectionId,
 	load loader.L,
 	sectionMapper func(sectionId byte, payloadLen uint32),
-	unknownLoader func(reader.R, uint32) error,
+	customLoader func(reader.R, uint32) error,
 ) module.SectionId {
 	for {
 		sectionId, err := load.R.ReadByte()
@@ -31,15 +31,15 @@ func Find(
 		id := module.SectionId(sectionId)
 
 		switch {
-		case id == module.SectionUnknown:
+		case id == module.SectionCustom:
 			payloadLen := load.Varuint32()
 
 			if sectionMapper != nil {
 				sectionMapper(sectionId, payloadLen)
 			}
 
-			if unknownLoader != nil {
-				err = unknownLoader(load.R, payloadLen)
+			if customLoader != nil {
+				err = customLoader(load.R, payloadLen)
 			} else {
 				_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
 			}

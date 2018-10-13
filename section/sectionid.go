@@ -12,7 +12,7 @@ import (
 type Id = module.SectionId
 
 const (
-	Unknown  = module.SectionUnknown
+	Custom   = module.SectionCustom
 	Type     = module.SectionType
 	Import   = module.SectionImport
 	Function = module.SectionFunction

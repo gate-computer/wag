@@ -106,14 +106,14 @@ func readMemory(m *module.M, load loader.L) {
 
 // Config for loading WebAssembly module sections.
 type Config struct {
-	// SectionMapper is invoked for every section (known or unknown), just
+	// SectionMapper is invoked for every section (standard or custom), just
 	// before the payload is read.
 	SectionMapper func(sectionId byte, payloadLen uint32)
 
-	// UnknownSectionLoader is invoked for every unknown section.  It must read
+	// CustomSectionLoader is invoked for every custom section.  It must read
 	// exactly payloadLen bytes, or return an error.  SectionMapper (if
 	// configured) has been invoked just before it.
-	UnknownSectionLoader func(r Reader, payloadLen uint32) error
+	CustomSectionLoader func(r Reader, payloadLen uint32) error
 }
 
 // ModuleConfig for a single compiler invocation.
@@ -169,7 +169,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 
 		id := module.SectionId(sectionId)
 
-		if id != module.SectionUnknown {
+		if id != module.SectionCustom {
 			if id <= seenId {
 				panic(fmt.Errorf("section 0x%x follows section 0x%x", id, seenId))
 			}
@@ -179,7 +179,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 		if id >= module.NumMetaSections {
 			load.R.UnreadByte()
 			if id >= module.NumSections {
-				panic(fmt.Errorf("unknown section id: 0x%x", id))
+				panic(fmt.Errorf("custom section id: 0x%x", id))
 			}
 			return
 		}
@@ -195,10 +195,10 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 }
 
 var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, uint32, loader.L){
-	module.SectionUnknown: func(m *Module, config *ModuleConfig, payloadLen uint32, load loader.L) {
+	module.SectionCustom: func(m *Module, config *ModuleConfig, payloadLen uint32, load loader.L) {
 		var err error
-		if config.UnknownSectionLoader != nil {
-			err = config.UnknownSectionLoader(load.R, payloadLen)
+		if config.CustomSectionLoader != nil {
+			err = config.CustomSectionLoader(load.R, payloadLen)
 		} else {
 			_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
 		}
@@ -363,7 +363,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 			case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
 
 			default:
-				panic(fmt.Errorf("unknown export kind: %s", kind))
+				panic(fmt.Errorf("custom export kind: %s", kind))
 			}
 		}
 	},
@@ -503,7 +503,7 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 	load := loader.L{R: r}
 
-	switch id := section.Find(module.SectionCode, load, config.SectionMapper, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionCode, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData, 0:
 		// no code section
 
@@ -573,7 +573,7 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 
 	load := loader.L{R: r}
 
-	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
 		payloadLen := load.Varuint32()
 
@@ -630,7 +630,7 @@ func validateDataSection(config *Config, r Reader, mod *Module) {
 
 	load := loader.L{R: r}
 
-	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.UnknownSectionLoader); id {
+	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
 		payloadLen := load.Varuint32()
 
@@ -648,25 +648,25 @@ func validateDataSection(config *Config, r Reader, mod *Module) {
 	}
 }
 
-// LoadUnknownSections reads a WebAssembly module's extension sections which
-// follow known sections.
-func LoadUnknownSections(config *Config, r Reader) (err error) {
+// LoadCustomSections reads a WebAssembly module's extension sections which
+// follow standard sections.
+func LoadCustomSections(config *Config, r Reader) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	loadUnknownSections(config, r)
+	loadCustomSections(config, r)
 	return
 }
 
-func loadUnknownSections(config *Config, r Reader) {
+func loadCustomSections(config *Config, r Reader) {
 	if config == nil {
 		config = new(Config)
 	}
 
 	load := loader.L{R: r}
 
-	if id := section.Find(0, load, config.SectionMapper, config.UnknownSectionLoader); id != 0 {
-		panic(fmt.Errorf("unexpected section id: 0x%x (after all known sections)", id))
+	if id := section.Find(0, load, config.SectionMapper, config.CustomSectionLoader); id != 0 {
+		panic(fmt.Errorf("unexpected section id: 0x%x (after all standard sections)", id))
 	}
 }

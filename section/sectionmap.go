@@ -19,8 +19,8 @@ type ByteRange struct {
 }
 
 // Map of section offset and sizes within the WebAssebly binary module.  Offset
-// and Length are nonzero if a section is present.  ModuleSections[Unknown]
-// holds information about the last (or latest) unknown section.
+// and Length are nonzero if a section is present.  ModuleSections[Custom]
+// holds information about the last (or latest) custom section.
 type Map struct {
 	Sections [module.NumSections]ByteRange
 }

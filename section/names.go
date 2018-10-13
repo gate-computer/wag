@@ -99,7 +99,7 @@ type MappedNameSection struct {
 // WebAssembly binary module.
 func (ns *MappedNameSection) Loader(sectionMap *Map) func(string, reader.R) error {
 	return func(sectionName string, r reader.R) error {
-		ns.Mapping = sectionMap.Sections[Unknown] // The latest one.
+		ns.Mapping = sectionMap.Sections[Custom] // The latest one.
 		return ns.NameSection.Load(sectionName, r)
 	}
 }

@@ -23,7 +23,7 @@ type Header struct {
 type SectionId byte
 
 const (
-	SectionUnknown = SectionId(iota)
+	SectionCustom = SectionId(iota)
 	SectionType
 	SectionImport
 	SectionFunction
@@ -41,7 +41,7 @@ const (
 )
 
 var sectionNames = []string{
-	SectionUnknown:  "unknown",
+	SectionCustom:   "custom",
 	SectionType:     "type",
 	SectionImport:   "import",
 	SectionFunction: "function",

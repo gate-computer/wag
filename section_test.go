@@ -17,10 +17,10 @@ func TestSection(t *testing.T) {
 	var (
 		sectionMap         = new(section.Map)
 		nameSectionMapping = new(section.MappedNameSection)
-		imaginaryMapping   = new(section.UnknownMapping)
+		imaginaryMapping   = new(section.CustomMapping)
 		loadConfig         = compile.Config{
 			SectionMapper: sectionMap.Mapper(),
-			UnknownSectionLoader: section.UnknownLoaders{
+			CustomSectionLoader: section.CustomLoaders{
 				"name":      nameSectionMapping.Loader(sectionMap),
 				"imaginary": imaginaryMapping.Loader(sectionMap),
 			}.Load,
@@ -49,7 +49,7 @@ func TestSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = compile.LoadUnknownSections(&loadConfig, r)
+	err = compile.LoadCustomSections(&loadConfig, r)
 	if err != nil {
 		t.Fatal(err)
 	}
