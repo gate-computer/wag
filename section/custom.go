@@ -30,7 +30,8 @@ func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 		return
 	}
 
-	load := loader.L{R: bytes.NewReader(payload)}
+	payloadReader := bytes.NewReader(payload)
+	load := loader.L{R: payloadReader}
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {
@@ -41,20 +42,26 @@ func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 	name := string(load.Bytes(nameLen))
 
 	if f := uls[name]; f != nil {
-		err = f(name, load.R)
+		err = f(name, payloadReader)
 	} else {
-		_, err = io.Copy(ioutil.Discard, load.R)
+		// It's a bytes.Reader, no need to discard.
 	}
 	return
 }
 
 type CustomMapping ByteRange
 
-// Loader of any custom section.  Saves position and discards content.
+// Loader of any custom section.  Stores its offset and size within the
+// WebAssembly binary module, and discards content.
 func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R) error {
 	return func(_ string, r reader.R) (err error) {
 		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
-		_, err = io.Copy(ioutil.Discard, r)
+
+		if _, ok := r.(*bytes.Reader); ok {
+			// No need to discard.
+		} else {
+			_, err = io.Copy(ioutil.Discard, r)
+		}
 		return
 	}
 }
