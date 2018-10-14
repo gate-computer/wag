@@ -481,7 +481,7 @@ func (m *Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fo
 type CodeConfig struct {
 	MaxTextSize  int        // Effective if Text is nil; defaults to DefaultMaxTextSize.
 	Text         CodeBuffer // Initialized with default implementation if nil.
-	Map          ObjectMapper
+	Mapper       ObjectMapper
 	EventHandler func(event.Event)
 	LastInitFunc uint32
 	Config
@@ -533,12 +533,12 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 			config.Text = buffer.NewLimited(make([]byte, alloc), config.MaxTextSize)
 		}
 
-		objMap := config.Map
-		if objMap == nil {
-			objMap = dummyMap{}
+		mapper := config.Mapper
+		if mapper == nil {
+			mapper = dummyMap{}
 		}
 
-		codegen.GenProgram(config.Text, objMap, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
+		codegen.GenProgram(config.Text, mapper, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
 
 	default:
 		panic(fmt.Errorf("unexpected section id: 0x%x (looking for code section)", id))

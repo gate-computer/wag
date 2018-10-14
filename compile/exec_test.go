@@ -73,7 +73,7 @@ func TestExec(t *testing.T) {
 
 	var code = &CodeConfig{
 		Text:         buffer.NewStatic(p.Text),
-		Map:          &p.DebugMap,
+		Mapper:       &p.DebugMap,
 		EventHandler: eventHandler,
 		LastInitFunc: entryFunc,
 	}

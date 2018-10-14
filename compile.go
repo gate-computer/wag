@@ -102,7 +102,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 
 	var codeConfig = &compile.CodeConfig{
 		Text:   objectConfig.Text,
-		Map:    &object.CallMap,
+		Mapper: &object.CallMap,
 		Config: loadConfig,
 	}
 

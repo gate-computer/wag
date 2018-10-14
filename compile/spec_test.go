@@ -460,7 +460,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		var code = &CodeConfig{
 			Text:   buffer.NewStatic(p.Text),
-			Map:    &p.DebugMap,
+			Mapper: &p.DebugMap,
 			Config: common,
 		}
 		var data = &DataConfig{

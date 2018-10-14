@@ -45,8 +45,8 @@ func TestSnapshot(t *testing.T) {
 	defer p.Close()
 
 	var code = &CodeConfig{
-		Text: buffer.NewStatic(p.Text),
-		Map:  &p.DebugMap,
+		Text:   buffer.NewStatic(p.Text),
+		Mapper: &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)
 
