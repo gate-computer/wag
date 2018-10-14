@@ -10,8 +10,8 @@ Features
 
 - The input is a wasm32 binary module.
 
-- The output is executable x86-64 machine code.  Support for 64-bit ARM is in
-  development.  (Support for non-64-bit or non-little-endian CPU architectures
+- The output is executable x86-64 machine code.  Support for 64-bit ARM is
+  planned.  (Support for non-64-bit or non-little-endian CPU architectures
   isn't planned.)
 
 - It is only a compiler.  A runtime environment for the compiled program,
@@ -36,7 +36,24 @@ Status
 
 - Supports WebAssembly version 1 (MVP).
 
+- ARM64 support is in development.
+
 - The Go package API hasn't been finalized (but it's getting there).
+
+
+Security
+--------
+
+[Spectre](https://spectreattack.com) variant 1: Memory indexing is limited to
+32 bits.  To prevent conditional branch exploitation, a secure runtime
+environment must ensure that nothing else is mapped within the 4 GB following
+the address of WebAssembly linear memory.  It's therefore not safe for an
+oblivious host program using default memory allocation APIs to run arbitrary
+user programs.
+
+Spectre variant 2: On x86, [Retpoline](https://support.google.com/faqs/answer/7625886)
+is used to protect the runtime environment (although user programs shouldn't be
+able to inject arbitrary addresses into the branch target buffer).
 
 
 Testing

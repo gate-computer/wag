@@ -13,6 +13,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/x86/in"
+	isatext "github.com/tsavola/wag/internal/isa/x86/text"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
@@ -99,9 +100,10 @@ func (MacroAssembler) Branch(p *gen.Prog, addr int32) int32 {
 // BranchIndirect may use RegResult and update condition flags.  It takes
 // ownership of address register, which has already been zero-extended.
 func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
-	in.ADD.RegReg(&f.Text, wa.I64, addr, RegTextBase)
-	in.JMP.Reg(&f.Text, in.OneSize, addr)
+	in.MOV.RegReg(&f.Text, wa.I32, RegScratch, addr)
 	f.Regs.Free(wa.I64, addr)
+	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
+	in.JMPcd.Addr32(&f.Text, isatext.TextAddrRetpoline)
 }
 
 // BranchIfStub may use RegResult and update condition flags.
@@ -198,20 +200,13 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	isa.UpdateNearBranches(f.Text.Bytes(), &checksOut)
 
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
-	in.CALL.Reg(&f.Text, in.OneSize, RegScratch)
+	in.CALLcd.Addr32(&f.Text, isatext.TextAddrRetpoline)
 	return f.Text.Addr
 }
 
 // ClearIntResultReg may use RegResult and update condition flags.
 func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero)
-}
-
-// Exit may use RegResult and update condition flags.
-func (MacroAssembler) Exit(p *gen.Prog) {
-	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
-	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
-	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
 }
 
 // LoadGlobal has default restrictions.
@@ -259,8 +254,12 @@ func (MacroAssembler) Init(p *gen.Prog) {
 
 // InitCallEntry may use RegResult and update condition flags.
 func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
+	// Init
+
 	pad(p, NopByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
 	reinit(p)
+
+	// Entry
 
 	var null link.L
 
@@ -272,11 +271,39 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	null.AddSite(p.Text.Addr)
 
 	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
-	in.CALL.Reg(&p.Text, in.OneSize, RegScratch)
+	in.CALLcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
 	retAddr = p.Text.Addr
 
 	null.Addr = p.Text.Addr
 	isa.UpdateNearBranches(p.Text.Bytes(), &null)
+
+	// Exit
+
+	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
+	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
+
+	// Retpoline (https://support.google.com/faqs/answer/7625886)
+
+	isa.AlignFunc(p)
+	if p.Text.Addr != isatext.TextAddrRetpoline {
+		panic("hardcoded retpoline address needs to be adjusted")
+	}
+
+	in.CALLcd.Addr32(&p.Text, isatext.TextAddrRetpolineSetup)
+
+	captureSpecAddr := p.Text.Addr
+	in.PAUSE.Simple(&p.Text)
+	in.JMPcb.Addr8(&p.Text, captureSpecAddr)
+
+	isa.AlignFunc(p)
+	if p.Text.Addr != isatext.TextAddrRetpolineSetup {
+		panic("hardcoded retpoline setup address needs to be adjusted")
+	}
+
+	asm.StoreStackReg(p, wa.I64, 0, RegScratch)
+	in.RET.Simple(&p.Text)
+
 	return
 }
 
@@ -293,7 +320,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
 	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, int32(vecIndex*8))
-	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
+	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
 }
 
 // JumpToTrapHandler may use RegResult and update condition flags.  It MUST NOT
@@ -301,7 +328,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
-	in.JMP.Reg(&p.Text, in.OneSize, RegScratch)
+	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
 }
 
 // LoadIntStubNear may update condition flags.  The register passed as argument

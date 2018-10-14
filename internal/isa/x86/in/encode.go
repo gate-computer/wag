@@ -116,6 +116,17 @@ func (op NP) Simple(text *code.Buf) {
 	text.PutByte(byte(op))
 }
 
+// NP with fixed 0xf3 prefix
+
+type NPprefix byte
+
+func (op NPprefix) Simple(text *code.Buf) {
+	var o output
+	o.byte(0xf3)
+	o.byte(byte(op))
+	o.copy(text.Extend(o.len()))
+}
+
 // O
 
 type O byte

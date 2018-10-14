@@ -47,6 +47,7 @@ var (
 )
 
 func TestInsnNP(test *testing.T) {
+	testEncode(test, "pause", "", func(text *code.Buf) { PAUSE.Simple(text) })
 	testEncode(test, "cdq", "", func(text *code.Buf) { CDQ.Type(text, wa.I32) })
 	testEncode(test, "cqo", "", func(text *code.Buf) { CDQ.Type(text, wa.I64) })
 	testEncode(test, "ret", "", func(text *code.Buf) { RET.Simple(text) })
@@ -100,8 +101,6 @@ func TestInsnM(test *testing.T) {
 		op M
 	}{
 		{"pop", POP},
-		{"call", CALL},
-		{"jmp", JMP},
 		{"push", PUSH},
 	} {
 		for _, r := range allRegs {

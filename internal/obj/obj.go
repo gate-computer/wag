@@ -9,9 +9,9 @@ const (
 )
 
 const (
-	ResumeAddr    = 16 // return from import function or trap call
-	InitStartAddr = 32 // init, call start and entry functions, and exit
-	InitEntryAddr = 48 // init, call entry function, and exit
+	TextAddrResume    = 16 // return from import function or trap call
+	TextAddrInitStart = 32 // init, call start and entry functions, and exit
+	TextAddrInitEntry = 48 // init, call entry function, and exit
 )
 
 // ObjectMapper gathers information about positions of (WebAssembly) functions,

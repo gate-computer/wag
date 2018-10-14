@@ -71,6 +71,7 @@ const (
 	JGEcd   = D2d(0x0f<<8 | 0x8d)
 	JLEcd   = D2d(0x0f<<8 | 0x8e)
 	JGcd    = D2d(0x0f<<8 | 0x8f)
+	PAUSE   = NPprefix(0x90)
 	SETB    = Mex2(0x0f<<8 | 0x92)
 	SETAE   = Mex2(0x0f<<8 | 0x93)
 	SETE    = Mex2(0x0f<<8 | 0x94)
@@ -118,8 +119,6 @@ const (
 	IDIV    = M(0xf7<<8 | 7<<opcodeBase)
 	INC     = M(0xff<<8 | 0<<opcodeBase)
 	DEC     = M(0xff<<8 | 1<<opcodeBase)
-	CALL    = M(0xff<<8 | 2<<opcodeBase)
-	JMP     = M(0xff<<8 | 4<<opcodeBase)
 	PUSH    = M(0xff<<8 | 6<<opcodeBase)
 
 	// GP opcode pairs

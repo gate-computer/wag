@@ -59,12 +59,12 @@ func GenProgram(
 	}
 	asm.JumpToTrapHandler(p, trap.MissingFunction)
 
-	if p.Text.Addr == 0 || p.Text.Addr > obj.ResumeAddr {
+	if p.Text.Addr == 0 || p.Text.Addr > obj.TextAddrResume {
 		panic("bad text address after MissingFunction trap handler")
 	}
 	asm.Resume(p)
 
-	if p.Text.Addr <= obj.ResumeAddr || p.Text.Addr > obj.InitStartAddr {
+	if p.Text.Addr <= obj.TextAddrResume || p.Text.Addr > obj.TextAddrInitStart {
 		panic("bad text address after resume routine")
 	}
 	asm.Init(p)
@@ -78,12 +78,11 @@ func GenProgram(
 		p.FuncLinks[m.StartIndex].AddSite(retAddr)
 	}
 
-	if p.Text.Addr <= obj.InitStartAddr || p.Text.Addr > obj.InitEntryAddr {
+	if p.Text.Addr <= obj.TextAddrInitStart || p.Text.Addr > obj.TextAddrInitEntry {
 		panic("bad text address after init routine and start function call")
 	}
 	retAddr := asm.InitCallEntry(p)
 	p.Map.PutCallSite(retAddr, obj.Word) // stack depth excluding entry args (including link addr)
-	asm.Exit(p)
 
 	if p.Text.Addr > rodata.CommonsAddr {
 		panic("bad text address after init routines")
