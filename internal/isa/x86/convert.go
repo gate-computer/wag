@@ -22,26 +22,26 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 	case prop.ExtendS:
 		r, _ := allocResultReg(f, source)
 		in.MOVSXD.RegReg(&f.Text, wa.I64, r, r)
-		result = operand.Reg(resultType, r, false)
+		result = operand.Reg(resultType, r)
 
 	case prop.ExtendU:
-		r, zeroExt := allocResultReg(f, source)
-		if !zeroExt {
+		r, zeroExtended := allocResultReg(f, source)
+		if !zeroExtended {
 			in.MOV.RegReg(&f.Text, wa.I32, r, r)
 		}
-		result = operand.Reg(resultType, r, false)
+		result = operand.Reg(wa.I64, r)
 
 	case prop.Mote:
 		r, _ := allocResultReg(f, source)
 		in.CVTS2SSD.RegReg(&f.Text, source.Type, r, r)
-		result = operand.Reg(resultType, r, false)
+		result = operand.Reg(resultType, r)
 
 	case prop.TruncS:
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		in.CVTTSSD2SI.TypeRegReg(&f.Text, source.Type, resultType, resultReg, sourceReg)
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg, true)
+		result = operand.Reg(resultType, resultReg)
 
 	case prop.TruncU:
 		sourceReg, _ := getScratchReg(f, source)
@@ -52,20 +52,20 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			truncFloatToUnsignedI64(f, resultReg, source.Type, sourceReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg, false)
+		result = operand.Reg(resultType, resultReg)
 
 	case prop.ConvertS:
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		in.CVTSI2SSD.TypeRegReg(&f.Text, resultType, source.Type, resultReg, sourceReg)
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg, false)
+		result = operand.Reg(resultType, resultReg)
 
 	case prop.ConvertU:
-		sourceReg, zeroExt := getScratchReg(f, source)
+		sourceReg, zeroExtended := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		if source.Type == wa.I32 {
-			if !zeroExt {
+			if !zeroExtended {
 				in.MOV.RegReg(&f.Text, wa.I32, sourceReg, sourceReg)
 			}
 			in.CVTSI2SSD.TypeRegReg(&f.Text, resultType, wa.I64, resultReg, sourceReg)
@@ -73,7 +73,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			convertUnsignedI64ToFloat(f, resultType, resultReg, sourceReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg, false)
+		result = operand.Reg(resultType, resultReg)
 
 	case prop.Reinterpret:
 		sourceReg, _ := getScratchReg(f, source)
@@ -84,7 +84,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			in.MOVDQmr.RegReg(&f.Text, source.Type, sourceReg, resultReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg, true)
+		result = operand.Reg(resultType, resultReg)
 	}
 
 	return

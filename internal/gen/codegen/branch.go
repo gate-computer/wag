@@ -106,7 +106,7 @@ func genBlock(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 
 	truncateBlockOperands(f)
 	frame.end(f)
-	pushResultRegOperand(f, blockType, false) // zeroExt unknown due to branch
+	pushResultRegOperand(f, blockType)
 
 	end := popBranchTarget(f)
 	label(f, end)
@@ -153,7 +153,6 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	cond := popOperand(f, wa.I32)
 
-	var valueZeroExt bool
 	if target.ValueType != wa.Void {
 		value := popOperand(f, target.ValueType)
 		debug.Printf("value: %s", value)
@@ -161,9 +160,9 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		if cond.Storage == storage.Reg && cond.Reg() == reg.Result {
 			r := opAllocReg(f, wa.I32)
 			asm.MoveReg(&f.Prog, wa.I32, r, reg.Result)
-			cond.SetReg(r, true)
+			cond.SetReg(r)
 		}
-		valueZeroExt = asm.Move(f, reg.Result, value)
+		asm.Move(f, reg.Result, value)
 	}
 
 	drop := f.StackDepth - target.StackDepth
@@ -196,7 +195,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		b.Suspension = true
 	}
 
-	pushResultRegOperand(f, target.ValueType, valueZeroExt)
+	pushResultRegOperand(f, target.ValueType)
 
 	return
 }
@@ -264,7 +263,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 		if index.Storage == storage.Reg && index.Reg() == reg.Result {
 			indexReg := allocStealDeadReg(f, wa.I32)
 			asm.MoveReg(&f.Prog, wa.I32, indexReg, reg.Result)
-			index.SetReg(indexReg, true)
+			index.SetReg(indexReg)
 		}
 		asm.Move(f, reg.Result, value)
 	}
@@ -387,7 +386,7 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	}
 
 	frame.end(f)
-	pushResultRegOperand(f, ifType, false)
+	pushResultRegOperand(f, ifType)
 
 	end := popBranchTarget(f)
 	label(f, end)

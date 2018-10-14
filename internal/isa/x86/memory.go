@@ -85,7 +85,7 @@ func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultTyp
 
 	r := f.Regs.AllocResult(resultType)
 	loadInsns[uint8(props&prop.LoadIndexMask)].RegMemDisp(&f.Text, resultType, r, base, disp)
-	return operand.Reg(resultType, r, (props&prop.LoadIndexZeroExtFlag) != 0)
+	return operand.Reg(resultType, r)
 }
 
 // Store may allocate registers, use RegResult and update condition flags.
@@ -181,7 +181,7 @@ func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
 	in.MOV.RegReg(&f.Text, wa.I64, r, RegMemoryLimit)
 	in.SUB.RegReg(&f.Text, wa.I64, r, RegMemoryBase)
 	in.SHRi.RegImm8(&f.Text, wa.I64, r, wa.PageBits)
-	return operand.Reg(wa.I32, r, true)
+	return operand.Reg(wa.I32, r)
 }
 
 // GrowMemory may allocate registers, use RegResult and update condition flags.
@@ -192,8 +192,8 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemoryLimit)
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
 
-	targetReg, zeroExt := allocResultReg(f, x)
-	if !zeroExt {
+	targetReg, zeroExtended := allocResultReg(f, x)
+	if !zeroExtended {
 		in.MOV.RegReg(&f.Text, wa.I32, targetReg, targetReg)
 	}
 
@@ -221,5 +221,5 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	out.Addr = f.Text.Addr
 	isa.UpdateNearBranches(f.Text.Bytes(), &out)
 
-	return operand.Reg(wa.I32, targetReg, true)
+	return operand.Reg(wa.I32, targetReg)
 }

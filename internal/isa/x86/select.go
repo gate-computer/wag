@@ -94,5 +94,5 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 		isa.UpdateNearBranches(f.Text.Bytes(), &end)
 	}
 
-	return operand.Reg(a.Type, targetReg, true) // cmov zero-extends the target unconditionally
+	return operand.Reg(a.Type, targetReg)
 }

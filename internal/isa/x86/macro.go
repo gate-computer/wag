@@ -210,7 +210,7 @@ func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 }
 
 // LoadGlobal has default restrictions.
-func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExt bool) {
+func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExtended bool) {
 	if t.Category() == wa.Int {
 		in.MOV.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
 	} else {
@@ -342,7 +342,7 @@ func (MacroAssembler) LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (
 
 // Move MUST NOT update condition flags unless the operand is the condition
 // flags.  The source operand is consumed.
-func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool) {
+func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended bool) {
 	switch x.Type.Category() {
 	case wa.Int:
 		switch x.Storage {
@@ -359,18 +359,17 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool
 			default:
 				in.MOV64i.RegImm64(&f.Text, target, value)
 			}
-			zeroExt = true
+			zeroExtended = true
 
 		case storage.Reg:
 			if source := x.Reg(); source != target {
 				in.MOV.RegReg(&f.Text, x.Type, target, source)
 				f.Regs.Free(x.Type, source)
-				zeroExt = true
+				zeroExtended = true
 			} else {
 				if target != RegResult {
 					panic("register moved to itself")
 				}
-				zeroExt = x.RegZeroExt()
 			}
 
 		case storage.Flags:
@@ -378,7 +377,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool
 			if target != RegScratch {
 				in.MOV.RegReg(&f.Text, wa.I32, target, RegScratch)
 			}
-			zeroExt = true
+			zeroExtended = true
 		}
 
 	case wa.Float:
@@ -622,13 +621,12 @@ func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {
 
 // getScratchReg returns either the operand's existing register, or the
 // operand's value in RegScratch.
-func getScratchReg(f *gen.Func, x operand.O) (r reg.R, zeroExt bool) {
+func getScratchReg(f *gen.Func, x operand.O) (r reg.R, zeroExtended bool) {
 	if x.Storage == storage.Reg {
 		r = x.Reg()
-		zeroExt = x.RegZeroExt()
 	} else {
 		r = RegScratch
-		zeroExt = asm.Move(f, r, x)
+		zeroExtended = asm.Move(f, r, x)
 	}
 	return
 }
@@ -636,13 +634,12 @@ func getScratchReg(f *gen.Func, x operand.O) (r reg.R, zeroExt bool) {
 // allocResultReg may allocate registers.  It returns either the operand's
 // existing register, or the operand's value in allocated register or
 // RegResult.
-func allocResultReg(f *gen.Func, x operand.O) (r reg.R, zeroExt bool) {
+func allocResultReg(f *gen.Func, x operand.O) (r reg.R, zeroExtended bool) {
 	if x.Storage == storage.Reg {
 		r = x.Reg()
-		zeroExt = x.RegZeroExt()
 	} else {
 		r = f.Regs.AllocResult(x.Type)
-		zeroExt = asm.Move(f, r, x)
+		zeroExtended = asm.Move(f, r, x)
 	}
 	return
 }

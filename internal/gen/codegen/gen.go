@@ -273,7 +273,7 @@ func genWrap(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	switch x.Storage {
 	case storage.Reg:
-		x = operand.Reg(wa.I32, x.Reg(), false)
+		x = operand.Reg(wa.I32, x.Reg())
 
 	default:
 		x.Type = wa.I32

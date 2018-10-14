@@ -68,13 +68,13 @@ func binaryIntAL(f *gen.Func, index uint8, a, b operand.O) operand.O {
 
 		case uint64(value+0x80000000) > 0xffffffff:
 			in.MOV64i.RegImm64(&f.Text, RegScratch, value)
-			b.SetReg(RegScratch, true)
+			b.SetReg(RegScratch)
 		}
 
 	case storage.Stack:
 		in.POPo.RegScratch(&f.Text)
 		f.StackValueConsumed()
-		b.SetReg(RegScratch, false)
+		b.SetReg(RegScratch)
 	}
 
 	targetReg, _ := allocResultReg(f, a)
@@ -88,7 +88,7 @@ func binaryIntAL(f *gen.Func, index uint8, a, b operand.O) operand.O {
 		f.Regs.Free(b.Type, b.Reg())
 	}
 
-	return operand.Reg(a.Type, targetReg, true)
+	return operand.Reg(a.Type, targetReg)
 }
 
 func binaryIntCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
@@ -133,7 +133,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	if b.Storage == storage.Reg {
 		if b.Reg() == RegDividendLow {
 			in.MOV.RegReg(&f.Text, b.Type, RegScratch, RegDividendLow)
-			b.SetReg(RegScratch, true)
+			b.SetReg(RegScratch)
 		}
 	} else {
 		if division && b.Storage == storage.Imm {
@@ -146,8 +146,8 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 			}
 		}
 
-		zeroExt := asm.Move(f, RegScratch, b)
-		b.SetReg(RegScratch, zeroExt)
+		asm.Move(f, RegScratch, b)
+		b.SetReg(RegScratch)
 	}
 
 	asm.Move(f, RegDividendLow, a)
@@ -222,7 +222,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 
 	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
 
-	return operand.Reg(a.Type, RegResult, true)
+	return operand.Reg(a.Type, RegResult)
 }
 
 func opCheckDivideByZero(f *gen.Func, t wa.Type, r reg.R) {
@@ -250,7 +250,7 @@ func binaryIntShift(f *gen.Func, index uint8, a, b operand.O) operand.O {
 		insn.Opcode().Reg(&f.Text, a.Type, r)
 	}
 
-	return operand.Reg(a.Type, r, true)
+	return operand.Reg(a.Type, r)
 }
 
 func binaryFloatCommon(f *gen.Func, index uint8, a, b operand.O) operand.O {
@@ -261,7 +261,7 @@ func binaryFloatCommon(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	opcode.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 
 	f.Regs.Free(b.Type, sourceReg)
-	return operand.Reg(a.Type, targetReg, false)
+	return operand.Reg(a.Type, targetReg)
 }
 
 var binaryFloatMinmaxOpcodes = [2]struct {
@@ -297,7 +297,7 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	isa.UpdateNearBranches(f.Text.Bytes(), &end)
 
 	f.Regs.Free(b.Type, sourceReg)
-	return operand.Reg(a.Type, targetReg, false)
+	return operand.Reg(a.Type, targetReg)
 }
 
 func binaryFloatCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
@@ -333,19 +333,19 @@ func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 	isa.UpdateNearBranches(f.Text.Bytes(), &done)
 
 	f.Regs.Free(b.Type, sourceReg)
-	return operand.Reg(a.Type, targetReg, false)
+	return operand.Reg(a.Type, targetReg)
 }
 
 // opNegInt allocates registers.
 func opNegInt(f *gen.Func, x operand.O) operand.O {
 	r, _ := allocResultReg(f, x)
 	in.NEG.Reg(&f.Text, x.Type, r)
-	return operand.Reg(x.Type, r, true)
+	return operand.Reg(x.Type, r)
 }
 
 // opInplaceInt allocates registers.
 func opInplaceInt(f *gen.Func, insn in.M, x operand.O) operand.O {
 	r, _ := allocResultReg(f, x)
 	insn.Reg(&f.Text, x.Type, r)
-	return operand.Reg(x.Type, r, true)
+	return operand.Reg(x.Type, r)
 }

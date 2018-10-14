@@ -51,9 +51,9 @@ func pushOperand(f *gen.Func, x operand.O) {
 	f.Operands = append(f.Operands, x)
 }
 
-func pushResultRegOperand(f *gen.Func, t wa.Type, zeroExt bool) {
+func pushResultRegOperand(f *gen.Func, t wa.Type) {
 	if t != wa.Void {
-		pushOperand(f, operand.Reg(t, reg.Result, zeroExt))
+		pushOperand(f, operand.Reg(t, reg.Result))
 	}
 }
 
@@ -161,15 +161,15 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	pushBranchTarget(f, f.ResultType, true)
 
 	if deadend := genOps(f, load); !deadend {
-		var zeroExt bool
+		var zeroExtended bool
 
 		if f.ResultType != wa.Void {
 			result := popOperand(f, f.ResultType)
-			zeroExt = asm.Move(f, reg.Result, result)
+			zeroExtended = asm.Move(f, reg.Result, result)
 		}
 
 		switch {
-		case f.ResultType == wa.I32 && !zeroExt:
+		case f.ResultType == wa.I32 && !zeroExtended:
 			asm.ZeroExtendResultReg(&f.Prog)
 
 		case f.ResultType == wa.Void || f.ResultType.Category() == wa.Float:
@@ -253,14 +253,14 @@ func opStabilizeOperands(f *gen.Func) {
 
 			r := opAllocReg(f, x.Type)
 			asm.MoveReg(&f.Prog, x.Type, r, reg.Result)
-			x.SetReg(r, true)
+			x.SetReg(r)
 
 		case x.Storage == storage.Flags:
 			debug.Printf("stabilize operand #%d: %s", i, *x)
 
 			r := opAllocReg(f, x.Type)
 			asm.SetBool(&f.Prog, r, x.FlagsCond())
-			x.SetReg(r, true)
+			x.SetReg(r)
 		}
 	}
 

@@ -30,7 +30,7 @@ func genGetLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dea
 	index, t := readLocalIndex(f, load, op)
 	r := opAllocReg(f, t)
 	asm.LoadStack(&f.Prog, t, r, f.LocalOffset(index))
-	pushOperand(f, operand.Reg(t, r, true))
+	pushOperand(f, operand.Reg(t, r))
 	return
 }
 
@@ -52,7 +52,7 @@ func genTeeLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dea
 	default:
 		r := opAllocReg(f, t)
 		asm.Move(f, r, value)
-		value.SetReg(r, false) // zeroExt information not needed
+		value.SetReg(r)
 		fallthrough
 
 	case storage.Reg:

@@ -32,40 +32,40 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 		in.CMOVE.RegReg(&f.Text, x.Type, RegScratch, r)
 		in.MOVi.RegImm32(&f.Text, x.Type, r, (int32(x.Type.Size())<<3)-1)
 		in.SUB.RegReg(&f.Text, x.Type, r, RegScratch)
-		return operand.Reg(x.Type, r, true)
+		return operand.Reg(x.Type, r)
 
 	case prop.IntCtz:
 		r, _ := allocResultReg(f, x)
 		in.BSF.RegReg(&f.Text, x.Type, r, r)
 		in.MOVi.RegImm32(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
 		in.CMOVE.RegReg(&f.Text, x.Type, r, RegScratch)
-		return operand.Reg(x.Type, r, true)
+		return operand.Reg(x.Type, r)
 
 	case prop.IntPopcnt:
 		r, _ := allocResultReg(f, x)
 		in.POPCNT.RegReg(&f.Text, x.Type, r, r)
-		return operand.Reg(x.Type, r, true)
+		return operand.Reg(x.Type, r)
 
 	case prop.FloatAbs:
 		r, _ := allocResultReg(f, x)
 		absFloatReg(&f.Prog, x.Type, r)
-		return operand.Reg(x.Type, r, false)
+		return operand.Reg(x.Type, r)
 
 	case prop.FloatNeg:
 		r, _ := allocResultReg(f, x)
 		negFloatReg(&f.Prog, x.Type, r)
-		return operand.Reg(x.Type, r, false)
+		return operand.Reg(x.Type, r)
 
 	case prop.FloatRoundOp:
 		r, _ := allocResultReg(f, x)
 		roundMode := int8(props >> 8)
 		in.ROUNDSSD.RegRegImm8(&f.Text, x.Type, r, r, roundMode)
-		return operand.Reg(x.Type, r, false)
+		return operand.Reg(x.Type, r)
 
 	default: // FloatSqrt
 		r, _ := allocResultReg(f, x)
 		in.SQRTSSD.RegReg(&f.Text, x.Type, r, r)
-		return operand.Reg(x.Type, r, false)
+		return operand.Reg(x.Type, r)
 	}
 }
 

@@ -68,7 +68,7 @@ func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
 	f.Regs.CheckNoneAllocated()
 
 	opDropCallOperands(f, len(sig.Params))
-	pushResultRegOperand(f, sig.Result, true)
+	pushResultRegOperand(f, sig.Result)
 
 	// The called function's initial suspension point was certainly executed
 	if len(f.BranchTargets) > 0 {

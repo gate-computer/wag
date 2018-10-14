@@ -111,25 +111,24 @@ const (
 	IndexIntLoad32U = 6
 	IndexFloatLoad  = 7
 
-	LoadIndexMask        = 0x7
-	LoadIndexZeroExtFlag = 0x8
+	LoadIndexMask = 0x7
 )
 
 const (
-	I32Load    = 3<<8 | IndexIntLoad | LoadIndexZeroExtFlag
-	I64Load    = 7<<8 | IndexIntLoad | LoadIndexZeroExtFlag
+	I32Load    = 3<<8 | IndexIntLoad
+	I64Load    = 7<<8 | IndexIntLoad
 	F32Load    = 3<<8 | IndexFloatLoad
 	F64Load    = 7<<8 | IndexFloatLoad
-	I32Load8S  = 0<<8 | IndexIntLoad8S | LoadIndexZeroExtFlag
-	I32Load8U  = 0<<8 | IndexIntLoad8U | LoadIndexZeroExtFlag
-	I32Load16S = 1<<8 | IndexIntLoad16S | LoadIndexZeroExtFlag
-	I32Load16U = 1<<8 | IndexIntLoad16U | LoadIndexZeroExtFlag
-	I64Load8S  = 0<<8 | IndexIntLoad8S | LoadIndexZeroExtFlag
-	I64Load8U  = 0<<8 | IndexIntLoad8U | LoadIndexZeroExtFlag
-	I64Load16S = 1<<8 | IndexIntLoad16S | LoadIndexZeroExtFlag
-	I64Load16U = 1<<8 | IndexIntLoad16U | LoadIndexZeroExtFlag
+	I32Load8S  = 0<<8 | IndexIntLoad8S
+	I32Load8U  = 0<<8 | IndexIntLoad8U
+	I32Load16S = 1<<8 | IndexIntLoad16S
+	I32Load16U = 1<<8 | IndexIntLoad16U
+	I64Load8S  = 0<<8 | IndexIntLoad8S
+	I64Load8U  = 0<<8 | IndexIntLoad8U
+	I64Load16S = 1<<8 | IndexIntLoad16S
+	I64Load16U = 1<<8 | IndexIntLoad16U
 	I64Load32S = 3<<8 | IndexIntLoad32S
-	I64Load32U = 3<<8 | IndexIntLoad32U | LoadIndexZeroExtFlag
+	I64Load32U = 3<<8 | IndexIntLoad32U
 )
 
 // Store
