@@ -58,7 +58,7 @@ type MacroAssembler interface {
 	AddToStackPtrUpper32(f *gen.Func, r reg.R)
 
 	// Binary may allocate registers, use RegResult and update condition flags.
-	Binary(f *gen.Func, props uint16, a, b operand.O) operand.O
+	Binary(f *gen.Func, props uint16, lhs, rhs operand.O) operand.O
 
 	// Branch may use RegResult and update condition flags.
 	Branch(p *gen.Prog, addr int32) int32
@@ -89,7 +89,7 @@ type MacroAssembler interface {
 
 	// Convert may allocate registers, use RegResult and update condition
 	// flags.  The source operand may be RegResult or condition flags.
-	Convert(f *gen.Func, props uint16, resultType wa.Type, source operand.O) (result operand.O)
+	Convert(f *gen.Func, props uint16, result wa.Type, source operand.O) operand.O
 
 	// DropStackValues has default restrictions.  The caller will take care of
 	// updating the virtual stack pointer.
@@ -111,7 +111,7 @@ type MacroAssembler interface {
 	//
 	// Void functions must make sure that they don't return any sensitive
 	// information in result register.
-	JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int)
+	JumpToImportFunc(p *gen.Prog, vectorIndex int, variadic bool, argc, sigIndex int)
 
 	// JumpToTrapHandler may use RegResult and update condition flags.  It MUST
 	// NOT generate over 16 bytes of code.
@@ -119,27 +119,27 @@ type MacroAssembler interface {
 
 	// Load may allocate registers, use RegResult and update condition flags.
 	// The index operand may be RegResult or the condition flags.
-	Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O
+	Load(f *gen.Func, props uint16, index operand.O, result wa.Type, align, offset uint32) operand.O
 
 	// LoadGlobal has default restrictions.
-	LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExtended bool)
+	LoadGlobal(p *gen.Prog, t wa.Type, dest reg.R, offset int32) (zeroExtended bool)
 
 	// LoadIntStubNear may update condition flags.  The register passed as
-	// argument is both the index (source) and the target register.  The index
-	// has been zero-extended by the caller.
-	LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (insnAddr int32)
+	// argument is both the index (source) and the destination register.  The
+	// index has been zero-extended by the caller.
+	LoadIntStubNear(f *gen.Func, index wa.Type, r reg.R) (insnAddr int32)
 
 	// LoadStack has default restrictions.  It MUST zero-extend the (integer)
-	// target register.
-	LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int32)
+	// destination register.
+	LoadStack(p *gen.Prog, t wa.Type, dest reg.R, offset int32)
 
 	// Move MUST NOT update condition flags unless the operand is the condition
 	// flags.  The source operand is consumed.
-	Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended bool)
+	Move(f *gen.Func, dest reg.R, x operand.O) (zeroExtended bool)
 
 	// MoveReg has default restrictions.  It MUST zero-extend the (integer)
-	// target register.
-	MoveReg(p *gen.Prog, t wa.Type, target, source reg.R)
+	// destination register.
+	MoveReg(p *gen.Prog, t wa.Type, dest, source reg.R)
 
 	// PushCond has default restrictions.
 	PushCond(p *gen.Prog, cond condition.C)
@@ -166,11 +166,11 @@ type MacroAssembler interface {
 
 	// Select may allocate registers, use RegResult and update condition flags.
 	// The cond operand may be the condition flags.
-	Select(f *gen.Func, a, b, condOperand operand.O) operand.O
+	Select(f *gen.Func, lhs, rhs, cond operand.O) operand.O
 
-	// SetBool has default restrictions.  It MUST zero-extend the target
+	// SetBool has default restrictions.  It MUST zero-extend the destination
 	// register.
-	SetBool(p *gen.Prog, target reg.R, cond condition.C)
+	SetBool(p *gen.Prog, dest reg.R, cond condition.C)
 
 	// SetupStackFrame may use RegResult and update condition flags.
 	SetupStackFrame(f *gen.Func) (stackCheckAddr int32)
