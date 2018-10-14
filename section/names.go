@@ -15,22 +15,20 @@ import (
 
 const CustomName = "name"
 
-type subsectionId byte
-
 const (
-	subsectionModuleName subsectionId = iota
-	subsectionFunctionNames
-	subsectionLocalNames
+	nameSubsectionModuleName byte = iota
+	nameSubsectionFunctionNames
+	nameSubsectionLocalNames
 )
 
-type FuncName struct { // TODO: rename?
-	FunName    string   // TODO: rename?
-	LocalNames []string // TODO: map?
+type FuncName struct {
+	FuncName   string
+	LocalNames []string
 }
 
 type NameSection struct {
 	ModuleName string
-	FuncNames  []FuncName // TODO: map? rename?
+	FuncNames  []FuncName
 }
 
 // Load "name" section.
@@ -39,56 +37,61 @@ func (ns *NameSection) Load(_ string, r reader.R) (err error) {
 		err = errorpanic.Handle(recover())
 	}()
 
+	for ns.readSubsection(r) {
+	}
+
+	return
+}
+
+func (ns *NameSection) readSubsection(r reader.R) (read bool) {
+	id, err := r.ReadByte()
+	if err != nil {
+		if err == io.EOF {
+			return
+		}
+		panic(err)
+	}
+
 	load := loader.L{R: r}
 
-	for {
-		idByte, err := load.R.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				panic(err)
+	contentSize := load.Varuint32()
+	content := load.Bytes(contentSize)
+
+	switch id {
+	case nameSubsectionModuleName:
+		ns.ModuleName = string(content)
+
+	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
+		loadContent := loader.L{R: bytes.NewReader(content)}
+
+		for range loadContent.Count() {
+			funcIndex := loadContent.Varuint32()
+			for uint32(len(ns.FuncNames)) <= funcIndex {
+				ns.FuncNames = append(ns.FuncNames, FuncName{}) // TODO: optimize
 			}
-		}
-		id := subsectionId(idByte)
-		contentSize := load.Varuint32()
-		content := load.Bytes(contentSize)
 
-		switch id {
-		case subsectionModuleName:
-			ns.ModuleName = string(content)
+			fn := &ns.FuncNames[funcIndex]
 
-		case subsectionFunctionNames, subsectionLocalNames:
-			loadContent := loader.L{R: bytes.NewReader(content)}
+			switch id {
+			case nameSubsectionFunctionNames:
+				funcNameLen := loadContent.Varuint32()
+				fn.FuncName = string(loadContent.Bytes(funcNameLen))
 
-			for range loadContent.Count() {
-				funIndex := loadContent.Varuint32()
-				for uint32(len(ns.FuncNames)) <= funIndex {
-					ns.FuncNames = append(ns.FuncNames, FuncName{}) // TODO: optimize
-				}
-
-				fn := &ns.FuncNames[funIndex]
-
-				switch id {
-				case subsectionFunctionNames:
-					funNameLen := loadContent.Varuint32()
-					fn.FunName = string(loadContent.Bytes(funNameLen))
-
-				case subsectionLocalNames:
-					for range loadContent.Count() {
-						localIndex := loadContent.Varuint32()
-						for uint32(len(fn.LocalNames)) <= localIndex {
-							fn.LocalNames = append(fn.LocalNames, "") // TODO: optimize
-						}
-
-						localNameLen := loadContent.Varuint32()
-						fn.LocalNames[localIndex] = string(loadContent.Bytes(localNameLen))
+			case nameSubsectionLocalNames:
+				for range loadContent.Count() {
+					localIndex := loadContent.Varuint32()
+					for uint32(len(fn.LocalNames)) <= localIndex {
+						fn.LocalNames = append(fn.LocalNames, "") // TODO: optimize
 					}
+
+					localNameLen := loadContent.Varuint32()
+					fn.LocalNames[localIndex] = string(loadContent.Bytes(localNameLen))
 				}
 			}
 		}
 	}
 
+	read = true
 	return
 }
 

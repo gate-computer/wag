@@ -184,7 +184,7 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *sectio
 		var localNames []string
 
 		if ns != nil && funcNum < len(ns.FuncNames) {
-			name = ns.FuncNames[funcNum].FunName
+			name = ns.FuncNames[funcNum].FuncName
 			localNames = ns.FuncNames[funcNum].LocalNames
 		} else {
 			name = fmt.Sprintf("func-%d", funcNum)

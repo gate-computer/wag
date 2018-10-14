@@ -32,11 +32,10 @@ type Config struct {
 	EntryArgs       []uint64           // Defaults to zeros (subject to policy).
 }
 
-// Object code with debug information.  The fields are roughly in the order of
-// appearance during compilation.  (The NameSection is populated at an
-// unpredicatable stage.)
+// Object code with debug information.  The fields are roughly in order of
+// appearance during compilation.
 //
-// Executing the code is possible using a platform-specific mechanism; it's not
+// Executing the code requires a platform-specific mechanism; it's not
 // supported by this package.
 type Object struct {
 	FuncTypes         []wa.FuncType       // Signatures for debug output.
@@ -58,15 +57,18 @@ type Object struct {
 func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResolver) (object *Object, err error) {
 	object = new(Object)
 
-	// The name section loader needs to be available at every step, as custom
-	// sections might appear at any position in the binary module.
+	// In general, custom sections may appear at any position in the binary
+	// module, so the custom section loader must be available at every step.
+	// (WebAssembly specification says that the name section can appear only
+	// after the data section, but wag's custom section handling is decoupled
+	// from standard section handling; just accept it at any point.)
 
-	var customs = section.CustomLoaders{
+	var customSections = section.CustomLoaders{
 		section.CustomName: object.Names.Load,
 	}
 
-	var loadConfig = compile.Config{
-		CustomSectionLoader: customs.Load,
+	var loadingConfig = compile.Config{
+		CustomSectionLoader: customSections.Load,
 	}
 
 	// Parse the module specification while reading the WebAssembly sections
@@ -75,7 +77,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	// the program can be executed without it.)
 
 	var moduleConfig = &compile.ModuleConfig{
-		Config: loadConfig,
+		Config: loadingConfig,
 	}
 
 	module, err := compile.LoadInitialSections(moduleConfig, r)
@@ -103,7 +105,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	var codeConfig = &compile.CodeConfig{
 		Text:   objectConfig.Text,
 		Mapper: &object.CallMap,
-		Config: loadConfig,
+		Config: loadingConfig,
 	}
 
 	err = compile.LoadCodeSection(codeConfig, r, module)
@@ -122,7 +124,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	var dataConfig = &compile.DataConfig{
 		GlobalsMemory:   objectConfig.GlobalsMemory,
 		MemoryAlignment: objectConfig.MemoryAlignment,
-		Config:          loadConfig,
+		Config:          loadingConfig,
 	}
 
 	err = compile.LoadDataSection(dataConfig, r, module)
@@ -172,9 +174,9 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 
 	object.StackFrame = stack.EntryFrame(entryAddr, entryArgs)
 
-	// Read the whole WebAssembly module; the name section may be at the end.
+	// Read the whole binary module to get the name section.
 
-	err = compile.LoadCustomSections(&loadConfig, r)
+	err = compile.LoadCustomSections(&loadingConfig, r)
 	if err != nil {
 		return
 	}

@@ -76,7 +76,7 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 
 		var name string
 		if i < len(names) {
-			name = names[i].FunName
+			name = names[i].FuncName
 		} else {
 			name = fmt.Sprintf("func.%d", i)
 		}
