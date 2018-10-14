@@ -62,11 +62,13 @@ func GenProgram(
 	if p.Text.Addr == 0 || p.Text.Addr > obj.TextAddrResume {
 		panic("bad text address after MissingFunction trap handler")
 	}
+	isa.AlignFunc(p)
 	asm.Resume(p)
 
 	if p.Text.Addr <= obj.TextAddrResume || p.Text.Addr > obj.TextAddrInitStart {
 		panic("bad text address after resume routine")
 	}
+	isa.AlignFunc(p)
 	asm.Init(p)
 
 	if m.StartDefined {

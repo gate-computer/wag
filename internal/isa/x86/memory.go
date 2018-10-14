@@ -77,8 +77,6 @@ var storeImmInsns = [5]memDispImmInsn{
 	prop.IndexFloatStore: opStoreImm{},
 }
 
-// Load may allocate registers, use RegResult and update condition flags.  The
-// index operand may be RegResult or the condition flags.
 func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
 	sizeReach := uint64(props >> 8)
 	base, disp := checkAccess(f, sizeReach, index, offset)
@@ -88,7 +86,6 @@ func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultTyp
 	return operand.Reg(resultType, r)
 }
 
-// Store may allocate registers, use RegResult and update condition flags.
 func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
 	sizeReach := uint64(props >> 8)
 	base, disp := checkAccess(f, sizeReach, index, offset)
@@ -174,8 +171,6 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 	return
 }
 
-// QueryMemorySize may allocate registers, use RegResult and update condition
-// flags.
 func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
 	r := f.Regs.AllocResult(wa.I64)
 	in.MOV.RegReg(&f.Text, wa.I64, r, RegMemoryLimit)
@@ -184,7 +179,6 @@ func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
 	return operand.Reg(wa.I32, r)
 }
 
-// GrowMemory may allocate registers, use RegResult and update condition flags.
 func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	var out link.L
 	var fail link.L

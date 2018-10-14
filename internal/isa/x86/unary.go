@@ -15,8 +15,6 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// Unary may allocate registers, use RegResult and update condition flags.  The
-// operand argument may be RegResult or condition flags.
 func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 	switch uint8(props) {
 	case prop.IntEqz:

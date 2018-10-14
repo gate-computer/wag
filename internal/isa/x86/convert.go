@@ -15,8 +15,6 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// Convert may allocate registers, use RegResult and update condition flags.
-// The source operand may be RegResult or condition flags.
 func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, source operand.O) (result operand.O) {
 	switch props {
 	case prop.ExtendS:

@@ -7,6 +7,7 @@
 package codegen
 
 import (
+	interfaces "github.com/tsavola/wag/internal/isa"
 	"github.com/tsavola/wag/internal/isa/x86"
 )
 
@@ -14,3 +15,9 @@ var (
 	isa x86.ISA
 	asm x86.MacroAssembler
 )
+
+func init() {
+	// Consistency check
+	var _ interfaces.ISA = isa
+	var _ interfaces.MacroAssembler = asm
+}

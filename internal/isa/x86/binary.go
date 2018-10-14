@@ -18,7 +18,6 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// Binary may allocate registers, use RegResult and update condition flags.
 func (MacroAssembler) Binary(f *gen.Func, props uint16, a, b operand.O) operand.O {
 	switch uint8(props) {
 	case prop.BinaryIntAL:

@@ -14,8 +14,6 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// Select may allocate registers, use RegResult and update condition flags.
-// The cond operand may be the condition flags.
 func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O {
 	var cond condition.C
 

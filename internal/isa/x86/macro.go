@@ -48,28 +48,16 @@ var conditionInsns = [22]in.CCInsn{
 	condition.UnorderedOrLt: in.InsnLtU,
 }
 
-// MacroAssembler methods by default MUST NOT update condition flags, use
-// RegResult or allocate registers.
-//
-// Methods which return an operand (and are allowed to do such things) may
-// return either an allocated register or RegResult.
-//
-// Some methods which can use RegResult or update condition flags may need to
-// still handle them as input operands.
 type MacroAssembler struct{}
 
 var asm MacroAssembler
 
-// AddToStackPtrUpper32 may update condition flags.  It takes ownership of the
-// register.
 func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
 	in.SARi.RegImm8(&f.Text, wa.I64, r, 32) // sign-extension
 	in.ADD.RegReg(&f.Text, wa.I64, RegStackPtr, r)
 	f.Regs.Free(wa.I64, r)
 }
 
-// DropStackValues has default restrictions.  The caller will take care of
-// updating the virtual stack pointer.
 func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
 	if n != 0 {
 		in.LEA.RegStackDisp(&p.Text, wa.I64, RegStackPtr, int32(n*obj.Word))
@@ -87,7 +75,6 @@ func dropStableValue(f *gen.Func, x operand.O) {
 	}
 }
 
-// Branch may use RegResult and update condition flags.
 func (MacroAssembler) Branch(p *gen.Prog, addr int32) int32 {
 	if addr != 0 {
 		in.JMPcd.Addr32(&p.Text, addr)
@@ -97,8 +84,6 @@ func (MacroAssembler) Branch(p *gen.Prog, addr int32) int32 {
 	return p.Text.Addr
 }
 
-// BranchIndirect may use RegResult and update condition flags.  It takes
-// ownership of address register, which has already been zero-extended.
 func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
 	in.MOV.RegReg(&f.Text, wa.I32, RegScratch, addr)
 	f.Regs.Free(wa.I64, addr)
@@ -106,7 +91,6 @@ func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
 	in.JMPcd.Addr32(&f.Text, isatext.TextAddrRetpoline)
 }
 
-// BranchIfStub may use RegResult and update condition flags.
 func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (sites []int32) {
 	var cond condition.C
 
@@ -143,8 +127,6 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 	return
 }
 
-// BranchIfOutOfBounds may use RegResult and update condition flags.  It MUST
-// zero-extend the index register.
 func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) int32 {
 	compareBounds(p, indexReg, upperBound)
 	in.JLEc.Addr(&p.Text, addr)
@@ -159,20 +141,16 @@ func compareBounds(p *gen.Prog, indexReg reg.R, upperBound int32) {
 	in.CMP.RegReg(&p.Text, wa.I32, RegScratch, indexReg)
 }
 
-// Call may use RegResult and update condition flags.
 func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {
 	in.CALLcd.Addr32(&p.Text, addr)
 	return p.Text.Addr
 }
 
-// CallMissing may use RegResult and update condition flags.
 func (MacroAssembler) CallMissing(p *gen.Prog) (retAddr int32) {
 	in.CALLcd.MissingFunction(&p.Text)
 	return p.Text.Addr
 }
 
-// CallIndirect may use RegResult and update condition flags.  It takes
-// ownership of funcIndexReg.
 func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32 {
 	var outOfBounds link.L
 	var checksOut link.L
@@ -204,12 +182,10 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	return f.Text.Addr
 }
 
-// ClearIntResultReg may use RegResult and update condition flags.
 func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero)
 }
 
-// LoadGlobal has default restrictions.
 func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExtended bool) {
 	if t.Category() == wa.Int {
 		in.MOV.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
@@ -219,7 +195,6 @@ func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset in
 	return true
 }
 
-// StoreGlobal has default restrictions.
 func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 	var r reg.R
 
@@ -238,30 +213,23 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 	}
 }
 
-// Resume may update condition flags.  It MUST NOT generate over 16 bytes of
-// code.
 func (MacroAssembler) Resume(p *gen.Prog) {
-	isa.AlignFunc(p)
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 	in.RET.Simple(&p.Text) // return from trap handler or import function call
 }
 
-// Init may use RegResult and update condition flags.
 func (MacroAssembler) Init(p *gen.Prog) {
-	isa.AlignFunc(p)
 	reinit(p)
 }
 
-// InitCallEntry may use RegResult and update condition flags.
 func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
-	// Init
-
 	pad(p, NopByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
-	reinit(p)
 
-	// Entry
+	// Entry routine
 
 	var null link.L
+
+	reinit(p)
 
 	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero) // result if no entry func
 
@@ -311,10 +279,6 @@ func reinit(p *gen.Prog) {
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 }
 
-// JumpToImportFunc may use RegResult and update condition flags.
-//
-// Void functions must make sure that they don't return any sensitive
-// information in RAX.
 func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int) {
 	if variadic {
 		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
@@ -323,25 +287,18 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
 }
 
-// JumpToTrapHandler may use RegResult and update condition flags.  It MUST NOT
-// generate over 16 bytes of code.
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
 }
 
-// LoadIntStubNear may update condition flags.  The register passed as argument
-// is both the index (source) and the target register.  The index has been
-// zero-extended.
 func (MacroAssembler) LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (insnAddr int32) {
 	// 32-bit displacement as placeholder
 	in.MOV.RegMemIndexDisp(&f.Text, indexType, r, in.BaseText, r, in.TypeScale(indexType), 0x7fffffff)
 	return f.Text.Addr
 }
 
-// Move MUST NOT update condition flags unless the operand is the condition
-// flags.  The source operand is consumed.
 func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended bool) {
 	switch x.Type.Category() {
 	case wa.Int:
@@ -410,8 +367,6 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 	return
 }
 
-// MoveReg has default restrictions.  It MUST zero-extend the (integer) target
-// register.
 func (MacroAssembler) MoveReg(p *gen.Prog, t wa.Type, target, source reg.R) {
 	switch t.Category() {
 	case wa.Int:
@@ -422,7 +377,6 @@ func (MacroAssembler) MoveReg(p *gen.Prog, t wa.Type, target, source reg.R) {
 	}
 }
 
-// PushImm has default restrictions.
 func (MacroAssembler) PushImm(p *gen.Prog, value int64) {
 	switch {
 	case value == 0:
@@ -437,7 +391,6 @@ func (MacroAssembler) PushImm(p *gen.Prog, value int64) {
 	}
 }
 
-// PushReg has default restrictions.
 func (MacroAssembler) PushReg(p *gen.Prog, t wa.Type, r reg.R) {
 	switch t.Category() {
 	case wa.Int:
@@ -449,13 +402,11 @@ func (MacroAssembler) PushReg(p *gen.Prog, t wa.Type, r reg.R) {
 	}
 }
 
-// PushCond has default restrictions.
 func (MacroAssembler) PushCond(p *gen.Prog, cond condition.C) {
 	setBool(p, cond)
 	in.PUSHo.RegScratch(&p.Text)
 }
 
-// PushZeros may use RegResult and update condition flags.
 func (MacroAssembler) PushZeros(p *gen.Prog, n int) {
 	if n <= 9 {
 		for i := 0; i < n; i++ {
@@ -469,13 +420,11 @@ func (MacroAssembler) PushZeros(p *gen.Prog, n int) {
 	}
 }
 
-// Return may use RegResult and update condition flags.
 func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 	asm.DropStackValues(p, numStackValues)
 	in.RET.Simple(&p.Text)
 }
 
-// SetupStackFrame may use RegResult and update condition flags.
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	var checked link.L
 
@@ -494,13 +443,13 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	return
 }
 
-// SetBool has default restrictions.  It MUST zero-extend the target register.
 func (MacroAssembler) SetBool(p *gen.Prog, target reg.R, cond condition.C) {
 	setBool(p, cond)
 	in.MOV.RegReg(&p.Text, wa.I32, target, RegScratch)
 }
 
-// setBool sets the scratch register.  (SETcc's register encoding is tricky.)
+// setBool sets the scratch register.  (SETcc instruction's register encoding
+// is tricky.)
 func setBool(p *gen.Prog, cond condition.C) {
 	var end link.L
 
@@ -525,8 +474,6 @@ func setBool(p *gen.Prog, cond condition.C) {
 	isa.UpdateNearBranches(p.Text.Bytes(), &end)
 }
 
-// LoadStack has default restrictions.  It MUST zero-extend the (integer)
-// target register.
 func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int32) {
 	switch t.Category() {
 	case wa.Int:
@@ -537,14 +484,12 @@ func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int
 	}
 }
 
-// StoreStack has default restrictions.  The source operand is consumed.
 func (MacroAssembler) StoreStack(f *gen.Func, offset int32, x operand.O) {
 	r, _ := getScratchReg(f, x)
 	asm.StoreStackReg(&f.Prog, x.Type, offset, r)
 	f.Regs.Free(x.Type, r)
 }
 
-// StoreStackImm has default restrictions.
 func (MacroAssembler) StoreStackImm(p *gen.Prog, t wa.Type, offset int32, value int64) {
 	switch {
 	case value == 0:
@@ -559,7 +504,6 @@ func (MacroAssembler) StoreStackImm(p *gen.Prog, t wa.Type, offset int32, value 
 	}
 }
 
-// StoreStackReg has default restrictions.
 func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.R) {
 	switch t.Category() {
 	case wa.Int:
@@ -570,13 +514,11 @@ func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.
 	}
 }
 
-// Trap may use RegResult and update condition flags.
 func (MacroAssembler) Trap(f *gen.Func, id trap.Id) {
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[id].Addr)
 	f.MapCallAddr(f.Text.Addr)
 }
 
-// TrapIfLoopSuspended may use RegResult and update condition flags.
 func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
 	var skip link.L
 
@@ -590,7 +532,6 @@ func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
 	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
 }
 
-// TrapIfLoopSuspendedSaveInt may update condition flags.
 func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 	var skip link.L
 
@@ -606,7 +547,6 @@ func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
 }
 
-// TrapIfLoopSuspendedElse may use RegResult and update condition flags.
 func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
 	in.JEcd.Addr32(&f.Text, elseAddr) // 0 -> else, 1 -> trap
@@ -614,7 +554,6 @@ func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 	asm.Trap(f, trap.Suspended)
 }
 
-// ZeroExtendResultReg may use RegResult and update condition flags.
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {
 	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegResult)
 }
