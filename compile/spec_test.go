@@ -440,7 +440,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 
 		var nameSection section.NameSection
 		var common = Config{
-			CustomSectionLoader: section.CustomLoaders{"name": nameSection.Load}.Load,
+			CustomSectionLoader: section.CustomLoaders{section.CustomName: nameSection.Load}.Load,
 		}
 
 		mod := loadInitialSections(&ModuleConfig{common}, wasm)

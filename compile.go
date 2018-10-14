@@ -62,7 +62,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	// sections might appear at any position in the binary module.
 
 	var customs = section.CustomLoaders{
-		"name": object.Names.Load,
+		section.CustomName: object.Names.Load,
 	}
 
 	var loadConfig = compile.Config{

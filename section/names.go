@@ -13,6 +13,8 @@ import (
 	"github.com/tsavola/wag/internal/reader"
 )
 
+const CustomName = "name"
+
 type subsectionId byte
 
 const (
@@ -31,7 +33,7 @@ type NameSection struct {
 	FuncNames  []FuncName // TODO: map? rename?
 }
 
-// Load "name" custom section.
+// Load "name" section.
 func (ns *NameSection) Load(_ string, r reader.R) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
@@ -95,8 +97,7 @@ type MappedNameSection struct {
 	Mapping ByteRange
 }
 
-// Loader of "name" custom section.  Stores its offset and size within the
-// WebAssembly binary module.
+// Loader of "name" section.  Remembers position.
 func (ns *MappedNameSection) Loader(sectionMap *Map) func(string, reader.R) error {
 	return func(sectionName string, r reader.R) error {
 		ns.Mapping = sectionMap.Sections[Custom] // The latest one.

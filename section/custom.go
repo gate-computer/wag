@@ -51,8 +51,7 @@ func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 
 type CustomMapping ByteRange
 
-// Loader of any custom section.  Stores its offset and size within the
-// WebAssembly binary module, and discards content.
+// Loader of arbitrary custom section.  Remembers position, discards content.
 func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R) error {
 	return func(_ string, r reader.R) (err error) {
 		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
