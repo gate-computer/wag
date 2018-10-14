@@ -135,12 +135,13 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 		in.LEA.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, int32(reachAddr))
 
 	default:
-		r, zeroExt := getScratchReg(f, index)
-		if !zeroExt {
-			in.MOV.RegReg(&f.Text, wa.I32, r, r)
+		asm.Move(f, RegScratch, index) // unconditional 32-bit mask for fool-proofing
+
+		if reachOffset == 0 {
+			in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
+		} else {
+			in.LEA.RegMemIndexDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, RegScratch, in.Scale0, int32(reachOffset))
 		}
-		in.LEA.RegMemIndexDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, r, in.Scale0, int32(reachOffset))
-		f.Regs.Free(wa.I32, r)
 	}
 
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
