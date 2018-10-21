@@ -11,10 +11,24 @@ type Static struct {
 	max int
 }
 
+// MakeStatic buffer with len(b) as its capacity.  It is initially empty (b is
+// truncated).
+//
+// This function can be used in field initializer expressions.  The initialized
+// field must not be copied.
+func MakeStatic(b []byte) Static {
+	return Static{b[:0], len(b)}
+}
+
 // NewStatic buffer with len(b) as its capacity.  It is initially empty (b is
 // truncated).
 func NewStatic(b []byte) *Static {
 	return &Static{b[:0], len(b)}
+}
+
+// Capacity of the static buffer.
+func (s *Static) Cap() int {
+	return s.max
 }
 
 // Bytes doesn't panic.
