@@ -54,7 +54,7 @@ const (
 	maxTableLimit         = 32768 // TODO
 	maxInitialMemoryLimit = 16384 // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wa.PageBits
-	maxGlobals            = 512 // 4096 bytes
+	maxGlobals            = 4096/obj.Word - 2 // (trap handler + memory limit)
 )
 
 func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int) module.ResizableLimits {
