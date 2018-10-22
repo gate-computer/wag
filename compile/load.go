@@ -421,7 +421,8 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 }
 
-func (m *Module) Types() []wa.FuncType { return m.m.Types }
+func (m *Module) Types() []wa.FuncType      { return m.m.Types }
+func (m *Module) FuncTypeIndexes() []uint32 { return m.m.Funcs }
 
 func (m *Module) FuncTypes() []wa.FuncType {
 	sigs := make([]wa.FuncType, len(m.m.Funcs))
