@@ -167,17 +167,18 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	drop := f.StackDepth - target.StackDepth
 
-	if target.Label.Addr == 0 {
+	if target.Label.Addr == 0 || getCurrentBlock(f).Suspension {
 		asm.DropStackValues(&f.Prog, drop)
 
 		retAddrs := asm.BranchIfStub(f, cond, true, false)
 		target.Label.AddSites(retAddrs)
 
 		asm.DropStackValues(&f.Prog, -drop)
-	} else if b := getCurrentBlock(f); !b.Suspension {
-		debug.Printf("loop")
+	} else {
+		debug.Printf("suspension")
+
 		if target.ValueType != wa.Void {
-			panic("backwards branch with value")
+			panic("backward branch with value")
 		}
 
 		var skip link.L
@@ -192,7 +193,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		skip.Addr = f.Text.Addr
 		isa.UpdateNearBranches(f.Text.Bytes(), &skip)
 
-		b.Suspension = true
+		getCurrentBlock(f).Suspension = true
 	}
 
 	pushResultRegOperand(f, target.ValueType)
@@ -282,7 +283,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 
 	if b := getCurrentBlock(f); loop && !b.Suspension {
 		if value.Type != wa.Void {
-			panic("backwards branch with value")
+			panic("backward branch with value")
 		}
 		asm.TrapIfLoopSuspendedSaveInt(f, r)
 		b.Suspension = true
