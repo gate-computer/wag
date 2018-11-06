@@ -270,6 +270,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	}
 
 	asm.StoreStackReg(p, wa.I64, 0, RegScratch)
+	in.XOR.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
 	in.RET.Simple(&p.Text)
 
 	return
