@@ -5,6 +5,8 @@
 package debug
 
 import (
+	"sort"
+
 	"github.com/tsavola/wag/object"
 )
 
@@ -63,3 +65,39 @@ func (m *InsnMap) putMapping(absPos, sourceIndex int32, blockLength int) {
 
 func (m *InsnMap) GetFuncAddrs() []int32         { return m.FuncAddrs }
 func (m *InsnMap) GetFuncInsns() [][]InsnMapping { return m.FuncInsns }
+
+func (m *InsnMap) FindAddr(retAddr int32) (funcIndex, retInsnIndex, stackOffset int32, initial, ok bool) {
+	funcIndex, _, stackOffset, initial, siteOk := m.CallMap.FindAddr(retAddr)
+	if !siteOk {
+		return
+	}
+
+	if initial {
+		ok = true
+		return
+	}
+
+	numImportFuncs := len(m.FuncAddrs) - len(m.FuncInsns)
+	otherFuncIndex := int(funcIndex) - numImportFuncs
+	insns := m.FuncInsns[otherFuncIndex]
+
+	retMapIndex := sort.Search(len(insns), func(i int) bool {
+		return insns[i].ObjectOffset >= retAddr
+	})
+
+	if retMapIndex > 0 {
+		// The specific wasm instruction at the return address might not exist
+		// in generated code; there might not even be any generated code after
+		// the call.  The call instruction certaily exists in generated code,
+		// and it's mapped before the one we found (or it's the last one if we
+		// didn't find any).
+		callMapIndex := retMapIndex - 1
+		callInsnIndex := insns[callMapIndex].SourceIndex
+
+		// Because FindAddr is called with a return address, we must return the
+		// index of the wasm instruction at which the call would return.
+		retInsnIndex = callInsnIndex + 1
+		ok = true
+	}
+	return
+}

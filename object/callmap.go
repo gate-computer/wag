@@ -4,6 +4,10 @@
 
 package object
 
+import (
+	"sort"
+)
+
 // CallSite represents a position within the text section (machine code) where
 // a function call is made.
 type CallSite struct {
@@ -25,4 +29,20 @@ func (m *CallMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
 
 func (m *CallMap) PutCallSite(retAddr int32, stackOffset int32) {
 	m.CallSites = append(m.CallSites, CallSite{retAddr, stackOffset})
+}
+
+func (m *CallMap) FindAddr(retAddr int32) (funcIndex, _, stackOffset int32, initial, ok bool) {
+	funcIndex, _, _, initial, funcOk := m.FuncMap.FindAddr(retAddr)
+	if !funcOk {
+		return
+	}
+
+	i := sort.Search(len(m.CallSites), func(i int) bool {
+		return m.CallSites[i].ReturnAddr >= retAddr
+	})
+	if i < len(m.CallSites) && m.CallSites[i].ReturnAddr == retAddr {
+		stackOffset = m.CallSites[i].StackOffset
+		ok = true
+	}
+	return
 }
