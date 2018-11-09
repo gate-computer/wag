@@ -7,6 +7,7 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
+	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
@@ -40,8 +41,13 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 		return operand.Reg(x.Type, r)
 
 	case prop.IntPopcnt:
-		r, _ := allocResultReg(f, x)
-		in.POPCNT.RegReg(&f.Text, x.Type, r, r)
+		var r reg.R
+		if havePOPCNT() {
+			r, _ = allocResultReg(f, x)
+			in.POPCNT.RegReg(&f.Text, x.Type, r, r)
+		} else {
+			r = popcnt(f, x)
+		}
 		return operand.Reg(x.Type, r)
 
 	case prop.FloatAbs:
@@ -77,4 +83,41 @@ func absFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
 func negFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
 	signMaskAddr := rodata.MaskAddr(rodata.Mask80Base, t)
 	in.XORPSD.RegMemDisp(&p.Text, t, r, in.BaseText, signMaskAddr)
+}
+
+// Population count algorithm:
+//
+//     func popcnt(x uint) (count int) {
+//         for count = 0; x != 0; count++ {
+//             x &= x - 1
+//         }
+//         return
+//     }
+//
+func popcnt(f *gen.Func, x operand.O) (count reg.R) {
+	var skip link.L
+
+	count = f.Regs.AllocResult(x.Type)
+	pop, _ := getScratchReg(f, x)
+	temp := RegZero // cleared again at the end
+
+	in.XOR.RegReg(&f.Text, wa.I32, count, count)
+
+	in.TEST.RegReg(&f.Text, x.Type, pop, pop)
+	in.JEcb.Stub8(&f.Text)
+	skip.AddSite(f.Text.Addr)
+
+	loopAddr := f.Text.Addr
+	in.INC.Reg(&f.Text, wa.I32, count)
+	in.MOV.RegReg(&f.Text, x.Type, temp, pop)
+	in.DEC.Reg(&f.Text, x.Type, temp)
+	in.AND.RegReg(&f.Text, x.Type, pop, temp)
+	in.JNEcb.Addr8(&f.Text, loopAddr)
+
+	skip.Addr = f.Text.Addr
+	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
+
+	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero) // temp reg
+	f.Regs.Free(x.Type, pop)
+	return
 }
