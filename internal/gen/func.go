@@ -69,8 +69,6 @@ type Func struct {
 
 	BranchTargets []*BranchTarget
 	BranchTables  []BranchTable
-
-	MemoryOutOfBounds TrapTrampoline
 }
 
 func (f *Func) LocalOffset(index int) int32 {

@@ -124,6 +124,8 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 		}
 
 		if reachAddr < uint64(f.Module.MemoryLimitValues.Initial) {
+			// Call site is not mapped, so this optimization is part of
+			// portable ABI.
 			base = in.BaseMemory
 			disp = int32(addr)
 			return
@@ -141,22 +143,16 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 		}
 	}
 
+	var checked link.L
+
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
+	in.JLcb.Stub8(&f.Text)
+	checked.AddSite(f.Text.Addr)
 
-	if addr := f.MemoryOutOfBounds.Addr(f); addr != 0 {
-		in.JGEcb.Addr8(&f.Text, addr)
-	} else {
-		var checked link.L
+	asm.Trap(f, trap.MemoryOutOfBounds)
 
-		in.JLcb.Stub8(&f.Text)
-		checked.AddSite(f.Text.Addr)
-
-		f.MemoryOutOfBounds.Init(f)
-		asm.Trap(f, trap.MemoryOutOfBounds)
-
-		checked.Addr = f.Text.Addr
-		isa.UpdateNearBranches(f.Text.Bytes(), &checked)
-	}
+	checked.Addr = f.Text.Addr
+	isa.UpdateNearBranches(f.Text.Bytes(), &checked)
 
 	base = in.BaseScratch
 	disp = -int32(sizeReach)
