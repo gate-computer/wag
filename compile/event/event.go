@@ -8,7 +8,7 @@ package event
 type Event int
 
 const (
-	// The init routine can be executed.  It may cause MissingFunction traps.
+	// The init routine can be executed.  It may cause NoFunction traps.
 	//
 	// The event handler is a good place to resolve the entry function address,
 	// because the compiler doesn't mutate the ObjectMapper during event

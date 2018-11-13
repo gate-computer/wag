@@ -19,6 +19,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
+	"github.com/tsavola/wag/object/abi"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -54,18 +55,18 @@ func GenProgram(
 
 	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
-	if p.Text.Addr != 0 {
-		panic("initial text address is non-zero")
+	if p.Text.Addr != abi.TextAddrNoFunction {
+		panic("unexpected initial text address")
 	}
-	asm.JumpToTrapHandler(p, trap.MissingFunction)
+	asm.JumpToTrapHandler(p, trap.NoFunction)
 
-	if p.Text.Addr == 0 || p.Text.Addr > obj.TextAddrResume {
-		panic("bad text address after MissingFunction trap handler")
+	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
+		panic("bad text address after NoFunction trap handler")
 	}
 	isa.AlignFunc(p)
 	asm.Resume(p)
 
-	if p.Text.Addr <= obj.TextAddrResume || p.Text.Addr > obj.TextAddrInitStart {
+	if p.Text.Addr <= abi.TextAddrResume || p.Text.Addr > abi.TextAddrStart {
 		panic("bad text address after resume routine")
 	}
 	isa.AlignFunc(p)
@@ -80,7 +81,7 @@ func GenProgram(
 		p.FuncLinks[m.StartIndex].AddSite(retAddr)
 	}
 
-	if p.Text.Addr <= obj.TextAddrInitStart || p.Text.Addr > obj.TextAddrInitEntry {
+	if p.Text.Addr <= abi.TextAddrStart || p.Text.Addr > abi.TextAddrEnter {
 		panic("bad text address after init routine and start function call")
 	}
 	retAddr := asm.InitCallEntry(p)
@@ -91,7 +92,7 @@ func GenProgram(
 	}
 	genCommons(p)
 
-	for id := trap.MissingFunction + 1; id < trap.NumTraps; id++ {
+	for id := trap.NoFunction + 1; id < trap.NumTraps; id++ {
 		isa.AlignFunc(p)
 		p.TrapLinks[id].Addr = p.Text.Addr
 		asm.JumpToTrapHandler(p, id)
@@ -114,7 +115,7 @@ func GenProgram(
 	ptr := p.Text.Bytes()[rodata.TableAddr:]
 
 	for i, funcIndex := range m.TableFuncs {
-		var funcAddr uint32 // missing function trap by default
+		var funcAddr uint32 // NoFunction trap by default
 
 		if funcIndex < uint32(len(p.FuncLinks)) {
 			ln := &p.FuncLinks[funcIndex]

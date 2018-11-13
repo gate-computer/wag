@@ -662,7 +662,7 @@ func (op Dd) MissingFunction(text *code.Buf) {
 	}
 
 	siteAddr := text.Addr + int32(o.offset) + insnSize
-	disp := -siteAddr // MissingFunction trap
+	disp := -siteAddr // NoFunction trap
 
 	o.byte(byte(op))
 	o.int32(disp)

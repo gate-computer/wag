@@ -11,7 +11,7 @@ import (
 
 	"github.com/bnagy/gapstone"
 
-	isatext "github.com/tsavola/wag/internal/isa/x86/text"
+	abi "github.com/tsavola/wag/internal/isa/x86/abi"
 	"github.com/tsavola/wag/trap"
 )
 
@@ -23,8 +23,8 @@ const (
 )
 
 func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr uintptr, firstFuncAddr uint) {
-	targets[uint(textAddr)+isatext.TextAddrRetpoline] = "retpoline"
-	targets[uint(textAddr)+isatext.TextAddrRetpolineSetup] = "retpoline.setup"
+	targets[uint(textAddr)+abi.TextAddrRetpoline] = "retpoline"
+	targets[uint(textAddr)+abi.TextAddrRetpolineSetup] = "retpoline.setup"
 
 	sequence := 0
 

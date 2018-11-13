@@ -12,8 +12,8 @@ import (
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/storage"
+	abi "github.com/tsavola/wag/internal/isa/x86/abi"
 	"github.com/tsavola/wag/internal/isa/x86/in"
-	isatext "github.com/tsavola/wag/internal/isa/x86/text"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
@@ -88,7 +88,7 @@ func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
 	in.MOV.RegReg(&f.Text, wa.I32, RegScratch, addr)
 	f.Regs.Free(wa.I64, addr)
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
-	in.JMPcd.Addr32(&f.Text, isatext.TextAddrRetpoline)
+	in.JMPcd.Addr32(&f.Text, abi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (sites []int32) {
@@ -178,7 +178,7 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	isa.UpdateNearBranches(f.Text.Bytes(), &checksOut)
 
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
-	in.CALLcd.Addr32(&f.Text, isatext.TextAddrRetpoline)
+	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
 	return f.Text.Addr
 }
 
@@ -239,7 +239,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	null.AddSite(p.Text.Addr)
 
 	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
-	in.CALLcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
+	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 	retAddr = p.Text.Addr
 
 	null.Addr = p.Text.Addr
@@ -249,23 +249,23 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 
 	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
-	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
+	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 
 	// Retpoline (https://support.google.com/faqs/answer/7625886)
 
 	isa.AlignFunc(p)
-	if p.Text.Addr != isatext.TextAddrRetpoline {
+	if p.Text.Addr != abi.TextAddrRetpoline {
 		panic("hardcoded retpoline address needs to be adjusted")
 	}
 
-	in.CALLcd.Addr32(&p.Text, isatext.TextAddrRetpolineSetup)
+	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpolineSetup)
 
 	captureSpecAddr := p.Text.Addr
 	in.PAUSE.Simple(&p.Text)
 	in.JMPcb.Addr8(&p.Text, captureSpecAddr)
 
 	isa.AlignFunc(p)
-	if p.Text.Addr != isatext.TextAddrRetpolineSetup {
+	if p.Text.Addr != abi.TextAddrRetpolineSetup {
 		panic("hardcoded retpoline setup address needs to be adjusted")
 	}
 
@@ -285,13 +285,13 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
 	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, int32(vecIndex*8))
-	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
+	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
-	in.JMPcd.Addr32(&p.Text, isatext.TextAddrRetpoline)
+	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (insnAddr int32) {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/bnagy/gapstone"
 
-	"github.com/tsavola/wag/internal/obj"
+	"github.com/tsavola/wag/object/abi"
 	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/section"
 )
@@ -65,9 +65,9 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 	firstFuncAddr := uint(textAddr) + uint(funcMap[0])
 
 	targets := map[uint]string{
-		uint(textAddr) + obj.TextAddrResume:    "resume",
-		uint(textAddr) + obj.TextAddrInitStart: "init.start",
-		uint(textAddr) + obj.TextAddrInitEntry: "init.entry",
+		uint(textAddr) + abi.TextAddrResume: "resume",
+		uint(textAddr) + abi.TextAddrStart:  "start",
+		uint(textAddr) + abi.TextAddrEnter:  "enter",
 	}
 
 	for i := 0; len(funcMap) > 0; i++ {

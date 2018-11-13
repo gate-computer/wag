@@ -89,7 +89,7 @@ TEXT trapHandler<>(SB),NOSPLIT,$0-128
 	JE	skip
 	MOVL	$2, AX			// Suspended
 skip:
-	CMPL	AX, $1			// MissingFunction
+	CMPL	AX, $1			// NoFunction
 	JE	pause
 
 	MOVQ	SP, R11			// stack ptr
