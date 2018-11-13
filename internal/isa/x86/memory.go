@@ -143,16 +143,10 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 		}
 	}
 
-	var checked link.L
-
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
-	in.JLcb.Stub8(&f.Text)
-	checked.AddSite(f.Text.Addr)
-
-	asm.Trap(f, trap.MemoryOutOfBounds)
-
-	checked.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &checked)
+	in.JLcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.MemoryOutOfBounds].Addr)
+	f.MapCallAddr(f.Text.Addr)
 
 	base = in.BaseScratch
 	disp = -int32(sizeReach)

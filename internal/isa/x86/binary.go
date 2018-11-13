@@ -225,16 +225,10 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 }
 
 func opCheckDivideByZero(f *gen.Func, t wa.Type, r reg.R) {
-	var end link.L
-
 	in.TEST.RegReg(&f.Text, t, r, r)
-	in.JNEcb.Stub8(&f.Text)
-	end.AddSite(f.Text.Addr)
-
-	asm.Trap(f, trap.IntegerDivideByZero)
-
-	end.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &end)
+	in.JNEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.IntegerDivideByZero].Addr)
+	f.MapCallAddr(f.Text.Addr)
 }
 
 func binaryIntShift(f *gen.Func, index uint8, a, b operand.O) operand.O {

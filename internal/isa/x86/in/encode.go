@@ -544,6 +544,10 @@ type Dd byte    // opcode byte
 type D2d uint16 // two opcode bytes
 type D12 uint32 // combination
 
+func (Db) Size() int8  { return 2 }
+func (Dd) Size() int8  { return 5 }
+func (D2d) Size() int8 { return 6 }
+
 func (ops D12) Addr(text *code.Buf, addr int32) {
 	const (
 		insnSize8  = 2
@@ -565,6 +569,13 @@ func (ops D12) Addr(text *code.Buf, addr int32) {
 	disp32 := addrDisp(text.Addr, insnSize32, addr)
 	o.word(uint16(ops >> 16))
 	o.int32(disp32)
+	o.copy(text.Extend(o.len()))
+}
+
+func (op Db) Rel8(text *code.Buf, disp int8) {
+	var o output
+	o.byte(byte(op))
+	o.int8(disp)
 	o.copy(text.Extend(o.len()))
 }
 

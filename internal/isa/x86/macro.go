@@ -427,20 +427,13 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
-	var checked link.L
-
 	in.LEA.RegStackStub32(&f.Text, wa.I64, RegScratch)
 	stackCheckAddr = f.Text.Addr
 
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
-
-	in.JGEcb.Stub8(&f.Text)
-	checked.AddSite(f.Text.Addr)
-
-	asm.Trap(f, trap.CallStackExhausted) // handler checks if it was actually suspension
-
-	checked.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &checked)
+	in.JGEcb.Rel8(&f.Text, in.CALLcd.Size())                             // Skip next instruction.
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.CallStackExhausted].Addr) // Handler checks suspension.
+	f.MapCallAddr(f.Text.Addr)
 	return
 }
 
@@ -521,27 +514,22 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 }
 
 func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
-	var skip link.L
-
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
-	in.JEcb.Stub8(&f.Text) // 0 -> skip, 1 -> trap
-	skip.AddSite(f.Text.Addr)
-
-	asm.Trap(f, trap.Suspended)
-
-	skip.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
+	in.JEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction if bit is zero (no trap).
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
+	f.MapCallAddr(f.Text.Addr)
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 	var skip link.L
 
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
-	in.JEcb.Stub8(&f.Text) // 0 -> skip, 1 -> trap
+	in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).
 	skip.AddSite(f.Text.Addr)
 
 	in.PUSH.Reg(&f.Text, in.OneSize, saveReg)
-	asm.Trap(f, trap.Suspended)
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
+	f.MapCallAddr(f.Text.Addr)
 	in.POP.Reg(&f.Text, in.OneSize, saveReg)
 
 	skip.Addr = f.Text.Addr
@@ -550,7 +538,7 @@ func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 
 func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
-	in.JEcd.Addr32(&f.Text, elseAddr) // 0 -> else, 1 -> trap
+	in.JEcd.Addr32(&f.Text, elseAddr) // Branch to else if bit is zero (no trap).
 
 	asm.Trap(f, trap.Suspended)
 }
