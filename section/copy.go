@@ -23,7 +23,7 @@ import (
 // length is returned.  If no standard section is encountered, zero length and
 // io.EOF are returned.  io.EOF is returned only when it occurs between
 // sections.
-func CopyStandardSection(w io.Writer, r reader.R, id Id, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
+func CopyStandardSection(w io.Writer, r reader.R, id ID, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)
@@ -67,7 +67,7 @@ func SkipCustomSections(r reader.R, customLoader func(Reader, uint32) error) (er
 	return
 }
 
-func copySection(w io.Writer, id Id, load loader.L) (length int64, err error) {
+func copySection(w io.Writer, id ID, load loader.L) (length int64, err error) {
 	payloadLen := load.Varuint32()
 
 	head := make([]byte, 1+binary.MaxVarintLen32)

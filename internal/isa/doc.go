@@ -115,7 +115,7 @@ type MacroAssembler interface {
 
 	// JumpToTrapHandler may use RegResult and update condition flags.  It MUST
 	// NOT generate over 16 bytes of code.
-	JumpToTrapHandler(p *gen.Prog, id trap.Id)
+	JumpToTrapHandler(p *gen.Prog, id trap.ID)
 
 	// Load may allocate registers, use RegResult and update condition flags.
 	// The index operand may be RegResult or the condition flags.
@@ -191,7 +191,7 @@ type MacroAssembler interface {
 	StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.R)
 
 	// Trap may use RegResult and update condition flags.
-	Trap(f *gen.Func, id trap.Id)
+	Trap(f *gen.Func, id trap.ID)
 
 	// TrapIfLoopSuspended may use RegResult and update condition flags.
 	TrapIfLoopSuspended(f *gen.Func)

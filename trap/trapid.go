@@ -9,10 +9,10 @@ import (
 	"fmt"
 )
 
-type Id int
+type ID int
 
 const (
-	Exit = Id(iota)
+	Exit = ID(iota)
 	NoFunction
 	Suspended
 
@@ -27,7 +27,7 @@ const (
 	NumTraps
 )
 
-func (id Id) String() string {
+func (id ID) String() string {
 	switch id {
 	case Exit:
 		return "exit"
@@ -64,6 +64,6 @@ func (id Id) String() string {
 	}
 }
 
-func (id Id) Error() string {
+func (id ID) Error() string {
 	return "trap: " + id.String()
 }

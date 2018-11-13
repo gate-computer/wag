@@ -580,7 +580,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 			}
 
 			if err != nil {
-				if trapId, ok := err.(trap.Id); ok {
+				if trapId, ok := err.(trap.ID); ok {
 					if testType == "assert_trap" {
 						t.Logf("run: module %s: test #%d: pass", filename, id)
 					} else {

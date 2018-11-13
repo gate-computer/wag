@@ -288,7 +288,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 }
 
-func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.Id) {
+func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
@@ -515,7 +515,7 @@ func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.
 	}
 }
 
-func (MacroAssembler) Trap(f *gen.Func, id trap.Id) {
+func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[id].Addr)
 	f.MapCallAddr(f.Text.Addr)
 }

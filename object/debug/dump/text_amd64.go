@@ -97,7 +97,7 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		if insn.Address < firstFuncAddr && (insn.Mnemonic == "movl" || insn.Mnemonic == "shlq") && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", result") {
 			var n uint
 			fmt.Sscanf(insn.OpStr, "$%d, %%eax", &n)
-			if id := trap.Id(n); id < trap.NumTraps {
+			if id := trap.ID(n); id < trap.NumTraps {
 				targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
 			}
 		}

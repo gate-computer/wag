@@ -272,7 +272,7 @@ type Runner struct {
 	memorySize    int
 	stack         []byte
 
-	lastTrap     trap.Id
+	lastTrap     trap.ID
 	lastStackPtr uintptr
 
 	Snapshots []*Snapshot
@@ -467,7 +467,7 @@ func (e *Executor) run() {
 	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, stack, stackOffset, resumeResult, fds[1], e.testArg)
 
 	e.runner.memorySize = memorySize
-	e.runner.lastTrap = trap.Id(uint32(trapId))
+	e.runner.lastTrap = trap.ID(uint32(trapId))
 	e.runner.lastStackPtr = stackPtr
 
 	if e.runner.lastTrap == trap.Exit {
