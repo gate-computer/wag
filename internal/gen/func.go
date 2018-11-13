@@ -34,23 +34,6 @@ type BranchTable struct {
 	StackDepth int // -1 indicates common depth among all targets
 }
 
-type TrapTrampoline struct {
-	stackDepth int
-	addr       int32
-}
-
-func (t *TrapTrampoline) Init(f *Func) {
-	t.stackDepth = f.StackDepth
-	t.addr = f.Text.Addr
-}
-
-func (t *TrapTrampoline) Addr(f *Func) (addr int32) {
-	if t.stackDepth == f.StackDepth {
-		addr = t.addr
-	}
-	return
-}
-
 type Func struct {
 	Prog // initialized by GenProgram, preserved by GenFunction
 
