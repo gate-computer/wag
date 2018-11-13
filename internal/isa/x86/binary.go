@@ -270,24 +270,19 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
-	var common link.L
-	var end link.L
-
 	in.UCOMISSD.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 	in.JNEcb.Stub8(&f.Text)
-	common.AddSite(f.Text.Addr)
+	commonJump := f.Text.Addr
 
 	opcodes.zero.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 	in.JMPcb.Stub8(&f.Text)
-	end.AddSite(f.Text.Addr)
+	endJump := f.Text.Addr
 
-	common.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &common)
+	isa.UpdateNearBranch(f.Text.Bytes(), commonJump)
 
 	opcodes.common.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 
-	end.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &end)
+	isa.UpdateNearBranch(f.Text.Bytes(), endJump)
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)
@@ -308,8 +303,6 @@ func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
-	var done link.L
-
 	signMaskAddr := rodata.MaskAddr(rodata.Mask80Base, a.Type)
 
 	in.MOVDQmr.RegReg(&f.Text, a.Type, sourceReg, RegScratch) // int <- float
@@ -318,12 +311,11 @@ func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 	in.AND.RegMemDisp(&f.Text, a.Type, RegResult, in.BaseText, signMaskAddr)
 	in.CMP.RegReg(&f.Text, a.Type, RegResult, RegScratch)
 	in.JEcb.Stub8(&f.Text)
-	done.AddSite(f.Text.Addr)
+	doneJump := f.Text.Addr
 
 	negFloatReg(&f.Prog, a.Type, targetReg)
 
-	done.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &done)
+	isa.UpdateNearBranch(f.Text.Bytes(), doneJump)
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)

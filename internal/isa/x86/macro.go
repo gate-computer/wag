@@ -152,12 +152,9 @@ func (MacroAssembler) CallMissing(p *gen.Prog) (retAddr int32) {
 }
 
 func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32 {
-	var outOfBounds link.L
-	var checksOut link.L
-
 	compareBounds(&f.Prog, funcIndexReg, int32(len(f.Module.TableFuncs))) // zero-extension
 	in.JLEcb.Stub8(&f.Text)
-	outOfBounds.AddSite(f.Text.Addr)
+	outOfBoundsJump := f.Text.Addr
 
 	in.MOV.RegMemIndexDisp(&f.Text, wa.I64, RegResult, in.BaseText, funcIndexReg, in.Scale3, rodata.TableAddr)
 	f.Regs.Free(wa.I64, funcIndexReg)
@@ -165,17 +162,15 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	in.SHRi.RegImm8(&f.Text, wa.I64, RegResult, 32)       // signature index
 	in.CMPi.RegImm(&f.Text, wa.I32, RegResult, sigIndex)
 	in.JEcb.Stub8(&f.Text)
-	checksOut.AddSite(f.Text.Addr)
+	okJump := f.Text.Addr
 
 	asm.Trap(f, trap.IndirectCallSignature)
 
-	outOfBounds.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &outOfBounds)
+	isa.UpdateNearBranch(f.Text.Bytes(), outOfBoundsJump)
 
 	asm.Trap(f, trap.IndirectCallIndex)
 
-	checksOut.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &checksOut)
+	isa.UpdateNearBranch(f.Text.Bytes(), okJump)
 
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
@@ -227,8 +222,6 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 
 	// Entry routine
 
-	var null link.L
-
 	reinit(p)
 
 	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero) // result if no entry func
@@ -236,14 +229,13 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // entry func text addr
 	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
 	in.JEcb.Stub8(&p.Text)
-	null.AddSite(p.Text.Addr)
+	nullJump := p.Text.Addr
 
 	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 	retAddr = p.Text.Addr
 
-	null.Addr = p.Text.Addr
-	isa.UpdateNearBranches(p.Text.Bytes(), &null)
+	isa.UpdateNearBranch(p.Text.Bytes(), nullJump)
 
 	// Exit
 
@@ -521,19 +513,16 @@ func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
-	var skip link.L
-
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
 	in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).
-	skip.AddSite(f.Text.Addr)
+	skipJump := f.Text.Addr
 
 	in.PUSH.Reg(&f.Text, in.OneSize, saveReg)
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
 	f.MapCallAddr(f.Text.Addr)
 	in.POP.Reg(&f.Text, in.OneSize, saveReg)
 
-	skip.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
+	isa.UpdateNearBranch(f.Text.Bytes(), skipJump)
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {

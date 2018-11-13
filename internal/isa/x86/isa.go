@@ -69,23 +69,30 @@ func pad(p *gen.Prog, filler byte, length int) {
 }
 
 // UpdateNearLoad modifies a 32-bit displacement.
-func (ISA) UpdateNearLoad(text []byte, insnAddr, accessAddr int32) {
+func (ISA) UpdateNearLoad(text []byte, insnAddr int32) {
+	accessAddr := int32(len(text))
 	updateAddr32(text, insnAddr, accessAddr)
+}
+
+// UpdateNearBranch modifies the 8-bit relocation of a JMP or Jcc instruction.
+func (ISA) UpdateNearBranch(text []byte, originAddr int32) {
+	labelAddr := int32(len(text))
+	updateAddr8(text, originAddr, labelAddr-originAddr)
 }
 
 // UpdateNearBranches modifies 8-bit relocations of JMP and Jcc instructions.
 func (ISA) UpdateNearBranches(text []byte, l *link.L) {
 	labelAddr := l.FinalAddr()
-	for _, retAddr := range l.Sites {
-		updateAddr8(text, retAddr, labelAddr-retAddr)
+	for _, originAddr := range l.Sites {
+		updateAddr8(text, originAddr, labelAddr-originAddr)
 	}
 }
 
 // UpdateFarBranches modifies 32-bit relocations of JMP and Jcc instructions.
 func (ISA) UpdateFarBranches(text []byte, l *link.L) {
 	labelAddr := l.FinalAddr()
-	for _, retAddr := range l.Sites {
-		updateAddr32(text, retAddr, labelAddr-retAddr)
+	for _, originAddr := range l.Sites {
+		updateAddr32(text, originAddr, labelAddr-originAddr)
 	}
 }
 

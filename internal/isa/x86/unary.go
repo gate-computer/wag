@@ -7,7 +7,6 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
@@ -103,8 +102,6 @@ func negFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
 //     }
 //
 func popcnt(f *gen.Func, x operand.O) (count reg.R) {
-	var skip link.L
-
 	count = f.Regs.AllocResult(x.Type)
 	pop, _ := getScratchReg(f, x)
 	temp := RegZero // cleared again at the end
@@ -113,7 +110,7 @@ func popcnt(f *gen.Func, x operand.O) (count reg.R) {
 
 	in.TEST.RegReg(&f.Text, x.Type, pop, pop)
 	in.JEcb.Stub8(&f.Text)
-	skip.AddSite(f.Text.Addr)
+	skipJump := f.Text.Addr
 
 	loopAddr := f.Text.Addr
 	in.INC.Reg(&f.Text, wa.I32, count)
@@ -122,8 +119,7 @@ func popcnt(f *gen.Func, x operand.O) (count reg.R) {
 	in.AND.RegReg(&f.Text, x.Type, pop, temp)
 	in.JNEcb.Addr8(&f.Text, loopAddr)
 
-	skip.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &skip)
+	isa.UpdateNearBranch(f.Text.Bytes(), skipJump)
 
 	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero) // temp reg
 	f.Regs.Free(x.Type, pop)

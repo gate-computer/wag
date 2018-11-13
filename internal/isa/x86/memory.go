@@ -7,7 +7,6 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
@@ -170,9 +169,6 @@ func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
-	var out link.L
-	var fail link.L
-
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemoryLimit)
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
 
@@ -186,7 +182,7 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	in.CMP.RegReg(&f.Text, wa.I64, targetReg, RegScratch)
 
 	in.JGcb.Stub8(&f.Text)
-	fail.AddSite(f.Text.Addr)
+	failJump := f.Text.Addr
 
 	in.MOV.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
 	in.MOV.RegReg(&f.Text, wa.I64, RegMemoryLimit, targetReg)
@@ -195,15 +191,13 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	in.MOV.RegReg(&f.Text, wa.I32, targetReg, RegScratch)
 
 	in.JMPcb.Stub8(&f.Text)
-	out.AddSite(f.Text.Addr)
+	outJump := f.Text.Addr
 
-	fail.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &fail)
+	isa.UpdateNearBranch(f.Text.Bytes(), failJump)
 
 	in.MOVi.RegImm32(&f.Text, wa.I32, targetReg, -1) // value on failure
 
-	out.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &out)
+	isa.UpdateNearBranch(f.Text.Bytes(), outJump)
 
 	return operand.Reg(wa.I32, targetReg)
 }

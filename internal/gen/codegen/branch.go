@@ -308,8 +308,8 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	deadend = true
 
 	isa.AlignData(&f.Prog, int(tableType.Size()))
+	isa.UpdateNearLoad(f.Text.Bytes(), loadInsnAddr)
 	tableAddr := f.Text.Addr
-	isa.UpdateNearLoad(f.Text.Bytes(), loadInsnAddr, tableAddr)
 	tableSize := len(targetTable) * int(tableType.Size())
 	f.Text.Extend(tableSize)
 	f.Map.PutDataBlock(tableAddr, tableSize)
