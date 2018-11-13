@@ -30,11 +30,17 @@ Features
 - Supports snapshot-and-restore across compiler versions and CPU architectures.
   Could also support limited form of code swapping during snapshot and restore.
 
+- Cross-compilaton is supported via Go build tags.  If `wagamd64` is specified,
+  the x86-64 code generator is used regardless of host architecture, and CPU
+  feature detection is disabled with pessimistic assumptions.
+
 
 Status
 ------
 
 - Supports WebAssembly version 1 (MVP).
+
+- Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
 
 - ARM64 support is in development.
 

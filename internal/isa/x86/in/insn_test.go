@@ -176,6 +176,8 @@ func TestInsnRMint(test *testing.T) {
 		{mn: "movzx", op: MOVZX8, memSize: "byte", skipRegReg: true},
 		{mn: "movzx", op: MOVZX16, memSize: "word", skipRegReg: true},
 		{mn: "popcnt", op: POPCNT},
+		{mn: "tzcnt", op: TZCNT},
+		{mn: "lzcnt", op: LZCNT},
 		{mn: "bsf", op: BSF},
 		{mn: "bsr", op: BSR},
 		{mn: "movsx", op: MOVSX8, memSize: "byte", skipRegReg: true},

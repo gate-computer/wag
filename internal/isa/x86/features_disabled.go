@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !amd64
+// +build wagamd64
 
 package x86
 
-func havePOPCNT() bool {
-	return false
-}
+func haveLZCNT() bool  { return false }
+func havePOPCNT() bool { return false }
+func haveTZCNT() bool  { return false }

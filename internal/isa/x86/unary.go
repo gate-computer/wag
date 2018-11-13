@@ -26,18 +26,26 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 
 	case prop.IntClz:
 		r, _ := allocResultReg(f, x)
-		in.BSR.RegReg(&f.Text, x.Type, RegScratch, r)
-		in.MOVi.RegImm32(&f.Text, x.Type, r, -1)
-		in.CMOVE.RegReg(&f.Text, x.Type, RegScratch, r)
-		in.MOVi.RegImm32(&f.Text, x.Type, r, (int32(x.Type.Size())<<3)-1)
-		in.SUB.RegReg(&f.Text, x.Type, r, RegScratch)
+		if haveLZCNT() {
+			in.LZCNT.RegReg(&f.Text, x.Type, r, r)
+		} else {
+			in.BSR.RegReg(&f.Text, x.Type, RegScratch, r)
+			in.MOVi.RegImm32(&f.Text, x.Type, r, -1)
+			in.CMOVE.RegReg(&f.Text, x.Type, RegScratch, r)
+			in.MOVi.RegImm32(&f.Text, x.Type, r, (int32(x.Type.Size())<<3)-1)
+			in.SUB.RegReg(&f.Text, x.Type, r, RegScratch)
+		}
 		return operand.Reg(x.Type, r)
 
 	case prop.IntCtz:
 		r, _ := allocResultReg(f, x)
-		in.BSF.RegReg(&f.Text, x.Type, r, r)
-		in.MOVi.RegImm32(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
-		in.CMOVE.RegReg(&f.Text, x.Type, r, RegScratch)
+		if haveTZCNT() {
+			in.TZCNT.RegReg(&f.Text, x.Type, r, r)
+		} else {
+			in.BSF.RegReg(&f.Text, x.Type, r, r)
+			in.MOVi.RegImm32(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
+			in.CMOVE.RegReg(&f.Text, x.Type, r, RegScratch)
+		}
 		return operand.Reg(x.Type, r)
 
 	case prop.IntPopcnt:

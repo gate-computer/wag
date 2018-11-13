@@ -89,6 +89,8 @@ const (
 	MOVZX16 = RM2(0x0f<<8 | 0xb7) // RegReg is untested
 	MOV64i  = OI(0xb8)
 	POPCNT  = RMprefix(0xf3<<8 | 0xb8)
+	TZCNT   = RMprefix(0xf3<<8 | 0xbc)
+	LZCNT   = RMprefix(0xf3<<8 | 0xbd)
 	BSF     = RM2(0x0f<<8 | 0xbc)
 	BSR     = RM2(0x0f<<8 | 0xbd)
 	MOVSX8  = RM2(0x0f<<8 | 0xbe) // RegReg is untested
