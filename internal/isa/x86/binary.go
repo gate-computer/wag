@@ -7,7 +7,6 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
@@ -151,7 +150,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 
 	asm.Move(f, RegDividendLow, a)
 
-	var doNot link.L
+	var doNotJumps []int32
 
 	if division {
 		if checkZero {
@@ -174,12 +173,12 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 		signed := (insn == in.InsnDivS)
 
 		if signed && checkOverflow {
-			var do link.L
+			var doJumps []int32
 
 			if remainder {
 				in.CMPi.RegImm8(&f.Text, b.Type, b.Reg(), -1)
 				in.JEcb.Stub8(&f.Text)
-				doNot.AddSite(f.Text.Addr)
+				doNotJumps = append(doNotJumps, f.Text.Addr)
 			} else {
 				if a.Type == wa.I32 {
 					in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
@@ -188,17 +187,16 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 				}
 
 				in.JNEcb.Stub8(&f.Text)
-				do.AddSite(f.Text.Addr)
+				doJumps = append(doJumps, f.Text.Addr)
 
 				in.CMPi.RegImm8(&f.Text, b.Type, b.Reg(), -1)
 				in.JNEcb.Stub8(&f.Text)
-				do.AddSite(f.Text.Addr)
+				doJumps = append(doJumps, f.Text.Addr)
 
 				asm.Trap(f, trap.IntegerOverflow)
 			}
 
-			do.Addr = f.Text.Addr
-			isa.UpdateNearBranches(f.Text.Bytes(), &do)
+			isa.UpdateNearBranches(f.Text.Bytes(), doJumps)
 		}
 
 		if signed {
@@ -212,8 +210,7 @@ func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	insn.Opcode().Reg(&f.Text, b.Type, b.Reg())
 	f.Regs.Free(b.Type, b.Reg())
 
-	doNot.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &doNot)
+	isa.UpdateNearBranches(f.Text.Bytes(), doNotJumps)
 
 	if remainder {
 		in.MOV.RegReg(&f.Text, a.Type, RegResult, RegDividendHigh)

@@ -181,17 +181,13 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 			panic("backward branch with value")
 		}
 
-		var skip link.L
-
 		retAddrs := asm.BranchIfStub(f, cond, false, true)
-		skip.AddSites(retAddrs)
 
 		asm.DropStackValues(&f.Prog, drop)
 		asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
 		asm.Branch(&f.Prog, target.Label.Addr)
 
-		skip.Addr = f.Text.Addr
-		isa.UpdateNearBranches(f.Text.Bytes(), &skip)
+		isa.UpdateNearBranches(f.Text.Bytes(), retAddrs)
 
 		getCurrentBlock(f).Suspension = true
 	}

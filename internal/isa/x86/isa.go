@@ -81,9 +81,9 @@ func (ISA) UpdateNearBranch(text []byte, originAddr int32) {
 }
 
 // UpdateNearBranches modifies 8-bit relocations of JMP and Jcc instructions.
-func (ISA) UpdateNearBranches(text []byte, l *link.L) {
-	labelAddr := l.FinalAddr()
-	for _, originAddr := range l.Sites {
+func (ISA) UpdateNearBranches(text []byte, originAddrs []int32) {
+	labelAddr := int32(len(text))
+	for _, originAddr := range originAddrs {
 		updateAddr8(text, originAddr, labelAddr-originAddr)
 	}
 }

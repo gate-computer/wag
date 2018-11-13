@@ -9,11 +9,6 @@ type L struct {
 	Addr  int32
 }
 
-func (l *L) Reset() {
-	l.Sites = nil
-	l.Addr = 0
-}
-
 func (l *L) AddSite(addr int32) {
 	l.Sites = append(l.Sites, addr)
 }

@@ -7,7 +7,6 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/x86/in"
@@ -57,8 +56,8 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 		}
 
 	case wa.Float:
-		var moveIt link.L
-		var end link.L
+		var moveItJumps []int32
+		var endJumps []int32
 
 		cond = condition.Inverted[cond]
 		notCondJump := conditionInsns[cond].JccOpcodeCb()
@@ -66,30 +65,28 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 		switch {
 		case cond >= condition.MinUnorderedOrCondition:
 			in.JPcb.Stub8(&f.Text) // move it if unordered
-			moveIt.AddSite(f.Text.Addr)
+			moveItJumps = append(moveItJumps, f.Text.Addr)
 
 			notCondJump.Stub8(&f.Text) // break if not cond
-			end.AddSite(f.Text.Addr)
+			endJumps = append(endJumps, f.Text.Addr)
 
 		case cond >= condition.MinOrderedAndCondition:
 			in.JPcb.Stub8(&f.Text) // break if unordered
-			end.AddSite(f.Text.Addr)
+			endJumps = append(endJumps, f.Text.Addr)
 
 			notCondJump.Stub8(&f.Text) // break if not cond
-			end.AddSite(f.Text.Addr)
+			endJumps = append(endJumps, f.Text.Addr)
 
 		default:
 			notCondJump.Stub8(&f.Text) // break if not cond
-			end.AddSite(f.Text.Addr)
+			endJumps = append(endJumps, f.Text.Addr)
 		}
 
-		moveIt.Addr = f.Text.Addr
-		isa.UpdateNearBranches(f.Text.Bytes(), &moveIt)
+		isa.UpdateNearBranches(f.Text.Bytes(), moveItJumps)
 
 		asm.Move(f, targetReg, a)
 
-		end.Addr = f.Text.Addr
-		isa.UpdateNearBranches(f.Text.Bytes(), &end)
+		isa.UpdateNearBranches(f.Text.Bytes(), endJumps)
 	}
 
 	return operand.Reg(a.Type, targetReg)

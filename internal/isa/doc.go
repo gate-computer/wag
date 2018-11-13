@@ -34,8 +34,9 @@ type ISA interface {
 	// branch target is the current text address.
 	UpdateNearBranch(text []byte, originAddr int32)
 
-	// UpdateNearBranches modifies relocations of branch instructions.
-	UpdateNearBranches(text []byte, l *link.L)
+	// UpdateNearBranches modifies relocations of branch instructions.  The
+	// branch target is the current text address.
+	UpdateNearBranches(text []byte, originAddrs []int32)
 
 	// UpdateFarBranches modifies relocations of branch instructions.
 	UpdateFarBranches(text []byte, l *link.L)

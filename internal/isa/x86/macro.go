@@ -7,7 +7,6 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
@@ -107,7 +106,7 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 		cond = condition.Inverted[cond]
 	}
 
-	var end link.L
+	var endJumps []int32
 
 	switch {
 	case cond >= condition.MinUnorderedOrCondition:
@@ -116,14 +115,13 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 
 	case cond >= condition.MinOrderedAndCondition:
 		in.JPcb.Stub8(&f.Text)
-		end.AddSite(f.Text.Addr)
+		endJumps = append(endJumps, f.Text.Addr)
 	}
 
 	conditionInsns[cond].JccOpcodeC().Stub(&f.Text, near)
 	sites = append(sites, f.Text.Addr)
 
-	end.Addr = f.Text.Addr
-	isa.UpdateNearBranches(f.Text.Bytes(), &end)
+	isa.UpdateNearBranches(f.Text.Bytes(), endJumps)
 	return
 }
 
@@ -437,18 +435,18 @@ func (MacroAssembler) SetBool(p *gen.Prog, target reg.R, cond condition.C) {
 // setBool sets the scratch register.  (SETcc instruction's register encoding
 // is tricky.)
 func setBool(p *gen.Prog, cond condition.C) {
-	var end link.L
+	var endJumps []int32
 
 	switch {
 	case cond >= condition.MinUnorderedOrCondition:
 		in.MOVi.RegImm32(&p.Text, wa.I32, RegScratch, 1) // true
 		in.JPcb.Stub8(&p.Text)                           // if unordered, else
-		end.AddSite(p.Text.Addr)
+		endJumps = append(endJumps, p.Text.Addr)
 
 	case cond >= condition.MinOrderedAndCondition:
 		in.MOV.RegReg(&p.Text, wa.I32, RegScratch, RegZero) // false
 		in.JPcb.Stub8(&p.Text)                              // if unordered, else
-		end.AddSite(p.Text.Addr)
+		endJumps = append(endJumps, p.Text.Addr)
 
 	default:
 		in.MOV.RegReg(&p.Text, wa.I32, RegScratch, RegZero)
@@ -456,8 +454,7 @@ func setBool(p *gen.Prog, cond condition.C) {
 
 	conditionInsns[cond].SetccOpcode().OneSizeReg(&p.Text, RegScratch)
 
-	end.Addr = p.Text.Addr
-	isa.UpdateNearBranches(p.Text.Bytes(), &end)
+	isa.UpdateNearBranches(p.Text.Bytes(), endJumps)
 }
 
 func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int32) {
