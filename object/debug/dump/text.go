@@ -13,16 +13,10 @@ import (
 	"github.com/bnagy/gapstone"
 
 	"github.com/tsavola/wag/object/abi"
-	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/section"
 )
 
-type TextMap interface {
-	GetFuncAddrs() []int32
-	GetFuncInsns() [][]debug.InsnMapping
-}
-
-func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *section.NameSection) error {
+func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []int32, ns *section.NameSection) error {
 	var names []section.FuncName
 	if ns != nil {
 		names = ns.FuncNames
@@ -61,8 +55,7 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 		offset = skipTo
 	}
 
-	funcMap := textMap.GetFuncAddrs()
-	firstFuncAddr := uint(textAddr) + uint(funcMap[0])
+	firstFuncAddr := uint(textAddr) + uint(funcAddrs[0])
 
 	targets := map[uint]string{
 		uint(textAddr) + abi.TextAddrResume: "resume",
@@ -70,9 +63,9 @@ func Text(w io.Writer, text []byte, textAddr uintptr, textMap TextMap, ns *secti
 		uint(textAddr) + abi.TextAddrEnter:  "enter",
 	}
 
-	for i := 0; len(funcMap) > 0; i++ {
-		addr := uint(textAddr) + uint(funcMap[0])
-		funcMap = funcMap[1:]
+	for i := 0; len(funcAddrs) > 0; i++ {
+		addr := uint(textAddr) + uint(funcAddrs[0])
+		funcAddrs = funcAddrs[1:]
 
 		var name string
 		if i < len(names) {

@@ -59,7 +59,7 @@ func TestSnapshot(t *testing.T) {
 	maxMemorySize := mod.MemorySizeLimit()
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, nil)
+		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.DebugMap.FuncAddrs, nil)
 	}
 
 	if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {

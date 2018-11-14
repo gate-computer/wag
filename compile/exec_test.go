@@ -88,6 +88,6 @@ func TestExec(t *testing.T) {
 	}
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, nil)
+		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.DebugMap.FuncAddrs, nil)
 	}
 }

@@ -476,7 +476,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		maxMemorySize := mod.MemorySizeLimit()
 
 		if dumpText && testing.Verbose() {
-			dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), &p.DebugMap, &nameSection)
+			dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.DebugMap.FuncAddrs, &nameSection)
 		}
 
 		if dumpGlobals {

@@ -57,7 +57,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	p.SetData(obj.GlobalsMemory, obj.MemoryOffset)
 
 	if dumpText && testing.Verbose() {
-		dump.Text(os.Stdout, obj.Text, p.TextAddr(), obj, &obj.Names)
+		dump.Text(os.Stdout, obj.Text, p.TextAddr(), obj.FuncAddrs, &obj.Names)
 	}
 
 	r, err := p.NewRunner(obj.InitialMemorySize, obj.MemorySizeLimit, stackSize)
