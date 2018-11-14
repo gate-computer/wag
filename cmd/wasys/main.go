@@ -18,6 +18,7 @@ import (
 
 	"github.com/tsavola/wag"
 	"github.com/tsavola/wag/buffer"
+	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/wa"
 )
@@ -94,8 +95,8 @@ func main() {
 	}
 
 	var (
-		textSize  = 128 * 1024 * 1024
-		stackSize = 64 * 1024
+		textSize  = compile.DefaultMaxTextSize
+		stackSize = wa.PageSize
 		entry     = "main"
 		dumpText  = false
 	)
