@@ -161,7 +161,7 @@ type Program struct {
 
 	entryFunc uint32
 	entryArgs []uint64
-	entryAddr int32
+	entryAddr uint32
 
 	data         []byte
 	memoryOffset int
@@ -231,7 +231,7 @@ func (p *Program) getData() (data []byte, memoryOffset int) {
 	return
 }
 
-func (p *Program) SetEntryAddr(addr int32) {
+func (p *Program) SetEntryAddr(addr uint32) {
 	p.entryAddr = addr
 }
 
@@ -243,7 +243,7 @@ func (p *Program) resolveEntry() {
 	p.entryAddr = p.DebugMap.FuncAddrs[p.entryFunc]
 }
 
-func (p *Program) GetStackEntry() (addr int32, args []uint64) {
+func (p *Program) GetStackEntry() (addr uint32, args []uint64) {
 	p.getStack()
 	addr = p.entryAddr
 	args = p.entryArgs

@@ -144,7 +144,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	var (
 		entryIndex uint32
 		entryType  wa.FuncType
-		entryAddr  int32
+		entryAddr  uint32
 	)
 
 	if objectConfig.Entry != "" {

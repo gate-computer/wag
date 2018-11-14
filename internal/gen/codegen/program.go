@@ -77,7 +77,7 @@ func GenProgram(
 			initFuncCount = int(m.StartIndex) + 1
 		}
 		retAddr := asm.CallMissing(p)
-		p.Map.PutCallSite(retAddr, obj.Word*2) // stack depth excluding entry args (including link addr)
+		p.Map.PutCallSite(uint32(retAddr), obj.Word*2) // stack depth excluding entry args (including link addr)
 		p.FuncLinks[m.StartIndex].AddSite(retAddr)
 	}
 
@@ -85,7 +85,7 @@ func GenProgram(
 		panic("bad text address after init routine and start function call")
 	}
 	retAddr := asm.InitCallEntry(p)
-	p.Map.PutCallSite(retAddr, obj.Word) // stack depth excluding entry args (including link addr)
+	p.Map.PutCallSite(uint32(retAddr), obj.Word) // stack depth excluding entry args (including link addr)
 
 	if p.Text.Addr > rodata.CommonsAddr {
 		panic("bad text address after init routines")

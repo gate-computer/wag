@@ -12,9 +12,9 @@ const (
 // function calls and instructions within the text (machine code) section.
 type ObjectMapper interface {
 	InitObjectMap(numImportFuncs, numOtherFuncs int)
-	PutImportFuncAddr(addr int32)
-	PutFuncAddr(addr int32)
-	PutCallSite(returnAddr int32, stackOffset int32)
-	PutInsnAddr(addr int32)
-	PutDataBlock(addr int32, length int)
+	PutImportFuncAddr(addr uint32)
+	PutFuncAddr(addr uint32)
+	PutCallSite(returnAddr uint32, stackOffset int32)
+	PutInsnAddr(addr uint32)
+	PutDataBlock(addr uint32, length int32)
 }

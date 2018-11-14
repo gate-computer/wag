@@ -8,12 +8,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/tsavola/wag/wa"
 )
 
 type TextMap interface {
-	FindAddr(retAddr int32) (funcIndex, retInsnPos, stackOffset int32, initialCall, ok bool)
+	FindAddr(retAddr uint32) (funcIndex, retInsnPos uint32, stackOffset int32, initialCall, ok bool)
 }
 
 type Frame struct {
@@ -32,12 +33,12 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncTyp
 		absRetAddr := binary.LittleEndian.Uint64(stack[:8])
 
 		retAddr := absRetAddr - textAddr
-		if retAddr > 0x7ffffffe {
+		if retAddr > math.MaxUint32 {
 			err = fmt.Errorf("return address 0x%x is not in text section", absRetAddr)
 			return
 		}
 
-		funcIndex, retInsnPos, stackOffset, initial, ok := textMap.FindAddr(int32(retAddr))
+		funcIndex, retInsnPos, stackOffset, initial, ok := textMap.FindAddr(uint32(retAddr))
 		if !ok {
 			err = fmt.Errorf("call instruction not found for return address 0x%x", retAddr)
 			return

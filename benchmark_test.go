@@ -52,7 +52,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.SetEntryAddr(int32(binary.LittleEndian.Uint64(obj.StackFrame)))
+	p.SetEntryAddr(uint32(binary.LittleEndian.Uint64(obj.StackFrame)))
 	p.Seal()
 	p.SetData(obj.GlobalsMemory, obj.MemoryOffset)
 

@@ -131,7 +131,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	isa.AlignFunc(&f.Prog)
 	addr := f.Text.Addr
 	f.FuncLinks[funcIndex].Addr = addr
-	f.Map.PutFuncAddr(addr)
+	f.Map.PutFuncAddr(uint32(addr))
 	stackCheckAddr := asm.SetupStackFrame(f)
 
 	f.ResultType = sig.Result

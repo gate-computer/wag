@@ -308,7 +308,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	tableAddr := f.Text.Addr
 	tableSize := len(targetTable) * int(tableType.Size())
 	f.Text.Extend(tableSize)
-	f.Map.PutDataBlock(tableAddr, tableSize)
+	f.Map.PutDataBlock(uint32(tableAddr), int32(tableSize))
 
 	table := gen.BranchTable{
 		Addr:    tableAddr,

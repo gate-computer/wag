@@ -14,9 +14,9 @@ import (
 // Instruction mapping from machine code to WebAssembly.  SourcePos is zero if
 // ObjectPos contains non-executable data interleaved with the code.
 type InsnMapping struct {
-	ObjectPos int32 // Machine code offset in bytes.
-	SourcePos int32 // WebAssembly code offset in bytes.
-	BlockLen  int   // Length of data block (when SourcePos is 0).
+	ObjectPos uint32 // Machine code offset in bytes.
+	SourcePos uint32 // WebAssembly code offset in bytes.
+	BlockLen  int32  // Length of data block (when SourcePos is 0).
 }
 
 // InsnMap implements compile.ObjectMapper.  It stores function addresses, call
@@ -43,15 +43,15 @@ func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
 	m.reader.pos = 0
 }
 
-func (m *InsnMap) PutInsnAddr(objectPos int32) {
-	m.putMapping(objectPos, int32(m.reader.pos), 0)
+func (m *InsnMap) PutInsnAddr(objectPos uint32) {
+	m.putMapping(objectPos, m.reader.pos, 0)
 }
 
-func (m *InsnMap) PutDataBlock(objectPos int32, blockLen int) {
+func (m *InsnMap) PutDataBlock(objectPos uint32, blockLen int32) {
 	m.putMapping(objectPos, 0, blockLen)
 }
 
-func (m *InsnMap) putMapping(objectPos, sourcePos int32, blockLen int) {
+func (m *InsnMap) putMapping(objectPos, sourcePos uint32, blockLen int32) {
 	prev := len(m.Insns) - 1
 	if prev >= 0 && m.Insns[prev].ObjectPos == objectPos {
 		// Replace previous mapping because no machine code was generated.
@@ -62,7 +62,7 @@ func (m *InsnMap) putMapping(objectPos, sourcePos int32, blockLen int) {
 	}
 }
 
-func (m *InsnMap) FindAddr(retAddr int32) (funcIndex, retInsnPos, stackOffset int32, initial, ok bool) {
+func (m *InsnMap) FindAddr(retAddr uint32) (funcIndex, retInsnPos uint32, stackOffset int32, initial, ok bool) {
 	funcIndex, _, stackOffset, initial, siteOk := m.CallMap.FindAddr(retAddr)
 	if !siteOk {
 		return
@@ -86,12 +86,12 @@ func (m *InsnMap) FindAddr(retAddr int32) (funcIndex, retInsnPos, stackOffset in
 
 type posReader struct {
 	r   reader.R
-	pos int
+	pos uint32
 }
 
 func (pr *posReader) Read(b []byte) (n int, err error) {
 	n, err = pr.r.Read(b)
-	pr.pos += n
+	pr.pos += uint32(n)
 	return
 }
 

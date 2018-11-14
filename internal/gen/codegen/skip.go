@@ -14,7 +14,7 @@ import (
 func skipOps(f *gen.Func, load loader.L) {
 	for {
 		op := opcode.Opcode(load.Byte())
-		f.Map.PutInsnAddr(f.Text.Addr)
+		f.Map.PutInsnAddr(uint32(f.Text.Addr))
 
 		if op == opcode.End {
 			return
@@ -27,7 +27,7 @@ func skipOps(f *gen.Func, load loader.L) {
 func skipThenOps(f *gen.Func, load loader.L) (haveElse bool) {
 	for {
 		op := opcode.Opcode(load.Byte())
-		f.Map.PutInsnAddr(f.Text.Addr)
+		f.Map.PutInsnAddr(uint32(f.Text.Addr))
 
 		switch op {
 		case opcode.End:

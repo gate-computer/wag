@@ -16,7 +16,7 @@ import (
 	"github.com/tsavola/wag/section"
 )
 
-func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []int32, ns *section.NameSection) error {
+func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *section.NameSection) error {
 	var names []section.FuncName
 	if ns != nil {
 		names = ns.FuncNames

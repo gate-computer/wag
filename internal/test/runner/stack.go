@@ -56,7 +56,7 @@ func (p *Program) CallSites() map[int]callSite {
 	if p.callSites == nil {
 		p.callSites = make(map[int]callSite)
 		for i, site := range p.DebugMap.CallSites {
-			p.callSites[int(site.ReturnAddr)] = callSite{
+			p.callSites[int(site.RetAddr)] = callSite{
 				uint64(i),
 				int(site.StackOffset),
 			}
