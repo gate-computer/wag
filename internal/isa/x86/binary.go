@@ -124,11 +124,26 @@ func binaryIntCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
 
 func binaryIntMul(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
-	sourceReg, _ := getScratchReg(f, b)
+
+	var sourceReg reg.R
+
+	if b.Storage == storage.Imm {
+		value := b.ImmValue()
+
+		if uint64(value+0x80000000) <= 0xffffffff {
+			in.IMULi.RegRegImm(&f.Text, a.Type, targetReg, targetReg, int32(value))
+			return operand.Reg(a.Type, targetReg)
+		}
+
+		in.MOV64i.RegImm64(&f.Text, RegScratch, value)
+		sourceReg = RegScratch
+	} else {
+		sourceReg, _ = getScratchReg(f, b)
+	}
 
 	in.IMUL.RegReg(&f.Text, a.Type, targetReg, sourceReg)
-
 	f.Regs.Free(b.Type, sourceReg)
+
 	return operand.Reg(a.Type, targetReg)
 }
 

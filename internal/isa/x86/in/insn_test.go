@@ -445,4 +445,20 @@ func TestInsnMI(test *testing.T) {
 	}
 }
 
+func TestInsnRMI(test *testing.T) {
+	for _, t := range intTypes {
+		for _, r := range allRegs {
+			for _, r2 := range allRegs {
+				opStr := typeRegNames[t][r] + ", " + typeRegNames[t][r2] + ", IMM"
+
+				for _, val := range testImm32 {
+					testEncodeImm(test, "imul", opStr, val, func(text *code.Buf) {
+						IMULi.RegRegImm(text, t, r, r2, val)
+					})
+				}
+			}
+		}
+	}
+}
+
 // TODO: float and D encoding tests

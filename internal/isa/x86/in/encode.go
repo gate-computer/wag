@@ -522,9 +522,23 @@ func (op MI32) MemDispImm(text *code.Buf, t wa.Type, base BaseReg, disp int32, v
 	o.copy(text.Extend(o.len()))
 }
 
+// RMI
+
+type RMI byte // opcode of 8-bit variant, transformed to 32-bit variant automatically
+
+func (op RMI) RegRegImm(text *code.Buf, t wa.Type, r, r2 reg.R, val int32) {
+	var valSize = immSize(val)
+	var o output
+	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(r2))
+	o.byte(byte(op) &^ (valSize >> 1)) // 0x6b => 0x69 if 32-bit
+	o.mod(ModReg, regRO(r), regRM(r2))
+	o.int(val, valSize)
+	o.copy(text.Extend(o.len()))
+}
+
 // RMI with prefix, two opcode bytes (first byte hardcoded) and size code
 
-type RMIscalar byte // second opcode byte; uses constant fixed-length prefix
+type RMIscalar byte // opcode of 8-bit variant, transformed to 32-bit variant automatically
 
 func (op RMIscalar) RegRegImm8(text *code.Buf, t wa.Type, r, r2 reg.R, val int8) {
 	var o output
