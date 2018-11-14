@@ -85,6 +85,7 @@ const (
 	SETLE   = Mex2(0x0f<<8 | 0x9e)
 	SETG    = Mex2(0x0f<<8 | 0x9f)
 	CDQ     = NP(0x99)
+	IMUL    = RM2(0x0f<<8 | 0xaf)
 	MOVZX8  = RM2(0x0f<<8 | 0xb6) // RegReg is untested
 	MOVZX16 = RM2(0x0f<<8 | 0xb7) // RegReg is untested
 	MOV64i  = OI(0xb8)
@@ -116,7 +117,6 @@ const (
 	JMPcb   = Db(0xeb)
 	TEST8i  = MI8(0xf6<<8 | 0<<opcodeBase)
 	NEG     = M(0xf7<<8 | 3<<opcodeBase)
-	MUL     = M(0xf7<<8 | 4<<opcodeBase)
 	DIV     = M(0xf7<<8 | 6<<opcodeBase)
 	IDIV    = M(0xf7<<8 | 7<<opcodeBase)
 	INC     = M(0xff<<8 | 0<<opcodeBase)
@@ -182,18 +182,6 @@ const (
 
 func (ro ShiftInsn) Opcode() M   { return 0xd3<<8 | M(ro) }
 func (ro ShiftInsn) OpcodeI() MI { return 0xc1<<8 | MI(ro) }
-
-// Division/multiplication instructions
-
-type DivmulInsn byte
-
-const (
-	InsnMul  = DivmulInsn(4 << opcodeBase)
-	InsnDivU = DivmulInsn(6 << opcodeBase)
-	InsnDivS = DivmulInsn(7 << opcodeBase)
-)
-
-func (ro DivmulInsn) Opcode() M { return 0xf7<<8 | M(ro) }
 
 // Condition code instructions
 

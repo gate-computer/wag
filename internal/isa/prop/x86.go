@@ -32,25 +32,22 @@ const (
 // Binary
 
 const (
-	BinaryIntAL = iota
+	BinaryIntALAdd = iota
+	BinaryIntALSub
+	BinaryIntAL
 	BinaryIntCmp
-	BinaryIntDivmul
+	BinaryIntMul
+	BinaryIntDivU
+	BinaryIntDivS
+	BinaryIntRemU
+	BinaryIntRemS
 	BinaryIntShift
 	BinaryFloatCommon
 	BinaryFloatMinmax
 	BinaryFloatCmp
 	BinaryFloatCopysign
-)
 
-const (
-	DivmulRemFlag  = 1
-	DivmulInsnMask = in.InsnMul | in.InsnDivU | in.InsnDivS
-
-	IndexDivmulMul  = uint(in.InsnMul)
-	IndexDivmulDivU = uint(in.InsnDivU)
-	IndexDivmulRemU = uint(in.InsnDivU) | DivmulRemFlag
-	IndexDivmulDivS = uint(in.InsnDivS)
-	IndexDivmulRemS = uint(in.InsnDivS) | DivmulRemFlag
+	BinaryMask = 15
 )
 
 const (
@@ -75,13 +72,13 @@ const (
 	FloatGt       = BinaryFloatCmp | condition.OrderedAndGt<<8
 	FloatLe       = BinaryFloatCmp | condition.OrderedAndLe<<8
 	FloatGe       = BinaryFloatCmp | condition.OrderedAndGe<<8
-	IntAdd        = BinaryIntAL | uint(in.InsnAdd)<<8
-	IntSub        = BinaryIntAL | uint(in.InsnSub)<<8
-	IntMul        = BinaryIntDivmul | IndexDivmulMul<<8
-	IntDivS       = BinaryIntDivmul | IndexDivmulDivS<<8
-	IntDivU       = BinaryIntDivmul | IndexDivmulDivU<<8
-	IntRemS       = BinaryIntDivmul | IndexDivmulRemS<<8
-	IntRemU       = BinaryIntDivmul | IndexDivmulRemU<<8
+	IntAdd        = BinaryIntALAdd | uint(in.InsnAdd)<<8
+	IntSub        = BinaryIntALSub | uint(in.InsnSub)<<8
+	IntMul        = BinaryIntMul
+	IntDivS       = BinaryIntDivS
+	IntDivU       = BinaryIntDivU
+	IntRemS       = BinaryIntRemS
+	IntRemU       = BinaryIntRemU
 	IntAnd        = BinaryIntAL | uint(in.InsnAnd)<<8
 	IntOr         = BinaryIntAL | uint(in.InsnOr)<<8
 	IntXor        = BinaryIntAL | uint(in.InsnXor)<<8

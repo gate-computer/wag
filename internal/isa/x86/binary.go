@@ -18,53 +18,57 @@ import (
 )
 
 func (MacroAssembler) Binary(f *gen.Func, props uint16, a, b operand.O) operand.O {
-	switch uint8(props) {
-	case prop.BinaryIntAL:
-		return binaryIntAL(f, uint8(props>>8), a, b)
+	return ops[props&prop.BinaryMask](f, uint8(props>>8), a, b)
+}
 
-	case prop.BinaryIntCmp:
-		return binaryIntCmp(f, uint8(props>>8), a, b)
+var ops = [prop.BinaryMask + 1]func(*gen.Func, uint8, operand.O, operand.O) operand.O{
+	prop.BinaryIntALAdd:      binaryIntALAdd,
+	prop.BinaryIntALSub:      binaryIntALSub,
+	prop.BinaryIntAL:         binaryIntAL,
+	prop.BinaryIntCmp:        binaryIntCmp,
+	prop.BinaryIntMul:        binaryIntMul,
+	prop.BinaryIntDivU:       binaryIntDivU,
+	prop.BinaryIntDivS:       binaryIntDivS,
+	prop.BinaryIntRemU:       binaryIntRemU,
+	prop.BinaryIntRemS:       binaryIntRemS,
+	prop.BinaryIntShift:      binaryIntShift,
+	prop.BinaryFloatCommon:   binaryFloatCommon,
+	prop.BinaryFloatMinmax:   binaryFloatMinmax,
+	prop.BinaryFloatCmp:      binaryFloatCmp,
+	prop.BinaryFloatCopysign: binaryFloatCopysign,
+}
 
-	case prop.BinaryIntDivmul:
-		return binaryIntDivmul(f, uint8(props>>8), a, b)
-
-	case prop.BinaryIntShift:
-		return binaryIntShift(f, uint8(props>>8), a, b)
-
-	case prop.BinaryFloatCommon:
-		return binaryFloatCommon(f, uint8(props>>8), a, b)
-
-	case prop.BinaryFloatMinmax:
-		return binaryFloatMinmax(f, uint8(props>>8), a, b)
-
-	case prop.BinaryFloatCmp:
-		return binaryFloatCmp(f, uint8(props>>8), a, b)
+func binaryIntALAdd(f *gen.Func, index uint8, a, b operand.O) operand.O {
+	switch {
+	case b.Storage == storage.Imm && b.ImmValue() == 1:
+		return opInplaceInt(f, in.INC, a)
 
 	default:
-		return binaryFloatCopysign(f, a, b)
+		return binaryIntAL(f, index, a, b)
+	}
+}
+
+func binaryIntALSub(f *gen.Func, index uint8, a, b operand.O) operand.O {
+	switch {
+	case b.Storage == storage.Imm && b.ImmValue() == 1:
+		return opInplaceInt(f, in.DEC, a)
+
+	case a.Storage == storage.Imm && a.ImmValue() == 0:
+		r, _ := allocResultReg(f, b)
+		in.NEG.Reg(&f.Text, b.Type, r)
+		return operand.Reg(b.Type, r)
+
+	default:
+		return binaryIntAL(f, index, a, b)
 	}
 }
 
 func binaryIntAL(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	insn := in.ALInsn(index)
 
-	if insn == in.InsnSub && a.Storage == storage.Imm && a.ImmValue() == 0 {
-		return opNegInt(f, b)
-	}
-
 	switch b.Storage {
 	case storage.Imm:
-		switch value := b.ImmValue(); {
-		case value == 1:
-			switch insn {
-			case in.InsnAdd:
-				return opInplaceInt(f, in.INC, a)
-
-			case in.InsnSub:
-				return opInplaceInt(f, in.DEC, a)
-			}
-
-		case uint64(value+0x80000000) > 0xffffffff:
+		if value := b.ImmValue(); uint64(value+0x80000000) > 0xffffffff {
 			in.MOV64i.RegImm64(&f.Text, RegScratch, value)
 			b.SetReg(RegScratch)
 		}
@@ -118,114 +122,144 @@ func binaryIntCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
 	return operand.Flags(condition.C(cond))
 }
 
-func binaryIntDivmul(f *gen.Func, index uint8, a, b operand.O) operand.O {
-	var (
-		insn      = in.DivmulInsn(index) & prop.DivmulInsnMask
-		remainder = (index & prop.DivmulRemFlag) != 0
-		division  = insn != in.InsnMul
-	)
+func binaryIntMul(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+	targetReg, _ := allocResultReg(f, a)
+	sourceReg, _ := getScratchReg(f, b)
 
+	in.IMUL.RegReg(&f.Text, a.Type, targetReg, sourceReg)
+
+	f.Regs.Free(b.Type, sourceReg)
+	return operand.Reg(a.Type, targetReg)
+}
+
+func binaryIntDivU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+	divisorReg, _ := opPrepareDIV(f, a, b)
+
+	// RegDividendHigh is RegZero.
+
+	in.DIV.Reg(&f.Text, b.Type, divisorReg)
+	f.Regs.Free(b.Type, divisorReg)
+
+	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
+	return operand.Reg(a.Type, RegResult)
+}
+
+func binaryIntRemU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+	divisorReg, _ := opPrepareDIV(f, a, b)
+
+	// RegDividendHigh is RegZero.
+
+	in.DIV.Reg(&f.Text, b.Type, divisorReg)
+	f.Regs.Free(b.Type, divisorReg)
+
+	resultReg := f.Regs.AllocResult(a.Type)
+	in.MOV.RegReg(&f.Text, a.Type, resultReg, RegDividendHigh) // Remainder
+
+	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
+	return operand.Reg(a.Type, resultReg)
+}
+
+func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+	divisorReg, checkOverflow := opPrepareIDIV(f, a, b)
+
+	if checkOverflow {
+		var okJumps []int32
+
+		if a.Type == wa.I32 {
+			in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
+		} else {
+			in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseText, rodata.Mask80Addr64)
+		}
+		in.JNEcb.Stub8(&f.Text)
+		okJumps = append(okJumps, f.Text.Addr)
+
+		in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
+		in.JNEcb.Stub8(&f.Text)
+		okJumps = append(okJumps, f.Text.Addr)
+
+		asm.Trap(f, trap.IntegerOverflow)
+
+		isa.UpdateNearBranches(f.Text.Bytes(), okJumps)
+	}
+
+	in.CDQ.Type(&f.Text, a.Type) // Sign-extend dividend low bits to high bits.
+	in.IDIV.Reg(&f.Text, b.Type, divisorReg)
+	f.Regs.Free(b.Type, divisorReg)
+
+	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
+	return operand.Reg(a.Type, RegResult)
+}
+
+func binaryIntRemS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+	divisorReg, checkOverflow := opPrepareIDIV(f, a, b)
+
+	var overflowJumps []int32
+
+	if checkOverflow {
+		in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
+		in.JEcb.Stub8(&f.Text)
+		overflowJumps = append(overflowJumps, f.Text.Addr)
+	}
+
+	in.CDQ.Type(&f.Text, a.Type) // Sign-extend dividend low bits to high bits.
+	in.IDIV.Reg(&f.Text, b.Type, divisorReg)
+	f.Regs.Free(b.Type, divisorReg)
+
+	isa.UpdateNearBranches(f.Text.Bytes(), overflowJumps)
+
+	resultReg := f.Regs.AllocResult(a.Type)
+	in.MOV.RegReg(&f.Text, a.Type, resultReg, RegDividendHigh) // Remainder
+
+	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
+	return operand.Reg(a.Type, resultReg)
+}
+
+func opPrepareDIV(f *gen.Func, a, b operand.O) (divisorReg reg.R, checkOverflow bool) {
+	checkOverflow = true
 	checkZero := true
-	checkOverflow := true
 
 	if b.Storage == storage.Reg {
 		if b.Reg() == RegDividendLow {
 			in.MOV.RegReg(&f.Text, b.Type, RegScratch, RegDividendLow)
-			b.SetReg(RegScratch)
+			divisorReg = RegScratch
+		} else {
+			divisorReg = b.Reg()
 		}
 	} else {
-		if division && b.Storage == storage.Imm {
-			value := b.ImmValue()
-			if value != 0 {
-				checkZero = false
-			}
-			if value != -1 {
-				checkOverflow = false
-			}
-		}
-
 		asm.Move(f, RegScratch, b)
-		b.SetReg(RegScratch)
+		divisorReg = RegScratch
+
+		if b.Storage == storage.Imm {
+			divisor := b.ImmValue()
+			checkOverflow = (divisor == -1)
+			checkZero = (divisor == 0)
+		}
+	}
+
+	if checkZero {
+		in.TEST.RegReg(&f.Text, b.Type, divisorReg, divisorReg)
+		in.JNEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
+		in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.IntegerDivideByZero].Addr)
+		f.MapCallAddr(f.Text.Addr)
 	}
 
 	asm.Move(f, RegDividendLow, a)
-
-	var doNotJumps []int32
-
-	if division {
-		if checkZero {
-			opCheckDivideByZero(f, b.Type, b.Reg())
-		}
-
-		if a.Storage == storage.Imm {
-			value := a.ImmValue()
-			if a.Type == wa.I32 {
-				if value != -0x80000000 {
-					checkOverflow = false
-				}
-			} else {
-				if value != -0x8000000000000000 {
-					checkOverflow = false
-				}
-			}
-		}
-
-		signed := (insn == in.InsnDivS)
-
-		if signed && checkOverflow {
-			var doJumps []int32
-
-			if remainder {
-				in.CMPi.RegImm8(&f.Text, b.Type, b.Reg(), -1)
-				in.JEcb.Stub8(&f.Text)
-				doNotJumps = append(doNotJumps, f.Text.Addr)
-			} else {
-				if a.Type == wa.I32 {
-					in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
-				} else {
-					in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseText, rodata.Mask80Addr64)
-				}
-
-				in.JNEcb.Stub8(&f.Text)
-				doJumps = append(doJumps, f.Text.Addr)
-
-				in.CMPi.RegImm8(&f.Text, b.Type, b.Reg(), -1)
-				in.JNEcb.Stub8(&f.Text)
-				doJumps = append(doJumps, f.Text.Addr)
-
-				asm.Trap(f, trap.IntegerOverflow)
-			}
-
-			isa.UpdateNearBranches(f.Text.Bytes(), doJumps)
-		}
-
-		if signed {
-			// Sign-extend dividend low bits to high bits
-			in.CDQ.Type(&f.Text, a.Type)
-		} else {
-			// RegDividendHigh is zero by default
-		}
-	}
-
-	insn.Opcode().Reg(&f.Text, b.Type, b.Reg())
-	f.Regs.Free(b.Type, b.Reg())
-
-	isa.UpdateNearBranches(f.Text.Bytes(), doNotJumps)
-
-	if remainder {
-		in.MOV.RegReg(&f.Text, a.Type, RegResult, RegDividendHigh)
-	}
-
-	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero)
-
-	return operand.Reg(a.Type, RegResult)
+	return
 }
 
-func opCheckDivideByZero(f *gen.Func, t wa.Type, r reg.R) {
-	in.TEST.RegReg(&f.Text, t, r, r)
-	in.JNEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.IntegerDivideByZero].Addr)
-	f.MapCallAddr(f.Text.Addr)
+func opPrepareIDIV(f *gen.Func, a, b operand.O) (divisorReg reg.R, checkOverflow bool) {
+	divisorReg, checkOverflow = opPrepareDIV(f, a, b)
+
+	if checkOverflow && a.Storage == storage.Imm {
+		dividend := a.ImmValue()
+		if a.Type == wa.I32 {
+			checkOverflow = (dividend == -0x80000000)
+		} else {
+			checkOverflow = (dividend == -0x8000000000000000)
+		}
+	}
+
+	return
 }
 
 func binaryIntShift(f *gen.Func, index uint8, a, b operand.O) operand.O {
@@ -296,7 +330,7 @@ func binaryFloatCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
 	return operand.Flags(condition.C(cond))
 }
 
-func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
+func binaryFloatCopysign(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
@@ -316,13 +350,6 @@ func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)
-}
-
-// opNegInt allocates registers.
-func opNegInt(f *gen.Func, x operand.O) operand.O {
-	r, _ := allocResultReg(f, x)
-	in.NEG.Reg(&f.Text, x.Type, r)
-	return operand.Reg(x.Type, r)
 }
 
 // opInplaceInt allocates registers.
