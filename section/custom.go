@@ -64,3 +64,21 @@ func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R) erro
 		return
 	}
 }
+
+type CustomSections struct {
+	Sections map[string][]byte
+}
+
+func (cs *CustomSections) Load(name string, r reader.R) (err error) {
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return
+	}
+
+	if cs.Sections == nil {
+		cs.Sections = make(map[string][]byte)
+	}
+
+	cs.Sections[name] = data
+	return
+}
