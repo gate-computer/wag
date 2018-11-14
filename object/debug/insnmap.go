@@ -7,66 +7,62 @@ package debug
 import (
 	"sort"
 
+	"github.com/tsavola/wag/internal/reader"
 	"github.com/tsavola/wag/object"
 )
 
-// Instruction mapping from machine code to WebAssembly.  SourceIndex is -1 if
-// ObjectOffset contains non-executable data interleaved with the code.
+// Instruction mapping from machine code to WebAssembly.  SourcePos is zero if
+// ObjectPos contains non-executable data interleaved with the code.
 type InsnMapping struct {
-	ObjectOffset int32 // Machine code byte position within a function
-	SourceIndex  int32 // WebAssembly instruction index within a function
-	BlockLength  int   // Length of data block (when SourceIndex is -1)
+	ObjectPos int32 // Machine code offset in bytes.
+	SourcePos int32 // WebAssembly code offset in bytes.
+	BlockLen  int   // Length of data block (when SourcePos is 0).
 }
 
-// InsnMap implements compile.ObjectMapper.  It stores everything.
+// InsnMap implements compile.ObjectMapper.  It stores function addresses, call
+// sites and instruction positions.
+//
+// The WebAssembly module must be loaded using InsnMap's pass-through reader,
+// or the source positions will be zero.
 type InsnMap struct {
 	object.CallMap
-	FuncInsns [][]InsnMapping
+	Insns []InsnMapping
 
-	fun  int
-	base int32
-	ins  int32
+	reader posReader
+}
+
+// Reader gets the pass-through reader.  It must not be wrapped in a buffered
+// reader (the input reader can be).
+func (m *InsnMap) Reader(input reader.R) reader.R {
+	m.reader = posReader{r: input}
+	return &m.reader
 }
 
 func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
 	m.CallMap.InitObjectMap(numImportFuncs, numOtherFuncs)
-	m.FuncInsns = make([][]InsnMapping, numOtherFuncs)
-	m.fun = -1
+	m.reader.pos = 0
 }
 
-func (m *InsnMap) PutFuncAddr(pos int32) {
-	m.CallMap.PutFuncAddr(pos)
-	m.fun++
-	m.base = pos
-	m.ins = -1
+func (m *InsnMap) PutInsnAddr(objectPos int32) {
+	m.putMapping(objectPos, int32(m.reader.pos), 0)
 }
 
-func (m *InsnMap) PutInsnAddr(pos int32) {
-	m.ins++
-	m.putMapping(pos, m.ins, 0)
+func (m *InsnMap) PutDataBlock(objectPos int32, blockLen int) {
+	m.putMapping(objectPos, 0, blockLen)
 }
 
-func (m *InsnMap) PutDataBlock(pos int32, length int) {
-	m.putMapping(pos, -1, length)
-}
-
-func (m *InsnMap) putMapping(absPos, sourceIndex int32, blockLength int) {
-	relPos := absPos - m.base
-
-	prev := len(m.FuncInsns[m.fun]) - 1
-	if prev >= 0 && m.FuncInsns[m.fun][prev].ObjectOffset == relPos {
-		// Replace previous mapping because no machine code was generated
-		m.FuncInsns[m.fun][prev].SourceIndex = sourceIndex
-		m.FuncInsns[m.fun][prev].BlockLength = blockLength
+func (m *InsnMap) putMapping(objectPos, sourcePos int32, blockLen int) {
+	prev := len(m.Insns) - 1
+	if prev >= 0 && m.Insns[prev].ObjectPos == objectPos {
+		// Replace previous mapping because no machine code was generated.
+		m.Insns[prev].SourcePos = sourcePos
+		m.Insns[prev].BlockLen = blockLen
 	} else {
-		m.FuncInsns[m.fun] = append(m.FuncInsns[m.fun], InsnMapping{relPos, sourceIndex, blockLength})
+		m.Insns = append(m.Insns, InsnMapping{objectPos, sourcePos, blockLen})
 	}
 }
 
-func (m *InsnMap) GetFuncAddrs() []int32         { return m.FuncAddrs }
-func (m *InsnMap) GetFuncInsns() [][]InsnMapping { return m.FuncInsns }
-
-func (m *InsnMap) FindAddr(retAddr int32) (funcIndex, retInsnIndex, stackOffset int32, initial, ok bool) {
+func (m *InsnMap) FindAddr(retAddr int32) (funcIndex, retInsnPos, stackOffset int32, initial, ok bool) {
 	funcIndex, _, stackOffset, initial, siteOk := m.CallMap.FindAddr(retAddr)
 	if !siteOk {
 		return
@@ -77,27 +73,40 @@ func (m *InsnMap) FindAddr(retAddr int32) (funcIndex, retInsnIndex, stackOffset 
 		return
 	}
 
-	numImportFuncs := len(m.FuncAddrs) - len(m.FuncInsns)
-	otherFuncIndex := int(funcIndex) - numImportFuncs
-	insns := m.FuncInsns[otherFuncIndex]
-
-	retMapIndex := sort.Search(len(insns), func(i int) bool {
-		return insns[i].ObjectOffset >= retAddr
+	retIndex := sort.Search(len(m.Insns), func(i int) bool {
+		return m.Insns[i].ObjectPos >= retAddr
 	})
 
-	if retMapIndex > 0 {
-		// The specific wasm instruction at the return address might not exist
-		// in generated code; there might not even be any generated code after
-		// the call.  The call instruction certaily exists in generated code,
-		// and it's mapped before the one we found (or it's the last one if we
-		// didn't find any).
-		callMapIndex := retMapIndex - 1
-		callInsnIndex := insns[callMapIndex].SourceIndex
-
-		// Because FindAddr is called with a return address, we must return the
-		// index of the wasm instruction at which the call would return.
-		retInsnIndex = callInsnIndex + 1
+	if retIndex > 0 && retIndex < len(m.Insns) {
+		retInsnPos = m.Insns[retIndex].SourcePos
 		ok = true
+	}
+	return
+}
+
+type posReader struct {
+	r   reader.R
+	pos int
+}
+
+func (pr *posReader) Read(b []byte) (n int, err error) {
+	n, err = pr.r.Read(b)
+	pr.pos += n
+	return
+}
+
+func (pr *posReader) ReadByte() (b byte, err error) {
+	b, err = pr.r.ReadByte()
+	if err == nil {
+		pr.pos++
+	}
+	return
+}
+
+func (pr *posReader) UnreadByte() (err error) {
+	err = pr.r.UnreadByte()
+	if err == nil {
+		pr.pos--
 	}
 	return
 }
