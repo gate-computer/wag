@@ -8,18 +8,21 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/tsavola/wag/wa"
 )
 
 type TextMap interface {
-	FindAddr(retAddr int32) (funcIndex, retInsnIndex, stackOffset int32, initialCall, ok bool)
+	FindAddr(retAddr int32) (funcIndex, retInsnPos, stackOffset int32, initialCall, ok bool)
 }
 
 type Frame struct {
-	FuncIndex    int
-	RetInsnIndex int // Zero if information is not available.
+	FuncIndex  int
+	RetInsnPos int      // Zero if information is not available.
+	Locals     []uint64 // If function signatures are available.
 }
 
-func Trace(stack []byte, textAddr uint64, textMap TextMap) (stacktrace []Frame, err error) {
+func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncType) (stacktrace []Frame, err error) {
 	if n := len(stack); n == 0 || n&7 != 0 {
 		err = fmt.Errorf("invalid stack size %d", n)
 		return
@@ -34,7 +37,7 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap) (stacktrace []Frame, 
 			return
 		}
 
-		funcIndex, retInsnIndex, stackOffset, initial, ok := textMap.FindAddr(int32(retAddr))
+		funcIndex, retInsnPos, stackOffset, initial, ok := textMap.FindAddr(int32(retAddr))
 		if !ok {
 			err = fmt.Errorf("call instruction not found for return address 0x%x", retAddr)
 			return
@@ -52,9 +55,27 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap) (stacktrace []Frame, 
 			return
 		}
 
+		var locals []uint64
+
+		if funcSigs != nil {
+			numParams := len(funcSigs[funcIndex].Params)
+			numOthers := int(stackOffset/8) - 1
+			numLocals := numParams + numOthers
+			locals = make([]uint64, numLocals)
+
+			for i := 0; i < numParams; i++ {
+				locals[i] = binary.LittleEndian.Uint64(stack[(numLocals-i+1)*8:])
+			}
+
+			for i := 0; i < numOthers; i++ {
+				locals[numParams+i] = binary.LittleEndian.Uint64(stack[(numOthers-i)*8:])
+			}
+		}
+
 		stacktrace = append(stacktrace, Frame{
-			FuncIndex:    int(funcIndex),
-			RetInsnIndex: int(retInsnIndex),
+			FuncIndex:  int(funcIndex),
+			RetInsnPos: int(retInsnPos),
+			Locals:     locals,
 		})
 
 		stack = stack[stackOffset:]
