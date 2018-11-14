@@ -162,11 +162,11 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 	in.JEcb.Stub8(&f.Text)
 	okJump := f.Text.Addr
 
-	asm.Trap(f, trap.IndirectCallSignature)
+	asm.Trap(f, trap.IndirectCallSignatureMismatch)
 
 	isa.UpdateNearBranch(f.Text.Bytes(), outOfBoundsJump)
 
-	asm.Trap(f, trap.IndirectCallIndex)
+	asm.Trap(f, trap.IndirectCallIndexOutOfBounds)
 
 	isa.UpdateNearBranch(f.Text.Bytes(), okJump)
 

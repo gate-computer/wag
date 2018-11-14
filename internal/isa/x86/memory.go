@@ -144,7 +144,7 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
 	in.JLcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.MemoryOutOfBounds].Addr)
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.MemoryAccessOutOfBounds].Addr)
 	f.MapCallAddr(f.Text.Addr)
 
 	base = in.BaseScratch
@@ -153,7 +153,7 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 }
 
 func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
-	asm.Trap(f, trap.MemoryOutOfBounds)
+	asm.Trap(f, trap.MemoryAccessOutOfBounds)
 
 	base = in.BaseZero
 	disp = 0

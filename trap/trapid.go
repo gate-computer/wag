@@ -15,12 +15,11 @@ const (
 	Exit = ID(iota)
 	NoFunction
 	Suspended
-
-	CallStackExhausted
-	IndirectCallIndex
-	IndirectCallSignature
-	MemoryOutOfBounds
 	Unreachable
+	CallStackExhausted
+	MemoryAccessOutOfBounds
+	IndirectCallIndexOutOfBounds
+	IndirectCallSignatureMismatch
 	IntegerDivideByZero
 	IntegerOverflow
 
@@ -38,20 +37,20 @@ func (id ID) String() string {
 	case Suspended:
 		return "suspended"
 
+	case Unreachable:
+		return "unreachable"
+
 	case CallStackExhausted:
 		return "call stack exhausted"
 
-	case IndirectCallIndex:
+	case MemoryAccessOutOfBounds:
+		return "memory access out of bounds"
+
+	case IndirectCallIndexOutOfBounds:
 		return "indirect call index out of bounds"
 
-	case IndirectCallSignature:
+	case IndirectCallSignatureMismatch:
 		return "indirect call signature mismatch"
-
-	case MemoryOutOfBounds:
-		return "out of bounds memory access"
-
-	case Unreachable:
-		return "unreachable"
 
 	case IntegerDivideByZero:
 		return "integer divide by zero"
