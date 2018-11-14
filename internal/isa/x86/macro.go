@@ -176,7 +176,7 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 }
 
 func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
-	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero)
+	in.XOR.RegReg(&p.Text, wa.I32, RegResult, RegResult)
 }
 
 func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExtended bool) {
@@ -222,7 +222,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 
 	reinit(p)
 
-	in.MOV.RegReg(&p.Text, wa.I32, RegResult, RegZero) // result if no entry func
+	in.XOR.RegReg(&p.Text, wa.I32, RegResult, RegResult) // result if no entry func
 
 	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // entry func text addr
 	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
