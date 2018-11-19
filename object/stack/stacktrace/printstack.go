@@ -83,11 +83,19 @@ func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names
 		if frame.Locals != nil {
 			var values string
 
-			for _, x := range frame.Locals {
-				values += fmt.Sprintf(" %#016x", x)
+			delim := "       0  "
+
+			for i, x := range frame.Locals {
+				if i&3 == 3 {
+					values += fmt.Sprintf("%s%016x", delim, x)
+					delim = fmt.Sprintf("\n%8d  ", i+1)
+				} else {
+					values += fmt.Sprintf("%s%016x", delim, x)
+					delim = " "
+				}
 			}
 
-			_, err = fmt.Fprintf(w, "\tlocals:%s\n", values)
+			_, err = fmt.Fprintf(w, "%s\n", values)
 			if err != nil {
 				return
 			}
