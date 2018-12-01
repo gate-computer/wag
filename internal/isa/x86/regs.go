@@ -1,0 +1,35 @@
+// Copyright (c) 2016 Timo Savola. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package x86
+
+import (
+	"github.com/tsavola/wag/internal/gen/reg"
+	"github.com/tsavola/wag/internal/isa/x86/in"
+)
+
+const (
+	RegResult         = in.RegResult     // rax xmm0
+	RegDividendLow    = reg.R(0)         // rax
+	RegScratch        = in.RegScratch    // rcx xmm1
+	RegCount          = reg.R(1)         // rcx
+	RegZero           = in.RegZero       // rdx
+	RegDividendHigh   = reg.R(2)         // rdx
+	_                 = reg.R(2)         //     xmm2  <- AllocFloatFirst
+	RegStackLimit     = reg.R(3)         // rbx
+	RegSuspendBit     = reg.R(3)         // rbx
+	RegStackPtr       = reg.R(4)         // rsp
+	RegImportVariadic = reg.R(5)         // rbp       <- AllocIntFirst
+	_                 = reg.R(6)         // rsi
+	_                 = reg.R(7)         // rdi
+	_                 = reg.R(8)         // r8
+	_                 = reg.R(9)         // r9
+	_                 = reg.R(10)        // r10
+	_                 = reg.R(11)        // r11
+	_                 = reg.R(12)        // r12       <- AllocIntLast
+	RegMemoryLimit    = reg.R(13)        // r13
+	RegMemoryBase     = in.RegMemoryBase // r14
+	RegTextBase       = in.RegTextBase   // r15
+	_                 = reg.R(15)        //     xmm15 <- AllocFloatLast
+)

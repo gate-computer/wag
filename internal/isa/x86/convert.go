@@ -115,7 +115,7 @@ func convertUnsignedI64ToFloat(f *gen.Func, targetType wa.Type, target, source r
 	in.JMPcb.Stub8(&f.Text)
 	doneJump := f.Text.Addr
 
-	isa.UpdateNearBranch(f.Text.Bytes(), hugeJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), hugeJump)
 
 	// 64-bit value
 	in.MOV.RegReg(&f.Text, wa.I64, RegScratch, source)
@@ -125,5 +125,5 @@ func convertUnsignedI64ToFloat(f *gen.Func, targetType wa.Type, target, source r
 	in.CVTSI2SSD.TypeRegReg(&f.Text, targetType, wa.I64, target, source)
 	in.ADDSSD.RegReg(&f.Text, targetType, target, target)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), doneJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), doneJump)
 }

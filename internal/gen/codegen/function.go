@@ -135,7 +135,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 
 	load.Varuint32() // body size
 
-	isa.AlignFunc(&f.Prog)
+	asm.AlignFunc(&f.Prog)
 	addr := f.Text.Addr
 	f.FuncLinks[funcIndex].Addr = addr
 	f.Map.PutFuncAddr(uint32(addr))
@@ -194,7 +194,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 
 	end := popBranchTarget(f)
 	label(f, end)
-	isa.UpdateFarBranches(f.Text.Bytes(), end)
+	linker.UpdateFarBranches(f.Text.Bytes(), end)
 
 	asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
 
@@ -204,7 +204,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 
 	fullText := f.Text.Bytes()
 
-	isa.UpdateStackCheck(fullText, stackCheckAddr, f.NumLocals+f.MaxStackDepth)
+	linker.UpdateStackCheck(fullText, stackCheckAddr, f.NumLocals+f.MaxStackDepth)
 
 	for i, table := range f.BranchTables {
 		buf := fullText[table.Addr:]

@@ -194,7 +194,7 @@ func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 
 		asm.Trap(f, trap.IntegerOverflow)
 
-		isa.UpdateNearBranches(f.Text.Bytes(), okJumps)
+		linker.UpdateNearBranches(f.Text.Bytes(), okJumps)
 	}
 
 	in.CDQ.Type(&f.Text, a.Type) // Sign-extend dividend low bits to high bits.
@@ -220,7 +220,7 @@ func binaryIntRemS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	in.IDIV.Reg(&f.Text, b.Type, divisorReg)
 	f.Regs.Free(b.Type, divisorReg)
 
-	isa.UpdateNearBranches(f.Text.Bytes(), overflowJumps)
+	linker.UpdateNearBranches(f.Text.Bytes(), overflowJumps)
 
 	resultReg := f.Regs.AllocResult(a.Type)
 	in.MOV.RegReg(&f.Text, a.Type, resultReg, RegDividendHigh) // Remainder
@@ -324,11 +324,11 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	in.JMPcb.Stub8(&f.Text)
 	endJump := f.Text.Addr
 
-	isa.UpdateNearBranch(f.Text.Bytes(), commonJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), commonJump)
 
 	opcodes.common.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), endJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), endJump)
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)
@@ -361,7 +361,7 @@ func binaryFloatCopysign(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 
 	negFloatReg(&f.Prog, a.Type, targetReg)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), doneJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), doneJump)
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)

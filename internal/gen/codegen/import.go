@@ -10,7 +10,7 @@ import (
 )
 
 func genImportTrampoline(p *gen.Prog, m *module.M, funcIndex int, imp module.ImportFunc) (addr int32) {
-	isa.AlignFunc(p)
+	asm.AlignFunc(p)
 	addr = p.Text.Addr
 	p.Map.PutImportFuncAddr(uint32(addr))
 

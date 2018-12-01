@@ -63,13 +63,13 @@ func GenProgram(
 	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
 		panic("bad text address after NoFunction trap handler")
 	}
-	isa.AlignFunc(p)
+	asm.AlignFunc(p)
 	asm.Resume(p)
 
 	if p.Text.Addr <= abi.TextAddrResume || p.Text.Addr > abi.TextAddrStart {
 		panic("bad text address after resume routine")
 	}
-	isa.AlignFunc(p)
+	asm.AlignFunc(p)
 	asm.Init(p)
 
 	if m.StartDefined {
@@ -93,7 +93,7 @@ func GenProgram(
 	genCommons(p)
 
 	for id := trap.NoFunction + 1; id < trap.NumTraps; id++ {
-		isa.AlignFunc(p)
+		asm.AlignFunc(p)
 		p.TrapLinks[id].Addr = p.Text.Addr
 		asm.JumpToTrapHandler(p, id)
 	}
@@ -109,7 +109,7 @@ func GenProgram(
 
 	for i := len(m.ImportFuncs); i < initFuncCount; i++ {
 		genFunction(&funcStorage, load, i)
-		isa.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
+		linker.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
 	ptr := p.Text.Bytes()[rodata.TableAddr:]
@@ -157,14 +157,14 @@ func GenProgram(
 				atomic.PutUint32(table[offset:offset+4], addr) // overwrite only function addr
 			}
 
-			isa.UpdateCalls(p.Text.Bytes(), &ln.L)
+			linker.UpdateCalls(p.Text.Bytes(), &ln.L)
 		}
 	}
 }
 
 // genCommons except the contents of the table.
 func genCommons(p *gen.Prog) {
-	isa.PadUntil(p, rodata.CommonsAddr)
+	asm.PadUntil(p, rodata.CommonsAddr)
 
 	var (
 		tableSize   = len(p.Module.TableFuncs) * 8

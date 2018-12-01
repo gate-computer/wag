@@ -114,7 +114,7 @@ func genBlock(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 
 	end := popBranchTarget(f)
 	label(f, end)
-	isa.UpdateFarBranches(f.Text.Bytes(), end)
+	linker.UpdateFarBranches(f.Text.Bytes(), end)
 
 	return false
 }
@@ -190,7 +190,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
 		asm.Branch(&f.Prog, target.Label.Addr)
 
-		isa.UpdateNearBranches(f.Text.Bytes(), retAddrs)
+		linker.UpdateNearBranches(f.Text.Bytes(), retAddrs)
 
 		getCurrentBlock(f).Suspension = true
 	}
@@ -306,8 +306,8 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	asm.BranchIndirect(f, r)
 	deadend = true
 
-	isa.AlignData(&f.Prog, int(tableType.Size()))
-	isa.UpdateNearLoad(f.Text.Bytes(), loadInsnAddr)
+	asm.AlignData(&f.Prog, int(tableType.Size()))
+	linker.UpdateNearLoad(f.Text.Bytes(), loadInsnAddr)
 	tableAddr := f.Text.Addr
 	tableSize := len(targetTable) * int(tableType.Size())
 	f.Text.Extend(tableSize)
@@ -368,7 +368,7 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	}
 
 	label(f, &afterThen)
-	isa.UpdateFarBranches(f.Text.Bytes(), &afterThen)
+	linker.UpdateFarBranches(f.Text.Bytes(), &afterThen)
 
 	if haveElse {
 		elseDeadend := genOps(f, load)
@@ -390,7 +390,7 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 
 	end := popBranchTarget(f)
 	label(f, end)
-	isa.UpdateFarBranches(f.Text.Bytes(), end)
+	linker.UpdateFarBranches(f.Text.Bytes(), end)
 
 	return false
 }

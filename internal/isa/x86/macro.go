@@ -21,7 +21,10 @@ import (
 )
 
 const (
+	FuncAlignment = 16
+
 	NopByte = 0x90
+	PadByte = 0xcc // INT3 instruction
 )
 
 var conditionInsns = [22]in.CCInsn{
@@ -49,9 +52,28 @@ var conditionInsns = [22]in.CCInsn{
 	condition.UnorderedOrLt: in.InsnLtU,
 }
 
+var asm MacroAssembler
+
 type MacroAssembler struct{}
 
-var asm MacroAssembler
+func (MacroAssembler) AlignData(p *gen.Prog, alignment int) {
+	pad(p, PadByte, (alignment-int(p.Text.Addr))&(alignment-1))
+}
+
+func (MacroAssembler) AlignFunc(p *gen.Prog) {
+	pad(p, PadByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
+}
+
+func (MacroAssembler) PadUntil(p *gen.Prog, addr int32) {
+	pad(p, PadByte, int(addr)-int(p.Text.Addr))
+}
+
+func pad(p *gen.Prog, filler byte, length int) {
+	gap := p.Text.Extend(length)
+	for i := range gap {
+		gap[i] = filler
+	}
+}
 
 func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
 	in.SARi.RegImm8(&f.Text, wa.I64, r, 32) // sign-extension
@@ -96,7 +118,7 @@ func (MacroAssembler) BranchIf(f *gen.Func, x operand.O, labelAddr int32) (sites
 	// TODO: optimize
 	sites = asm.BranchIfStub(f, x, true, false)
 	if labelAddr != 0 {
-		isa.UpdateFarBranches(f.Text.Bytes(), &link.L{Sites: sites, Addr: labelAddr})
+		linker.UpdateFarBranches(f.Text.Bytes(), &link.L{Sites: sites, Addr: labelAddr})
 	}
 	return
 }
@@ -132,7 +154,7 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 	conditionInsns[cond].JccOpcodeC().Stub(&f.Text, near)
 	sites = append(sites, f.Text.Addr)
 
-	isa.UpdateNearBranches(f.Text.Bytes(), endJumps)
+	linker.UpdateNearBranches(f.Text.Bytes(), endJumps)
 	return
 }
 
@@ -175,11 +197,11 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 
 	asm.Trap(f, trap.IndirectCallSignatureMismatch)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), outOfBoundsJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), outOfBoundsJump)
 
 	asm.Trap(f, trap.IndirectCallIndexOutOfBounds)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), okJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), okJump)
 
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
@@ -244,7 +266,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 	retAddr = p.Text.Addr
 
-	isa.UpdateNearBranch(p.Text.Bytes(), nullJump)
+	linker.UpdateNearBranch(p.Text.Bytes(), nullJump)
 
 	// Exit
 
@@ -254,7 +276,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 
 	// Retpoline (https://support.google.com/faqs/answer/7625886)
 
-	isa.AlignFunc(p)
+	asm.AlignFunc(p)
 	if p.Text.Addr != abi.TextAddrRetpoline {
 		panic("x86: hardcoded retpoline address needs to be adjusted")
 	}
@@ -265,7 +287,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	in.PAUSE.Simple(&p.Text)
 	in.JMPcb.Addr8(&p.Text, captureSpecAddr)
 
-	isa.AlignFunc(p)
+	asm.AlignFunc(p)
 	if p.Text.Addr != abi.TextAddrRetpolineSetup {
 		panic("x86: hardcoded retpoline setup address needs to be adjusted")
 	}
@@ -465,7 +487,7 @@ func setBool(p *gen.Prog, cond condition.C) {
 
 	conditionInsns[cond].SetccOpcode().OneSizeReg(&p.Text, RegScratch)
 
-	isa.UpdateNearBranches(p.Text.Bytes(), endJumps)
+	linker.UpdateNearBranches(p.Text.Bytes(), endJumps)
 }
 
 func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int32) {
@@ -530,7 +552,7 @@ func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 	f.MapCallAddr(f.Text.Addr)
 	in.POP.Reg(&f.Text, in.OneSize, saveReg)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), skipJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), skipJump)
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {

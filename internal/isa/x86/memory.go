@@ -193,11 +193,11 @@ func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
 	in.JMPcb.Stub8(&f.Text)
 	outJump := f.Text.Addr
 
-	isa.UpdateNearBranch(f.Text.Bytes(), failJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), failJump)
 
 	in.MOVi.RegImm32(&f.Text, wa.I32, targetReg, -1) // value on failure
 
-	isa.UpdateNearBranch(f.Text.Bytes(), outJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), outJump)
 
 	return operand.Reg(wa.I32, targetReg)
 }

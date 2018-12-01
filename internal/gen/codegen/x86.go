@@ -12,12 +12,12 @@ import (
 )
 
 var (
-	isa x86.ISA
-	asm x86.MacroAssembler
+	asm    x86.MacroAssembler
+	linker x86.Linker
 )
 
 func init() {
 	// Consistency check
-	var _ interfaces.ISA = isa
 	var _ interfaces.MacroAssembler = asm
+	var _ interfaces.Linker = linker
 }

@@ -119,7 +119,7 @@ func popcnt(f *gen.Func, x operand.O) (count reg.R) {
 	in.AND.RegReg(&f.Text, x.Type, pop, temp)
 	in.JNEcb.Addr8(&f.Text, loopAddr)
 
-	isa.UpdateNearBranch(f.Text.Bytes(), skipJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), skipJump)
 
 	in.XOR.RegReg(&f.Text, wa.I32, RegZero, RegZero) // temp reg
 	f.Regs.Free(x.Type, pop)

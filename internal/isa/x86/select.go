@@ -82,11 +82,11 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 			endJumps = append(endJumps, f.Text.Addr)
 		}
 
-		isa.UpdateNearBranches(f.Text.Bytes(), moveItJumps)
+		linker.UpdateNearBranches(f.Text.Bytes(), moveItJumps)
 
 		asm.Move(f, targetReg, a)
 
-		isa.UpdateNearBranches(f.Text.Bytes(), endJumps)
+		linker.UpdateNearBranches(f.Text.Bytes(), endJumps)
 	}
 
 	return operand.Reg(a.Type, targetReg)
