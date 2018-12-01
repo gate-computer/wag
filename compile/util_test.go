@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"testing"
 
 	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/test/runner"
@@ -132,6 +133,25 @@ func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
 	}
 
 	return f2
+}
+
+func initFuzzCorpus(t *testing.T, filename string, r io.Reader) {
+	t.Helper()
+
+	if dir := os.Getenv("WAG_TEST_INIT_FUZZ_CORPUS"); dir != "" {
+		data, err := ioutil.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		filename = path.Join(dir, filename)
+
+		if err := ioutil.WriteFile(filename, data, 0666); err != nil {
+			t.Fatal(err)
+		}
+
+		t.Skip("initializing fuzz corpus")
+	}
 }
 
 func dumpExecutable(filename string, p *runner.Program, globalsMemory data.Buffer, memoryOffset int) {

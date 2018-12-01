@@ -4,7 +4,9 @@
 
 package gen
 
-import "testing"
+import (
+	"testing"
+)
 
 func checkLocalOffsets(t *testing.T, f *Func, table [][2]int) {
 	t.Helper()

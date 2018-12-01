@@ -105,13 +105,7 @@ func Test_utf8_import_field(t *testing.T)      { spec(t, "utf8-import-field") }
 func Test_utf8_import_module(t *testing.T)     { spec(t, "utf8-import-module") }
 
 func spec(t *testing.T, name string) {
-	const (
-		parallel = false
-	)
-
-	if parallel {
-		t.Parallel()
-	}
+	t.Parallel()
 
 	filename := path.Join(specTestDir, name) + ".wast"
 
@@ -140,7 +134,7 @@ func spec(t *testing.T, name string) {
 	}
 }
 
-func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []byte {
+func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 	const (
 		maxTextSize   = 0x100000
 		maxMemorySize = 0x100000
@@ -153,7 +147,7 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 		dumpMemory  = false
 	)
 
-	module, wasmData := sexp.ParsePanic(wasmData)
+	module, wasmData := sexp.ParsePanic(wast)
 	if module == nil {
 		return nil
 	}
@@ -436,6 +430,9 @@ func testModule(t *testing.T, wasmData []byte, filename string, quiet bool) []by
 	{
 		wasmReadCloser := wast2wasm(sexp.Unparse(module), quiet)
 		defer wasmReadCloser.Close()
+
+		initFuzzCorpus(t, "spec."+filename, wasmReadCloser)
+
 		wasm := bufio.NewReader(wasmReadCloser)
 
 		var nameSection section.NameSection

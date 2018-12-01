@@ -6,44 +6,24 @@ package fuzz
 
 import (
 	"bytes"
-	"fmt"
-
-	"github.com/bnagy/gapstone"
 
 	"github.com/tsavola/wag"
-	"github.com/tsavola/wag/wa"
+	"github.com/tsavola/wag/internal/test/fuzz/fuzzutil"
 )
 
 func Fuzz(data []byte) int {
-	obj, err := wag.Compile(&wag.Config{}, bytes.NewReader(data), res{})
+	config := &wag.Config{
+		Text:          fuzzutil.NewTextBuffer(),
+		GlobalsMemory: fuzzutil.NewGlobalsMemoryBuffer(),
+	}
+
+	_, err := wag.Compile(config, bytes.NewReader(data), fuzzutil.Resolver)
 	if err != nil {
+		if fuzzutil.IsFine(err) {
+			return 1
+		}
 		return 0
 	}
 
-	if len(obj.Text) != 0 {
-		engine, err := gapstone.New(gapstone.CS_ARCH_X86, gapstone.CS_MODE_64)
-		if err != nil {
-			panic(err)
-		}
-		defer engine.Close()
-
-		_, err = engine.Disasm(obj.Text, 0, 0)
-		if err != nil {
-			panic(err)
-		}
-	}
-
 	return 1
-}
-
-type res struct{}
-
-func (res) ResolveFunc(module, field string, sig wa.FuncType) (index int, err error) {
-	err = fmt.Errorf("import function %#v%#v %s", module, field, sig)
-	return
-}
-
-func (res) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
-	err = fmt.Errorf("import %s global %#v %#v", t, module, field)
-	return
 }
