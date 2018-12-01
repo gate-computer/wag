@@ -122,7 +122,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	sig := f.Module.Types[sigIndex]
 
 	if debug.Enabled {
-		debug.Printf("function %d %s", funcIndex-len(f.Module.ImportFuncs), sig)
+		debug.Printf("function %d %s", funcIndex, sig)
 		debug.Depth++
 	}
 

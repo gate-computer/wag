@@ -167,11 +167,10 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	drop := f.StackDepth - target.StackDepth
 
-	if target.Label.Addr == 0 || getCurrentBlock(f).Suspension {
+	if forward := target.Label.Addr == 0; forward || getCurrentBlock(f).Suspension {
 		asm.DropStackValues(&f.Prog, drop)
 
-		retAddrs := asm.BranchIfStub(f, cond, true, false)
-		target.Label.AddSites(retAddrs)
+		opBranchIf(f, cond, &target.Label)
 
 		asm.DropStackValues(&f.Prog, -drop)
 	} else {
@@ -431,6 +430,13 @@ func opBranch(f *gen.Func, l *link.L) {
 	retAddr := asm.Branch(&f.Prog, l.Addr)
 	if l.Addr == 0 {
 		l.AddSite(retAddr)
+	}
+}
+
+func opBranchIf(f *gen.Func, cond operand.O, l *link.L) {
+	sites := asm.BranchIf(f, cond, l.Addr)
+	if l.Addr == 0 {
+		l.AddSites(sites)
 	}
 }
 

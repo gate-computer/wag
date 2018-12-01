@@ -73,8 +73,11 @@ type MacroAssembler interface {
 	// MUST zero-extend the index register.
 	BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) int32
 
+	// BranchIf may use RegResult and update condition flags.
+	BranchIf(f *gen.Func, cond operand.O, addr int32) (sites []int32)
+
 	// BranchIfStub may use RegResult and update condition flags.
-	BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (sites []int32)
+	BranchIfStub(f *gen.Func, cond operand.O, yes, near bool) (sites []int32)
 
 	// BranchIndirect may use RegResult and update condition flags.  It takes
 	// ownership of address register, which has already been zero-extended.

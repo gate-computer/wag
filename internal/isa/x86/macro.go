@@ -7,6 +7,7 @@ package x86
 import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
+	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
@@ -88,6 +89,15 @@ func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
 	f.Regs.Free(wa.I64, addr)
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
 	in.JMPcd.Addr32(&f.Text, abi.TextAddrRetpoline)
+}
+
+func (MacroAssembler) BranchIf(f *gen.Func, x operand.O, labelAddr int32) (sites []int32) {
+	// TODO: optimize
+	sites = asm.BranchIfStub(f, x, true, false)
+	if labelAddr != 0 {
+		isa.UpdateFarBranches(f.Text.Bytes(), &link.L{Sites: sites, Addr: labelAddr})
+	}
+	return
 }
 
 func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (sites []int32) {
