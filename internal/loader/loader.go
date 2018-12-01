@@ -6,10 +6,10 @@ package loader
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math"
 
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/reader"
 )
 
@@ -81,7 +81,7 @@ func (load L) Varuint1() bool {
 		panic(err)
 	}
 	if x > 1 {
-		panic(fmt.Errorf("varuint1 is too large: 0x%x", x))
+		panic(module.Errorf("varuint1 is too large: 0x%x", x))
 	}
 	return x == 1
 }
@@ -92,7 +92,7 @@ func (load L) Varuint32() uint32 {
 		panic(err)
 	}
 	if x > math.MaxUint32 {
-		panic(fmt.Errorf("varuint32 is too large: 0x%x", x))
+		panic(module.Errorf("varuint32 is too large: 0x%x", x))
 	}
 	return uint32(x)
 }
@@ -109,7 +109,7 @@ func (load L) Varuint64() (x uint64) {
 func (load L) Count() []struct{} {
 	count := load.Varuint32()
 	if count > math.MaxInt32 {
-		panic(fmt.Errorf("count is too large: 0x%x", count))
+		panic(module.Errorf("count is too large: 0x%x", count))
 	}
 	return make([]struct{}, int(count))
 }

@@ -5,15 +5,18 @@
 package codegen
 
 import (
-	"fmt"
-
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opcode"
 	"github.com/tsavola/wag/wa"
+)
+
+var (
+	errCallParamsExceedStack = module.Error("function call parameter count exceeds stack operand count")
 )
 
 func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
@@ -21,7 +24,7 @@ func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	funcIndex := load.Varuint32()
 	if funcIndex >= uint32(len(f.Module.Funcs)) {
-		panic(fmt.Errorf("%s: function index out of bounds: %d", op, funcIndex))
+		panic(module.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
 	sig := checkCallOperandCount(f, f.Module.Funcs[funcIndex])
@@ -33,7 +36,7 @@ func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(f.Module.Types)) {
-		panic(fmt.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
+		panic(module.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
 
 	load.Byte() // reserved
@@ -59,7 +62,7 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
 	sig := f.Module.Types[sigIndex]
 	if len(sig.Params) > f.StackDepth-f.FrameBase {
-		panic("call parameter count exceeds stack operand count")
+		panic(errCallParamsExceedStack)
 	}
 	return sig
 }

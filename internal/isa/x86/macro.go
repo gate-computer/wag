@@ -5,6 +5,7 @@
 package x86
 
 import (
+	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -255,7 +256,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 
 	isa.AlignFunc(p)
 	if p.Text.Addr != abi.TextAddrRetpoline {
-		panic("hardcoded retpoline address needs to be adjusted")
+		panic("x86: hardcoded retpoline address needs to be adjusted")
 	}
 
 	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpolineSetup)
@@ -266,7 +267,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 
 	isa.AlignFunc(p)
 	if p.Text.Addr != abi.TextAddrRetpolineSetup {
-		panic("hardcoded retpoline setup address needs to be adjusted")
+		panic("x86: hardcoded retpoline setup address needs to be adjusted")
 	}
 
 	asm.StoreStackReg(p, wa.I64, 0, RegScratch)
@@ -326,7 +327,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 				zeroExtended = true
 			} else {
 				if target != RegResult {
-					panic("register moved to itself")
+					panic(errors.New("x86: register moved to itself"))
 				}
 			}
 
@@ -359,7 +360,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 				f.Regs.Free(x.Type, source)
 			} else {
 				if target != RegResult {
-					panic("register moved to itself")
+					panic(errors.New("x86: register moved to itself"))
 				}
 			}
 		}

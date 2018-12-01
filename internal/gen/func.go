@@ -5,6 +5,7 @@
 package gen
 
 import (
+	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
@@ -62,7 +63,7 @@ func (f *Func) LocalOffset(index int) int32 {
 		n--
 	}
 	if n < 0 {
-		panic("effective stack offset of local variable #%d is negative")
+		panic(errors.New("effective stack offset of local variable #%d is negative"))
 	}
 	return int32(n * obj.Word)
 }

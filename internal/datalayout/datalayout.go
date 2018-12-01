@@ -6,7 +6,6 @@ package datalayout
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -73,14 +72,14 @@ func ValidateMemory(load loader.L, m *module.M) {
 
 func readSegmentHeader(load loader.L, m *module.M, segmentIndex int) (offset, size uint32) {
 	if memoryIndex := load.Varuint32(); memoryIndex != 0 {
-		panic(fmt.Errorf("unsupported memory index: %d", memoryIndex))
+		panic(module.Errorf("unsupported memory index: %d", memoryIndex))
 	}
 
 	offset = initexpr.ReadOffset(m, load)
 	size = load.Varuint32()
 
 	if uint64(offset)+uint64(size) > uint64(m.MemoryLimitValues.Initial) {
-		panic(fmt.Errorf("memory segment #%d exceeds initial memory size", segmentIndex))
+		panic(module.Errorf("memory segment #%d exceeds initial memory size", segmentIndex))
 	}
 
 	return

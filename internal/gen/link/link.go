@@ -4,6 +4,10 @@
 
 package link
 
+import (
+	"github.com/pkg/errors"
+)
+
 type L struct {
 	Sites []int32
 	Addr  int32
@@ -19,7 +23,7 @@ func (l *L) AddSites(addrs []int32) {
 
 func (l *L) FinalAddr() int32 {
 	if l.Addr == 0 {
-		panic("link address is undefined")
+		panic(errors.New("link address undefined while updating branch or call instruction"))
 	}
 	return l.Addr
 }

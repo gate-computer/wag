@@ -5,8 +5,6 @@
 package initexpr
 
 import (
-	"fmt"
-
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opcode"
@@ -36,18 +34,18 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
 	case opcode.GetGlobal:
 		i := load.Varuint32()
 		if i >= uint32(len(m.ImportGlobals)) {
-			panic(fmt.Errorf("import global index out of bounds in initializer expression: %d", i))
+			panic(module.Errorf("import global index out of bounds in initializer expression: %d", i))
 		}
 		g := m.Globals[i]
 		valueBits = g.Init
 		t = g.Type
 
 	default:
-		panic(fmt.Errorf("unsupported operation in initializer expression: %s", op))
+		panic(module.Errorf("unsupported operation in initializer expression: %s", op))
 	}
 
 	if op := opcode.Opcode(load.Byte()); op != opcode.End {
-		panic(fmt.Errorf("unexpected operation in initializer expression when expecting end: %s", op))
+		panic(module.Errorf("unexpected operation in initializer expression when expecting end: %s", op))
 	}
 
 	return
@@ -56,7 +54,7 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
 func ReadOffset(m *module.M, load loader.L) uint32 {
 	offset, t := Read(m, load)
 	if t != wa.I32 {
-		panic(fmt.Errorf("offset initializer expression has invalid type: %s", t))
+		panic(module.Errorf("offset initializer expression has invalid type: %s", t))
 	}
 	return uint32(int32(int64(offset)))
 }

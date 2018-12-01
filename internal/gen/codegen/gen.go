@@ -5,14 +5,13 @@
 package codegen
 
 import (
-	"fmt"
-
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opcode"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
@@ -127,7 +126,7 @@ func genBinaryCommute(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo)
 
 func opBinary(f *gen.Func, op opcode.Opcode, left, right operand.O, info opInfo) {
 	if t := info.primaryType(); left.Type != t || right.Type != t {
-		panic(fmt.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
+		panic(module.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}
 
 	result := asm.Binary(f, info.props(), left, right)
@@ -254,7 +253,7 @@ func genSelect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deade
 	right := popAnyOperand(f)
 	left := popAnyOperand(f)
 	if left.Type != right.Type {
-		panic(fmt.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
+		panic(module.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
 	}
 
 	result := asm.Select(f, left, right, cond)
@@ -290,8 +289,8 @@ func badGen(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend 
 
 func badOp(op opcode.Opcode) {
 	if s := opcode.Strings[op]; s != "" {
-		panic(fmt.Errorf("unexpected opcode: %s", s))
+		panic(module.Errorf("unexpected opcode: %s", s))
 	} else {
-		panic(fmt.Errorf("invalid opcode: 0x%02x", byte(op)))
+		panic(module.Errorf("invalid opcode: 0x%02x", byte(op)))
 	}
 }

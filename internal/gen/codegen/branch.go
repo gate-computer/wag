@@ -5,9 +5,7 @@
 package codegen
 
 import (
-	"errors"
-	"fmt"
-
+	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -15,9 +13,15 @@ import (
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/opcode"
 	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wa"
+)
+
+var (
+	errIfResultType    = module.Error("if without else has result type")
+	errBranchLoopValue = module.Error("looping branch with return value")
 )
 
 func stealDeadBlockOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
@@ -35,7 +39,7 @@ func stealDeadBlockOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
 		}
 	}
 
-	panic("suitable allocated register operand not found during robbery")
+	panic(errors.New("suitable allocated register operand not found during robbery"))
 }
 
 // allocStealDeadReg may take current block's operand's register without
@@ -65,7 +69,7 @@ func popBranchTarget(f *gen.Func) (finalizedLabel *link.L) {
 
 func getBranchTarget(f *gen.Func, depth uint32) *gen.BranchTarget {
 	if depth >= uint32(len(f.BranchTargets)) {
-		panic(fmt.Errorf("relative branch depth out of bounds: %d", depth))
+		panic(module.Errorf("relative branch depth out of bounds: %d", depth))
 	}
 	return f.BranchTargets[len(f.BranchTargets)-int(depth)-1]
 }
@@ -177,7 +181,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		debug.Printf("suspension")
 
 		if target.ValueType != wa.Void {
-			panic("backward branch with value")
+			panic(errBranchLoopValue)
 		}
 
 		retAddrs := asm.BranchIfStub(f, cond, false, true)
@@ -199,7 +203,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableSize) {
-		panic(fmt.Errorf("%s has too many targets: %d", op, targetCount))
+		panic(module.Errorf("%s has too many targets: %d", op, targetCount))
 	}
 
 	targetTable := make([]*gen.BranchTarget, targetCount)
@@ -238,7 +242,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 		}
 
 		if target.ValueType != defaultTarget.ValueType {
-			panic(fmt.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
+			panic(module.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
 		}
 	}
 
@@ -278,7 +282,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 
 	if b := getCurrentBlock(f); loop && !b.Suspension {
 		if value.Type != wa.Void {
-			panic("backward branch with value")
+			panic(errBranchLoopValue)
 		}
 		asm.TrapIfLoopSuspendedSaveInt(f, r)
 		b.Suspension = true
@@ -345,7 +349,7 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	thenDeadend, haveElse := genThenOps(f, load)
 
 	if ifType != wa.Void && !haveElse {
-		panic(errors.New("if without else has result type"))
+		panic(errIfResultType)
 	}
 
 	if ifType != wa.Void {

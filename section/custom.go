@@ -6,11 +6,11 @@ package section
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
 
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/reader"
 )
 
@@ -35,7 +35,7 @@ func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {
-		err = errors.New("custom section name is too long")
+		err = module.Error("custom section name is too long")
 		return
 	}
 

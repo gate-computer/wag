@@ -5,8 +5,7 @@
 package typedecode
 
 import (
-	"fmt"
-
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -21,7 +20,7 @@ func Value(x int8) wa.Type {
 	if i := uint(-1 - x); i < uint(len(valueTypes)) {
 		return valueTypes[i]
 	}
-	panic(fmt.Errorf("unknown value type %d", x))
+	panic(module.Errorf("unknown value type %d", x))
 }
 
 func Block(x int8) (t wa.Type) {
@@ -31,5 +30,5 @@ func Block(x int8) (t wa.Type) {
 	if i := uint(-1 - x); i < uint(len(valueTypes)) {
 		return valueTypes[i]
 	}
-	panic(fmt.Errorf("unknown block type %d", x))
+	panic(module.Errorf("unknown block type %d", x))
 }

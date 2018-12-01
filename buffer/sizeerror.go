@@ -7,11 +7,11 @@ package buffer
 
 type sizeError string
 
-func (sizeError) OutputSizeLimit() bool { return true }
-func (s sizeError) Error() string       { return string(s) }
-func (s sizeError) String() string      { return string(s) }
+func (s sizeError) Error() string           { return string(s) }
+func (s sizeError) ModuleError() string     { return string(s) }
+func (s sizeError) BufferSizeLimit() string { return string(s) }
 
-// These errors implement interface{ OutputSizeLimit() bool }.
+// Errors implementing interface{ BufferSizeLimit() string }.
 var (
 	ErrSizeLimit  = sizeError("buffer size limit exceeded")
 	ErrStaticSize = sizeError("static buffer capacity exceeded")

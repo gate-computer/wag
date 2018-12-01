@@ -6,9 +6,8 @@ package codegen
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/operand"
@@ -16,6 +15,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/regalloc"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wa"
@@ -25,6 +25,13 @@ const (
 	MaxFuncParams      = 255
 	MaxFuncLocals      = 8191  // index must fit in uint16; TODO
 	MaxBranchTableSize = 32768 // TODO
+)
+
+var (
+	errOperandStackNotEmpty      = module.Error("operand stack not empty at end of function")
+	errBranchTargetStackNotEmpty = module.Error("branch target stack not empty at end of function")
+	errPopNoOperand              = module.Error("block has no operand to pop")
+	errDropNoOperand             = module.Error("block has no operand to drop")
 )
 
 type operandFrame struct {
@@ -60,7 +67,7 @@ func pushResultRegOperand(f *gen.Func, t wa.Type) {
 func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 	x = popAnyOperand(f)
 	if x.Type != t {
-		panic(fmt.Errorf("operand %s has wrong type; expected %s", x, t))
+		panic(module.Errorf("operand %s has wrong type; expected %s", x, t))
 	}
 	return
 }
@@ -68,7 +75,7 @@ func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 func popAnyOperand(f *gen.Func) (x operand.O) {
 	i := len(f.Operands) - 1
 	if i < f.FrameBase {
-		panic("block ran out of operands")
+		panic(errPopNoOperand)
 	}
 
 	x = f.Operands[i]
@@ -140,7 +147,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	for range load.Count() {
 		count := load.Varuint32()
 		if uint64(len(f.LocalTypes))+uint64(count) >= MaxFuncLocals {
-			panic(fmt.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
+			panic(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
 		}
 
 		t := typedecode.Value(load.Varint7())
@@ -177,7 +184,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 		}
 
 		if len(f.Operands) != 0 {
-			panic(errors.New("operand stack is not empty at end of function"))
+			panic(errOperandStackNotEmpty)
 		}
 
 		f.Regs.CheckNoneAllocated()
@@ -192,7 +199,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
 
 	if len(f.BranchTargets) != 0 {
-		panic("branch target stack is not empty at end of function")
+		panic(errBranchTargetStackNotEmpty)
 	}
 
 	fullText := f.Text.Bytes()
@@ -316,7 +323,7 @@ func opReserveStackEntry(f *gen.Func) {
 func opDropOperand(f *gen.Func) {
 	i := len(f.Operands) - 1
 	for i < f.FrameBase {
-		panic("dropping operand outside of current block")
+		panic(errDropNoOperand)
 	}
 
 	x := f.Operands[i]
@@ -373,7 +380,7 @@ func opDropCallOperands(f *gen.Func, n int) {
 func opStealOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
 	r = opStealOperandRegBefore(f, t, len(f.Operands))
 	if r == reg.Result {
-		panic("registers not found in operand stack")
+		panic(errors.New("no registers found in operand stack during robbery"))
 	}
 	return
 }

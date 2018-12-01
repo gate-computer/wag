@@ -5,7 +5,7 @@
 package buffer
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 )
 
 // Dynamic is a variable-capacity buffer.  The default value is a valid buffer.

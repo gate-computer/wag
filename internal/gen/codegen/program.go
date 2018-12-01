@@ -6,7 +6,7 @@ package codegen
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"math"
 
 	"github.com/tsavola/wag/compile/event"
@@ -50,13 +50,13 @@ func GenProgram(
 
 	funcCodeCount := load.Varuint32()
 	if needed := len(m.Funcs) - len(m.ImportFuncs); funcCodeCount != uint32(needed) {
-		panic(fmt.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
+		panic(module.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
 	}
 
 	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
 	if p.Text.Addr != abi.TextAddrNoFunction {
-		panic("unexpected initial text address")
+		panic(errors.New("unexpected initial text address"))
 	}
 	asm.JumpToTrapHandler(p, trap.NoFunction)
 

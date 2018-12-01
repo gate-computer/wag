@@ -5,9 +5,8 @@
 package binding
 
 import (
-	"fmt"
-
 	"github.com/tsavola/wag/compile"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -16,7 +15,7 @@ import (
 func GetMainFunc(mod *compile.Module, name string) (funcIndex uint32, sig wa.FuncType, err error) {
 	funcIndex, sig, found := mod.ExportFunc(name)
 	if !found {
-		err = fmt.Errorf("export function %q not found", name)
+		err = module.Errorf("export function %q not found", name)
 		return
 	}
 
@@ -26,7 +25,7 @@ func GetMainFunc(mod *compile.Module, name string) (funcIndex uint32, sig wa.Fun
 		return
 
 	default:
-		err = fmt.Errorf("export function %q has wrong result type %s", name, sig.Result)
+		err = module.Errorf("export function %q has wrong result type %s", name, sig.Result)
 		return
 	}
 }
