@@ -20,3 +20,16 @@ func Errorf(format string, args ...interface{}) error {
 
 func (s moduleError) Error() string       { return string(s) }
 func (s moduleError) ModuleError() string { return string(s) }
+
+type wrappedError struct {
+	text  string
+	cause error
+}
+
+func WrapError(cause error, text string) error {
+	return &wrappedError{text, cause}
+}
+
+func (e *wrappedError) Error() string       { return e.text }
+func (e *wrappedError) ModuleError() string { return e.text }
+func (e *wrappedError) Cause() error        { return e.cause }

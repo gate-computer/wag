@@ -89,7 +89,7 @@ func (load L) Varuint1() bool {
 func (load L) Varuint32() uint32 {
 	x, err := binary.ReadUvarint(load.R)
 	if err != nil {
-		panic(err)
+		panic(module.WrapError(err, "varuint32 read error"))
 	}
 	if x > math.MaxUint32 {
 		panic(module.Errorf("varuint32 is too large: 0x%x", x))
@@ -100,7 +100,7 @@ func (load L) Varuint32() uint32 {
 func (load L) Varuint64() (x uint64) {
 	x, err := binary.ReadUvarint(load.R)
 	if err != nil {
-		panic(err)
+		panic(module.WrapError(err, "varuint64 read error"))
 	}
 	return
 }
