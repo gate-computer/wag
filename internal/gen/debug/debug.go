@@ -20,7 +20,7 @@ func Printf(format string, args ...interface{}) {
 	}
 
 	for i := 0; i < Depth; i++ {
-		fmt.Print("  ")
+		print("  ")
 	}
 
 	print(fmt.Sprintf(format+"\n", args...))

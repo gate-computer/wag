@@ -108,7 +108,7 @@ func genBlock(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	debug.Printf("operands: %d", len(f.Operands))
 	debug.Printf("stack depth: %d", f.StackDepth)
 
-	truncateBlockOperands(f)
+	opTruncateBlockOperands(f)
 	frame.end(f)
 	pushResultRegOperand(f, blockType)
 
@@ -361,7 +361,7 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	debug.Printf("operands: %d", len(f.Operands))
 	debug.Printf("stack depth: %d", f.StackDepth)
 
-	truncateBlockOperands(f)
+	opTruncateBlockOperands(f)
 
 	if haveElse && !thenDeadend {
 		opBranch(f, &getBranchTarget(f, 0).Label) // end
@@ -382,7 +382,7 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 		debug.Printf("operands: %d", len(f.Operands))
 		debug.Printf("stack depth: %d", f.StackDepth)
 
-		truncateBlockOperands(f)
+		opTruncateBlockOperands(f)
 	}
 
 	frame.end(f)
@@ -419,7 +419,7 @@ func genLoop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 	debug.Printf("operands: %d", len(f.Operands))
 	debug.Printf("stack depth: %d", f.StackDepth)
 
-	truncateBlockOperands(f)
+	opTruncateBlockOperands(f)
 	frame.end(f)
 	if blockType != wa.Void {
 		pushOperand(f, result)

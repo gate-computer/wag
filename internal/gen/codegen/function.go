@@ -101,20 +101,6 @@ func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	}
 }
 
-func truncateBlockOperands(f *gen.Func) {
-	if debug.Enabled {
-		for i := f.FrameBase; i < len(f.Operands); i++ {
-			debug.Printf("truncate operand #%d: %s", i, f.Operands[i])
-		}
-	}
-
-	f.Operands = f.Operands[:f.FrameBase]
-
-	if len(f.Operands) < f.NumStableOperands {
-		f.NumStableOperands = len(f.Operands)
-	}
-}
-
 func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	*f = gen.Func{
 		Prog: f.Prog,
@@ -375,6 +361,35 @@ func opDropCallOperands(f *gen.Func, n int) {
 	}
 
 	return
+}
+
+func opTruncateBlockOperands(f *gen.Func) {
+	var numStack int
+
+	for i := f.FrameBase; i < len(f.Operands); i++ {
+		x := f.Operands[i]
+
+		debug.Printf("truncate operand #%d: %s", i, x)
+
+		switch x.Storage {
+		case storage.Stack:
+			numStack++
+
+		case storage.Reg:
+			f.Regs.Free(x.Type, x.Reg())
+		}
+	}
+
+	asm.DropStackValues(&f.Prog, numStack)
+	f.StackDepth -= numStack
+
+	debug.Printf("stack depth: %d (drop %d)", f.StackDepth, numStack)
+
+	f.Operands = f.Operands[:f.FrameBase]
+
+	if len(f.Operands) < f.NumStableOperands {
+		f.NumStableOperands = len(f.Operands)
+	}
 }
 
 func opStealOperandReg(f *gen.Func, t wa.Type) (r reg.R) {

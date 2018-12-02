@@ -6,6 +6,7 @@ package codegen
 
 import (
 	"github.com/tsavola/wag/internal/gen"
+	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
@@ -61,9 +62,13 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 
 func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
 	sig := f.Module.Types[sigIndex]
+
+	debug.Printf("sig: %s", sig)
+
 	if len(sig.Params) > f.StackDepth-f.FrameBase {
 		panic(errCallParamsExceedStack)
 	}
+
 	return sig
 }
 
