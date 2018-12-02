@@ -7,6 +7,7 @@ package fuzzutil
 import (
 	"hash/crc32"
 	"hash/crc64"
+	"io"
 	"math"
 
 	"github.com/tsavola/wag/binding"
@@ -53,6 +54,15 @@ func (resolver) ResolveGlobal(module, field string, t wa.Type) (value uint64, er
 }
 
 func IsFine(err error) bool {
-	_, ok := err.(interface{ ModuleError() string })
-	return ok
+	switch err {
+	case io.EOF:
+		return true
+	}
+
+	switch err.(type) {
+	case interface{ ModuleError() string }:
+		return true
+	}
+
+	return false
 }
