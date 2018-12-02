@@ -15,10 +15,10 @@ import (
 	"github.com/tsavola/wag/internal/test/fuzz/fuzzutil"
 )
 
-func TestFuzzCorpus(t *testing.T) {
-	dir := os.Getenv("WAG_TEST_FUZZ_CORPUS")
+func TestFuzz(t *testing.T) {
+	dir := os.Getenv("WAG_TEST_FUZZ")
 	if dir == "" {
-		t.Skip("WAG_TEST_FUZZ_CORPUS not set")
+		t.Skip("WAG_TEST_FUZZ directory not set")
 	}
 
 	infos, err := ioutil.ReadDir(dir)
@@ -30,16 +30,24 @@ func TestFuzzCorpus(t *testing.T) {
 
 	for _, info := range infos {
 		if !strings.Contains(info.Name(), ".") {
+			filename := path.Join(dir, info.Name())
+
 			t.Run(info.Name(), func(t *testing.T) {
-				t.Parallel()
-				fuzzCorpusTest(t, path.Join(dir, info.Name()))
+				if testing.Verbose() {
+					println(filename)
+				} else {
+					t.Parallel()
+				}
+
+				fuzzCorpusTest(t, filename)
 			})
+
 			tested = true
 		}
 	}
 
 	if !tested {
-		t.Logf("%s does not contain any generated samples", dir)
+		t.Logf("%s does not contain any samples", dir)
 	}
 }
 
