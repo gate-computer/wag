@@ -55,7 +55,7 @@ func (resolver) ResolveGlobal(module, field string, t wa.Type) (value uint64, er
 
 func IsFine(err error) bool {
 	switch err {
-	case io.EOF:
+	case io.EOF, io.ErrClosedPipe, io.ErrUnexpectedEOF:
 		return true
 	}
 
