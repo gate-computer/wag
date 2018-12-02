@@ -53,6 +53,8 @@ const (
 	maxInitialMemoryLimit = 16384 // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wa.PageBits
 	maxGlobals            = 4096/obj.Word - 2 // (trap handler + memory limit)
+	maxExports            = 256
+	maxElements           = 32768
 )
 
 func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int) module.ResizableLimits {
@@ -206,7 +208,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionType: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for i := range load.Count() {
+		for i := range load.Count(module.MaxTypes, "type") {
 			if form := load.Varint7(); form != -0x20 {
 				panic(module.Errorf("unsupported function type form: %d", form))
 			}
@@ -214,7 +216,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 			var sig wa.FuncType
 
 			paramCount := load.Varuint32()
-			if paramCount > codegen.MaxFuncParams {
+			if paramCount > module.MaxFuncParams {
 				panic(module.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 			}
 
@@ -232,7 +234,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionImport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for i := range load.Count() {
+		for i := range load.Count(module.MaxImports, "import") {
 			moduleLen := load.Varuint32()
 			if moduleLen > maxStringLen {
 				panic(module.Errorf("module string is too long in import #%d", i))
@@ -298,7 +300,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionFunction: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count() {
+		for range load.Count(module.MaxFunctions, "function") {
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.m.Types)) {
 				panic(module.Errorf("function type index out of bounds: %d", sigIndex))
@@ -309,23 +311,19 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionTable: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count() {
+		for range load.Count(1, "table") {
 			readTable(&m.m, load)
 		}
 	},
 
 	module.SectionMemory: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count() {
+		for range load.Count(1, "memory") {
 			readMemory(&m.m, load)
 		}
 	},
 
 	module.SectionGlobal: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count() {
-			if len(m.m.Globals) >= maxGlobals {
-				panic(module.Error("too many globals"))
-			}
-
+		for range load.Count(maxGlobals, "global") {
 			t := typedecode.Value(load.Varint7())
 			mutable := load.Varuint1()
 			init, _ := initexpr.Read(&m.m, load)
@@ -341,7 +339,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	module.SectionExport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		m.m.ExportFuncs = make(map[string]uint32)
 
-		for i := range load.Count() {
+		for i := range load.Count(maxExports, "export") {
 			fieldLen := load.Varuint32()
 			if fieldLen > maxStringLen {
 				panic(module.Errorf("field string is too long in export #%d", i))
@@ -383,7 +381,7 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionElement: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for i := range load.Count() {
+		for i := range load.Count(maxElements, "element") {
 			if index := load.Varuint32(); index != 0 {
 				panic(module.Errorf("unsupported table index: %d", index))
 			}

@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"io"
 	"io/ioutil"
+	"math"
 
 	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/initexpr"
@@ -18,6 +19,10 @@ import (
 
 const (
 	MinAlignment = 16 // for x86-64 SSE
+)
+
+const (
+	maxSegments = math.MaxInt32
 )
 
 func MemoryOffset(m *module.M, alignment int) int {
@@ -44,7 +49,7 @@ func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
 	b := buffer.Bytes()
 	memoryOffset := len(b)
 
-	for i := range load.Count() {
+	for i := range load.Count(maxSegments, "segment") {
 		offset, size := readSegmentHeader(load, m, i)
 
 		var (
@@ -61,7 +66,7 @@ func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
 }
 
 func ValidateMemory(load loader.L, m *module.M) {
-	for i := range load.Count() {
+	for i := range load.Count(maxSegments, "segment") {
 		_, size := readSegmentHeader(load, m, i)
 
 		if _, err := io.CopyN(ioutil.Discard, load.R, int64(size)); err != nil {

@@ -106,10 +106,10 @@ func (load L) Varuint64() (x uint64) {
 }
 
 // Count reads a varuint32 for iteration.
-func (load L) Count() []struct{} {
+func (load L) Count(maxCount uint32, name string) []struct{} {
 	count := load.Varuint32()
-	if count > math.MaxInt32 {
-		panic(module.Errorf("count is too large: 0x%x", count))
+	if count > maxCount {
+		panic(module.Errorf("%s count is too large: 0x%x", name, count))
 	}
 	return make([]struct{}, int(count))
 }

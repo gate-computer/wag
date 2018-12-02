@@ -20,6 +20,13 @@ type Header struct {
 	Version     uint32
 }
 
+const (
+	MaxFunctions  = 32768
+	MaxFuncParams = 255
+	MaxTypes      = MaxFunctions
+	MaxImports    = MaxFunctions
+)
+
 type SectionId byte
 
 const (

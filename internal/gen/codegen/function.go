@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	MaxFuncParams      = 255
 	MaxFuncLocals      = 8191  // index must fit in uint16; TODO
 	MaxBranchTableSize = 32768 // TODO
 )
@@ -130,7 +129,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 	f.ResultType = sig.Result
 	f.LocalTypes = sig.Params
 
-	for range load.Count() {
+	for range load.Count(MaxFuncLocals, "function local group") {
 		count := load.Varuint32()
 		if uint64(len(f.LocalTypes))+uint64(count) >= MaxFuncLocals {
 			panic(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
