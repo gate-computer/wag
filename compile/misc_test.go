@@ -47,7 +47,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	bindVariadicImports(mod, runner.Resolver)
 
 	var code = &CodeConfig{
-		Text:   buffer.NewStatic(p.Text),
+		Text:   buffer.NewStatic(p.Text[:0], len(p.Text)),
 		Mapper: &p.DebugMap,
 	}
 	loadCodeSection(code, wasm, mod)

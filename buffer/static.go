@@ -11,19 +11,26 @@ type Static struct {
 	max int
 }
 
-// MakeStatic buffer with len(b) as its capacity.  It is initially empty (b is
-// truncated).
+// MakeStatic buffer.  The slice must be empty, but it must be able to support
+// the specified capacity.
 //
 // This function can be used in field initializer expressions.  The initialized
 // field must not be copied.
-func MakeStatic(b []byte) Static {
-	return Static{b[:0], len(b)}
+func MakeStatic(b []byte, capacity int) Static {
+	if len(b) != 0 {
+		panic("slice must be empty")
+	}
+	if cap(b) < capacity {
+		panic("static buffer capacity exceeds slice capacity")
+	}
+	return Static{b, capacity}
 }
 
-// NewStatic buffer with len(b) as its capacity.  It is initially empty (b is
-// truncated).
-func NewStatic(b []byte) *Static {
-	return &Static{b[:0], len(b)}
+// NewStatic buffer.  The slice must be empty, but it must be able to support
+// the specified capacity.
+func NewStatic(b []byte, capacity int) *Static {
+	s := MakeStatic(b, capacity)
+	return &s
 }
 
 // Capacity of the static buffer.

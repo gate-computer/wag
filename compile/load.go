@@ -600,7 +600,7 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 		// no data section
 
 		if config.GlobalsMemory == nil {
-			config.GlobalsMemory = buffer.NewStatic(make([]byte, memoryOffset))
+			config.GlobalsMemory = buffer.NewStatic(make([]byte, 0, memoryOffset), memoryOffset)
 		}
 
 		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)

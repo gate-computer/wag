@@ -73,12 +73,12 @@ func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
 
 	for i := 0; i < b.N; i++ {
 		var code = &CodeConfig{
-			Text:         buffer.NewStatic(text),
+			Text:         buffer.NewStatic(text[:0], len(text)),
 			EventHandler: eventHandler,
 		}
 
 		var data = &DataConfig{
-			GlobalsMemory: buffer.NewStatic(globalsMemory),
+			GlobalsMemory: buffer.NewStatic(globalsMemory[:0], len(globalsMemory)),
 		}
 
 		r := bytes.NewReader(wasm)

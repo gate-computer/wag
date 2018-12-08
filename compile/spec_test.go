@@ -456,7 +456,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 		}()
 
 		var code = &CodeConfig{
-			Text:   buffer.NewStatic(p.Text),
+			Text:   buffer.NewStatic(p.Text[:0], len(p.Text)),
 			Mapper: &p.DebugMap,
 			Config: common,
 		}
