@@ -527,7 +527,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 				alloc = int(guess)
 			}
 
-			config.Text = buffer.NewLimited(make([]byte, alloc), config.MaxTextSize)
+			config.Text = buffer.NewLimited(make([]byte, 0, alloc), config.MaxTextSize)
 		}
 
 		mapper := config.Mapper
@@ -590,7 +590,7 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 				alloc = limit
 			}
 
-			config.GlobalsMemory = buffer.NewDynamicHint(make([]byte, alloc), limit)
+			config.GlobalsMemory = buffer.NewDynamicHint(make([]byte, 0, alloc), limit)
 		}
 
 		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)

@@ -10,10 +10,9 @@ type Limited struct {
 	d Dynamic
 }
 
-// NewLimited buffer with a maximum size.  It is initially empty (b is
-// truncated).
+// NewLimited buffer with a maximum size.  The slice must be empty.
 func NewLimited(b []byte, maxSize int) *Limited {
-	return &Limited{Dynamic{b[:0], maxSize}}
+	return &Limited{makeDynamicHint(b, maxSize)}
 }
 
 // Bytes doesn't panic.

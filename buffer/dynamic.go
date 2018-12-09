@@ -14,15 +14,23 @@ type Dynamic struct {
 	maxSize int // For limiting allocation; not enforced by this implementation.
 }
 
-// NewDynamic buffer is initially empty (b is truncated).
+func makeDynamicHint(b []byte, maxSizeHint int) Dynamic {
+	if len(b) != 0 {
+		panic("slice must be empty")
+	}
+	return Dynamic{b, maxSizeHint}
+}
+
+// NewDynamic buffer.  The slice must be empty.
 func NewDynamic(b []byte) *Dynamic {
-	return &Dynamic{b[:0], 0}
+	return NewDynamicHint(b, 0)
 }
 
 // NewDynamicHint avoids making excessive allocations if the maximum buffer
-// size can be estimated in advance.
+// size can be estimated in advance.  The slice must be empty.
 func NewDynamicHint(b []byte, maxSizeHint int) *Dynamic {
-	return &Dynamic{b[:0], maxSizeHint}
+	d := makeDynamicHint(b, maxSizeHint)
+	return &d
 }
 
 // Bytes doesn't panic.
