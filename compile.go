@@ -81,13 +81,14 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	}
 
 	module, err := compile.LoadInitialSections(moduleConfig, r)
+	if module != nil {
+		object.FuncTypes = module.FuncTypes()
+		object.InitialMemorySize = module.InitialMemorySize()
+		object.MemorySizeLimit = module.MemorySizeLimit()
+	}
 	if err != nil {
 		return
 	}
-
-	object.FuncTypes = module.FuncTypes()
-	object.InitialMemorySize = module.InitialMemorySize()
-	object.MemorySizeLimit = module.MemorySizeLimit()
 
 	// Fill in host function addresses and global variables' values.
 
@@ -109,12 +110,11 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	}
 
 	err = compile.LoadCodeSection(codeConfig, r, module)
+	objectConfig.Text = codeConfig.Text
+	object.Text = codeConfig.Text.Bytes()
 	if err != nil {
 		return
 	}
-
-	objectConfig.Text = codeConfig.Text
-	object.Text = codeConfig.Text.Bytes()
 
 	// Generate initial linear memory contents while reading the WebAssembly
 	// data section.  This step also copies the global variables' initial
@@ -128,14 +128,13 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	}
 
 	err = compile.LoadDataSection(dataConfig, r, module)
-	if err != nil {
-		return
-	}
-
 	objectConfig.GlobalsMemory = dataConfig.GlobalsMemory
 	objectConfig.MemoryAlignment = dataConfig.MemoryAlignment
 	object.MemoryOffset = alignSize(module.GlobalsSize(), dataConfig.MemoryAlignment)
 	object.GlobalsMemory = dataConfig.GlobalsMemory.Bytes()
+	if err != nil {
+		return
+	}
 
 	// Find the export function which will be used as the optional entry point.
 	// (It is executed after the start function which is defined by the module

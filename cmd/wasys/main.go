@@ -140,7 +140,7 @@ func main() {
 		Entry:           entry,
 	}
 	obj, err := wag.Compile(config, progReader, resolver{})
-	if dumpText {
+	if dumpText && len(obj.Text) > 0 {
 		e := dump.Text(os.Stdout, obj.Text, textAddr, obj.FuncAddrs, &obj.Names)
 		if err == nil {
 			err = e
