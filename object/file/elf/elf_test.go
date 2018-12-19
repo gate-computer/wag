@@ -19,8 +19,6 @@ import (
 	"github.com/tsavola/wag/internal/test/runner"
 )
 
-func testText() []byte
-
 var testGlobals = []byte{
 	0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 33
 }

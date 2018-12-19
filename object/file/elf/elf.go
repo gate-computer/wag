@@ -214,3 +214,5 @@ func align(b *bytes.Buffer, alignment int) {
 func roundSize(value, alignment int) int {
 	return (value + alignment - 1) &^ (alignment - 1)
 }
+
+func testText() []byte

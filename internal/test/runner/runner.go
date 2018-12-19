@@ -24,11 +24,12 @@ import (
 
 const signalStackReserve = 8192
 
-func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, testArg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
 
 func importTrapHandler() uint64
 func importGetArg() uint64
 func importSnapshot() uint64
+func importSuspendNextCall() uint64
 func importSpectestPrint() uint64
 func importPutns() uint64
 func importBenchmarkBegin() uint64

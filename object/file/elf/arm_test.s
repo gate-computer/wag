@@ -6,16 +6,16 @@
 
 #include "textflag.h"
 
-// func testText() (slice []byte)
+// func testText() []byte
 TEXT ·testText(SB),$0-24
 	BL	at
 	MOVD	LR, R0
 	BL	after
 	SUB	$4, LR, R1		// size of "after" routine
 	SUB	R0, R1
-	MOVD	R0, slice+0(FP)		// data
-	MOVD	R1, slice+8(FP)		// len
-	MOVD	R1, slice+16(FP)	// cap
+	MOVD	R0, ret_base+0(FP)
+	MOVD	R1, ret_len+8(FP)
+	MOVD	R1, ret_cap+16(FP)
 	RET
 
 at:	BL	(LR)

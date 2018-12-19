@@ -6,16 +6,16 @@
 
 #include "textflag.h"
 
-// func testText() (slice []byte)
+// func testText() []byte
 TEXT ·testText(SB),$0-24
 	LEAQ	testText32<>(SB), AX	// keep alive
 	LEAQ	testText16<>(SB), AX	// keep alive
 	LEAQ	testTextStart<>(SB), AX
 	LEAQ	testTextEnd<>(SB), BX
 	SUBQ	AX, BX
-	MOVQ	AX, slice+0(FP)		// data
-	MOVQ	BX, slice+8(FP)		// len
-	MOVQ	BX, slice+16(FP)	// cap
+	MOVQ	AX, ret_base+0(FP)
+	MOVQ	BX, ret_len+8(FP)
+	MOVQ	BX, ret_cap+16(FP)
 	RET
 
 TEXT testTextStart<>(SB),NOSPLIT,$0	// offset 0

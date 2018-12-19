@@ -11,7 +11,7 @@ TEXT ·clearInstructionCache(SB),$0
 	RET
 
 // func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),NOSPLIT,$0-144
+TEXT ·run(SB),NOSPLIT,$0-120
 	MOVD	text+0(FP), R27
 	MOVD	initialMemorySize+24(FP), R7
 	MOVD	memoryAddr+32(FP), R26
@@ -28,9 +28,9 @@ TEXT ·ObjectRuntime(SB),$0-32
 	MOVD	LR, R0
 	BL	objectRuntimeEnd<>(SB)	// end address returned in R1
 	SUB	R0, R1
-	MOVD	R0, slice+0(FP)		// data
-	MOVD	R1, slice+8(FP)		// len
-	MOVD	R1, slice+16(FP)	// cap
+	MOVD	R0, slice_base+0(FP)
+	MOVD	R1, slice_len+8(FP)
+	MOVD	R1, slice_cap+16(FP)
 	MOVD	R0, addr+24(FP)
 	RET
 

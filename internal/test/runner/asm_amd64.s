@@ -5,7 +5,7 @@
 #include "textflag.h"
 
 // func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),NOSPLIT,$0-128
+TEXT ·run(SB),NOSPLIT,$0-120
 	MOVQ	text+0(FP), R15
 	MOVQ	initialMemorySize+24(FP), R13
 	MOVQ	memoryAddr+32(FP), R14	// memory ptr
@@ -21,9 +21,9 @@ TEXT ·ObjectRuntime(SB),$0-32
 	LEAQ	objectRuntimeStart<>(SB), AX
 	LEAQ	objectRuntimeEnd<>(SB), BX
 	SUBQ	AX, BX
-	MOVQ	AX, slice+0(FP)		// data
-	MOVQ	BX, slice+8(FP)		// len
-	MOVQ	BX, slice+16(FP)	// cap
+	MOVQ	AX, slice_base+0(FP)
+	MOVQ	BX, slice_len+8(FP)
+	MOVQ	BX, slice_cap+16(FP)
 	MOVQ	AX, addr+24(FP)
 	RET
 
