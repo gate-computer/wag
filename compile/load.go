@@ -36,8 +36,7 @@ const (
 	defaultMemoryBufferSize = wa.PageSize // arbitrary
 )
 
-var emptyCodeSection = []byte{
-	1, // payload length
+var emptyCodeSectionPayload = []byte{
 	0, // function count
 }
 
@@ -504,20 +503,19 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 }
 
 func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
+	var payloadLen uint32
+
 	load := loader.L{R: r}
 
 	switch id := section.Find(module.SectionCode, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData, 0:
-		// no code section
-
-		load = loader.L{R: bytes.NewReader(emptyCodeSection)}
-		fallthrough
+		// No code section, but compiler needs to generate init routines.
+		load = loader.L{R: bytes.NewReader(emptyCodeSectionPayload)}
+		payloadLen = uint32(len(emptyCodeSectionPayload))
 
 	case module.SectionCode:
-		var payloadLen uint32
-		var err error
-
 		if config.SectionMapper != nil {
+			var err error
 			payloadLen, err = config.SectionMapper(byte(id), load.R)
 			if err != nil {
 				panic(err)
@@ -526,32 +524,32 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 			payloadLen = load.Varuint32()
 		}
 
-		if config.Text == nil {
-			if config.MaxTextSize == 0 {
-				config.MaxTextSize = DefaultMaxTextSize
-			}
-
-			alloc := defaultTextBufferSize
-			if alloc > config.MaxTextSize {
-				alloc = config.MaxTextSize
-			}
-			if guess := 512 + uint64(payloadLen)*8; guess < uint64(alloc) { // citation needed
-				alloc = int(guess)
-			}
-
-			config.Text = buffer.NewLimited(make([]byte, 0, alloc), config.MaxTextSize)
-		}
-
-		mapper := config.Mapper
-		if mapper == nil {
-			mapper = dummyMap{}
-		}
-
-		codegen.GenProgram(config.Text, mapper, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
-
 	default:
 		panic(module.Errorf("unexpected section id: 0x%x (looking for code section)", id))
 	}
+
+	if config.Text == nil {
+		if config.MaxTextSize == 0 {
+			config.MaxTextSize = DefaultMaxTextSize
+		}
+
+		alloc := defaultTextBufferSize
+		if alloc > config.MaxTextSize {
+			alloc = config.MaxTextSize
+		}
+		if guess := 512 + uint64(payloadLen)*8; guess < uint64(alloc) { // citation needed
+			alloc = int(guess)
+		}
+
+		config.Text = buffer.NewLimited(make([]byte, 0, alloc), config.MaxTextSize)
+	}
+
+	mapper := config.Mapper
+	if mapper == nil {
+		mapper = dummyMap{}
+	}
+
+	codegen.GenProgram(config.Text, mapper, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
 }
 
 // DataConfig for a single compiler invocation.
