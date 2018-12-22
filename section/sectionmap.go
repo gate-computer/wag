@@ -5,6 +5,7 @@
 package section
 
 import (
+	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 )
 
@@ -25,18 +26,18 @@ type Map struct {
 	Sections [module.NumSections]ByteRange
 }
 
-func (m *Map) Mapper() func(byte, uint32) {
+func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
 	offset := int64(moduleHeaderSize)
 
-	return func(sectionId byte, payloadLen uint32) {
-		payloadLenSize := 1
-		for x := payloadLen; x >= 0x80; {
-			x >>= 7
-			payloadLenSize++
+	return func(sectionId byte, r Reader) (payloadLen uint32, err error) {
+		payloadLen, payloadLenSize, err := loader.Varuint32(r)
+		if err != nil {
+			return
 		}
 
 		length := sectionIdSize + int64(payloadLenSize) + int64(payloadLen)
 		m.Sections[sectionId] = ByteRange{offset, length}
 		offset += length
+		return
 	}
 }

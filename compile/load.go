@@ -107,8 +107,9 @@ func readMemory(m *module.M, load loader.L) {
 // Config for loading WebAssembly module sections.
 type Config struct {
 	// SectionMapper is invoked for every section (standard or custom), just
-	// before the payload is read.
-	SectionMapper func(sectionId byte, payloadLen uint32)
+	// after the section id byte.  It must read and return the payload length
+	// (varuint32), but not the payload itself.
+	SectionMapper func(sectionId byte, r Reader) (payloadLen uint32, err error)
 
 	// CustomSectionLoader is invoked for every custom section.  It must read
 	// exactly payloadLen bytes, or return an error.  SectionMapper (if
@@ -184,10 +185,15 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 			return
 		}
 
-		payloadLen := load.Varuint32()
+		var payloadLen uint32
 
 		if config.SectionMapper != nil {
-			config.SectionMapper(sectionId, payloadLen)
+			payloadLen, err = config.SectionMapper(sectionId, r)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			payloadLen = load.Varuint32()
 		}
 
 		metaSectionLoaders[id](m, config, payloadLen, load)
@@ -508,10 +514,16 @@ func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
 		fallthrough
 
 	case module.SectionCode:
-		payloadLen := load.Varuint32()
+		var payloadLen uint32
+		var err error
 
 		if config.SectionMapper != nil {
-			config.SectionMapper(byte(id), payloadLen)
+			payloadLen, err = config.SectionMapper(byte(id), load.R)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			payloadLen = load.Varuint32()
 		}
 
 		if config.Text == nil {
@@ -572,10 +584,16 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 
 	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
-		payloadLen := load.Varuint32()
+		var payloadLen uint32
+		var err error
 
 		if config.SectionMapper != nil {
-			config.SectionMapper(byte(id), payloadLen)
+			payloadLen, err = config.SectionMapper(byte(id), load.R)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			payloadLen = load.Varuint32()
 		}
 
 		if config.GlobalsMemory == nil {
@@ -629,10 +647,13 @@ func validateDataSection(config *Config, r Reader, mod *Module) {
 
 	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
-		payloadLen := load.Varuint32()
-
 		if config.SectionMapper != nil {
-			config.SectionMapper(byte(id), payloadLen)
+			_, err := config.SectionMapper(byte(id), load.R)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			load.Varuint32()
 		}
 
 		datalayout.ValidateMemory(load, &mod.m)

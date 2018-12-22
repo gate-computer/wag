@@ -113,3 +113,24 @@ func (load L) Count(maxCount uint32, name string) []struct{} {
 	}
 	return make([]struct{}, int(count))
 }
+
+func Varuint32(r io.ByteReader) (x uint32, n int, err error) {
+	var shift uint
+	for n = 1; ; n++ {
+		var b byte
+		b, err = r.ReadByte()
+		if err != nil {
+			return
+		}
+		if b < 0x80 {
+			if n > 5 || n == 5 && b > 0xf {
+				err = module.Errorf("varuint32 is too large")
+				return
+			}
+			x |= uint32(b) << shift
+			return
+		}
+		x |= (uint32(b) & 0x7f) << shift
+		shift += 7
+	}
+}

@@ -16,7 +16,7 @@ import (
 func Find(
 	findId module.SectionId,
 	load loader.L,
-	sectionMapper func(sectionId byte, payloadLen uint32),
+	sectionMapper func(sectionId byte, r reader.R) (payloadLen uint32, err error),
 	customLoader func(reader.R, uint32) error,
 ) module.SectionId {
 	for {
@@ -32,10 +32,15 @@ func Find(
 
 		switch {
 		case id == module.SectionCustom:
-			payloadLen := load.Varuint32()
+			var payloadLen uint32
 
 			if sectionMapper != nil {
-				sectionMapper(sectionId, payloadLen)
+				payloadLen, err = sectionMapper(sectionId, load.R)
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				payloadLen = load.Varuint32()
 			}
 
 			if customLoader != nil {
