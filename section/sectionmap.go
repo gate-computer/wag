@@ -19,11 +19,31 @@ type ByteRange struct {
 	Length int64
 }
 
-// Map of section positions within the WebAssebly binary module.  Offset and
-// Length are nonzero if a section is present.  Sections[Custom] holds
-// information about the last (or latest) custom section.
+// Map of section positions within the WebAssebly binary module.  Map must me
+// initialied with MakeMap or NewMap.
+//
+// Section offset is always nonzero for standard sections; if the section is
+// missing, it's the position where it would be.  Section length is nonzero if
+// the section is present.
+//
+// Sections[Custom] holds information about the last (or latest) custom
+// section.  Its offset is zero if there are no custom sections.
 type Map struct {
 	Sections [module.NumSections]ByteRange
+}
+
+// MakeMap which represents an empty module.
+func MakeMap() (m Map) {
+	for i := 1; i < int(module.NumSections); i++ {
+		m.Sections[i].Offset = moduleHeaderSize
+	}
+	return
+}
+
+// NewMap which represents an empty module.
+func NewMap() *Map {
+	m := MakeMap()
+	return &m
 }
 
 func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
@@ -35,9 +55,24 @@ func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
 			return
 		}
 
+		if ID(sectionId) != Custom {
+			// Initialize positions of skipped sections.
+			for i := int(sectionId) - 1; i > 0 && m.Sections[i].Length == 0; i-- {
+				m.Sections[i].Offset = offset
+			}
+		}
+
 		length := sectionIdSize + int64(payloadLenSize) + int64(payloadLen)
 		m.Sections[sectionId] = ByteRange{offset, length}
 		offset += length
+
+		// Default positions of remaining standard sections.  Be careful not to
+		// overwrite already mapped sections, as sectionId may be Custom.
+		for i := int(sectionId) + 1; i < int(module.NumSections); i++ {
+			if m.Sections[i].Length == 0 {
+				m.Sections[i].Offset = offset
+			}
+		}
 		return
 	}
 }

@@ -15,7 +15,7 @@ import (
 
 func TestSection(t *testing.T) {
 	var (
-		sectionMap         = new(section.Map)
+		sectionMap         = section.NewMap()
 		nameSectionMapping = new(section.MappedNameSection)
 		imaginaryMapping   = new(section.CustomMapping)
 		loadConfig         = compile.Config{
