@@ -55,6 +55,10 @@ type Object struct {
 //
 // See the source code for examples of how to use the lower-level APIs.
 func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResolver) (object *Object, err error) {
+	if objectConfig == nil {
+		objectConfig = new(Config)
+	}
+
 	object = new(Object)
 
 	// In general, custom sections may appear at any position in the binary
