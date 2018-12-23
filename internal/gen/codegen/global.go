@@ -10,7 +10,7 @@ import (
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/opcode"
+	"github.com/tsavola/wag/wa/opcode"
 )
 
 func globalOffset(f *gen.Func, index uint32) int32 {

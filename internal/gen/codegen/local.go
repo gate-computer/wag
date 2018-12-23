@@ -10,8 +10,8 @@ import (
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/loader"
 	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/opcode"
 	"github.com/tsavola/wag/wa"
+	"github.com/tsavola/wag/wa/opcode"
 )
 
 func readLocalIndex(f *gen.Func, load loader.L, op opcode.Opcode) (index int, t wa.Type) {

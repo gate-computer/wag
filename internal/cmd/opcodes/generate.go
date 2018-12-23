@@ -45,7 +45,7 @@ func main() {
 	}
 
 	generateFile("internal/gen/codegen/opcodes.go", forPackageCodegen, opcodes)
-	generateFile("internal/opcode/opcodes.go", forPackageOpcode, opcodes)
+	generateFile("wa/opcode/opcodes.go", forPackageOpcode, opcodes)
 }
 
 func generateFile(filename string, generator func(func(string, ...interface{}), []opcode), opcodes []opcode) {
@@ -129,11 +129,11 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 	out(`package codegen`)
 
 	out(`import (`)
-	out(`    "github.com/tsavola/wag/wa"`)
 	out(`    "github.com/tsavola/wag/internal/gen"`)
 	out(`    "github.com/tsavola/wag/internal/isa/prop"`)
 	out(`    "github.com/tsavola/wag/internal/loader"`)
-	out(`    "github.com/tsavola/wag/internal/opcode"`)
+	out(`    "github.com/tsavola/wag/wa"`)
+	out(`    "github.com/tsavola/wag/wa/opcode"`)
 	out(`)`)
 
 	out(`var opcodeImpls = [256]opImpl{`)

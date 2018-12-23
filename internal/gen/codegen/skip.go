@@ -8,7 +8,7 @@ import (
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/opcode"
+	"github.com/tsavola/wag/wa/opcode"
 )
 
 func skipOps(f *gen.Func, load loader.L) {
