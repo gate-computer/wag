@@ -65,3 +65,17 @@ func (t Type) String() string {
 		return "<invalid type>"
 	}
 }
+
+var typeEncoding = [16]byte{
+	Void: 0x00,
+	I32:  0xff,
+	I64:  0xfe,
+	F32:  0xfd,
+	F64:  0xfc,
+}
+
+// Encode as WebAssembly.  Result is undefined if Type representation is not
+// valid.
+func (t Type) Encode() byte {
+	return typeEncoding[t&15]
+}

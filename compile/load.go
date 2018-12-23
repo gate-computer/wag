@@ -436,6 +436,14 @@ func (m *Module) FuncTypes() []wa.FuncType {
 func (m *Module) InitialMemorySize() int { return m.m.MemoryLimitValues.Initial }
 func (m *Module) MemorySizeLimit() int   { return m.m.MemoryLimitValues.Maximum }
 
+func (m *Module) GlobalTypes() []wa.GlobalType {
+	gs := make([]wa.GlobalType, len(m.m.Globals))
+	for i, g := range m.m.Globals {
+		gs[i] = wa.MakeGlobalType(g.Type, g.Mutable)
+	}
+	return gs
+}
+
 func (m *Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
 func (m *Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }
 
