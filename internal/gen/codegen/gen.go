@@ -288,8 +288,8 @@ func badGen(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend 
 }
 
 func badOp(op opcode.Opcode) {
-	if s := opcode.Strings[op]; s != "" {
-		panic(module.Errorf("unexpected opcode: %s", s))
+	if opcode.Exists(byte(op)) {
+		panic(module.Errorf("unexpected opcode: %s", op))
 	} else {
 		panic(module.Errorf("invalid opcode: 0x%02x", byte(op)))
 	}

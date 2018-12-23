@@ -177,7 +177,7 @@ const (
 	F64ReinterpretI64 = Opcode(0xbf)
 )
 
-var Strings = [256]string{
+var strings = [256]string{
 	Unreachable:       "unreachable",
 	Nop:               "nop",
 	Block:             "block",

@@ -12,9 +12,13 @@ import (
 type Opcode byte
 
 func (op Opcode) String() (s string) {
-	s = Strings[op]
+	s = strings[op]
 	if s == "" {
 		s = fmt.Sprintf("0x%02x", byte(op))
 	}
 	return
+}
+
+func Exists(opcode byte) bool {
+	return strings[opcode] != ""
 }

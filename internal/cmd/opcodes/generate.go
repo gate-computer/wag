@@ -116,7 +116,7 @@ func forPackageOpcode(out func(string, ...interface{}), opcodes []opcode) {
 	}
 	out(`)`)
 
-	out(`var Strings = [256]string{`)
+	out(`var strings = [256]string{`)
 	for _, op := range opcodes {
 		if op.name != "" {
 			out(`%s: "%s",`, op.sym, op.name)
