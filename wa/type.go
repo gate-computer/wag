@@ -68,10 +68,10 @@ func (t Type) String() string {
 
 var typeEncoding = [16]byte{
 	Void: 0x00,
-	I32:  0xff,
-	I64:  0xfe,
-	F32:  0xfd,
-	F64:  0xfc,
+	I32:  0x7f,
+	I64:  0x7e,
+	F32:  0x7d,
+	F64:  0x7c,
 }
 
 // Encode as WebAssembly.  Result is undefined if Type representation is not
