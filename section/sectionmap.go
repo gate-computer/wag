@@ -55,21 +55,13 @@ func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
 			return
 		}
 
-		if ID(sectionId) != Custom {
-			// Initialize positions of skipped sections.
-			for i := int(sectionId) - 1; i > 0 && m.Sections[i].Length == 0; i-- {
-				m.Sections[i].Offset = offset
-			}
-		}
-
 		length := sectionIdSize + int64(payloadLenSize) + int64(payloadLen)
 		m.Sections[sectionId] = ByteRange{offset, length}
 		offset += length
 
-		// Default positions of remaining standard sections.  Be careful not to
-		// overwrite already mapped sections, as sectionId may be Custom.
-		for i := int(sectionId) + 1; i < int(module.NumSections); i++ {
-			if m.Sections[i].Length == 0 {
+		if ID(sectionId) != Custom {
+			// Default positions of remaining standard sections.
+			for i := int(sectionId) + 1; i < int(module.NumSections); i++ {
 				m.Sections[i].Offset = offset
 			}
 		}
