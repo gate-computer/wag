@@ -122,7 +122,6 @@ func (p *Program) exportStack(native []byte) (portable []byte, err error) {
 		byteOrder.PutUint64(buf[:8], site.index) // native address -> portable index
 
 		if initial {
-			buf = buf[:0]
 			return
 		}
 
@@ -216,7 +215,7 @@ func (r *Runner) WriteStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *section
 
 	stackLimit := (*reflect.SliceHeader)(unsafe.Pointer(&r.stack)).Data
 	unused := uintptr(r.lastStackPtr) - stackLimit
-	if unused < 0 || unused > uintptr(len(r.stack)) {
+	if unused > uintptr(len(r.stack)) {
 		err = errors.New("stack pointer out of range")
 		return
 	}

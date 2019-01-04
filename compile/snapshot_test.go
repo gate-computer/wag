@@ -75,9 +75,12 @@ func TestSnapshot(t *testing.T) {
 	}
 	_, err = r1.Run(0, mod.Types(), &printBuf)
 	r1.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if printBuf.Len() > 0 {
-		t.Logf("print output:\n%s", string(printBuf.Bytes()))
+		t.Logf("print output:\n%s", printBuf.String())
 	}
 
 	if len(r1.Snapshots) != 1 {
@@ -95,9 +98,12 @@ func TestSnapshot(t *testing.T) {
 	}
 	_, err = r2.Run(0, mod.Types(), &printBuf)
 	r2.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if printBuf.Len() > 0 {
-		t.Logf("print output:\n%s", string(printBuf.Bytes()))
+		t.Logf("print output:\n%s", printBuf.String())
 	}
 
 	if len(r2.Snapshots) != 0 {

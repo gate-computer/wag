@@ -82,7 +82,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 		t.Fatal(err)
 	}
 
-	output := string(printBuf.Bytes())
+	output := printBuf.String()
 	t.Logf("print output:\n%s", output)
 	if output != expectOutput {
 		t.Fail()

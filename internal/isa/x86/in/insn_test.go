@@ -141,7 +141,6 @@ func TestInsnRMint(test *testing.T) {
 		op          interface{}
 		mr          bool
 		skipRegReg  bool
-		testMem16   bool
 		types       []wa.Type
 		op2RegNames []string
 		memSize     string

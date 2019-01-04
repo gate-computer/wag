@@ -231,8 +231,6 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int) {
 		}
 		debug.Printf("functioned")
 	}
-
-	return
 }
 
 func opStabilizeOperands(f *gen.Func) {
@@ -330,8 +328,6 @@ func opDropOperand(f *gen.Func) {
 	case storage.Reg:
 		f.Regs.Free(x.Type, x.Reg())
 	}
-
-	return
 }
 
 // opDropCallOperands caller knows for sure that the dropped operands are stack
@@ -358,8 +354,6 @@ func opDropCallOperands(f *gen.Func, n int) {
 	if len(f.Operands) < f.NumStableOperands {
 		f.NumStableOperands = len(f.Operands)
 	}
-
-	return
 }
 
 func opTruncateBlockOperands(f *gen.Func) {

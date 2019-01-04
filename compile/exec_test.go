@@ -84,7 +84,7 @@ func TestExec(t *testing.T) {
 	}
 
 	if printBuf.Len() > 0 {
-		t.Logf("print output:\n%s", string(printBuf.Bytes()))
+		t.Logf("print output:\n%s", printBuf.String())
 	}
 
 	if dumpText && testing.Verbose() {

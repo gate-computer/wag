@@ -155,14 +155,14 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 			out(`opcode.%s: {genWrap, 0},`, op.sym)
 
 		default:
-			if m := regexp.MustCompile("^(...)\\.const$").FindStringSubmatch(op.name); m != nil {
+			if m := regexp.MustCompile(`^(...)\.const$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "genConst" + strings.ToUpper(m[1])
 					type1 = "wa." + strings.ToUpper(m[1])
 				)
 
 				out(`opcode.%s: {%s, opInfo(%s)},`, op.sym, impl, type1)
-			} else if m := regexp.MustCompile("^(...)\\.(.+)/(...)$").FindStringSubmatch(op.name); m != nil {
+			} else if m := regexp.MustCompile(`^(...)\.(.+)/(...)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "genConvert"
 					type1 = "wa." + strings.ToUpper(m[1])
@@ -171,7 +171,7 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 				)
 
 				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, props)
-			} else if m := regexp.MustCompile("^(.)(..)\\.(load|store)(.*)$").FindStringSubmatch(op.name); m != nil {
+			} else if m := regexp.MustCompile(`^(.)(..)\.(load|store)(.*)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "gen" + symbol(m[3])
 					type1 = "wa." + strings.ToUpper(m[1]+m[2])
@@ -181,7 +181,7 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 				props = "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3]+m[4])
 
 				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
-			} else if m := regexp.MustCompile("^(.)(..)\\.(.+)$").FindStringSubmatch(op.name); m != nil {
+			} else if m := regexp.MustCompile(`^(.)(..)\.(.+)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = operGen(m[3])
 					type1 = "wa." + strings.ToUpper(m[1]+m[2])

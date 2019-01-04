@@ -136,9 +136,8 @@ func spec(t *testing.T, name string) {
 
 func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 	const (
-		maxTextSize   = 0x100000
-		maxMemorySize = 0x100000
-		stackSize     = 4096 // limit stacktrace length
+		maxTextSize = 0x100000
+		stackSize   = 4096 // limit stacktrace length
 
 		timeout     = time.Second * 3
 		dumpExps    = false
@@ -517,7 +516,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			var printBuf bytes.Buffer
 			result, err := r.Run(0, mod.Types(), &printBuf)
 			if printBuf.Len() > 0 {
-				t.Logf("run: module %s: print:\n%s", filename, string(printBuf.Bytes()))
+				t.Logf("run: module %s: print:\n%s", filename, printBuf.String())
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -560,7 +559,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			}
 
 			if printBuf.Len() > 0 {
-				t.Logf("run: module %s: test #%d: print output:\n%s", filename, id, string(printBuf.Bytes()))
+				t.Logf("run: module %s: test #%d: print output:\n%s", filename, id, printBuf.String())
 			}
 
 			if panicked != nil {
@@ -570,7 +569,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			var stackBuf bytes.Buffer
 			if err := r.WriteStacktraceTo(&stackBuf, mod.FuncTypes(), &nameSection); err == nil {
 				if stackBuf.Len() > 0 {
-					t.Logf("run: module %s: test #%d: stacktrace:\n%s", filename, id, string(stackBuf.Bytes()))
+					t.Logf("run: module %s: test #%d: stacktrace:\n%s", filename, id, stackBuf.String())
 				}
 			} else {
 				t.Errorf("run: module %s: test #%d: stacktrace error: %v", filename, id, err)

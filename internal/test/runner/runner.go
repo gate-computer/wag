@@ -167,7 +167,6 @@ type Program struct {
 	data         []byte
 	memoryOffset int
 
-	funcAddrs map[int]int
 	callSites map[int]callSite
 }
 
@@ -476,7 +475,6 @@ func (e *Executor) run() {
 	} else {
 		e.err = e.runner.lastTrap
 	}
-	return
 }
 
 func makeMemory(size int, extraProt, extraFlags int) (mem []byte, err error) {

@@ -19,7 +19,6 @@ const (
 	ptr2 = (1 << 1)
 	ptr3 = (1 << 2)
 	ptr4 = (1 << 3)
-	ptr5 = (1 << 4)
 )
 
 type call struct {
