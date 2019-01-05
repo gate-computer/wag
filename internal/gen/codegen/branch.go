@@ -136,7 +136,9 @@ func genBr(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend b
 	if target.FuncEnd {
 		asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
 	} else {
-		asm.DropStackValues(&f.Prog, f.StackDepth-target.StackDepth)
+		if drop := f.StackDepth - target.StackDepth; drop != 0 {
+			asm.DropStackValues(&f.Prog, drop)
+		}
 
 		if b := getCurrentBlock(f); target.Label.Addr != 0 && !b.Suspension {
 			debug.Printf("loop")
@@ -172,11 +174,14 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 	drop := f.StackDepth - target.StackDepth
 
 	if forward := target.Label.Addr == 0; forward || getCurrentBlock(f).Suspension {
-		asm.DropStackValues(&f.Prog, drop)
-
-		opBranchIf(f, cond, &target.Label)
-
-		asm.DropStackValues(&f.Prog, -drop)
+		if drop == 0 {
+			opBranchIf(f, cond, &target.Label)
+		} else {
+			// TODO: don't deallocate stack entries even temporarily
+			asm.DropStackValues(&f.Prog, drop)
+			opBranchIf(f, cond, &target.Label)
+			asm.DropStackValues(&f.Prog, -drop)
+		}
 	} else {
 		debug.Printf("suspension")
 
@@ -186,7 +191,9 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 		retAddrs := asm.BranchIfStub(f, cond, false, true)
 
-		asm.DropStackValues(&f.Prog, drop)
+		if drop != 0 {
+			asm.DropStackValues(&f.Prog, drop)
+		}
 		asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
 		asm.Branch(&f.Prog, target.Label.Addr)
 
@@ -278,7 +285,9 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 
 	defaultDrop := f.StackDepth - defaultTarget.StackDepth
 	debug.Printf("drop values from physical stack for default target: %d", defaultDrop)
-	asm.DropStackValues(&f.Prog, defaultDrop)
+	if defaultDrop != 0 {
+		asm.DropStackValues(&f.Prog, defaultDrop)
+	}
 
 	if b := getCurrentBlock(f); loop && !b.Suspension {
 		if value.Type != wa.Void {
@@ -294,7 +303,9 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	if tableType == wa.I32 {
 		drop := defaultTarget.StackDepth - commonStackDepth
 		debug.Printf("drop values from physical stack for dynamic target: %d", drop)
-		asm.DropStackValues(&f.Prog, drop)
+		if drop != 0 {
+			asm.DropStackValues(&f.Prog, drop)
+		}
 	} else {
 		debug.Printf("drop values from physical stack for dynamic target")
 		indexOnly := allocStealDeadReg(f, wa.I32)

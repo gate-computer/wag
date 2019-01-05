@@ -373,8 +373,10 @@ func opTruncateBlockOperands(f *gen.Func) {
 		}
 	}
 
-	asm.DropStackValues(&f.Prog, numStack)
-	f.StackDepth -= numStack
+	if numStack != 0 {
+		asm.DropStackValues(&f.Prog, numStack)
+		f.StackDepth -= numStack
+	}
 
 	debug.Printf("stack depth: %d (drop %d)", f.StackDepth, numStack)
 
