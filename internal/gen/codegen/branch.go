@@ -177,10 +177,12 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		if drop == 0 {
 			opBranchIf(f, cond, &target.Label)
 		} else {
-			// TODO: don't deallocate stack entries even temporarily
+			retAddrs := asm.BranchIfStub(f, cond, false, true)
+
 			asm.DropStackValues(&f.Prog, drop)
-			opBranchIf(f, cond, &target.Label)
-			asm.DropStackValues(&f.Prog, -drop)
+			opBranch(f, &target.Label)
+
+			linker.UpdateNearBranches(f.Text.Bytes(), retAddrs)
 		}
 	} else {
 		debug.Printf("suspension")
