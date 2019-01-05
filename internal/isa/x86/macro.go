@@ -98,12 +98,12 @@ func dropStableValue(f *gen.Func, x operand.O) {
 	}
 }
 
-func (MacroAssembler) Branch(p *gen.Prog, addr int32) int32 {
-	if addr != 0 {
-		in.JMPcd.Addr32(&p.Text, addr)
-	} else {
-		in.JMPcd.Stub32(&p.Text)
-	}
+func (MacroAssembler) Branch(p *gen.Prog, addr int32) {
+	in.JMPcd.Addr32(&p.Text, addr)
+}
+
+func (MacroAssembler) BranchStub(p *gen.Prog) int32 {
+	in.JMPcd.Stub32(&p.Text)
 	return p.Text.Addr
 }
 

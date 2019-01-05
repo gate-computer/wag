@@ -71,8 +71,12 @@ func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
 	}
 }
 
-func (MacroAssembler) Branch(p *gen.Prog, addr int32) int32 {
+func (MacroAssembler) Branch(p *gen.Prog, addr int32) {
 	p.Text.PutUint32(in.B.I26(in.Int26((addr - p.Text.Addr) / 4)))
+}
+
+func (MacroAssembler) BranchStub(p *gen.Prog) int32 {
+	p.Text.PutUint32(in.B.I26(in.Int26(-1))) // Infinite loop as placeholder.
 	return p.Text.Addr
 }
 

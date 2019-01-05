@@ -431,9 +431,10 @@ func genLoop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 }
 
 func opBranch(f *gen.Func, l *link.L) {
-	retAddr := asm.Branch(&f.Prog, l.Addr)
-	if l.Addr == 0 {
-		l.AddSite(retAddr)
+	if l.Addr != 0 {
+		asm.Branch(&f.Prog, l.Addr)
+	} else {
+		l.AddSite(asm.BranchStub(&f.Prog))
 	}
 }
 
