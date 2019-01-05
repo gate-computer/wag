@@ -438,9 +438,10 @@ func opBranch(f *gen.Func, l *link.L) {
 }
 
 func opBranchIf(f *gen.Func, cond operand.O, l *link.L) {
-	sites := asm.BranchIf(f, cond, l.Addr)
-	if l.Addr == 0 {
-		l.AddSites(sites)
+	if l.Addr != 0 {
+		asm.BranchIf(f, cond, l.Addr)
+	} else {
+		l.AddSites(asm.BranchIfStub(f, cond, true, false))
 	}
 }
 
