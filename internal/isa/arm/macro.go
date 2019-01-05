@@ -62,13 +62,11 @@ func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
 }
 
 func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
-	if n != 0 {
-		offset := uint32(n * 8)
-		if offset > 4095 {
-			panic(n) // TODO
-		}
-		p.Text.PutUint32(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.I64))
+	offset := uint32(n * 8)
+	if offset > 4095 {
+		panic(n) // TODO
 	}
+	p.Text.PutUint32(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.I64))
 }
 
 func (MacroAssembler) Branch(p *gen.Prog, addr int32) {

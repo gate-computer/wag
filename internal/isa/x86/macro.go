@@ -82,9 +82,7 @@ func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
 }
 
 func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
-	if n != 0 {
-		in.LEA.RegStackDisp(&p.Text, wa.I64, RegStackPtr, int32(n*obj.Word))
-	}
+	in.LEA.RegStackDisp(&p.Text, wa.I64, RegStackPtr, int32(n*obj.Word))
 }
 
 func dropStableValue(f *gen.Func, x operand.O) {
@@ -450,7 +448,9 @@ func (MacroAssembler) PushZeros(p *gen.Prog, n int) {
 }
 
 func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
-	asm.DropStackValues(p, numStackValues)
+	if numStackValues != 0 {
+		asm.DropStackValues(p, numStackValues)
+	}
 	in.RET.Simple(&p.Text)
 }
 
