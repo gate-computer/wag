@@ -64,11 +64,15 @@ type MacroAssembler interface {
 	Binary(f *gen.Func, props uint16, lhs, rhs operand.O) operand.O
 
 	// Branch may use RegResult and update condition flags.
-	Branch(p *gen.Prog, addr int32) int32
+	Branch(p *gen.Prog, addr int32) (site int32)
 
 	// BranchIfOutOfBounds may use RegResult and update condition flags.  It
 	// MUST zero-extend the index register.
-	BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) int32
+	BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32)
+
+	// BranchIfOutOfBoundsStub may use RegResult and update condition flags.
+	// It MUST zero-extend the index register.
+	BranchIfOutOfBoundsStub(p *gen.Prog, indexReg reg.R, upperBound int32) (site int32)
 
 	// BranchIf may use RegResult and update condition flags.
 	BranchIf(f *gen.Func, cond operand.O, addr int32) (sites []int32)

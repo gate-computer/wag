@@ -445,8 +445,9 @@ func opBranchIf(f *gen.Func, cond operand.O, l *link.L) {
 }
 
 func opBranchIfOutOfBounds(f *gen.Func, indexReg reg.R, upperBound int32, l *link.L) {
-	site := asm.BranchIfOutOfBounds(&f.Prog, indexReg, upperBound, l.Addr)
-	if l.Addr == 0 {
-		l.AddSite(site)
+	if l.Addr != 0 {
+		asm.BranchIfOutOfBounds(&f.Prog, indexReg, upperBound, l.Addr)
+	} else {
+		l.AddSite(asm.BranchIfOutOfBoundsStub(&f.Prog, indexReg, upperBound))
 	}
 }

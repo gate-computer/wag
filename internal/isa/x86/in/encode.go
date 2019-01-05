@@ -570,19 +570,24 @@ func (ops D12) Addr(text *code.Buf, addr int32) {
 
 	var o output
 
-	if addr != 0 {
-		disp8 := addrDisp(text.Addr, insnSize8, addr)
-		if uint32(disp8+128) <= 255 {
-			o.byte(uint8(ops))
-			o.int8(int8(disp8))
-			o.copy(text.Extend(o.len()))
-			return
-		}
+	if disp := addrDisp(text.Addr, insnSize8, addr); uint32(disp+128) <= 255 {
+		o.byte(uint8(ops))
+		o.int8(int8(disp))
+	} else {
+		disp = addrDisp(text.Addr, insnSize32, addr)
+		o.word(uint16(ops >> 16))
+		o.int32(disp)
 	}
 
-	disp32 := addrDisp(text.Addr, insnSize32, addr)
+	o.copy(text.Extend(o.len()))
+}
+
+func (ops D12) AddrStub(text *code.Buf) {
+	const insnSize = 6
+
+	var o output
 	o.word(uint16(ops >> 16))
-	o.int32(disp32)
+	o.int32(-insnSize) // infinite loop as placeholder
 	o.copy(text.Extend(o.len()))
 }
 

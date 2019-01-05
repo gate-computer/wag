@@ -122,8 +122,12 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 	return
 }
 
-func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) int32 {
-	return TODO(indexReg, upperBound, addr).(int32)
+func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) {
+	TODO(indexReg, upperBound, addr)
+}
+
+func (MacroAssembler) BranchIfOutOfBoundsStub(p *gen.Prog, indexReg reg.R, upperBound int32) int32 {
+	return TODO(indexReg, upperBound).(int32)
 }
 
 func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {

@@ -158,9 +158,14 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 	return
 }
 
-func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) int32 {
+func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) {
 	compareBounds(p, indexReg, upperBound)
 	in.JLEc.Addr(&p.Text, addr)
+}
+
+func (MacroAssembler) BranchIfOutOfBoundsStub(p *gen.Prog, indexReg reg.R, upperBound int32) int32 {
+	compareBounds(p, indexReg, upperBound)
+	in.JLEc.AddrStub(&p.Text)
 	return p.Text.Addr
 }
 
