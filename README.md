@@ -71,7 +71,7 @@ spec testsuite is run, by first converting the tests to binary format:
 
 1. `go get -t github.com/tsavola/wag`
 2. `make -C $GOPATH/src/github.com/tsavola/wag/testdata/wabt`
-3. `go test -v -bench=. github.com/tsavola/wag/...`
+3. `go test -ldflags="-linkmode=internal" -bench=. github.com/tsavola/wag/...`
 
 
 Screenshot #1
