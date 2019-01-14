@@ -13,7 +13,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/rodata"
 	"github.com/tsavola/wag/internal/gen/storage"
-	abi "github.com/tsavola/wag/internal/isa/x86/abi"
+	"github.com/tsavola/wag/internal/isa/x86/abi"
 	"github.com/tsavola/wag/internal/isa/x86/in"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"

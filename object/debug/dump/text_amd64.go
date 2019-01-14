@@ -11,7 +11,7 @@ import (
 
 	"github.com/bnagy/gapstone"
 
-	abi "github.com/tsavola/wag/internal/isa/x86/abi"
+	"github.com/tsavola/wag/internal/isa/x86/abi"
 	"github.com/tsavola/wag/trap"
 )
 
