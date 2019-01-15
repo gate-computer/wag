@@ -11,6 +11,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/prop"
+	"github.com/tsavola/wag/internal/isa/x86/abi"
 	"github.com/tsavola/wag/internal/isa/x86/in"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
@@ -77,32 +78,28 @@ var storeImmInsns = [5]memDispImmInsn{
 }
 
 func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
-	sizeReach := uint64(props >> 8)
-	base, disp := checkAccess(f, sizeReach, index, offset)
+	base, disp := checkAccess(f, index, offset)
 
 	r := f.Regs.AllocResult(resultType)
-	loadInsns[uint8(props&prop.LoadIndexMask)].RegMemDisp(&f.Text, resultType, r, base, disp)
+	loadInsns[props].RegMemDisp(&f.Text, resultType, r, base, disp)
 	return operand.Reg(resultType, r)
 }
 
 func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
-	sizeReach := uint64(props >> 8)
-	base, disp := checkAccess(f, sizeReach, index, offset)
+	base, disp := checkAccess(f, index, offset)
 
 	if x.Storage == storage.Imm {
-		storeImmInsns[uint8(props)].MemDispImm(&f.Text, x.Type, base, disp, x.ImmValue())
+		storeImmInsns[props].MemDispImm(&f.Text, x.Type, base, disp, x.ImmValue())
 	} else {
 		valueReg, _ := allocResultReg(f, x)
-		storeRegInsns[uint8(props)].RegMemDisp(&f.Text, x.Type, valueReg, base, disp)
+		storeRegInsns[props].RegMemDisp(&f.Text, x.Type, valueReg, base, disp)
 		f.Regs.Free(x.Type, valueReg)
 	}
 }
 
 // checkAccess returns RegMemoryBase or RegScratch as base.
-func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) (base in.BaseReg, disp int32) {
-	reachOffset := uint64(offset) + sizeReach
-
-	if reachOffset >= 0x80000000 {
+func checkAccess(f *gen.Func, index operand.O, offset uint32) (base in.BaseReg, disp int32) {
+	if offset >= 0x80000000 {
 		f.ValueBecameUnreachable(index)
 		return invalidAccess(f)
 	}
@@ -110,45 +107,23 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 	switch index.Storage {
 	case storage.Imm:
 		value := uint64(index.ImmValue())
-
-		if value >= 0x80000000 {
-			return invalidAccess(f)
-		}
-
 		addr := value + uint64(offset)
-		reachAddr := addr + sizeReach
-
-		if reachAddr >= 0x80000000 {
+		if value >= 0x80000000 || addr >= 0x80000000 {
 			return invalidAccess(f)
 		}
 
-		if reachAddr < uint64(f.Module.MemoryLimitValues.Initial) {
-			// Call site is not mapped, so this optimization is part of
-			// portable ABI.
-			base = in.BaseMemory
-			disp = int32(addr)
-			return
-		}
-
-		in.LEA.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, int32(reachAddr))
+		base = in.BaseMemory
+		disp = int32(addr)
 
 	default:
-		asm.Move(f, RegScratch, index) // unconditional 32-bit mask for fool-proofing
+		asm.Move(f, RegScratch, index) // Unconditional 32-bit mask.
+		in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
 
-		if reachOffset == 0 {
-			in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
-		} else {
-			in.LEA.RegMemIndexDisp(&f.Text, wa.I64, RegScratch, in.BaseMemory, RegScratch, in.Scale0, int32(reachOffset))
-		}
+		base = in.BaseScratch
+		disp = int32(offset)
 	}
 
-	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
-	in.JLcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.MemoryAccessOutOfBounds].Addr)
-	f.MapCallAddr(f.Text.Addr)
-
-	base = in.BaseScratch
-	disp = -int32(sizeReach)
+	f.MapCallAddr(f.Text.Addr) // Instruction pointer at segmentation fault.
 	return
 }
 
@@ -161,43 +136,12 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 }
 
 func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
-	r := f.Regs.AllocResult(wa.I64)
-	in.MOV.RegReg(&f.Text, wa.I64, r, RegMemoryLimit)
-	in.SUB.RegReg(&f.Text, wa.I64, r, RegMemoryBase)
-	in.SHRi.RegImm8(&f.Text, wa.I64, r, wa.PageBits)
+	r := f.Regs.AllocResult(wa.I32)
+	in.MOV.RegMemDisp(&f.Text, wa.I32, r, in.BaseText, gen.VectorOffsetCurrentMemory)
 	return operand.Reg(wa.I32, r)
 }
 
-func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
-	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemoryLimit)
-	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
-
-	targetReg, zeroExtended := allocResultReg(f, x)
-	if !zeroExtended {
-		in.MOV.RegReg(&f.Text, wa.I32, targetReg, targetReg)
-	}
-
-	in.SHLi.RegImm8(&f.Text, wa.I64, targetReg, wa.PageBits)
-	in.ADD.RegReg(&f.Text, wa.I64, targetReg, RegMemoryLimit) // new memory limit
-	in.CMP.RegReg(&f.Text, wa.I64, targetReg, RegScratch)
-
-	in.JGcb.Stub8(&f.Text)
-	failJump := f.Text.Addr
-
-	in.MOV.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryLimit)
-	in.MOV.RegReg(&f.Text, wa.I64, RegMemoryLimit, targetReg)
-	in.SUB.RegReg(&f.Text, wa.I64, RegScratch, RegMemoryBase)
-	in.SHRi.RegImm8(&f.Text, wa.I64, RegScratch, wa.PageBits) // value on success
-	in.MOV.RegReg(&f.Text, wa.I32, targetReg, RegScratch)
-
-	in.JMPcb.Stub8(&f.Text)
-	outJump := f.Text.Addr
-
-	linker.UpdateNearBranch(f.Text.Bytes(), failJump)
-
-	in.MOVi.RegImm32(&f.Text, wa.I32, targetReg, -1) // value on failure
-
-	linker.UpdateNearBranch(f.Text.Bytes(), outJump)
-
-	return operand.Reg(wa.I32, targetReg)
+func (MacroAssembler) GrowMemory(f *gen.Func) {
+	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemory)
+	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
 }

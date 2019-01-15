@@ -57,9 +57,9 @@ func importDup3() uint64
 func importPipe2() uint64
 
 func init() {
-	importVector = make([]byte, 424)
-	binary.LittleEndian.PutUint64(importVector[416:], 0x7fff0000)
-	binary.LittleEndian.PutUint64(importVector[408:], importTrapHandler())
+	importVector = make([]byte, 432)
+	binary.LittleEndian.PutUint64(importVector[424:], importTrapHandler())
+	binary.LittleEndian.PutUint64(importVector[416:], importGrowMemory())
 	binary.LittleEndian.PutUint64(importVector[400:], importRead())
 	binary.LittleEndian.PutUint64(importVector[392:], importWrite())
 	binary.LittleEndian.PutUint64(importVector[384:], importClose())
@@ -111,55 +111,59 @@ func init() {
 	binary.LittleEndian.PutUint64(importVector[16:], importEventfd())
 	binary.LittleEndian.PutUint64(importVector[8:], importDup3())
 	binary.LittleEndian.PutUint64(importVector[0:], importPipe2())
-	importFuncs["read"] = importFunc{-3, 3}
-	importFuncs["write"] = importFunc{-4, 3}
-	importFuncs["close"] = importFunc{-5, 1}
-	importFuncs["lseek"] = importFunc{-6, 3}
-	importFuncs["pread"] = importFunc{-7, 4}
-	importFuncs["pwrite"] = importFunc{-8, 4}
-	importFuncs["dup"] = importFunc{-9, 1}
-	importFuncs["getpid"] = importFunc{-10, 0}
-	importFuncs["sendfile"] = importFunc{-11, 4}
-	importFuncs["shutdown"] = importFunc{-12, 2}
-	importFuncs["socketpair"] = importFunc{-13, 4}
-	importFuncs["flock"] = importFunc{-14, 2}
-	importFuncs["fsync"] = importFunc{-15, 1}
-	importFuncs["fdatasync"] = importFunc{-16, 1}
-	importFuncs["truncate"] = importFunc{-17, 2}
-	importFuncs["ftruncate"] = importFunc{-18, 2}
-	importFuncs["getcwd"] = importFunc{-19, 2}
-	importFuncs["chdir"] = importFunc{-20, 1}
-	importFuncs["fchdir"] = importFunc{-21, 1}
-	importFuncs["fchmod"] = importFunc{-22, 2}
-	importFuncs["fchown"] = importFunc{-23, 3}
-	importFuncs["lchown"] = importFunc{-24, 3}
-	importFuncs["umask"] = importFunc{-25, 1}
-	importFuncs["getuid"] = importFunc{-26, 0}
-	importFuncs["getgid"] = importFunc{-27, 0}
-	importFuncs["vhangup"] = importFunc{-28, 0}
-	importFuncs["sync"] = importFunc{-29, 0}
-	importFuncs["gettid"] = importFunc{-30, 0}
-	importFuncs["time"] = importFunc{-31, 1}
-	importFuncs["posix_fadvise"] = importFunc{-32, 4}
-	importFuncs["_exit"] = importFunc{-33, 1}
-	importFuncs["inotify_init1"] = importFunc{-34, 0}
-	importFuncs["inotify_add_watch"] = importFunc{-35, 3}
-	importFuncs["inotify_rm_watch"] = importFunc{-36, 2}
-	importFuncs["openat"] = importFunc{-37, 4}
-	importFuncs["mkdirat"] = importFunc{-38, 3}
-	importFuncs["fchownat"] = importFunc{-39, 5}
-	importFuncs["unlinkat"] = importFunc{-40, 3}
-	importFuncs["renameat"] = importFunc{-41, 4}
-	importFuncs["linkat"] = importFunc{-42, 5}
-	importFuncs["symlinkat"] = importFunc{-43, 3}
-	importFuncs["readlinkat"] = importFunc{-44, 4}
-	importFuncs["fchmodat"] = importFunc{-45, 4}
-	importFuncs["faccessat"] = importFunc{-46, 4}
-	importFuncs["splice"] = importFunc{-47, 6}
-	importFuncs["tee"] = importFunc{-48, 4}
-	importFuncs["sync_file_range"] = importFunc{-49, 4}
-	importFuncs["fallocate"] = importFunc{-50, 4}
-	importFuncs["eventfd"] = importFunc{-51, 2}
-	importFuncs["dup3"] = importFunc{-52, 3}
-	importFuncs["pipe2"] = importFunc{-53, 2}
+	importFuncs["read"] = importFunc{-4, 3}
+	importFuncs["write"] = importFunc{-5, 3}
+	importFuncs["close"] = importFunc{-6, 1}
+	importFuncs["lseek"] = importFunc{-7, 3}
+	importFuncs["pread"] = importFunc{-8, 4}
+	importFuncs["pwrite"] = importFunc{-9, 4}
+	importFuncs["dup"] = importFunc{-10, 1}
+	importFuncs["getpid"] = importFunc{-11, 0}
+	importFuncs["sendfile"] = importFunc{-12, 4}
+	importFuncs["shutdown"] = importFunc{-13, 2}
+	importFuncs["socketpair"] = importFunc{-14, 4}
+	importFuncs["flock"] = importFunc{-15, 2}
+	importFuncs["fsync"] = importFunc{-16, 1}
+	importFuncs["fdatasync"] = importFunc{-17, 1}
+	importFuncs["truncate"] = importFunc{-18, 2}
+	importFuncs["ftruncate"] = importFunc{-19, 2}
+	importFuncs["getcwd"] = importFunc{-20, 2}
+	importFuncs["chdir"] = importFunc{-21, 1}
+	importFuncs["fchdir"] = importFunc{-22, 1}
+	importFuncs["fchmod"] = importFunc{-23, 2}
+	importFuncs["fchown"] = importFunc{-24, 3}
+	importFuncs["lchown"] = importFunc{-25, 3}
+	importFuncs["umask"] = importFunc{-26, 1}
+	importFuncs["getuid"] = importFunc{-27, 0}
+	importFuncs["getgid"] = importFunc{-28, 0}
+	importFuncs["vhangup"] = importFunc{-29, 0}
+	importFuncs["sync"] = importFunc{-30, 0}
+	importFuncs["gettid"] = importFunc{-31, 0}
+	importFuncs["time"] = importFunc{-32, 1}
+	importFuncs["posix_fadvise"] = importFunc{-33, 4}
+	importFuncs["_exit"] = importFunc{-34, 1}
+	importFuncs["inotify_init1"] = importFunc{-35, 0}
+	importFuncs["inotify_add_watch"] = importFunc{-36, 3}
+	importFuncs["inotify_rm_watch"] = importFunc{-37, 2}
+	importFuncs["openat"] = importFunc{-38, 4}
+	importFuncs["mkdirat"] = importFunc{-39, 3}
+	importFuncs["fchownat"] = importFunc{-40, 5}
+	importFuncs["unlinkat"] = importFunc{-41, 3}
+	importFuncs["renameat"] = importFunc{-42, 4}
+	importFuncs["linkat"] = importFunc{-43, 5}
+	importFuncs["symlinkat"] = importFunc{-44, 3}
+	importFuncs["readlinkat"] = importFunc{-45, 4}
+	importFuncs["fchmodat"] = importFunc{-46, 4}
+	importFuncs["faccessat"] = importFunc{-47, 4}
+	importFuncs["splice"] = importFunc{-48, 6}
+	importFuncs["tee"] = importFunc{-49, 4}
+	importFuncs["sync_file_range"] = importFunc{-50, 4}
+	importFuncs["fallocate"] = importFunc{-51, 4}
+	importFuncs["eventfd"] = importFunc{-52, 2}
+	importFuncs["dup3"] = importFunc{-53, 3}
+	importFuncs["pipe2"] = importFunc{-54, 2}
+}
+
+func setImportVectorCurrentMemory(size int) {
+	binary.LittleEndian.PutUint64(importVector[408:], uint64(size))
 }

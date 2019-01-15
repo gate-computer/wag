@@ -107,25 +107,23 @@ const (
 	IndexIntLoad32S = 5
 	IndexIntLoad32U = 6
 	IndexFloatLoad  = 7
-
-	LoadIndexMask = 0x7
 )
 
 const (
-	I32Load    = 3<<8 | IndexIntLoad
-	I64Load    = 7<<8 | IndexIntLoad
-	F32Load    = 3<<8 | IndexFloatLoad
-	F64Load    = 7<<8 | IndexFloatLoad
-	I32Load8S  = 0<<8 | IndexIntLoad8S
-	I32Load8U  = 0<<8 | IndexIntLoad8U
-	I32Load16S = 1<<8 | IndexIntLoad16S
-	I32Load16U = 1<<8 | IndexIntLoad16U
-	I64Load8S  = 0<<8 | IndexIntLoad8S
-	I64Load8U  = 0<<8 | IndexIntLoad8U
-	I64Load16S = 1<<8 | IndexIntLoad16S
-	I64Load16U = 1<<8 | IndexIntLoad16U
-	I64Load32S = 3<<8 | IndexIntLoad32S
-	I64Load32U = 3<<8 | IndexIntLoad32U
+	I32Load    = IndexIntLoad
+	I64Load    = IndexIntLoad
+	F32Load    = IndexFloatLoad
+	F64Load    = IndexFloatLoad
+	I32Load8S  = IndexIntLoad8S
+	I32Load8U  = IndexIntLoad8U
+	I32Load16S = IndexIntLoad16S
+	I32Load16U = IndexIntLoad16U
+	I64Load8S  = IndexIntLoad8S
+	I64Load8U  = IndexIntLoad8U
+	I64Load16S = IndexIntLoad16S
+	I64Load16U = IndexIntLoad16U
+	I64Load32S = IndexIntLoad32S
+	I64Load32U = IndexIntLoad32U
 )
 
 // Store
@@ -139,15 +137,15 @@ const (
 )
 
 const (
-	I32Store   = 3<<8 | IndexIntStore
-	I64Store   = 7<<8 | IndexIntStore
-	F32Store   = 3<<8 | IndexFloatStore
-	F64Store   = 7<<8 | IndexFloatStore
-	I32Store8  = 0<<8 | IndexIntStore8
-	I32Store16 = 1<<8 | IndexIntStore16
-	I64Store8  = 0<<8 | IndexIntStore8
-	I64Store16 = 1<<8 | IndexIntStore16
-	I64Store32 = 3<<8 | IndexIntStore32
+	I32Store   = IndexIntStore
+	I64Store   = IndexIntStore
+	F32Store   = IndexFloatStore
+	F64Store   = IndexFloatStore
+	I32Store8  = IndexIntStore8
+	I32Store16 = IndexIntStore16
+	I64Store8  = IndexIntStore8
+	I64Store16 = IndexIntStore16
+	I64Store32 = IndexIntStore32
 )
 
 // Conversion

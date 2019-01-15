@@ -2,6 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+#define __ASSEMBLY__
+
+#include <asm/mman.h>
+#include <asm/signal.h>
+#include <linux/wait.h>
+#include <sys/syscall.h>
+
+#define SIGACT_FLAGS (SA_RESTART | SA_RESTORER | SA_SIGINFO)
+
 .text
 
 .align	16
@@ -27,7 +36,6 @@ object_runtime_start:
 	sub	%rbx, %rbx		// stack limit
 	xor	%edx, %edx		// arg
 	mov	$1023, %edi		// slave fd
-	mov	$0x1000000, %r13	// init memory size
 	mov	$0x400000000, %r14	// memory
 	mov	$0x200000000, %r15	// text
 
@@ -43,27 +51,93 @@ object_runtime_start:
 .global	run
 
 run:
-	add	%r14, %r13		// current memory limit
+	mov	$SYS_fork, %eax
+	syscall
+	mov	%rax, 8+104(%rsp)	// run func result
+	test	%rax, %rax
+	je	.Lchild
+	jg	.Lparent
+	ret
+
+.Lparent:
+	mov	%eax, %edi		// wait4 upid
+	sub	$8, %rsp		// space for int
+	mov	%rsp, %rsi		// wait4 stat_addr
+	mov	$__WNOTHREAD, %rdx	// wait4 options
+	sub	$144, %rsp		// sizeof (struct rusage)
+	mov	%rsp, %r10		// wait4 ru
+	mov	$SYS_wait4, %eax
+	syscall
+	add	$144, %rsp		// sizeof (struct rusage)
+	add	$8, %rsp		// space for int
+	mov	%rax, 8+104(%rsp)	// run func result
+	ret
+
+.Lchild:
+	mov	$SIGSEGV, %edi		// sigaction signum
+	sub	$32, %rsp		// sizeof (struct sigaction)
+	mov	%rsp, %rsi		// sigaction act
+	lea	sigsegv_handler(%rip), %rax
+	mov	%rax, 0(%rsi)		// sa_handler
+	movq	$SIGACT_FLAGS, 8(%rsi)	// sa_flags
+	lea	signal_restorer(%rip), %rax
+	mov	%rax, 16(%rsi)		// sa_restorer
+	movq	$0, 24(%rsi)		// sa_mask
+	xor	%edx, %edx		// sigaction oldact
+	mov	$8, %r10d		// sigaction mask size
+	mov	$SYS_rt_sigaction, %eax
+	syscall
+	add	$32, %rsp		// sizeof (struct sigaction)
+
+	mov	8+0(%rsp), %r15		// run func param: text
+	mov	8+32(%rsp), %r14	// run func param: memoryAddr
+	mov	8+40(%rsp), %rbx	// run func param: stack
+	mov	8+64(%rsp), %rcx	// run func param: stackOffset
+	mov	8+72(%rsp), %rax	// run func param: initOffset
+	mov	8+80(%rsp), %rdi	// run func param: slaveFd
+
 	add	%rbx, %rcx		// stack ptr
 	add	$128, %rbx		// for imports and traps
 	add	$16, %rbx		// call + stack check trap call
 	movq	%rdi, %mm6		// slave fd
-	push	%rdx			// arg
 	movq	%rsp, %mm7		// original stack
 	mov	%rcx, %rsp		// stack ptr
-	lea	16(%r15), %rdi		// resume routine
-	test	%rax, %rax
-	jne	.Lresume
-	add	$16, %rdi		// init routine
-.Lresume:
-	jmp	*%rdi			// returns via trap handler
+	lea	(%rax, %r15), %rdi	// init routine
+	jmp	*%rdi			// exits via trap handler
 
 .align	16
 .global	resume
 
 resume:
- 	lea	16(%r15), %rdi		// resume routine
- 	jmp	*%rdi
+	lea	16(%r15), %rdi		// resume routine
+	jmp	*%rdi
+
+.align	16
+.global	sigsegv_handler
+
+sigsegv_handler:
+	mov	160(%rdx), %rax		// rsp in ucontext
+	sub	$8, %rax
+	mov	%rax, 160(%rdx)		// rsp in ucontext
+
+	mov	168(%rdx), %rbx		// rip in ucontext
+	mov	%rbx, (%rax)
+
+	lea	.Lsigsegv_exit(%rip), %rbx
+	mov	%rbx, 168(%rdx)		// rip in ucontext
+	ret
+
+.Lsigsegv_exit:
+	mov	$5, %eax		// MemoryAccessOutOfBounds
+	jmp	trap_handler
+
+.align	16
+.global	signal_restorer
+
+signal_restorer:
+	mov	$SYS_rt_sigreturn, %eax
+	syscall
+	hlt
 
 .align	16
 .global	trap_handler
@@ -80,12 +154,25 @@ trap_handler:
 
 	mov	%rsp, %r11		// stack ptr
 	movq	%mm7, %rsp		// original stack
-	add	$8, %rsp		// arg
-	mov	%rax, 8+96(%rsp)	// run func param: trapID
-	sub	%r14, %r13
-	mov	%r13, 8+104(%rsp)	// run func param: currentMemorySize
-	mov	%r11, 8+112(%rsp)	// run func param: stackPtr
-	ret				// return from run func
+
+	mov	8+96(%rsp), %edi	// run func param: resultFd -> write fd
+
+	sub	$24, %rsp		// sizeof result
+	mov	%rsp, %rsi		// write buf
+	mov	%rax, 0(%rsi)		// result: TrapID
+	mov	-24(%r15), %r13d	// current memory pages
+	shl	$16, %r13
+	mov	%r13, 8(%rsi)		// result: MemorySize
+	mov	%r11, 16(%rsi)		// result: StackPtr
+	mov	$24, %edx		// write count
+	mov	$SYS_write, %eax
+	syscall
+	add	$24, %rsp		// sizeof result
+
+	xor	%edi, %edi		// exit status
+	mov	$SYS_exit_group, %eax	// child process
+	syscall
+	hlt
 
 .Lpause:
 	push	%rcx
@@ -93,7 +180,7 @@ trap_handler:
 	push	%rsi
 	push	%r11
 
-	mov	$1, %eax		// sys_write
+	mov	$SYS_write, %eax
 	movq	%mm6, %rdi		// fd
 	lea	-8(%rsp), %rsi		// buf
 	movq	$-2, (%rsi)		// buf content
@@ -102,7 +189,7 @@ trap_handler:
 	sub	%rdx, %rax
 	jne	.Lfail_trap
 
-	xor	%eax, %eax		// sys_read
+	mov	$SYS_read, %eax
 	mov	$1, %edx		// bufsize
 	syscall
 	sub	%rdx, %rax
@@ -121,12 +208,48 @@ trap_handler:
 	jmp	trap_handler
 
 .align	16
+.global	grow_memory
+
+grow_memory:
+	mov	%eax, %r12d
+
+	mov	-24(%r15), %edi		// current memory pages
+	add	%rdi, %r12		// new memory pages
+	cmp	%r12, -32(%r15)		// grow memory limit pages
+	jl	.Loom
+
+	shl	$16, %rdi		// current memory bytes
+	add	%r14, %rdi		// mprotect addr
+
+	mov	%eax, %esi
+	shl	$16, %rsi		// mprotect len
+	je	.Lgrow_done
+
+	mov	$PROT_READ|PROT_WRITE, %edx
+	mov	$SYS_mprotect, %eax
+	syscall
+	test	%rax, %rax
+	je	.Lgrow_done
+
+	mov	$3005, %eax
+	jmp	trap_handler
+
+.Lgrow_done:
+	mov	-24(%r15), %eax		// old memory pages
+	mov	%r12d, -24(%r15)	// new memory pages
+	jmp	resume
+
+.Loom:
+	mov	$-1, %eax
+	jmp	resume
+
+.align	16
 .global	spectest_print
 
 spectest_print:
 	mov	(%rsp), %r9		// save link address
 
-	mov	$1, %eax		// sys_write
+	mov	$SYS_write, %eax
 	movq	%mm6, %rdi		// fd
 	mov	%rbp, %rdx		// (argcount << 32) | sigindex
 	shr	$32, %rdx		// argcount
@@ -155,13 +278,8 @@ putns:
 	mov	8(%rsp), %r9		// size
 
 	add	%r14, %r8		// absolute addr
-	cmp	%r8, %r14
-	jg	.Lfail_putns1		// absolute addr out of lower bound
-
 	mov	%r8, %rax
 	add	%r9, %rax		// absolute addr+size
-	cmp	%rax, %r13
-	jle	.Lfail_putns2		// absolute addr+size out of upper bound
 
 	movq	%mm6, %rdi		// fd
 	lea	-12(%rsp), %rsi		// buf
@@ -170,7 +288,7 @@ putns:
 	movq	$-3, (%rsi)		// command
 	mov	%r9d, 8(%rsi)		// size
 
-	mov	$1, %eax		// sys_write
+	mov	$SYS_write, %eax
 	syscall
 	cmp	%rdx, %rax
 	jne	.Lfail_putns3
@@ -178,21 +296,13 @@ putns:
 	mov	%r8, %rsi		// buf <- absolute addr
 	mov	%r9d, %edx		// bufsize <- size
 
-	mov	$1, %eax		// sys_write
+	mov	$SYS_write, %eax
 	syscall
 	cmp	%rdx, %rax
 	jne	.Lfail_putns4
 
 	xor	%eax, %eax
 	jmp	resume
-
-.Lfail_putns1:
-	mov	$3001, %rax
-	jmp	trap_handler
-
-.Lfail_putns2:
-	mov	$3002, %rax
-	jmp	trap_handler
 
 .Lfail_putns3:
 	mov	$3003, %rax
@@ -246,43 +356,54 @@ benchmark_barrier:
 
 get_arg:
 	movq	%mm7, %rax		// original stack
-	mov	(%rax), %rax		// arg
+	mov	8+88(%rax), %rax	// run func param: arg
 	jmp	resume
 
 .align	16
 .global	snapshot
 
 snapshot:
-	mov	$1, %eax		// sys_write
+	sub	$8, %rsp		// bufsize
+
+	mov	$SYS_write, %eax
 	movq	%mm6, %rdi 		// fd
-	lea	-8(%rsp), %rsi		// buf
+	mov	%rsp, %rsi		// buf
 	movq	$-1, (%rsi)		// buf contents
 	mov	$8, %edx		// bufsize
 	syscall
 	sub	%rdx, %rax
 	jne	.Lfail_snapshot
 
-	mov	$1, %eax		// sys_write
+	mov	$SYS_write, %eax
+	mov	-24(%r15), %r13d	// current memory pages
+	shl	$16, %r13
+	add	%r14, %r13		// current memory end address
 	mov	%r13, (%rsi)		// buf contents
 	syscall
 	sub	%rdx, %rax
 	jne	.Lfail_snapshot
 
-	mov	$1, %eax		// sys_write
-	mov	%rsp, (%rsi)		// buf contents
+	mov	$SYS_write, %eax
+	mov	%rsp, %r13
+	add	$8, %r13		// stack ptr before snapshot call
+	mov	%r13, (%rsi)		// buf contents
 	syscall
 	sub	%rdx, %rax
 	jne	.Lfail_snapshot
 
-	xor	%eax, %eax		// sys_read
+	mov	$SYS_read, %eax
 	syscall
 	sub	%rdx, %rax
 	jne	.Lfail_snapshot
 	mov	(%rsi), %rax		// snapshot id
 
+	add	$8, %rsp		// bufsize
+
 	jmp	resume
 
 .Lfail_snapshot:
+	add	$8, %rsp		// bufsize
+
 	mov	$3002, %rax
 	jmp	trap_handler
 

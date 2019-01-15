@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"syscall"
 	"unsafe"
 
+	"github.com/tsavola/wag/object/abi"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/wa"
 )
@@ -93,7 +95,13 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 		nativeStack:   nativeStack,
 	}
 
-	copy(s.data, r.globalsMemory[:globalsMemorySize])
+	data := r.globalsMemory[:globalsMemorySize]
+
+	if err := syscall.Mprotect(data[r.memoryOffset:], syscall.PROT_READ|syscall.PROT_WRITE); err != nil {
+		panic(err)
+	}
+
+	copy(s.data, data)
 
 	snapshotId := uint64(len(r.Snapshots))
 	r.Snapshots = append(r.Snapshots, s)
@@ -120,7 +128,7 @@ func (s *Snapshot) getStack() []byte {
 }
 
 func (*Snapshot) getResume() int {
-	return -1 // resume; return this value to snapshot function caller
+	return abi.TextAddrResume
 }
 
 func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []wa.FuncType, ns *section.NameSection, stack []byte) (err error) {

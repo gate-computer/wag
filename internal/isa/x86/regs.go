@@ -27,8 +27,8 @@ const (
 	_                 = reg.R(9)         // r9
 	_                 = reg.R(10)        // r10
 	_                 = reg.R(11)        // r11
-	_                 = reg.R(12)        // r12       <- AllocIntLast
-	RegMemoryLimit    = reg.R(13)        // r13
+	_                 = reg.R(12)        // r12
+	_                 = reg.R(13)        // r13       <- AllocIntLast
 	RegMemoryBase     = in.RegMemoryBase // r14
 	RegTextBase       = in.RegTextBase   // r15
 	_                 = reg.R(15)        //     xmm15 <- AllocFloatLast

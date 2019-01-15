@@ -9,12 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"syscall"
 	"unsafe"
 
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/internal/test/runner/imports"
+	"github.com/tsavola/wag/object/abi"
 	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/object/stack"
 	"github.com/tsavola/wag/section"
@@ -22,11 +24,22 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
+const linearMemoryAddressSpace = 8 * 1024 * 1024 * 1024
+
+const (
+	vectorIndexLastImportFunc  = -5
+	vectorIndexGrowMemoryLimit = -4
+	vectorIndexCurrentMemory   = -3
+	vectorIndexGrowMemory      = -2
+	vectorIndexTrapHandler     = -1
+)
+
 const signalStackReserve = 8192
 
-func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
+func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int) int
 
 func importTrapHandler() uint64
+func importGrowMemory() uint64
 func importGetArg() uint64
 func importSnapshot() uint64
 func importSuspendNextCall() uint64
@@ -39,21 +52,21 @@ func importBenchmarkBarrier() uint64
 var importFuncs = map[string]map[string]imports.Func{
 	"spectest": {
 		"print": imports.Func{
-			VecIndex: -3,
+			VecIndex: vectorIndexLastImportFunc - 0,
 			Addr:     importSpectestPrint(),
 			Variadic: true,
 		},
 	},
 	"wag": {
 		"get_arg": imports.Func{
-			VecIndex: -4,
+			VecIndex: vectorIndexLastImportFunc - 1,
 			Addr:     importGetArg(),
 			FuncType: wa.FuncType{
 				Result: wa.I64,
 			},
 		},
 		"snapshot": imports.Func{
-			VecIndex: -5,
+			VecIndex: vectorIndexLastImportFunc - 2,
 			Addr:     importSnapshot(),
 			FuncType: wa.FuncType{
 				Result: wa.I32,
@@ -62,21 +75,21 @@ var importFuncs = map[string]map[string]imports.Func{
 	},
 	"env": {
 		"putns": imports.Func{
-			VecIndex: -6,
+			VecIndex: vectorIndexLastImportFunc - 3,
 			Addr:     importPutns(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I32, wa.I32},
 			},
 		},
 		"benchmark_begin": imports.Func{
-			VecIndex: -7,
+			VecIndex: vectorIndexLastImportFunc - 4,
 			Addr:     importBenchmarkBegin(),
 			FuncType: wa.FuncType{
 				Result: wa.I64,
 			},
 		},
 		"benchmark_end": imports.Func{
-			VecIndex: -8,
+			VecIndex: vectorIndexLastImportFunc - 5,
 			Addr:     importBenchmarkEnd(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I64},
@@ -84,7 +97,7 @@ var importFuncs = map[string]map[string]imports.Func{
 			},
 		},
 		"benchmark_barrier": imports.Func{
-			VecIndex: -9,
+			VecIndex: vectorIndexLastImportFunc - 6,
 			Addr:     importBenchmarkBarrier(),
 			FuncType: wa.FuncType{
 				Params: []wa.Type{wa.I64, wa.I64},
@@ -95,8 +108,9 @@ var importFuncs = map[string]map[string]imports.Func{
 }
 
 func populateImportVector(b []byte) {
-	binary.LittleEndian.PutUint64(b[len(b)-16:], importTrapHandler())
-	// set grow memory limit later
+	// Set memory entries later.
+	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexGrowMemory*8:], importGrowMemory())
+	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexTrapHandler*8:], importTrapHandler())
 
 	for _, m := range importFuncs {
 		for _, f := range m {
@@ -178,7 +192,7 @@ func NewProgram(maxTextSize int, entryFunc uint32, entryArgs []uint64) (p *Progr
 
 	const vecSize = 4096
 
-	p.vecText, err = makeMemory(vecSize+maxTextSize, syscall.PROT_EXEC, 0)
+	p.vecText, err = makeMemory(vecSize+maxTextSize, syscall.PROT_READ|syscall.PROT_WRITE|syscall.PROT_EXEC)
 	if err != nil {
 		p.Close()
 		return
@@ -259,7 +273,7 @@ func (p *Program) getStack() []byte {
 }
 
 func (*Program) getResume() int {
-	return 0 // no resume
+	return abi.TextAddrStart
 }
 
 type Runner struct {
@@ -279,12 +293,8 @@ type Runner struct {
 }
 
 func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
-	binary.LittleEndian.PutUint64(p.vec[len(p.vec)-8:], uint64(growMemorySize))
-
-	err = syscall.Mprotect(p.vec, syscall.PROT_READ)
-	if err != nil {
-		return
-	}
+	binary.LittleEndian.PutUint64(p.vec[len(p.vec)+vectorIndexGrowMemoryLimit*8:], uint64(growMemorySize)/wa.PageSize)
+	binary.LittleEndian.PutUint64(p.vec[len(p.vec)+vectorIndexCurrentMemory*8:], uint64(initMemorySize)/wa.PageSize)
 
 	r, err = newRunner(p, initMemorySize, growMemorySize, stackSize)
 	if err != nil {
@@ -331,15 +341,25 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 		memorySize:   initMemorySize,
 	}
 
-	r.globalsMemory, err = makeMemory(memoryOffset+int(growMemorySize), 0, 0)
+	space, err := makeMemory(memoryOffset+linearMemoryAddressSpace, syscall.PROT_NONE)
 	if err != nil {
 		r.Close()
 		return
 	}
 
+	r.globalsMemory = space[:memoryOffset+int(growMemorySize)]
+
+	if allocated := r.globalsMemory[:memoryOffset+initMemorySize]; len(allocated) > 0 {
+		err = syscall.Mprotect(allocated, syscall.PROT_READ|syscall.PROT_WRITE)
+		if err != nil {
+			r.Close()
+			return
+		}
+	}
+
 	copy(r.globalsMemory, data)
 
-	r.stack, err = makeMemory(signalStackReserve+stackSize, 0, 0)
+	r.stack, err = makeMemory(signalStackReserve+stackSize, syscall.PROT_READ|syscall.PROT_WRITE)
 	if err != nil {
 		r.Close()
 		return
@@ -442,45 +462,76 @@ func (e *Executor) run() {
 	stackOffset := len(stack) - len(stackState)
 	copy(stack[stackOffset:], stackState)
 
-	resumeResult := e.runner.prog.getResume()
+	initOffset := e.runner.prog.getResume()
 
-	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	slaveSockets, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
-		return
+		panic(err)
 	}
 
-	done := make(chan struct{})
+	var resultPipe [2]int
+	if err := syscall.Pipe2(resultPipe[:], syscall.O_CLOEXEC); err != nil {
+		panic(err)
+	}
+
+	resultOutput := os.NewFile(uintptr(resultPipe[0]), "|0")
+	defer resultOutput.Close()
+
+	slaveDone := make(chan struct{})
 
 	defer func() {
-		syscall.Close(fds[1])
-		<-done
+		syscall.Close(slaveSockets[1])
+		<-slaveDone
 	}()
 
 	go func() {
-		defer close(done)
-		e.slave(fds[0], e.sigs, e.printer, e.cont)
+		defer close(slaveDone)
+		e.slave(slaveSockets[0], e.sigs, e.printer, e.cont)
 	}()
 
 	globalsMemoryAddr := (*reflect.SliceHeader)(unsafe.Pointer(&e.runner.globalsMemory)).Data
 	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
 
-	trapId, memorySize, stackPtr := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, stack, stackOffset, resumeResult, fds[1], e.testArg)
+	runResult := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, stack, stackOffset, initOffset, slaveSockets[1], e.testArg, resultPipe[1])
 
-	e.runner.memorySize = memorySize
-	e.runner.lastTrap = trap.ID(uint32(trapId))
-	e.runner.lastStackPtr = stackPtr
+	if err := syscall.Close(resultPipe[1]); err != nil {
+		panic(err)
+	}
+
+	if runResult < 0 {
+		panic(fmt.Errorf("run failed with result: %d", runResult))
+	}
+
+	var result struct {
+		TrapID     uint64
+		MemorySize uint64
+		StackPtr   uint64
+	}
+	if err := binary.Read(resultOutput, byteOrder, &result); err != nil {
+		panic(err)
+	}
+
+	e.runner.memorySize = int(result.MemorySize)
+	e.runner.lastTrap = trap.ID(uint32(result.TrapID))
+	e.runner.lastStackPtr = uintptr(result.StackPtr)
 
 	if e.runner.lastTrap == trap.Exit {
-		e.result = int32(uint32(trapId >> 32))
+		e.result = int32(uint32(result.TrapID >> 32))
 	} else {
 		e.err = e.runner.lastTrap
 	}
+
+	if allocated := e.runner.globalsMemory[e.runner.memoryOffset : e.runner.memoryOffset+e.runner.memorySize]; len(allocated) > 0 {
+		if err := syscall.Mprotect(allocated, syscall.PROT_READ|syscall.PROT_WRITE); err != nil {
+			panic(err)
+		}
+	}
 }
 
-func makeMemory(size int, extraProt, extraFlags int) (mem []byte, err error) {
+func makeMemory(size int, prot int) (mem []byte, err error) {
 	if size == 0 {
 		return
 	}
 
-	return syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE|extraProt, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
+	return syscall.Mmap(-1, 0, size, prot, syscall.MAP_SHARED|syscall.MAP_ANONYMOUS)
 }

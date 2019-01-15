@@ -116,6 +116,17 @@ import_trap_handler:
 	str	x30, [sp, 8]
 	ret
 
+.global	import_grow_memory
+
+import_grow_memory:
+	bl	.Lafter_grow_memory
+
+	b	resume
+
+.Lafter_grow_memory:
+	str	x30, [sp, 8]
+	ret
+
 .global	resume
 
 resume:

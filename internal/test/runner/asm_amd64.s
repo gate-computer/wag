@@ -4,16 +4,8 @@
 
 #include "textflag.h"
 
-// func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, resumeResult, slaveFd int, arg int64) (trapId uint64, currentMemorySize int, stackPtr uintptr)
-TEXT ·run(SB),NOSPLIT,$0-120
-	MOVQ	text+0(FP), R15
-	MOVQ	initialMemorySize+24(FP), R13
-	MOVQ	memoryAddr+32(FP), R14	// memory ptr
-	MOVQ	stack+40(FP), BX	// stack limit
-	MOVQ	stackOffset+64(FP), CX
-	MOVQ	resumeResult+72(FP), AX	// resume result (0 = don't resume)
-	MOVQ	slaveFd+80(FP), DI	// slave fd
-	MOVQ	arg+88(FP), DX		// arg
+// func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int) int
+TEXT ·run(SB),NOSPLIT,$0-356 // 112 (args) + 128 (siginfo) + 144 (rusage)
 	JMP	run(SB)
 
 // func ObjectRuntime() (slice []byte, addr uint64)
@@ -30,6 +22,12 @@ TEXT ·ObjectRuntime(SB),$0-32
 // func importTrapHandler() uint64
 TEXT ·importTrapHandler(SB),$0-8
 	LEAQ	trap_handler(SB), AX
+	MOVQ	AX, ret+0(FP)
+	RET
+
+// func importGrowMemory() uint64
+TEXT ·importGrowMemory(SB),$0-8
+	LEAQ	grow_memory(SB), AX
 	MOVQ	AX, ret+0(FP)
 	RET
 

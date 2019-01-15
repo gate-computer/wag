@@ -51,12 +51,9 @@ Status
 Security
 --------
 
-[Spectre](https://spectreattack.com) variant 1: Memory indexes are limited to
-32 bits and static offsets to 31 bits.  To prevent conditional branch
-exploitation, a secure runtime environment must ensure that nothing else is
-mapped within 6 GB following the address of WebAssembly linear memory.  It's
-therefore not safe for an oblivious host program using default memory
-allocation APIs to run arbitrary user programs.
+[Spectre](https://spectreattack.com) variant 1: Out-of-bounds linear memory
+access detection requires that addressable but unallocated memory is
+inaccessible.  It naturally prevents conditional branch exploitation.
 
 Spectre variant 2: On x86, [Retpoline](https://support.google.com/faqs/answer/7625886)
 is used to protect the runtime environment (although user programs shouldn't be

@@ -8,7 +8,7 @@ package reglayout
 
 const (
 	AllocIntFirst = 2
-	AllocIntLast  = 24
+	AllocIntLast  = 25
 
 	AllocFloatFirst = 2
 	AllocFloatLast  = 30 // TODO: is there a zero reg at 31?

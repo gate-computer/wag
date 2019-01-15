@@ -33,6 +33,10 @@ TEXT ·ObjectRuntime(SB),$0-32
 TEXT ·importTrapHandler(SB),$0-8
 	B	import_trap_handler(SB)
 
+// func importGrowMemory() uint64
+TEXT ·importGrowMemory(SB),$0-8
+	B	import_grow_memory(SB)
+
 // func importSpectestPrint() uint64
 TEXT ·importSpectestPrint(SB),$0-8
 	B	import_spectest_print(SB)

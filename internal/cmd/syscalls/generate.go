@@ -61,9 +61,9 @@ func main() {
 	}
 
 	fmt.Fprintf(decl, "\nfunc init() {\n")
-	fmt.Fprintf(decl, "\timportVector = make([]byte, %d)\n", len(syscalls)*8+8+8)
-	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], 0x7fff0000)\n", len(syscalls)*8+8)
-	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importTrapHandler())\n", len(syscalls)*8)
+	fmt.Fprintf(decl, "\timportVector = make([]byte, %d)\n", (len(syscalls)+3)*8)
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importTrapHandler())\n", (len(syscalls)+2)*8)
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importGrowMemory())\n", (len(syscalls)+1)*8)
 
 	for i, sc := range syscalls {
 		offset := (len(syscalls) - i - 1) * 8
@@ -71,11 +71,15 @@ func main() {
 	}
 
 	for i, sc := range syscalls {
-		index := -i - 3
+		index := -i - 4
 		fmt.Fprintf(decl, "\timportFuncs[\"%s\"] = importFunc{%d, %d}\n", sc.name, index, sc.params)
 	}
 
 	fmt.Fprintf(decl, "}\n") // init()
+
+	fmt.Fprintf(decl, "\nfunc setImportVectorCurrentMemory(size int) {\n")
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], uint64(size))\n", (len(syscalls)+0)*8)
+	fmt.Fprintf(decl, "}\n")
 }
 
 var x86Regs = []string{"DI", "SI", "DX", "R10", "R8", "R9"}

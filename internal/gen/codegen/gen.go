@@ -224,9 +224,12 @@ func genGrowMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (d
 	load.Byte() // reserved
 
 	x := popOperand(f, wa.I32)
+	asm.Move(f, reg.Result, x)
 
-	result := asm.GrowMemory(f, x)
-	pushOperand(f, result)
+	opSaveOperands(f)
+
+	asm.GrowMemory(f)
+	pushResultRegOperand(f, wa.I32)
 	return
 }
 

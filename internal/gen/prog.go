@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	VectorOffsetTrapHandler     = -2 * obj.Word
-	VectorOffsetGrowMemoryLimit = -1 * obj.Word
+	VectorOffsetCurrentMemory = -3 * obj.Word
+	VectorOffsetGrowMemory    = -2 * obj.Word
+	VectorOffsetTrapHandler   = -1 * obj.Word
 )
 
 type Prog struct {

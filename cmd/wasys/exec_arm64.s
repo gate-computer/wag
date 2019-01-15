@@ -4,13 +4,12 @@
 
 #include "textflag.h"
 
-// func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr uintptr)
+// func exec(textBase, stackLimit, memoryBase, stackPtr uintptr)
 TEXT ·exec(SB),NOSPLIT,$0-48
 	MOVD	textBase+0(FP), R27
 	MOVD	stackLimit+8(FP), R0
 	MOVD	memoryBase+16(FP), R26
-	MOVD	memoryLimit+24(FP), R25
-	MOVD	stackPtr+40(FP), R29	// RegFakeSP
+	MOVD	stackPtr+24(FP), R29	// RegFakeSP
 
 	MOVD	R0, RSP			// RegRealSP
 	ADD	$16, R0			// func call link addr + its stack check trap link addr
@@ -37,6 +36,16 @@ sysexit:
 	MOVD	$94, R8			// exit_group syscall
 	SVC
 	BRK
+
+after:	MOVD	LR, ret+0(FP)
+	RET
+
+// func importGrowMemory() uint64
+TEXT ·importGrowMemory(SB),$0-8
+	BL	after
+
+growmemory:
+	BRK				// TODO: implementation
 
 after:	MOVD	LR, ret+0(FP)
 	RET

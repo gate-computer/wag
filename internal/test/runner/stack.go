@@ -163,8 +163,8 @@ func (p *Program) writeStacktraceTo(w io.Writer, funcs []wa.FuncType, ns *sectio
 		}
 
 		if start {
-			if site.stackOffset != 0 {
-				fmt.Fprintf(w, "#%d  <start function call site stack offset is not zero>\n", depth)
+			if site.stackOffset != 8 {
+				fmt.Fprintf(w, "#%d  <start function call site stack offset is not 8>\n", depth)
 			}
 			if len(stack) != 8 {
 				fmt.Fprintf(w, "#%d  <start function return address is not stored at start of stack>\n", depth)

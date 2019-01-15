@@ -23,6 +23,7 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
+const linearMemoryAddressSpace = 8 * 1024 * 1024 * 1024
 const signalStackReserve = 8192
 
 var (
@@ -70,9 +71,9 @@ func (resolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, err
 	return
 }
 
-func makeMem(size int, extraFlags int) (mem []byte, err error) {
+func makeMem(size int, prot, extraFlags int) (mem []byte, err error) {
 	if size > 0 {
-		mem, err = syscall.Mmap(-1, 0, size, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
+		mem, err = syscall.Mmap(-1, 0, size, prot, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
 	}
 	return
 }
@@ -122,7 +123,7 @@ func main() {
 
 	vecSize := alignSize(len(importVector), os.Getpagesize())
 
-	vecTextMem, err := makeMem(vecSize+textSize, 0)
+	vecTextMem, err := makeMem(vecSize+textSize, syscall.PROT_READ|syscall.PROT_WRITE, 0)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -150,9 +151,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	memoryAddr := memAddr(obj.GlobalsMemory) + uintptr(obj.MemoryOffset)
-	initMemoryEnd := memoryAddr + uintptr(obj.InitialMemorySize)
-	growMemoryEnd := memoryAddr + uintptr(obj.MemorySizeLimit)
+	setImportVectorCurrentMemory(obj.InitialMemorySize)
+
+	globalsMemory, err := makeMem(obj.MemoryOffset+linearMemoryAddressSpace, syscall.PROT_NONE, 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = syscall.Mprotect(globalsMemory[:obj.MemoryOffset+obj.InitialMemorySize], syscall.PROT_READ|syscall.PROT_WRITE)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	copy(globalsMemory, obj.GlobalsMemory)
+
+	memoryAddr := memAddr(globalsMemory) + uintptr(obj.MemoryOffset)
 
 	if err := syscall.Mprotect(vecMem, syscall.PROT_READ); err != nil {
 		log.Fatal(err)
@@ -162,7 +175,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stackMem, err := makeMem(stackSize, syscall.MAP_STACK)
+	stackMem, err := makeMem(stackSize, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_STACK)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -177,5 +190,5 @@ func main() {
 		log.Fatal("stack is too small for starting program")
 	}
 
-	exec(textAddr, stackLimit, memoryAddr, initMemoryEnd, growMemoryEnd, stackPtr)
+	exec(textAddr, stackLimit, memoryAddr, stackPtr)
 }

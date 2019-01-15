@@ -86,9 +86,7 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 		}
 	}
 
-	f.Text.PutUint32(in.SUBSe.RdRnI3ExtRm(RegDiscard, RegScratch, 0, in.UXTX, RegMemoryLimit, wa.I64))
-	f.Text.PutUint32(in.Bc.CondI19(in.LT, 2)) // Skip next instruction.
-	asm.Trap(f, trap.MemoryAccessOutOfBounds)
+	f.MapCallAddr(f.Text.Addr) // Instruction pointer at segmentation fault.
 
 	base = RegScratch
 	disp9 = in.Int9(-int32(sizeReach))
@@ -105,12 +103,11 @@ func invalidAccess(f *gen.Func) (base reg.R, disp9 uint32) {
 }
 
 func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
-	r := f.Regs.AllocResult(wa.I64)
-	f.Text.PutUint32(in.SUBe.RdRnI3ExtRm(r, RegMemoryLimit, 0, in.UXTX, RegMemoryBase, wa.I64))
-	f.Text.PutUint32(in.LSL(r, r, wa.PageBits, wa.I64))
+	r := f.Regs.AllocResult(wa.I32)
+	f.Text.PutUint32(in.LDUR.RtRnI9(r, RegTextBase, in.Int9(gen.VectorOffsetCurrentMemory), wa.I32))
 	return operand.Reg(wa.I32, r)
 }
 
-func (MacroAssembler) GrowMemory(f *gen.Func, x operand.O) operand.O {
-	return TODO(x).(operand.O)
+func (MacroAssembler) GrowMemory(f *gen.Func) {
+	TODO()
 }

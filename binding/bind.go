@@ -13,15 +13,16 @@ import (
 // Well-known indexes of the import vector.  Import function addresses precede
 // the trap handler address and the memory growth limit.
 const (
-	VectorIndexLastImportFunc  = -3
-	VectorIndexTrapHandler     = -2
-	VectorIndexGrowMemoryLimit = -1
+	VectorIndexLastImport    = -4
+	VectorIndexCurrentMemory = -3
+	VectorIndexGrowMemory    = -2
+	VectorIndexTrapHandler   = -1
 )
 
 // ImportResolver maps symbols to vector indexes and constant values.
 //
 // ResolveFunc returns a negative index; the vector is addressed from the end.
-// VectorIndexLastImportFunc is the largest valid index which ResolveFunc can
+// VectorIndexLastImport is the largest valid index which ResolveFunc can
 // return.
 //
 // ResolveGlobal returns a bit pattern the interpretation of which depends on

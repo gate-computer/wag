@@ -36,7 +36,7 @@ func (resolver) ResolveFunc(module, field string, sig wa.FuncType) (index int, e
 	h.Write([]byte(module))
 	h.Write([]byte(field))
 	index = -int((uint64(h.Sum32()) * 8) / 7)
-	if index > binding.VectorIndexLastImportFunc || index < math.MinInt32 {
+	if index > binding.VectorIndexLastImport || index < math.MinInt32 {
 		err = errFuzzImport
 	}
 	return

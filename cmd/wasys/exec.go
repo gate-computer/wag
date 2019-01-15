@@ -4,5 +4,6 @@
 
 package main
 
-func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr uintptr)
+func exec(textBase, stackLimit, memoryBase, stackPtr uintptr)
 func importTrapHandler() uint64
+func importGrowMemory() uint64

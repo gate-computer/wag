@@ -8,7 +8,7 @@ package reglayout
 
 const (
 	AllocIntFirst = 5  // rbp
-	AllocIntLast  = 12 // r12
+	AllocIntLast  = 13 // r13
 
 	AllocFloatFirst = 2  // xmm2
 	AllocFloatLast  = 15 // xmm15

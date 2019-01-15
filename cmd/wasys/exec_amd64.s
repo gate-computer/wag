@@ -4,16 +4,13 @@
 
 #include "textflag.h"
 
-// func exec(textBase, stackLimit, memoryBase, memoryLimit, memoryGrowLimit, stackPtr uintptr)
+// func exec(textBase, stackLimit, memoryBase, stackPtr uintptr)
 TEXT ·exec(SB),NOSPLIT,$0-48
 	MOVQ	textBase+0(FP), R15
 	MOVQ	stackLimit+8(FP), BX
 	MOVQ	memoryBase+16(FP), R14
-	MOVQ	memoryLimit+24(FP), R13
-	MOVQ	memoryGrowLimit+32(FP), BP
-	MOVQ	stackPtr+40(FP), CX
+	MOVQ	stackPtr+24(FP), CX
 
-	MOVQ	BP, M1			// memory grow limit
 	MOVQ	CX, SP			// stack ptr
 
 	XORL	AX, AX
@@ -26,6 +23,7 @@ TEXT ·exec(SB),NOSPLIT,$0-48
 	XORL	R10, R10
 	XORL	R11, R11
 	XORL	R12, R12
+	XORL	R13, R13
 
 	MOVQ	R15, DX
 	ADDQ	$32, DX			// init routine
@@ -49,3 +47,12 @@ sysexit:
 	MOVL	AX, DI
 	MOVL	$231, AX		// exit_group syscall
 	SYSCALL
+
+// func importGrowMemory() uint64
+TEXT ·importGrowMemory(SB),$0-8
+	LEAQ	growMemory<>(SB), AX
+	MOVQ	AX, ret+0(FP)
+	RET
+
+TEXT growMemory<>(SB),NOSPLIT,$0
+	HLT				// TODO: implementation

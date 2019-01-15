@@ -110,7 +110,7 @@ type MacroAssembler interface {
 
 	// GrowMemory may allocate registers, use RegResult and update condition
 	// flags.
-	GrowMemory(f *gen.Func, x operand.O) operand.O
+	GrowMemory(f *gen.Func)
 
 	// Init may use RegResult and update condition flags.  It MUST NOT generate
 	// over 16 bytes of code.
