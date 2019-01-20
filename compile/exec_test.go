@@ -22,7 +22,7 @@ func TestExec(t *testing.T) {
 		filename = "../testdata/exec.wast"
 
 		maxTextSize = 65536
-		stackSize   = 4096
+		stackSize   = 16384
 
 		dumpText = false
 	)

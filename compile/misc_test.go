@@ -23,7 +23,7 @@ func TestCallWithDuplicatedOperand(t *testing.T) {
 func misc(t *testing.T, filename, expectOutput string) {
 	const (
 		maxTextSize = 65536
-		stackSize   = 4096
+		stackSize   = 16384
 
 		dumpText = false
 	)

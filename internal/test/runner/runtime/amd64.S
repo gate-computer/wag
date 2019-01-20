@@ -97,8 +97,7 @@ run:
 	mov	8+80(%rsp), %rdi	// run func param: slaveFd
 
 	add	%rbx, %rcx		// stack ptr
-	add	$128, %rbx		// for imports and traps
-	add	$16, %rbx		// call + stack check trap call
+	add	$10160, %rbx		// vars (16), signal (10000), redzone (128), stack check (16)
 	movq	%rdi, %mm6		// slave fd
 	movq	%rsp, %mm7		// original stack
 	mov	%rcx, %rsp		// stack ptr
@@ -160,7 +159,7 @@ trap_handler:
 	sub	$24, %rsp		// sizeof result
 	mov	%rsp, %rsi		// write buf
 	mov	%rax, 0(%rsi)		// result: TrapID
-	mov	-24(%r15), %r13d	// current memory pages
+	mov	-10160(%rbx), %r13d	// current memory pages
 	shl	$16, %r13
 	mov	%r13, 8(%rsi)		// result: MemorySize
 	mov	%r11, 16(%rsi)		// result: StackPtr
@@ -208,12 +207,19 @@ trap_handler:
 	jmp	trap_handler
 
 .align	16
+.global	current_memory
+
+current_memory:
+	mov	-10160(%rbx), %eax
+	jmp	resume
+
+.align	16
 .global	grow_memory
 
 grow_memory:
 	mov	%eax, %r12d
 
-	mov	-24(%r15), %edi		// current memory pages
+	mov	-10160(%rbx), %edi	// current memory pages
 	add	%rdi, %r12		// new memory pages
 	cmp	%r12, -32(%r15)		// grow memory limit pages
 	jl	.Loom
@@ -235,8 +241,8 @@ grow_memory:
 	jmp	trap_handler
 
 .Lgrow_done:
-	mov	-24(%r15), %eax		// old memory pages
-	mov	%r12d, -24(%r15)	// new memory pages
+	mov	-10160(%rbx), %eax	// old memory pages
+	mov	%r12d, -10160(%rbx)	// new memory pages
 	jmp	resume
 
 .Loom:
@@ -375,7 +381,7 @@ snapshot:
 	jne	.Lfail_snapshot
 
 	mov	$SYS_write, %eax
-	mov	-24(%r15), %r13d	// current memory pages
+	mov	-10160(%rbx), %r13d	// current memory pages
 	shl	$16, %r13
 	add	%r14, %r13		// current memory end address
 	mov	%r13, (%rsi)		// buf contents

@@ -25,6 +25,12 @@ TEXT ·importTrapHandler(SB),$0-8
 	MOVQ	AX, ret+0(FP)
 	RET
 
+// func importCurrentMemory() uint64
+TEXT ·importCurrentMemory(SB),$0-8
+	LEAQ	current_memory(SB), AX
+	MOVQ	AX, ret+0(FP)
+	RET
+
 // func importGrowMemory() uint64
 TEXT ·importGrowMemory(SB),$0-8
 	LEAQ	grow_memory(SB), AX

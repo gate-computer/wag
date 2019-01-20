@@ -104,6 +104,10 @@ type MacroAssembler interface {
 	// flags.  The source operand may be RegResult or condition flags.
 	Convert(f *gen.Func, props uint16, result wa.Type, source operand.O) operand.O
 
+	// CurrentMemory may allocate registers, use RegResult and update condition
+	// flags.
+	CurrentMemory(f *gen.Func)
+
 	// DropStackValues has default restrictions.  The caller will take care of
 	// updating the virtual stack pointer.
 	DropStackValues(p *gen.Prog, n int)
@@ -168,10 +172,6 @@ type MacroAssembler interface {
 
 	// PushZeros may use RegResult and update condition flags.
 	PushZeros(p *gen.Prog, n int)
-
-	// QueryMemorySize may allocate registers, use RegResult and update
-	// condition flags.
-	QueryMemorySize(f *gen.Func) operand.O
 
 	// Resume may update condition flags.  It MUST NOT generate
 	// over 16 bytes of code.

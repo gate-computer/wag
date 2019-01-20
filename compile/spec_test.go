@@ -137,7 +137,7 @@ func spec(t *testing.T, name string) {
 func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 	const (
 		maxTextSize = 0x100000
-		stackSize   = 4096 // limit stacktrace length
+		stackSize   = 16384 // limit stacktrace length
 
 		timeout     = time.Second * 3
 		dumpExps    = false

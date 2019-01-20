@@ -102,10 +102,8 @@ func invalidAccess(f *gen.Func) (base reg.R, disp9 uint32) {
 	return
 }
 
-func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
-	r := f.Regs.AllocResult(wa.I32)
-	f.Text.PutUint32(in.LDUR.RtRnI9(r, RegTextBase, in.Int9(gen.VectorOffsetCurrentMemory), wa.I32))
-	return operand.Reg(wa.I32, r)
+func (MacroAssembler) CurrentMemory(f *gen.Func) {
+	TODO()
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func) {

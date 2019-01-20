@@ -204,12 +204,12 @@ func genUnary(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deaden
 }
 
 func genCurrentMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	opStabilizeOperands(f)
+	opSaveOperands(f)
 
 	load.Byte() // reserved
 
-	result := asm.QueryMemorySize(f)
-	pushOperand(f, result)
+	asm.CurrentMemory(f)
+	pushResultRegOperand(f, wa.I32)
 	return
 }
 

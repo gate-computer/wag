@@ -24,7 +24,7 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-const linearMemoryAddressSpace = 8 * 1024 * 1024 * 1024
+const linearMemoryAddressSpace = 6 * 1024 * 1024 * 1024
 
 const (
 	vectorIndexLastImportFunc  = -5
@@ -34,11 +34,10 @@ const (
 	vectorIndexTrapHandler     = -1
 )
 
-const signalStackReserve = 8192
-
 func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int) int
 
 func importTrapHandler() uint64
+func importCurrentMemory() uint64
 func importGrowMemory() uint64
 func importGetArg() uint64
 func importSnapshot() uint64
@@ -108,7 +107,8 @@ var importFuncs = map[string]map[string]imports.Func{
 }
 
 func populateImportVector(b []byte) {
-	// Set memory entries later.
+	// vectorIndexGrowMemoryLimit is initialized later.
+	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexCurrentMemory*8:], importCurrentMemory())
 	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexGrowMemory*8:], importGrowMemory())
 	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexTrapHandler*8:], importTrapHandler())
 
@@ -294,7 +294,6 @@ type Runner struct {
 
 func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
 	binary.LittleEndian.PutUint64(p.vec[len(p.vec)+vectorIndexGrowMemoryLimit*8:], uint64(growMemorySize)/wa.PageSize)
-	binary.LittleEndian.PutUint64(p.vec[len(p.vec)+vectorIndexCurrentMemory*8:], uint64(initMemorySize)/wa.PageSize)
 
 	r, err = newRunner(p, initMemorySize, growMemorySize, stackSize)
 	if err != nil {
@@ -359,7 +358,7 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 
 	copy(r.globalsMemory, data)
 
-	r.stack, err = makeMemory(signalStackReserve+stackSize, syscall.PROT_READ|syscall.PROT_WRITE)
+	r.stack, err = makeMemory(stackSize, syscall.PROT_READ|syscall.PROT_WRITE)
 	if err != nil {
 		r.Close()
 		return
@@ -457,7 +456,8 @@ func (e *Executor) Wait() (result int32, err error) {
 }
 
 func (e *Executor) run() {
-	stack := e.runner.stack[signalStackReserve:]
+	stack := e.runner.stack
+	binary.LittleEndian.PutUint32(stack, uint32(e.runner.memorySize)/wa.PageSize)
 	stackState := e.runner.prog.getStack()
 	stackOffset := len(stack) - len(stackState)
 	copy(stack[stackOffset:], stackState)
@@ -533,5 +533,5 @@ func makeMemory(size int, prot int) (mem []byte, err error) {
 		return
 	}
 
-	return syscall.Mmap(-1, 0, size, prot, syscall.MAP_SHARED|syscall.MAP_ANONYMOUS)
+	return syscall.Mmap(-1, 0, size, prot, syscall.MAP_SHARED|syscall.MAP_ANONYMOUS|syscall.MAP_NORESERVE)
 }

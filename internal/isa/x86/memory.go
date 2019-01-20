@@ -135,10 +135,9 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 	return
 }
 
-func (MacroAssembler) QueryMemorySize(f *gen.Func) operand.O {
-	r := f.Regs.AllocResult(wa.I32)
-	in.MOV.RegMemDisp(&f.Text, wa.I32, r, in.BaseText, gen.VectorOffsetCurrentMemory)
-	return operand.Reg(wa.I32, r)
+func (MacroAssembler) CurrentMemory(f *gen.Func) {
+	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetCurrentMemory)
+	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func) {
