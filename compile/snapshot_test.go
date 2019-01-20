@@ -79,10 +79,6 @@ func TestSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if true {
-		return
-	}
-
 	if printBuf.Len() > 0 {
 		t.Logf("print output:\n%s", printBuf.String())
 	}
