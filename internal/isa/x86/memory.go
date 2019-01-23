@@ -135,12 +135,14 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 	return
 }
 
-func (MacroAssembler) CurrentMemory(f *gen.Func) {
+func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetCurrentMemory)
 	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
+	return f.Text.Addr
 }
 
-func (MacroAssembler) GrowMemory(f *gen.Func) {
+func (MacroAssembler) GrowMemory(f *gen.Func) int32 {
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemory)
 	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
+	return f.Text.Addr
 }

@@ -106,7 +106,7 @@ type MacroAssembler interface {
 
 	// CurrentMemory may allocate registers, use RegResult and update condition
 	// flags.
-	CurrentMemory(f *gen.Func)
+	CurrentMemory(f *gen.Func) (site int32)
 
 	// DropStackValues has default restrictions.  The caller will take care of
 	// updating the virtual stack pointer.
@@ -114,7 +114,7 @@ type MacroAssembler interface {
 
 	// GrowMemory may allocate registers, use RegResult and update condition
 	// flags.
-	GrowMemory(f *gen.Func)
+	GrowMemory(f *gen.Func) (site int32)
 
 	// Init may use RegResult and update condition flags.  It MUST NOT generate
 	// over 16 bytes of code.

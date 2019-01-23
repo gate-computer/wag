@@ -208,7 +208,7 @@ func genCurrentMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo)
 
 	load.Byte() // reserved
 
-	asm.CurrentMemory(f)
+	f.MapCallAddr(asm.CurrentMemory(f))
 	pushResultRegOperand(f, wa.I32)
 	return
 }
@@ -228,7 +228,7 @@ func genGrowMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (d
 
 	opSaveOperands(f)
 
-	asm.GrowMemory(f)
+	f.MapCallAddr(asm.GrowMemory(f))
 	pushResultRegOperand(f, wa.I32)
 	return
 }

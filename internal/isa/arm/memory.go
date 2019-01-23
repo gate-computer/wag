@@ -102,10 +102,12 @@ func invalidAccess(f *gen.Func) (base reg.R, disp9 uint32) {
 	return
 }
 
-func (MacroAssembler) CurrentMemory(f *gen.Func) {
+func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {
 	TODO()
+	return f.Text.Addr
 }
 
-func (MacroAssembler) GrowMemory(f *gen.Func) {
+func (MacroAssembler) GrowMemory(f *gen.Func) int32 {
 	TODO()
+	return f.Text.Addr
 }
