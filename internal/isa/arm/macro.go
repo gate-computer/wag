@@ -239,6 +239,15 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, index int, variadic bool, ar
 }
 
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {
+	jumpToTrapHandler(p, id)
+}
+
+func (MacroAssembler) JumpToStackTrapHandler(p *gen.Prog) {
+	p.Text.PutUint32(in.SUBi.RdRnI12S2(RegLink, RegLink, 5*4, 0, wa.I64)) // See SetupStackFrame.
+	jumpToTrapHandler(p, trap.CallStackExhausted)
+}
+
+func jumpToTrapHandler(p *gen.Prog, id trap.ID) {
 	var o output
 	o.uint32(in.MOVZ.RdI16Hw(RegResult, uint32(id), 0, wa.I64))
 	o.uint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
@@ -346,6 +355,11 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
+	f.MapCallAddr(f.Text.Addr) // Restart point.
+
+	// If the following instructions are changed, JumpToStackTrapHandler must
+	// be changed to match the instruction sequence size.
+
 	var o output
 
 	o.uint32(in.PushIntReg(RegLink))
@@ -414,12 +428,13 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	var o output
 	putTrapInsn(&o, f, id)
 	o.copy(f.Text.Extend(o.size()))
+
+	f.MapCallAddr(f.Text.Addr)
 }
 
 // putTrapInsn must generate exactly one instruction.
 func putTrapInsn(o *output, f *gen.Func, id trap.ID) {
 	o.uint32(in.BL.I26(in.Int26((f.TrapLinks[id].Addr - o.addr(&f.Text)) / 4)))
-	o.mapCallAddr(f)
 }
 
 func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {

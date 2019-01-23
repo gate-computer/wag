@@ -315,6 +315,15 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 }
 
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {
+	jumpToTrapHandler(p, id)
+}
+
+func (MacroAssembler) JumpToStackTrapHandler(p *gen.Prog) {
+	in.SUBi.StackImm8(&p.Text, wa.I64, 18) // See SetupStackFrame.
+	jumpToTrapHandler(p, trap.CallStackExhausted)
+}
+
+func jumpToTrapHandler(p *gen.Prog, id trap.ID) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
@@ -455,13 +464,17 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
+	f.MapCallAddr(f.Text.Addr) // Restart point.
+
+	// If the following instructions are changed, JumpToCallStackExhaustHandler
+	// must be changed to match the instruction sequence size.
+
 	in.LEA.RegStackStub32(&f.Text, wa.I64, RegScratch)
 	stackCheckAddr = f.Text.Addr
 
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
 	in.JGEcb.Rel8(&f.Text, in.CALLcd.Size())                             // Skip next instruction.
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.CallStackExhausted].Addr) // Handler checks suspension.
-	f.MapCallAddr(f.Text.Addr)
 	return
 }
 

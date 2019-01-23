@@ -219,14 +219,17 @@ func genDrop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 }
 
 func genGrowMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	opStabilizeOperands(f)
+	opSaveOperands(f)
 
 	load.Byte() // reserved
 
+	// This is a possible suspension point.  Operands must be on stack, and the
+	// size of the following instruction sequence is part of ISA-specific ABI.
+	// If the program is restored, the instruction pointer needs the be reset
+	// to this point.
+
 	x := popOperand(f, wa.I32)
 	asm.Move(f, reg.Result, x)
-
-	opSaveOperands(f)
 
 	f.MapCallAddr(asm.GrowMemory(f))
 	pushResultRegOperand(f, wa.I32)

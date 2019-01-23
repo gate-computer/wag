@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 
 	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/gen"
 )
 
 type output struct {
@@ -29,10 +28,6 @@ func (o *output) copy(target []byte) {
 
 func (o *output) addr(text *code.Buf) int32 {
 	return text.Addr + int32(o.index*4)
-}
-
-func (o *output) mapCallAddr(f *gen.Func) {
-	f.MapCallAddr(f.Text.Addr + int32(o.index*4))
 }
 
 func (o *output) uint32(i uint32) {

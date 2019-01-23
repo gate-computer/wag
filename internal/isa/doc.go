@@ -113,7 +113,9 @@ type MacroAssembler interface {
 	DropStackValues(p *gen.Prog, n int)
 
 	// GrowMemory may allocate registers, use RegResult and update condition
-	// flags.
+	// flags.  The generated instruction sequence is part of ISA-specific ABI:
+	// the instruction sequence size up to and including the function call
+	// instruction must be predictable.
 	GrowMemory(f *gen.Func) (site int32)
 
 	// Init may use RegResult and update condition flags.  It MUST NOT generate
@@ -133,6 +135,9 @@ type MacroAssembler interface {
 	// JumpToTrapHandler may use RegResult and update condition flags.  It MUST
 	// NOT generate over 16 bytes of code.
 	JumpToTrapHandler(p *gen.Prog, id trap.ID)
+
+	// JumpToStackTrapHandler may use RegResult and update condition flags.
+	JumpToStackTrapHandler(p *gen.Prog)
 
 	// Load may allocate registers, use RegResult and update condition flags.
 	// The index operand may be RegResult or the condition flags.

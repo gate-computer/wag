@@ -453,6 +453,16 @@ func (op MI) RegImm32(text *code.Buf, t wa.Type, r reg.R, val int32) {
 	o.copy(text.Extend(o.len()))
 }
 
+func (op MI) StackImm8(text *code.Buf, t wa.Type, val int8) {
+	var o output
+	o.rexIf(typeRexW(t))
+	o.byte(byte(op >> 16))
+	o.mod(ModMem, ModRO(op), ModRMSIB)
+	o.sib(Scale0, noIndex, baseStack)
+	o.int8(val)
+	o.copy(text.Extend(o.len()))
+}
+
 func (op MI) StackDispImm32(text *code.Buf, t wa.Type, disp, val int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output

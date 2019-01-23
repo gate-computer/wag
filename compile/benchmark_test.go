@@ -43,7 +43,7 @@ const (
 	loadBenchmarkEntrySymbol = "run"
 	loadBenchmarkMaxTextSize = 16 * 1024 * 1024
 	loadBenchmarkMaxDataSize = 16 * 1024 * 1024
-	loadBenchmarkTextCRC32   = 0xd4aeb5be
+	loadBenchmarkTextCRC32   = 0x673401d8
 	loadBenchmarkIgnoreCRC32 = false
 )
 

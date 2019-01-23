@@ -12,11 +12,11 @@ import (
 type ID int
 
 const (
-	Exit = ID(iota)
-	NoFunction
-	Suspended
+	Exit       = ID(iota)
+	NoFunction // Recoverable (nonportable).  Return address must be adjusted.
+	Suspended  // Recoverable (portable).
 	Unreachable
-	CallStackExhausted
+	CallStackExhausted // Recoverable (portable).
 	MemoryAccessOutOfBounds
 	IndirectCallIndexOutOfBounds
 	IndirectCallSignatureMismatch

@@ -95,7 +95,14 @@ func GenProgram(
 	for id := trap.NoFunction + 1; id < trap.NumTraps; id++ {
 		asm.AlignFunc(p)
 		p.TrapLinks[id].Addr = p.Text.Addr
-		asm.JumpToTrapHandler(p, id)
+
+		switch id {
+		case trap.CallStackExhausted:
+			asm.JumpToStackTrapHandler(p)
+
+		default:
+			asm.JumpToTrapHandler(p, id)
+		}
 	}
 
 	for i, imp := range m.ImportFuncs {
