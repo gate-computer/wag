@@ -34,12 +34,12 @@ type NameSection struct {
 }
 
 // Load "name" section.
-func (ns *NameSection) Load(_ string, r reader.R, payloadLen uint32) (err error) {
+func (ns *NameSection) Load(_ string, r reader.R, length uint32) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	r = bufio.NewReader(&io.LimitedReader{R: r, N: int64(payloadLen)})
+	r = bufio.NewReader(&io.LimitedReader{R: r, N: int64(length)})
 
 	for ns.readSubsection(r) {
 	}
@@ -113,8 +113,8 @@ type MappedNameSection struct {
 
 // Loader of "name" section.  Remembers position.
 func (ns *MappedNameSection) Loader(sectionMap *Map) func(string, reader.R, uint32) error {
-	return func(sectionName string, r reader.R, payloadLen uint32) error {
+	return func(sectionName string, r reader.R, length uint32) error {
 		ns.Mapping = sectionMap.Sections[Custom] // The latest one.
-		return ns.NameSection.Load(sectionName, r, payloadLen)
+		return ns.NameSection.Load(sectionName, r, length)
 	}
 }
