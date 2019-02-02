@@ -14,7 +14,7 @@ import (
 )
 
 type TextMap interface {
-	FindAddr(retAddr uint32) (funcIndex, retInsnPos uint32, stackOffset int32, initialCall, ok bool)
+	FindAddr(retAddr uint32) (funcIndex, callIndex, retInsnPos uint32, stackOffset int32, initialCall, ok bool)
 }
 
 type Frame struct {
@@ -38,7 +38,7 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncTyp
 			return
 		}
 
-		funcIndex, retInsnPos, stackOffset, initial, ok := textMap.FindAddr(uint32(retAddr))
+		funcIndex, _, retInsnPos, stackOffset, initial, ok := textMap.FindAddr(uint32(retAddr))
 		if !ok {
 			err = fmt.Errorf("call instruction not found for return address 0x%x", retAddr)
 			return

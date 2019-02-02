@@ -62,8 +62,8 @@ func (m *InsnMap) putMapping(objectPos, sourcePos uint32, blockLen int32) {
 	}
 }
 
-func (m *InsnMap) FindAddr(retAddr uint32) (funcIndex, retInsnPos uint32, stackOffset int32, initial, ok bool) {
-	funcIndex, _, stackOffset, initial, siteOk := m.CallMap.FindAddr(retAddr)
+func (m *InsnMap) FindAddr(retAddr uint32) (funcIndex, callIndex, retInsnPos uint32, stackOffset int32, initial, ok bool) {
+	funcIndex, callIndex, _, stackOffset, initial, siteOk := m.CallMap.FindAddr(retAddr)
 	if !siteOk {
 		return
 	}
