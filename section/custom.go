@@ -5,7 +5,6 @@
 package section
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 
@@ -20,18 +19,10 @@ const (
 
 type Reader = reader.R
 
-type CustomLoaders map[string]func(sectionName string, section Reader) error
+type CustomLoaders map[string]func(sectionName string, r Reader, payloadLen uint32) error
 
 func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
-	// io.LimitedReader doesn't implement Reader, so do this instead
-	payload := make([]byte, payloadLen)
-	_, err = io.ReadFull(r, payload)
-	if err != nil {
-		return
-	}
-
-	payloadReader := bytes.NewReader(payload)
-	load := loader.L{R: payloadReader}
+	load := loader.L{R: r}
 
 	nameLen := load.Varuint32()
 	if nameLen > maxSectionNameLen {
@@ -42,9 +33,9 @@ func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 	name := string(load.Bytes(nameLen))
 
 	if f := uls[name]; f != nil {
-		err = f(name, payloadReader)
+		err = f(name, load.R, payloadLen)
 	} else {
-		// It's a bytes.Reader, no need to discard.
+		_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
 	}
 	return
 }
@@ -52,15 +43,10 @@ func (uls CustomLoaders) Load(r Reader, payloadLen uint32) (err error) {
 type CustomMapping ByteRange
 
 // Loader of arbitrary custom section.  Remembers position, discards content.
-func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R) error {
-	return func(_ string, r reader.R) (err error) {
+func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R, uint32) error {
+	return func(_ string, r reader.R, payloadLen uint32) (err error) {
 		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
-
-		if _, ok := r.(*bytes.Reader); ok {
-			// No need to discard.
-		} else {
-			_, err = io.Copy(ioutil.Discard, r)
-		}
+		_, err = io.CopyN(ioutil.Discard, r, int64(payloadLen))
 		return
 	}
 }
@@ -69,8 +55,10 @@ type CustomSections struct {
 	Sections map[string][]byte
 }
 
-func (cs *CustomSections) Load(name string, r reader.R) (err error) {
-	data, err := ioutil.ReadAll(r)
+func (cs *CustomSections) Load(name string, r reader.R, payloadLen uint32) (err error) {
+	data := make([]byte, payloadLen)
+
+	_, err = io.ReadFull(r, data)
 	if err != nil {
 		return
 	}
