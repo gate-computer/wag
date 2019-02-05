@@ -21,7 +21,7 @@ func (l *L) AddSites(addrs []int32) {
 	l.Sites = append(l.Sites, addrs...)
 }
 
-func (l *L) FinalAddr() int32 {
+func (l L) FinalAddr() int32 {
 	if l.Addr == 0 {
 		panic(errors.New("link address undefined while updating branch or call instruction"))
 	}

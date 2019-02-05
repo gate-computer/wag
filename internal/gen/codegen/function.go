@@ -45,7 +45,7 @@ func beginFrame(f *gen.Func) (frame operandFrame) {
 	return
 }
 
-func (frame *operandFrame) end(f *gen.Func) {
+func (frame operandFrame) end(f *gen.Func) {
 	f.FrameBase = frame.savedBase
 
 	debug.Printf("old frame base: %d", f.FrameBase)

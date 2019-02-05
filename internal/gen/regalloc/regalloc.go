@@ -53,12 +53,12 @@ func (a *Allocator) Free(t wa.Type, r reg.R) {
 	a.categories[t.Category()].free(r)
 }
 
-func (a *Allocator) CheckNoneAllocated() {
+func (a Allocator) CheckNoneAllocated() {
 	a.categories[wa.Int].checkNoneAllocated(allocatableInt, "int registers still allocated")
 	a.categories[wa.Float].checkNoneAllocated(allocatableFloat, "float registers still allocated")
 }
 
-func (a *Allocator) DebugPrintAllocated() {
+func (a Allocator) DebugPrintAllocated() {
 	a.categories[wa.Int].debugPrintAllocated(reglayout.AllocIntFirst, reglayout.AllocIntLast, "int")
 	a.categories[wa.Float].debugPrintAllocated(reglayout.AllocFloatFirst, reglayout.AllocFloatLast, "float")
 }
@@ -81,13 +81,13 @@ func (s *state) free(r reg.R) {
 	s.available |= (1 << r) &^ 0x3 // ignore result and scratch regs
 }
 
-func (s *state) checkNoneAllocated(allocatable bitmap, msg string) {
+func (s state) checkNoneAllocated(allocatable bitmap, msg string) {
 	if s.available != allocatable {
 		panic(msg)
 	}
 }
 
-func (s *state) debugPrintAllocated(first, last reg.R, kind string) {
+func (s state) debugPrintAllocated(first, last reg.R, kind string) {
 	if debug.Enabled {
 		for r := first; r <= last; r++ {
 			if s.available&(1<<r) == 0 {
