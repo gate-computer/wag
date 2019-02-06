@@ -19,6 +19,11 @@ func NewLimited(b []byte, maxSize int) *Limited {
 	return &Limited{makeDynamicHint(b, maxSize)}
 }
 
+// Len doesn't panic.
+func (l *Limited) Len() int {
+	return l.d.Len()
+}
+
 // Bytes doesn't panic.
 func (l *Limited) Bytes() []byte {
 	return l.d.Bytes()

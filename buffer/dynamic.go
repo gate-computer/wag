@@ -35,6 +35,11 @@ func NewDynamicHint(b []byte, maxSizeHint int) *Dynamic {
 	return &d
 }
 
+// Len doesn't panic.
+func (d *Dynamic) Len() int {
+	return len(d.buf)
+}
+
 // Bytes doesn't panic.
 func (d *Dynamic) Bytes() []byte {
 	return d.buf

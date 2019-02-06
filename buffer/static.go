@@ -42,6 +42,11 @@ func (s *Static) Cap() int {
 	return s.max
 }
 
+// Len doesn't panic.
+func (s *Static) Len() int {
+	return len(s.buf)
+}
+
 // Bytes doesn't panic.
 func (s *Static) Bytes() []byte {
 	return s.buf
