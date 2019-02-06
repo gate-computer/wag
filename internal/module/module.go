@@ -109,7 +109,6 @@ type ImportFunc struct {
 type ResizableLimits struct {
 	Initial int
 	Maximum int
-	Defined bool
 }
 
 type Global struct {

@@ -79,28 +79,7 @@ func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int
 	return module.ResizableLimits{
 		Initial: int(initial) * scale,
 		Maximum: int(maximum) * scale,
-		Defined: true,
 	}
-}
-
-func readTable(m *module.M, load loader.L) {
-	if m.TableLimitValues.Defined {
-		panic(module.Error("multiple tables not supported"))
-	}
-
-	if elementType := load.Varint7(); elementType != -0x10 {
-		panic(module.Errorf("unsupported table element type: %d", elementType))
-	}
-
-	m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
-}
-
-func readMemory(m *module.M, load loader.L) {
-	if m.MemoryLimitValues.Defined {
-		panic(module.Error("multiple memories not supported"))
-	}
-
-	m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, wa.PageSize)
 }
 
 // Config for loading WebAssembly module sections.
@@ -272,12 +251,6 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 					},
 				})
 
-			case module.ExternalKindTable:
-				readTable(&m.m, load)
-
-			case module.ExternalKindMemory:
-				readMemory(&m.m, load)
-
 			case module.ExternalKindGlobal:
 				if len(m.m.Globals) >= maxGlobals {
 					panic(module.Error("too many imported globals"))
@@ -316,14 +289,30 @@ var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, ui
 	},
 
 	module.SectionTable: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count(1, "table") {
-			readTable(&m.m, load)
+		switch load.Varuint32() {
+		case 0:
+
+		case 1:
+			if elementType := load.Varint7(); elementType != -0x10 {
+				panic(module.Errorf("unsupported table element type: %d", elementType))
+			}
+
+			m.m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
+
+		default:
+			panic(module.Error("multiple tables not supported"))
 		}
 	},
 
 	module.SectionMemory: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count(1, "memory") {
-			readMemory(&m.m, load)
+		switch load.Varuint32() {
+		case 0:
+
+		case 1:
+			m.m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, wa.PageSize)
+
+		default:
+			panic(module.Error("multiple memories not supported"))
 		}
 	},
 
