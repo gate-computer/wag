@@ -130,6 +130,8 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		case strings.HasPrefix(insn.Mnemonic, "j") && insn.Mnemonic != "jmpq":
 			fallthrough
 		case insn.Mnemonic == "callq" && strings.HasPrefix(insn.OpStr, "0x"):
+			fallthrough
+		case insn.Mnemonic == "loop" && strings.HasPrefix(insn.OpStr, "0x"):
 			addr, err := strconv.ParseUint(insn.OpStr, 0, 64)
 			if err != nil {
 				panic(err)
