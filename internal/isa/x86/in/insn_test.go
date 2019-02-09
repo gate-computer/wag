@@ -376,6 +376,17 @@ func TestInsnMI(test *testing.T) {
 				}
 			}
 
+			if !i.skipImm8 {
+				// Test StackImm8
+				opStr := fmt.Sprintf("%s ptr [rsp], IMM", memSizes[t])
+
+				for _, val := range testImm8 {
+					testEncodeImm(test, i.mn, opStr, val, func(text *code.Buf) {
+						i.op.StackImm8(text, t, val)
+					})
+				}
+			}
+
 			if !i.skipImm32 {
 				for disp, dispStr := range testDisp32 {
 					// Test StackDispImm32

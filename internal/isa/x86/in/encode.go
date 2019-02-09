@@ -456,7 +456,7 @@ func (op MI) RegImm32(text *code.Buf, t wa.Type, r reg.R, val int32) {
 func (op MI) StackImm8(text *code.Buf, t wa.Type, val int8) {
 	var o output
 	o.rexIf(typeRexW(t))
-	o.byte(byte(op >> 16))
+	o.byte(byte(op >> 8))
 	o.mod(ModMem, ModRO(op), ModRMSIB)
 	o.sib(Scale0, noIndex, baseStack)
 	o.int8(val)

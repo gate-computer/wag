@@ -99,7 +99,7 @@ func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm i
 
 	insns, err := testEngine.Disasm(text.Bytes(), 0, 0)
 	if err != nil {
-		t.Errorf("expect %s %s: %v", expectMnemonic, expectOpStr, err)
+		t.Errorf("expect %s %s (IMM=%v): %v", expectMnemonic, expectOpStr, expectImm, err)
 		return
 	}
 
