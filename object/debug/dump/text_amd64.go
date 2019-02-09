@@ -27,6 +27,7 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 	targets[uint(textAddr)+abi.TextAddrRetpolineSetup] = "retpoline.setup"
 
 	sequence := 0
+	skipTrapInsn := false
 
 	for i := range insns {
 		insn := &insns[i]
@@ -101,11 +102,23 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		insn.OpStr = strings.Replace(insn.OpStr, "%r14", "memory", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%r15", "text", -1)
 
-		if insn.Address < firstFuncAddr && (insn.Mnemonic == "movl" || insn.Mnemonic == "shlq") && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", result") {
-			var n uint
-			fmt.Sscanf(insn.OpStr, "$%d, %%eax", &n)
-			if id := trap.ID(n); id < trap.NumTraps {
-				targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
+		if insn.Address < firstFuncAddr {
+			if skipTrapInsn {
+				skipTrapInsn = false
+				continue
+			}
+
+			if insn.Mnemonic == "subq" && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", (sp)") {
+				targets[insn.Address] = "trap.call_stack_exhausted"
+				skipTrapInsn = true
+			}
+
+			if (insn.Mnemonic == "movl" || insn.Mnemonic == "shlq") && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", result") {
+				var n uint
+				fmt.Sscanf(insn.OpStr, "$%d, %%eax", &n)
+				if id := trap.ID(n); id < trap.NumTraps {
+					targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
+				}
 			}
 		}
 	}
