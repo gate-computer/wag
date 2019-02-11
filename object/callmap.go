@@ -31,7 +31,7 @@ func (m *CallMap) PutCallSite(retAddr uint32, stackOffset int32) {
 	m.CallSites = append(m.CallSites, CallSite{retAddr, stackOffset})
 }
 
-func (m *CallMap) FindAddr(retAddr uint32) (funcIndex, callIndex, _ uint32, stackOffset int32, initial, ok bool) {
+func (m CallMap) FindAddr(retAddr uint32) (funcIndex, callIndex, _ uint32, stackOffset int32, initial, ok bool) {
 	funcIndex, _, _, _, initial, funcOk := m.FuncMap.FindAddr(retAddr)
 	if !funcOk {
 		return

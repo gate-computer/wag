@@ -31,7 +31,7 @@ func (*FuncMap) PutCallSite(uint32, int32)  {}
 func (*FuncMap) PutInsnAddr(uint32)         {}
 func (*FuncMap) PutDataBlock(uint32, int32) {}
 
-func (m *FuncMap) FindAddr(retAddr uint32) (funcIndex, _, _ uint32, _ int32, initial, ok bool) {
+func (m FuncMap) FindAddr(retAddr uint32) (funcIndex, _, _ uint32, _ int32, initial, ok bool) {
 	if len(m.FuncAddrs) == 0 {
 		return
 	}
