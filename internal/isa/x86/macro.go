@@ -310,7 +310,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool,
 	if variadic {
 		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
-	in.MOV.RegMemIndexDisp(&p.Text, wa.I64, RegScratch, in.BaseText, RegZero, in.Scale0, int32(vecIndex*8))
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, int32(vecIndex*8))
 	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 }
 
