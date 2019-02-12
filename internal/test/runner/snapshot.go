@@ -128,7 +128,7 @@ func (s *Snapshot) getStack() []byte {
 }
 
 func (*Snapshot) getResume() int {
-	return abi.TextAddrResume
+	return int(abi.TextAddrResume)
 }
 
 func (s *Snapshot) writeStacktraceTo(w io.Writer, sigs []wa.FuncType, ns *section.NameSection, stack []byte) (err error) {

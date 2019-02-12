@@ -55,18 +55,18 @@ func GenProgram(
 
 	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
-	if p.Text.Addr != abi.TextAddrNoFunction {
+	if p.Text.Addr != int32(abi.TextAddrNoFunction) {
 		panic(errors.New("unexpected initial text address"))
 	}
 	asm.JumpToTrapHandler(p, trap.NoFunction)
 
-	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
+	if p.Text.Addr == int32(abi.TextAddrNoFunction) || p.Text.Addr > int32(abi.TextAddrResume) {
 		panic("bad text address after NoFunction trap handler")
 	}
 	asm.AlignFunc(p)
 	asm.Resume(p)
 
-	if p.Text.Addr <= abi.TextAddrResume || p.Text.Addr > abi.TextAddrStart {
+	if p.Text.Addr <= int32(abi.TextAddrResume) || p.Text.Addr > int32(abi.TextAddrStart) {
 		panic("bad text address after resume routine")
 	}
 	asm.AlignFunc(p)
@@ -81,7 +81,7 @@ func GenProgram(
 		p.FuncLinks[m.StartIndex].AddSite(retAddr)
 	}
 
-	if p.Text.Addr <= abi.TextAddrStart || p.Text.Addr > abi.TextAddrEnter {
+	if p.Text.Addr <= int32(abi.TextAddrStart) || p.Text.Addr > int32(abi.TextAddrEnter) {
 		panic("bad text address after init routine and start function call")
 	}
 	retAddr := asm.InitCallEntry(p)

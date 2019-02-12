@@ -182,17 +182,17 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 }
 
 func (MacroAssembler) Resume(p *gen.Prog) {
-	padUntil(p, PadWord, abi.TextAddrResume)
+	padUntil(p, PadWord, int32(abi.TextAddrResume))
 	p.Text.PutUint32(in.RET.Rn(RegLink)) // Return from trap handler or import function call.
 }
 
 func (MacroAssembler) Init(p *gen.Prog) {
-	padUntil(p, PadWord, abi.TextAddrStart)
+	padUntil(p, PadWord, int32(abi.TextAddrStart))
 	p.Text.PutUint32(NopWord)
 }
 
 func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
-	padUntil(p, NopWord, abi.TextAddrEnter)
+	padUntil(p, NopWord, int32(abi.TextAddrEnter))
 
 	// Entry routine
 

@@ -273,7 +273,7 @@ func (p *Program) getStack() []byte {
 }
 
 func (*Program) getResume() int {
-	return abi.TextAddrStart
+	return int(abi.TextAddrStart)
 }
 
 type Runner struct {
