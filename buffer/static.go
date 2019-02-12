@@ -6,6 +6,7 @@ package buffer
 
 import (
 	"encoding/binary"
+	"io"
 )
 
 // Static is a fixed-capacity buffer, for wrapping a memory-mapped region.  The
@@ -50,6 +51,20 @@ func (s *Static) Len() int {
 // Bytes doesn't panic.
 func (s *Static) Bytes() []byte {
 	return s.buf
+}
+
+// Write doesn't panic.
+func (s *Static) Write(b []byte) (n int, err error) {
+	offset := len(s.buf)
+	size := offset + n
+	if size <= s.max {
+		s.buf = s.buf[:size]
+	} else {
+		s.buf = s.buf[:s.max]
+		err = io.EOF
+	}
+	n = copy(s.buf[offset:], b)
+	return
 }
 
 // PutByte panics with ErrStaticSize if the buffer is already full.
