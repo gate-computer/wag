@@ -10,6 +10,8 @@ import (
 
 // CallSite represents a position within the text section (machine code) where
 // a function call is made.
+//
+// The struct size or layout will not change between minor versions.
 type CallSite struct {
 	RetAddr     uint32 // The address immediately after the call instruction
 	StackOffset int32  // Calling function's stack usage at time of call
