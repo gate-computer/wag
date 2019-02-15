@@ -7,7 +7,6 @@ package loader
 import (
 	"encoding/binary"
 	"io"
-	"math"
 
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/reader"
@@ -86,23 +85,40 @@ func (load L) Varuint1() bool {
 	return x == 1
 }
 
-func (load L) Varuint32() uint32 {
-	x, err := binary.ReadUvarint(load.R)
-	if err != nil {
-		panic(module.WrapError(err, "varuint32 read error"))
+func (load L) Varuint32() (x uint32) {
+	var shift uint
+	for n := 1; ; n++ {
+		b, err := load.R.ReadByte()
+		if err != nil {
+			panic(err)
+		}
+		if b < 0x80 {
+			if n > 5 || n == 5 && b > 0xf {
+				panic(module.Error("varuint32 is too large"))
+			}
+			return x | uint32(b)<<shift
+		}
+		x |= (uint32(b) & 0x7f) << shift
+		shift += 7
 	}
-	if x > math.MaxUint32 {
-		panic(module.Errorf("varuint32 is too large: 0x%x", x))
-	}
-	return uint32(x)
 }
 
 func (load L) Varuint64() (x uint64) {
-	x, err := binary.ReadUvarint(load.R)
-	if err != nil {
-		panic(module.WrapError(err, "varuint64 read error"))
+	var shift uint
+	for n := 1; ; n++ {
+		b, err := load.R.ReadByte()
+		if err != nil {
+			panic(err)
+		}
+		if b < 0x80 {
+			if n > 9 || n == 9 && b > 1 {
+				panic(module.Error("varuint64 is too large"))
+			}
+			return x | uint64(b)<<shift
+		}
+		x |= (uint64(b) & 0x7f) << shift
+		shift += 7
 	}
-	return
 }
 
 // Count reads a varuint32 for iteration.
@@ -114,7 +130,7 @@ func (load L) Count(maxCount uint32, name string) []struct{} {
 	return make([]struct{}, int(count))
 }
 
-func Varuint32(r io.ByteReader) (x uint32, n int, err error) {
+func Varuint32(r reader.R) (x uint32, n int, err error) {
 	var shift uint
 	for n = 1; ; n++ {
 		var b byte
@@ -124,7 +140,7 @@ func Varuint32(r io.ByteReader) (x uint32, n int, err error) {
 		}
 		if b < 0x80 {
 			if n > 5 || n == 5 && b > 0xf {
-				err = module.Errorf("varuint32 is too large")
+				err = module.Error("varuint32 is too large")
 				return
 			}
 			x |= uint32(b) << shift
