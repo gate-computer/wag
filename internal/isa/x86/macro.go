@@ -180,8 +180,8 @@ func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {
 	return p.Text.Addr
 }
 
-func (MacroAssembler) CallMissing(p *gen.Prog) (retAddr int32) {
-	in.CALLcd.MissingFunction(&p.Text)
+func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) (retAddr int32) {
+	in.CALLcd.MissingFunction(&p.Text, atomic)
 	return p.Text.Addr
 }
 

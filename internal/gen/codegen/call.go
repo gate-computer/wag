@@ -89,7 +89,7 @@ func opCall(f *gen.Func, l *link.L) {
 	if l.Addr != 0 {
 		retAddr = asm.Call(&f.Prog, l.Addr)
 	} else {
-		retAddr = asm.CallMissing(&f.Prog)
+		retAddr = asm.CallMissing(&f.Prog, f.AtomicCallStubs)
 	}
 	f.MapCallAddr(retAddr)
 	if l.Addr == 0 {

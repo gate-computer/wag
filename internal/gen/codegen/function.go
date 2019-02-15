@@ -100,14 +100,15 @@ func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	}
 }
 
-func genFunction(f *gen.Func, load loader.L, funcIndex int) {
+func genFunction(f *gen.Func, load loader.L, funcIndex int, atomicCallStubs bool) {
 	*f = gen.Func{
 		Prog: f.Prog,
 
-		Regs:          regalloc.Make(),
-		Operands:      f.Operands[:0],
-		BranchTargets: f.BranchTargets[:0],
-		BranchTables:  f.BranchTables[:0],
+		Regs:            regalloc.Make(),
+		Operands:        f.Operands[:0],
+		BranchTargets:   f.BranchTargets[:0],
+		BranchTables:    f.BranchTables[:0],
+		AtomicCallStubs: atomicCallStubs,
 	}
 
 	sigIndex := f.Module.Funcs[funcIndex]

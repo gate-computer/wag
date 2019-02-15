@@ -76,7 +76,7 @@ func GenProgram(
 		if int(m.StartIndex) >= initFuncCount {
 			initFuncCount = int(m.StartIndex) + 1
 		}
-		retAddr := asm.CallMissing(p)
+		retAddr := asm.CallMissing(p, false)
 		p.Map.PutCallSite(uint32(retAddr), obj.Word*2) // stack depth excluding entry args (including link addr)
 		p.FuncLinks[m.StartIndex].AddSite(retAddr)
 	}
@@ -115,7 +115,7 @@ func GenProgram(
 	}
 
 	for i := len(m.ImportFuncs); i < initFuncCount; i++ {
-		genFunction(&funcStorage, load, i)
+		genFunction(&funcStorage, load, i, false)
 		linker.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
@@ -148,7 +148,7 @@ func GenProgram(
 		eventHandler(event.Init)
 
 		for i := initFuncCount; i < len(m.Funcs); i++ {
-			genFunction(&funcStorage, load, i)
+			genFunction(&funcStorage, load, i, true)
 		}
 
 		eventHandler(event.FunctionBarrier)

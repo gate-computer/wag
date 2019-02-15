@@ -689,16 +689,18 @@ func (op D2d) Stub32(text *code.Buf) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op Dd) MissingFunction(text *code.Buf) {
+func (op Dd) MissingFunction(text *code.Buf, align bool) {
 	const insnSize = 5
 
 	var o output
 
-	// Position of disp must be aligned
-	if n := (text.Addr + insnSize - 4) & 3; n > 0 {
-		size := 4 - n
-		copy(o.buf[:size], nops[size][:size])
-		o.offset = uint8(size)
+	if align {
+		// Position of disp must be aligned.
+		if n := (text.Addr + insnSize - 4) & 3; n > 0 {
+			size := 4 - n
+			copy(o.buf[:size], nops[size][:size])
+			o.offset = uint8(size)
+		}
 	}
 
 	siteAddr := text.Addr + int32(o.offset) + insnSize

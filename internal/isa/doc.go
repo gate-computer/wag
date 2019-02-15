@@ -95,7 +95,7 @@ type MacroAssembler interface {
 	CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32
 
 	// CallMissing may use RegResult and update condition flags.
-	CallMissing(p *gen.Prog) (retAddr int32)
+	CallMissing(p *gen.Prog, atomic bool) (retAddr int32)
 
 	// ClearIntResultReg may use RegResult and update condition flags.
 	ClearIntResultReg(p *gen.Prog)

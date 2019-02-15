@@ -53,6 +53,8 @@ type Func struct {
 
 	BranchTargets []*BranchTarget
 	BranchTables  []BranchTable
+
+	AtomicCallStubs bool
 }
 
 func (f *Func) LocalOffset(index int) int32 {

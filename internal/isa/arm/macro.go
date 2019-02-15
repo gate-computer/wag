@@ -141,7 +141,7 @@ func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {
 	return p.Text.Addr
 }
 
-func (MacroAssembler) CallMissing(p *gen.Prog) (retAddr int32) {
+func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) (retAddr int32) {
 	p.Text.PutUint32(in.BL.I26(in.Int26(-p.Text.Addr / 4)))
 	return p.Text.Addr
 }
