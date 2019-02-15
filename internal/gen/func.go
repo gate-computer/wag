@@ -74,7 +74,10 @@ func (f *Func) LocalOffset(index int) int32 {
 // MacroAssembler when it changes the physical stack pointer.
 func (f *Func) StackValueConsumed() {
 	f.StackDepth--
-	debug.Printf("stack depth: %d (pop 1)", f.StackDepth)
+
+	if debug.Enabled {
+		debug.Printf("stack depth: %d (pop 1)", f.StackDepth)
+	}
 }
 
 // ValueBecameUnreachable keeps the state consistent when an operand will not

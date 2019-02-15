@@ -43,7 +43,10 @@ func skipThenOps(f *gen.Func, load loader.L) (haveElse bool) {
 }
 
 func skipOp(f *gen.Func, load loader.L, op opcode.Opcode) {
-	debug.Printf("skip %s", op)
+	if debug.Enabled {
+		debug.Printf("skip %s", op)
+	}
+
 	opcodeSkips[op](f, load, op)
 }
 

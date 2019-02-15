@@ -141,7 +141,9 @@ func GenProgram(
 		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(funcAddr))
 		ptr = ptr[8:]
 
-		debug.Printf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
+		if debug.Enabled {
+			debug.Printf("element %d: function %d at 0x%x with signature %d", i, funcIndex, funcAddr, sigIndex)
+		}
 	}
 
 	if initFuncCount < len(m.Funcs) {

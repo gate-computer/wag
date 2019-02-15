@@ -37,18 +37,21 @@ func Make() (a Allocator) {
 func (a *Allocator) AllocResult(t wa.Type) (r reg.R) {
 	r = a.categories[t.Category()].allocResult()
 
-	if r != reg.Result {
-		debug.Printf("allocate %s register: %s", t.Category(), r)
-	} else {
-		debug.Printf("failed to allocate %s register", t.Category())
+	if debug.Enabled {
+		if r != reg.Result {
+			debug.Printf("allocate %s register: %s", t.Category(), r)
+		} else {
+			debug.Printf("failed to allocate %s register", t.Category())
+		}
 	}
-
 	return
 }
 
 // Free can be called also with reg.Result or reg.ScratchISA.
 func (a *Allocator) Free(t wa.Type, r reg.R) {
-	debug.Printf("free %s register: %s", t.Category(), r)
+	if debug.Enabled {
+		debug.Printf("free %s register: %s", t.Category(), r)
+	}
 
 	a.categories[t.Category()].free(r)
 }
@@ -88,11 +91,9 @@ func (s state) checkNoneAllocated(allocatable bitmap, msg string) {
 }
 
 func (s state) debugPrintAllocated(first, last reg.R, kind string) {
-	if debug.Enabled {
-		for r := first; r <= last; r++ {
-			if s.available&(1<<r) == 0 {
-				debug.Printf("%s register is currently allocated: %s", kind, r)
-			}
+	for r := first; r <= last; r++ {
+		if s.available&(1<<r) == 0 {
+			debug.Printf("%s register is currently allocated: %s", kind, r)
 		}
 	}
 }

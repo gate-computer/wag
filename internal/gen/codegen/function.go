@@ -41,18 +41,24 @@ func beginFrame(f *gen.Func) (frame operandFrame) {
 	frame.savedBase = f.FrameBase
 	f.FrameBase = len(f.Operands)
 
-	debug.Printf("new frame base: %d", f.FrameBase)
+	if debug.Enabled {
+		debug.Printf("new frame base: %d", f.FrameBase)
+	}
 	return
 }
 
 func (frame operandFrame) end(f *gen.Func) {
 	f.FrameBase = frame.savedBase
 
-	debug.Printf("old frame base: %d", f.FrameBase)
+	if debug.Enabled {
+		debug.Printf("old frame base: %d", f.FrameBase)
+	}
 }
 
 func pushOperand(f *gen.Func, x operand.O) {
-	debug.Printf("push operand #%d: %s", len(f.Operands), x)
+	if debug.Enabled {
+		debug.Printf("push operand #%d: %s", len(f.Operands), x)
+	}
 
 	f.Operands = append(f.Operands, x)
 }
@@ -84,7 +90,9 @@ func popAnyOperand(f *gen.Func) (x operand.O) {
 		f.NumStableOperands = len(f.Operands)
 	}
 
-	debug.Printf("pop operand #%d: %s", i, x)
+	if debug.Enabled {
+		debug.Printf("pop operand #%d: %s", i, x)
+	}
 
 	return
 }
@@ -95,7 +103,10 @@ func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	} else if len(f.Operands) > f.FrameBase {
 		return popAnyOperand(f)
 	} else {
-		debug.Printf("no block result operand to pop at deadend")
+		if debug.Enabled {
+			debug.Printf("no block result operand to pop at deadend")
+		}
+
 		return operand.Placeholder(t)
 	}
 }
@@ -175,7 +186,9 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int, atomicCallStubs bool
 
 		f.Regs.CheckNoneAllocated()
 	} else {
-		debug.Printf("body is a deadend")
+		if debug.Enabled {
+			debug.Printf("body is a deadend")
+		}
 	}
 
 	end := popBranchTarget(f)
@@ -240,14 +253,18 @@ func opStabilizeOperands(f *gen.Func) {
 
 		switch {
 		case x.Storage == storage.Reg && x.Reg() == reg.Result:
-			debug.Printf("stabilize operand #%d: %s", i, *x)
+			if debug.Enabled {
+				debug.Printf("stabilize operand #%d: %s", i, *x)
+			}
 
 			r := opAllocReg(f, x.Type)
 			asm.MoveReg(&f.Prog, x.Type, r, reg.Result)
 			x.SetReg(r)
 
 		case x.Storage == storage.Flags:
-			debug.Printf("stabilize operand #%d: %s", i, *x)
+			if debug.Enabled {
+				debug.Printf("stabilize operand #%d: %s", i, *x)
+			}
 
 			r := opAllocReg(f, x.Type)
 			asm.SetBool(&f.Prog, r, x.FlagsCond())
@@ -268,7 +285,9 @@ func opSaveSomeOperands(f *gen.Func, count int) {
 	for i = f.StackDepth; i < count; i++ {
 		x := &f.Operands[i]
 
-		debug.Printf("save operand #%d to stack: %s", i, *x)
+		if debug.Enabled {
+			debug.Printf("save operand #%d to stack: %s", i, *x)
+		}
 
 		opReserveStackEntry(f)
 
@@ -301,7 +320,9 @@ func opReserveStackEntry(f *gen.Func) {
 		f.MaxStackDepth = f.StackDepth
 	}
 
-	debug.Printf("stack depth: %d (push 1)", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("stack depth: %d (push 1)", f.StackDepth)
+	}
 }
 
 func opDropOperand(f *gen.Func) {
@@ -317,14 +338,18 @@ func opDropOperand(f *gen.Func) {
 		f.NumStableOperands = len(f.Operands)
 	}
 
-	debug.Printf("drop operand #%d: %s", i, x)
+	if debug.Enabled {
+		debug.Printf("drop operand #%d: %s", i, x)
+	}
 
 	switch x.Storage {
 	case storage.Stack:
 		asm.DropStackValues(&f.Prog, 1)
 		f.StackDepth--
 
-		debug.Printf("stack depth: %d (drop 1)", f.StackDepth)
+		if debug.Enabled {
+			debug.Printf("stack depth: %d (drop 1)", f.StackDepth)
+		}
 
 	case storage.Reg:
 		f.Regs.Free(x.Type, x.Reg())
@@ -341,14 +366,19 @@ func opDropCallOperands(f *gen.Func, n int) {
 	if debug.Enabled {
 		for i := len(f.Operands) - n; i < len(f.Operands); i++ {
 			x := f.Operands[i]
-			debug.Printf("drop call operand #%d: %s", i, x)
+
+			if debug.Enabled {
+				debug.Printf("drop call operand #%d: %s", i, x)
+			}
 		}
 	}
 
 	asm.DropStackValues(&f.Prog, n)
 	f.StackDepth -= n
 
-	debug.Printf("stack depth: %d (drop %d)", f.StackDepth, n)
+	if debug.Enabled {
+		debug.Printf("stack depth: %d (drop %d)", f.StackDepth, n)
+	}
 
 	f.Operands = f.Operands[:len(f.Operands)-n]
 
@@ -363,7 +393,9 @@ func opTruncateBlockOperands(f *gen.Func) {
 	for i := f.FrameBase; i < len(f.Operands); i++ {
 		x := f.Operands[i]
 
-		debug.Printf("truncate operand #%d: %s", i, x)
+		if debug.Enabled {
+			debug.Printf("truncate operand #%d: %s", i, x)
+		}
 
 		switch x.Storage {
 		case storage.Stack:
@@ -379,7 +411,9 @@ func opTruncateBlockOperands(f *gen.Func) {
 		f.StackDepth -= numStack
 	}
 
-	debug.Printf("stack depth: %d (drop %d)", f.StackDepth, numStack)
+	if debug.Enabled {
+		debug.Printf("stack depth: %d (drop %d)", f.StackDepth, numStack)
+	}
 
 	f.Operands = f.Operands[:f.FrameBase]
 
@@ -405,7 +439,9 @@ search:
 	for i = f.StackDepth; i < length; i++ {
 		x := &f.Operands[i]
 
-		debug.Printf("save operand #%d to stack: %s", i, *x)
+		if debug.Enabled {
+			debug.Printf("save operand #%d to stack: %s", i, *x)
+		}
 
 		opReserveStackEntry(f)
 
@@ -421,7 +457,10 @@ search:
 
 			if r != reg.Result {
 				if x.Type.Category() == cat {
-					debug.Printf("steal register: %s %s", cat, r)
+					if debug.Enabled {
+						debug.Printf("steal register: %s %s", cat, r)
+					}
+
 					i++ // this operand was stabilized too
 					break search
 				}

@@ -63,7 +63,9 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
 	sig := f.Module.Types[sigIndex]
 
-	debug.Printf("sig: %s", sig)
+	if debug.Enabled {
+		debug.Printf("sig: %s", sig)
+	}
 
 	if len(sig.Params) > f.StackDepth-f.FrameBase {
 		panic(errCallParamsExceedStack)

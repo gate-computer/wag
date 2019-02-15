@@ -31,7 +31,9 @@ func stealDeadBlockOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
 		x := &f.Operands[i]
 
 		if x.Storage == storage.Reg && x.Type.Category() == cat && x.Reg() != reg.Result {
-			debug.Printf("steal operand #%d register: %s", i, *x)
+			if debug.Enabled {
+				debug.Printf("steal operand #%d register: %s", i, *x)
+			}
 
 			r = x.Reg()
 			x.SetPlaceholder()
@@ -81,7 +83,10 @@ func getCurrentBlock(f *gen.Func) *gen.Block {
 }
 
 func label(f *gen.Func, l *link.L) {
-	debug.Printf("label")
+	if debug.Enabled {
+		debug.Printf("label")
+	}
+
 	l.Addr = f.Text.Addr
 }
 
@@ -92,9 +97,11 @@ func genBlock(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 
 	pushBranchTarget(f, blockType, false) // end
 
-	debug.Printf("type: %s", blockType)
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("type: %s", blockType)
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+	}
 
 	frame := beginFrame(f)
 	deadend := genOps(f, load)
@@ -102,11 +109,16 @@ func genBlock(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	if blockType != wa.Void {
 		result := popBlockResultOperand(f, blockType, deadend)
 		opMoveResult(f, result, deadend)
-		debug.Printf("result: %s", result)
+
+		if debug.Enabled {
+			debug.Printf("result: %s", result)
+		}
 	}
 
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+	}
 
 	opTruncateBlockOperands(f)
 	frame.end(f)
@@ -126,12 +138,17 @@ func genBr(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend b
 	if target.ValueType != wa.Void {
 		value := popOperand(f, target.ValueType)
 		asm.Move(f, reg.Result, value)
-		debug.Printf("value: %s", value)
+
+		if debug.Enabled {
+			debug.Printf("value: %s", value)
+		}
 	}
 
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
-	debug.Printf("target stack depth: %d", target.StackDepth)
+	if debug.Enabled {
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+		debug.Printf("target stack depth: %d", target.StackDepth)
+	}
 
 	if target.FuncEnd {
 		asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
@@ -141,7 +158,10 @@ func genBr(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend b
 		}
 
 		if b := getCurrentBlock(f); target.Label.Addr != 0 && !b.Suspension {
-			debug.Printf("loop")
+			if debug.Enabled {
+				debug.Printf("loop")
+			}
+
 			asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
 			b.Suspension = true
 		}
@@ -161,7 +181,10 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	if target.ValueType != wa.Void {
 		value := popOperand(f, target.ValueType)
-		debug.Printf("value: %s", value)
+
+		if debug.Enabled {
+			debug.Printf("value: %s", value)
+		}
 
 		if cond.Storage == storage.Reg && cond.Reg() == reg.Result {
 			r := opAllocReg(f, wa.I32)
@@ -185,7 +208,9 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 			linker.UpdateNearBranches(f.Text.Bytes(), retAddrs)
 		}
 	} else {
-		debug.Printf("suspension")
+		if debug.Enabled {
+			debug.Printf("suspension")
+		}
 
 		if target.ValueType != wa.Void {
 			panic(errBranchLoopValue)
@@ -226,7 +251,10 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	defaultTarget := getBranchTarget(f, relativeDepth)
 
 	index := popOperand(f, wa.I32)
-	debug.Printf("index: %s", index)
+
+	if debug.Enabled {
+		debug.Printf("index: %s", index)
+	}
 
 	loop := (defaultTarget.Label.Addr != 0)
 	commonStackDepth := defaultTarget.StackDepth
@@ -255,17 +283,22 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 		}
 	}
 
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
-	debug.Printf("default target stack depth: %d", defaultTarget.StackDepth)
-	debug.Printf("common target stack depth: %d", commonStackDepth)
-	debug.Printf("table element type: %s", tableType)
-	debug.Printf("loop: %v", loop)
+	if debug.Enabled {
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+		debug.Printf("default target stack depth: %d", defaultTarget.StackDepth)
+		debug.Printf("common target stack depth: %d", commonStackDepth)
+		debug.Printf("table element type: %s", tableType)
+		debug.Printf("loop: %v", loop)
+	}
 
 	var value operand.O
 	if defaultTarget.ValueType != wa.Void {
 		value = popOperand(f, defaultTarget.ValueType)
-		debug.Printf("value: %s", value)
+
+		if debug.Enabled {
+			debug.Printf("value: %s", value)
+		}
 	}
 
 	if value.Type != wa.Void {
@@ -286,7 +319,11 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 	}
 
 	defaultDrop := f.StackDepth - defaultTarget.StackDepth
-	debug.Printf("drop values from physical stack for default target: %d", defaultDrop)
+
+	if debug.Enabled {
+		debug.Printf("drop values from physical stack for default target: %d", defaultDrop)
+	}
+
 	if defaultDrop != 0 {
 		asm.DropStackValues(&f.Prog, defaultDrop)
 	}
@@ -304,12 +341,19 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 
 	if tableType == wa.I32 {
 		drop := defaultTarget.StackDepth - commonStackDepth
-		debug.Printf("drop values from physical stack for dynamic target: %d", drop)
+
+		if debug.Enabled {
+			debug.Printf("drop values from physical stack for dynamic target: %d", drop)
+		}
+
 		if drop != 0 {
 			asm.DropStackValues(&f.Prog, drop)
 		}
 	} else {
-		debug.Printf("drop values from physical stack for dynamic target")
+		if debug.Enabled {
+			debug.Printf("drop values from physical stack for dynamic target")
+		}
+
 		indexOnly := allocStealDeadReg(f, wa.I32)
 		asm.MoveReg(&f.Prog, wa.I32, indexOnly, r)
 		asm.AddToStackPtrUpper32(f, r)
@@ -344,9 +388,11 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	ifType := typedecode.Block(load.Varint7())
 
-	debug.Printf("type: %s", ifType)
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("type: %s", ifType)
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+	}
 
 	cond := popOperand(f, wa.I32)
 
@@ -368,11 +414,16 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 	if ifType != wa.Void {
 		result := popBlockResultOperand(f, ifType, thenDeadend)
 		opMoveResult(f, result, thenDeadend)
-		debug.Printf("result: %s", result)
+
+		if debug.Enabled {
+			debug.Printf("result: %s", result)
+		}
 	}
 
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+	}
 
 	opTruncateBlockOperands(f)
 
@@ -389,11 +440,16 @@ func genIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) bool {
 		if ifType != wa.Void {
 			result := popBlockResultOperand(f, ifType, elseDeadend)
 			opMoveResult(f, result, elseDeadend)
-			debug.Printf("result: %s", result)
+
+			if debug.Enabled {
+				debug.Printf("result: %s", result)
+			}
 		}
 
-		debug.Printf("operands: %d", len(f.Operands))
-		debug.Printf("stack depth: %d", f.StackDepth)
+		if debug.Enabled {
+			debug.Printf("operands: %d", len(f.Operands))
+			debug.Printf("stack depth: %d", f.StackDepth)
+		}
 
 		opTruncateBlockOperands(f)
 	}
@@ -416,9 +472,11 @@ func genLoop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 	pushBranchTarget(f, wa.Void, false) // begin
 	label(f, &getBranchTarget(f, 0).Label)
 
-	debug.Printf("type: %s", blockType)
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("type: %s", blockType)
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+	}
 
 	frame := beginFrame(f)
 	deadend = genOps(f, load)
@@ -426,11 +484,16 @@ func genLoop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 	var result operand.O
 	if blockType != wa.Void {
 		result = popBlockResultOperand(f, blockType, deadend)
-		debug.Printf("result: %s", result)
+
+		if debug.Enabled {
+			debug.Printf("result: %s", result)
+		}
 	}
 
-	debug.Printf("operands: %d", len(f.Operands))
-	debug.Printf("stack depth: %d", f.StackDepth)
+	if debug.Enabled {
+		debug.Printf("operands: %d", len(f.Operands))
+		debug.Printf("stack depth: %d", f.StackDepth)
+	}
 
 	opTruncateBlockOperands(f)
 	frame.end(f)
