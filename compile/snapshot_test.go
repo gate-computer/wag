@@ -36,7 +36,7 @@ func TestSnapshot(t *testing.T) {
 	wasm := bufio.NewReader(wasmReadCloser)
 
 	mod := loadInitialSections(nil, wasm)
-	bindVariadicImports(mod, runner.Resolver)
+	bindVariadicImports(&mod, runner.Resolver)
 
 	p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "main"), nil)
 	if err != nil {

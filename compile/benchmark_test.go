@@ -73,14 +73,14 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 
 	dataPos := len(wasm) - r.Len()
 
-	var mod *Module
+	var mod Module
 
 	b.Run("Init", func(b *testing.B) {
 		b.SetBytes(int64(initLen))
 
 		for i := 0; i < b.N; i++ {
 			mod = loadInitialSections(nil, bytes.NewReader(wasm))
-			bindVariadicImports(mod, dummyReso{})
+			bindVariadicImports(&mod, dummyReso{})
 		}
 	})
 

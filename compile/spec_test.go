@@ -440,7 +440,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 		}
 
 		mod := loadInitialSections(&ModuleConfig{common}, wasm)
-		bindVariadicImports(mod, runner.Resolver)
+		bindVariadicImports(&mod, runner.Resolver)
 
 		var timedout bool
 

@@ -36,8 +36,8 @@ func TestExec(t *testing.T) {
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	mod := loadInitialSections(&ModuleConfig{}, wasm)
-	bindVariadicImports(mod, runner.Resolver)
+	mod := loadInitialSections(nil, wasm)
+	bindVariadicImports(&mod, runner.Resolver)
 
 	var codeBuf bytes.Buffer
 

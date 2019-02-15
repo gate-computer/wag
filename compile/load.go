@@ -107,7 +107,7 @@ type Module struct {
 
 // LoadInitialSections reads module header and all sections preceding code and
 // data.
-func LoadInitialSections(config *ModuleConfig, r Reader) (m *Module, err error) {
+func LoadInitialSections(config *ModuleConfig, r Reader) (m Module, err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
@@ -116,12 +116,11 @@ func LoadInitialSections(config *ModuleConfig, r Reader) (m *Module, err error) 
 	return
 }
 
-func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
+func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	if config == nil {
 		config = new(ModuleConfig)
 	}
 
-	m = new(Module)
 	load := loader.L{R: r}
 
 	var header module.Header
@@ -174,7 +173,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 			payloadLen = load.Varuint32()
 		}
 
-		metaSectionLoaders[id](m, config, payloadLen, load)
+		metaSectionLoaders[id](&m, config, payloadLen, load)
 	}
 }
 
@@ -422,10 +421,10 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func (m *Module) Types() []wa.FuncType      { return m.m.Types }
-func (m *Module) FuncTypeIndexes() []uint32 { return m.m.Funcs }
+func (m Module) Types() []wa.FuncType      { return m.m.Types }
+func (m Module) FuncTypeIndexes() []uint32 { return m.m.Funcs }
 
-func (m *Module) FuncTypes() []wa.FuncType {
+func (m Module) FuncTypes() []wa.FuncType {
 	sigs := make([]wa.FuncType, len(m.m.Funcs))
 	for i, sigIndex := range m.m.Funcs {
 		sigs[i] = m.m.Types[sigIndex]
@@ -433,10 +432,10 @@ func (m *Module) FuncTypes() []wa.FuncType {
 	return sigs
 }
 
-func (m *Module) InitialMemorySize() int { return m.m.MemoryLimitValues.Initial }
-func (m *Module) MemorySizeLimit() int   { return m.m.MemoryLimitValues.Maximum }
+func (m Module) InitialMemorySize() int { return m.m.MemoryLimitValues.Initial }
+func (m Module) MemorySizeLimit() int   { return m.m.MemoryLimitValues.Maximum }
 
-func (m *Module) GlobalTypes() []wa.GlobalType {
+func (m Module) GlobalTypes() []wa.GlobalType {
 	gs := make([]wa.GlobalType, len(m.m.Globals))
 	for i, g := range m.m.Globals {
 		gs[i] = wa.MakeGlobalType(g.Type, g.Mutable)
@@ -444,10 +443,10 @@ func (m *Module) GlobalTypes() []wa.GlobalType {
 	return gs
 }
 
-func (m *Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
-func (m *Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }
+func (m Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
+func (m Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }
 
-func (m *Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
+func (m Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	imp := m.m.ImportFuncs[i]
 	module = imp.Module
 	field = imp.Field
@@ -457,7 +456,7 @@ func (m *Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	return
 }
 
-func (m *Module) ImportGlobal(i int) (module, field string, t wa.Type) {
+func (m Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	imp := m.m.ImportGlobals[i]
 	module = imp.Module
 	field = imp.Field
@@ -469,15 +468,15 @@ func (m *Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 func (m *Module) SetImportFunc(i int, vecIndex int)  { m.m.ImportFuncs[i].VecIndex = vecIndex }
 func (m *Module) SetImportGlobal(i int, init uint64) { m.m.Globals[i].Init = init }
 
-func (m *Module) GlobalsSize() int {
+func (m Module) GlobalsSize() int {
 	size := len(m.m.Globals) * obj.Word
 	mask := datalayout.MinAlignment - 1 // Round up so that linear memory will
 	return (size + mask) &^ mask        // have at least minimum alignment.
 }
 
-func (m *Module) ExportFuncs() map[string]uint32 { return m.m.ExportFuncs }
+func (m Module) ExportFuncs() map[string]uint32 { return m.m.ExportFuncs }
 
-func (m *Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
+func (m Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
 	funcIndex, found = m.m.ExportFuncs[field]
 	if found {
 		sigIndex := m.m.Funcs[funcIndex]
@@ -501,7 +500,7 @@ type CodeConfig struct {
 // machine code.
 //
 // If CodeBuffer panics with an error, it will be returned by this function.
-func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
+func LoadCodeSection(config *CodeConfig, r Reader, mod Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
@@ -510,7 +509,7 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod *Module) (err error) {
 	return
 }
 
-func loadCodeSection(config *CodeConfig, r Reader, mod *Module) {
+func loadCodeSection(config *CodeConfig, r Reader, mod Module) {
 	var payloadLen uint32
 
 	load := loader.L{R: r}
@@ -571,7 +570,7 @@ type DataConfig struct {
 // initial contents of mutable program state (globals and linear memory).
 //
 // If DataBuffer panics with an error, it will be returned by this function.
-func LoadDataSection(config *DataConfig, r Reader, mod *Module) (err error) {
+func LoadDataSection(config *DataConfig, r Reader, mod Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
@@ -580,7 +579,7 @@ func LoadDataSection(config *DataConfig, r Reader, mod *Module) (err error) {
 	return
 }
 
-func loadDataSection(config *DataConfig, r Reader, mod *Module) {
+func loadDataSection(config *DataConfig, r Reader, mod Module) {
 	if config.MemoryAlignment == 0 {
 		config.MemoryAlignment = datalayout.MinAlignment
 	}
@@ -635,7 +634,7 @@ func loadDataSection(config *DataConfig, r Reader, mod *Module) {
 }
 
 // ValidateDataSection reads a WebAssembly module's data section.
-func ValidateDataSection(config *Config, r Reader, mod *Module) (err error) {
+func ValidateDataSection(config *Config, r Reader, mod Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
@@ -644,7 +643,7 @@ func ValidateDataSection(config *Config, r Reader, mod *Module) (err error) {
 	return
 }
 
-func validateDataSection(config *Config, r Reader, mod *Module) {
+func validateDataSection(config *Config, r Reader, mod Module) {
 	if config == nil {
 		config = new(Config)
 	}

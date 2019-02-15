@@ -85,18 +85,16 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	}
 
 	module, err := compile.LoadInitialSections(moduleConfig, r)
-	if module != nil {
-		object.FuncTypes = module.FuncTypes()
-		object.InitialMemorySize = module.InitialMemorySize()
-		object.MemorySizeLimit = module.MemorySizeLimit()
-	}
+	object.FuncTypes = module.FuncTypes()
+	object.InitialMemorySize = module.InitialMemorySize()
+	object.MemorySizeLimit = module.MemorySizeLimit()
 	if err != nil {
 		return
 	}
 
 	// Fill in host function addresses and global variables' values.
 
-	err = binding.BindImports(module, imports)
+	err = binding.BindImports(&module, imports)
 	if err != nil {
 		return
 	}
@@ -155,7 +153,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 			objectConfig.EntryPolicy = binding.GetMainFunc
 		}
 
-		entryIndex, entryType, err = objectConfig.EntryPolicy(module, objectConfig.Entry)
+		entryIndex, entryType, err = objectConfig.EntryPolicy(&module, objectConfig.Entry)
 		if err != nil {
 			return
 		}

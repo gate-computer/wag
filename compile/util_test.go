@@ -49,7 +49,7 @@ func bindVariadicImports(mod *Module, reso variadicImportResolver) {
 	}
 }
 
-func findNiladicEntryFunc(mod *Module, name string) (funcIndex uint32) {
+func findNiladicEntryFunc(mod Module, name string) (funcIndex uint32) {
 	funcIndex, sig, found := mod.ExportFunc(name)
 	if !found {
 		panic("entry function not found")

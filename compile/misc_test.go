@@ -44,7 +44,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 	defer p.Close()
 
 	mod := loadInitialSections(nil, wasm)
-	bindVariadicImports(mod, runner.Resolver)
+	bindVariadicImports(&mod, runner.Resolver)
 
 	var code = &CodeConfig{
 		Text:   buffer.NewStatic(p.Text[:0], len(p.Text)),
