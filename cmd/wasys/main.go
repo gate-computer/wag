@@ -90,8 +90,8 @@ func main() {
 	log.SetFlags(0)
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] wasmfile\n\n", os.Args[0])
-		fmt.Fprintf(flag.CommandLine.Output(), "Options:\n")
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] wasmfile\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 	}
 
