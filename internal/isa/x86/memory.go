@@ -123,7 +123,6 @@ func checkAccess(f *gen.Func, index operand.O, offset uint32) (base in.BaseReg, 
 		disp = int32(offset)
 	}
 
-	f.MapCallAddr(f.Text.Addr) // Instruction pointer at segmentation fault.
 	return
 }
 

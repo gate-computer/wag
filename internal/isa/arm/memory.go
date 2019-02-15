@@ -86,8 +86,6 @@ func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) 
 		}
 	}
 
-	f.MapCallAddr(f.Text.Addr) // Instruction pointer at segmentation fault.
-
 	base = RegScratch
 	disp9 = in.Int9(-int32(sizeReach))
 	return

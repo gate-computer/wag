@@ -428,8 +428,6 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	var o output
 	putTrapInsn(&o, f, id)
 	o.copy(f.Text.Extend(o.size()))
-
-	f.MapCallAddr(f.Text.Addr)
 }
 
 // putTrapInsn must generate exactly one instruction.
@@ -454,6 +452,7 @@ func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 		f.Text.PutUint32(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0))
 	}
 	asm.Trap(f, trap.Suspended)
+	f.MapCallAddr(f.Text.Addr)
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {

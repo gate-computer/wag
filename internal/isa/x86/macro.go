@@ -578,6 +578,7 @@ func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 	in.JEcd.Addr32(&f.Text, elseAddr) // Branch to else if bit is zero (no trap).
 
 	asm.Trap(f, trap.Suspended)
+	f.MapCallAddr(f.Text.Addr)
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {
