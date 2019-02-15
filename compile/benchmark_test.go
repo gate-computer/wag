@@ -6,117 +6,115 @@ package compile
 
 import (
 	"bytes"
-	"hash/crc32"
 	"io/ioutil"
+	"os"
+	"path"
 	"testing"
-	"time"
 
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/compile/event"
+	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/wa"
 )
 
-type testDuration struct {
-	time.Duration
-}
+var benchDir = "../wag-bench" // Relative to project root directory.
 
-func (target *testDuration) set(d time.Duration) {
-	if target.Duration <= 0 || d < target.Duration {
-		target.Duration = d
+func init() {
+	if s := os.Getenv("WAG_BENCH_DIR"); s != "" {
+		benchDir = path.Join("..", s)
 	}
 }
 
-type dummyReso struct{}
-
-func (*dummyReso) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, index int, err error) {
-	return
-}
-
-func (*dummyReso) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
-	return
-}
-
-var loadBenchmarkReso = new(dummyReso)
-
-const (
-	loadBenchmarkFilename    = "../testdata/large.wasm"
-	loadBenchmarkEntrySymbol = "run"
-	loadBenchmarkMaxTextSize = 16 * 1024 * 1024
-	loadBenchmarkMaxDataSize = 16 * 1024 * 1024
-	loadBenchmarkTextCRC32   = 0x7b5fb264
-	loadBenchmarkIgnoreCRC32 = false
+var (
+	benchTextBuf = make([]byte, 16*1024*1024)
+	benchDataBuf = make([]byte, 16*1024*1024)
 )
 
-func BenchmarkLoad(b *testing.B)       { benchmarkLoad(b, nil) }
-func BenchmarkLoadEvents(b *testing.B) { benchmarkLoad(b, func(event.Event) {}) }
+func BenchmarkLoad000(b *testing.B)  { bench(b, "000", "run") }
+func BenchmarkLoad000E(b *testing.B) { benchE(b, "000", "run", func(event.Event) {}) }
+func BenchmarkLoad001(b *testing.B)  { bench(b, "001", "main") } // Gain hello example, debug build
+func BenchmarkLoad002(b *testing.B)  { bench(b, "002", "main") } // Gain hello example, release build
 
-func benchmarkLoad(b *testing.B, eventHandler func(event.Event)) {
+func bench(b *testing.B, filename, entrySymbol string) {
+	benchE(b, filename, entrySymbol, nil)
+}
+
+func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.Event)) {
 	b.Helper()
 
-	wasm, err := ioutil.ReadFile(loadBenchmarkFilename)
+	wasm, err := ioutil.ReadFile(path.Join("..", benchDir, filename) + ".wasm")
+	if err != nil {
+		if os.IsNotExist(err) {
+			b.Skip(err)
+		} else {
+			b.Fatal(err)
+		}
+	}
+
+	r := bytes.NewReader(wasm)
+	loadInitialSections(nil, r)
+
+	initLen := len(wasm) - r.Len()
+
+	if err := section.SkipCustomSections(r, nil); err != nil {
+		b.Fatal(err)
+	}
+
+	codePos := len(wasm) - r.Len()
+
+	codePayloadLen, err := section.CopyStandardSection(ioutil.Discard, r, section.Code, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	var (
-		text          = make([]byte, loadBenchmarkMaxTextSize)
-		globalsMemory = make([]byte, loadBenchmarkMaxDataSize)
-
-		elapInit testDuration
-		elapBind testDuration
-		elapCode testDuration
-		elapData testDuration
-	)
-
-	b.StopTimer()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var code = &CodeConfig{
-			Text:         buffer.NewStatic(text[:0], len(text)),
-			EventHandler: eventHandler,
-		}
-
-		var data = &DataConfig{
-			GlobalsMemory: buffer.NewStatic(globalsMemory[:0], len(globalsMemory)),
-		}
-
-		r := bytes.NewReader(wasm)
-
-		b.StartTimer()
-
-		t0 := time.Now()
-		mod := loadInitialSections(nil, r)
-		t1 := time.Now()
-		bindVariadicImports(mod, loadBenchmarkReso)
-		t2 := time.Now()
-		code.LastInitFunc, _, _ = mod.ExportFunc(loadBenchmarkEntrySymbol)
-		loadCodeSection(code, r, mod)
-		t3 := time.Now()
-		loadDataSection(data, r, mod)
-		t4 := time.Now()
-
-		b.StopTimer()
-
-		elapInit.set(t1.Sub(t0))
-		elapBind.set(t2.Sub(t1))
-		elapCode.set(t3.Sub(t2))
-		elapData.set(t4.Sub(t3))
-
-		checkLoadBenchmarkOutput(b, code)
+	if err := section.SkipCustomSections(r, nil); err != nil {
+		b.Fatal(err)
 	}
 
-	b.Logf("init: %v", elapInit)
-	b.Logf("bind: %v", elapBind)
-	b.Logf("code: %v", elapCode)
-	b.Logf("data: %v", elapData)
+	dataPos := len(wasm) - r.Len()
+
+	var mod *Module
+
+	b.Run("Init", func(b *testing.B) {
+		b.SetBytes(int64(initLen))
+
+		for i := 0; i < b.N; i++ {
+			mod = loadInitialSections(nil, bytes.NewReader(wasm))
+			bindVariadicImports(mod, dummyReso{})
+		}
+	})
+
+	b.Run("Code", func(b *testing.B) {
+		b.SetBytes(int64(codePayloadLen))
+
+		for i := 0; i < b.N; i++ {
+			code := CodeConfig{
+				Text:         buffer.NewStatic(benchTextBuf[:0], len(benchTextBuf)),
+				EventHandler: eventHandler,
+			}
+
+			code.LastInitFunc, _, _ = mod.ExportFunc(entrySymbol)
+			loadCodeSection(&code, bytes.NewReader(wasm[codePos:]), mod)
+		}
+	})
+
+	b.Run("Data", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			data := DataConfig{
+				GlobalsMemory: buffer.NewStatic(benchDataBuf[:0], len(benchDataBuf)),
+			}
+
+			loadDataSection(&data, bytes.NewReader(wasm[dataPos:]), mod)
+		}
+	})
 }
 
-func checkLoadBenchmarkOutput(b *testing.B, code *CodeConfig) {
-	b.Helper()
+type dummyReso struct{}
 
-	sum := crc32.ChecksumIEEE(code.Text.Bytes())
-	if sum != loadBenchmarkTextCRC32 && !loadBenchmarkIgnoreCRC32 {
-		b.Errorf("text checksum changed: 0x%08x", sum)
-	}
+func (dummyReso) ResolveVariadicFunc(string, string, wa.FuncType) (_ bool, _ int, _ error) {
+	return
+}
+
+func (dummyReso) ResolveGlobal(string, string, wa.Type) (_ uint64, _ error) {
+	return
 }
