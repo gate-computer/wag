@@ -179,236 +179,247 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m *Module) {
 }
 
 var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, uint32, loader.L){
-	module.SectionCustom: func(m *Module, config *ModuleConfig, payloadLen uint32, load loader.L) {
-		var err error
-		if config.CustomSectionLoader != nil {
-			err = config.CustomSectionLoader(load.R, payloadLen)
-		} else {
-			_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
+	module.SectionCustom:   loadCustomSection,
+	module.SectionType:     loadTypeSection,
+	module.SectionImport:   loadImportSection,
+	module.SectionFunction: loadFunctionSection,
+	module.SectionTable:    loadTableSection,
+	module.SectionMemory:   loadMemorySection,
+	module.SectionGlobal:   loadGlobalSection,
+	module.SectionExport:   loadExportSection,
+	module.SectionStart:    loadStartSection,
+	module.SectionElement:  loadElementSection,
+}
+
+func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load loader.L) {
+	var err error
+	if config.CustomSectionLoader != nil {
+		err = config.CustomSectionLoader(load.R, payloadLen)
+	} else {
+		_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
+	}
+	if err != nil {
+		panic(err)
+	}
+}
+
+func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	for i := range load.Count(module.MaxTypes, "type") {
+		if form := load.Varint7(); form != -0x20 {
+			panic(module.Errorf("unsupported function type form: %d", form))
 		}
-		if err != nil {
-			panic(err)
+
+		var sig wa.FuncType
+
+		paramCount := load.Varuint32()
+		if paramCount > module.MaxFuncParams {
+			panic(module.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 		}
-	},
 
-	module.SectionType: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for i := range load.Count(module.MaxTypes, "type") {
-			if form := load.Varint7(); form != -0x20 {
-				panic(module.Errorf("unsupported function type form: %d", form))
-			}
-
-			var sig wa.FuncType
-
-			paramCount := load.Varuint32()
-			if paramCount > module.MaxFuncParams {
-				panic(module.Errorf("function type #%d has too many parameters: %d", i, paramCount))
-			}
-
-			sig.Params = make([]wa.Type, paramCount)
-			for j := range sig.Params {
-				sig.Params[j] = typedecode.Value(load.Varint7())
-			}
-
-			if returnCount1 := load.Varuint1(); returnCount1 {
-				sig.Result = typedecode.Value(load.Varint7())
-			}
-
-			m.m.Types = append(m.m.Types, sig)
+		sig.Params = make([]wa.Type, paramCount)
+		for j := range sig.Params {
+			sig.Params[j] = typedecode.Value(load.Varint7())
 		}
-	},
 
-	module.SectionImport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for i := range load.Count(module.MaxImports, "import") {
-			moduleLen := load.Varuint32()
-			if moduleLen > maxStringLen {
-				panic(module.Errorf("module string is too long in import #%d", i))
-			}
-
-			moduleStr := string(load.Bytes(moduleLen))
-
-			fieldLen := load.Varuint32()
-			if fieldLen > maxStringLen {
-				panic(module.Errorf("field string is too long in import #%d", i))
-			}
-
-			fieldStr := string(load.Bytes(fieldLen))
-
-			kind := module.ExternalKind(load.Byte())
-
-			switch kind {
-			case module.ExternalKindFunction:
-				sigIndex := load.Varuint32()
-				if sigIndex >= uint32(len(m.m.Types)) {
-					panic(module.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
-				}
-
-				m.m.Funcs = append(m.m.Funcs, sigIndex)
-
-				m.m.ImportFuncs = append(m.m.ImportFuncs, module.ImportFunc{
-					Import: module.Import{
-						Module: moduleStr,
-						Field:  fieldStr,
-					},
-				})
-
-			case module.ExternalKindGlobal:
-				if len(m.m.Globals) >= maxGlobals {
-					panic(module.Error("too many imported globals"))
-				}
-
-				t := typedecode.Value(load.Varint7())
-
-				if mutable := load.Varuint1(); mutable {
-					panic(module.Errorf("unsupported mutable global in import #%d", i))
-				}
-
-				m.m.Globals = append(m.m.Globals, module.Global{
-					Type: t,
-				})
-
-				m.m.ImportGlobals = append(m.m.ImportGlobals, module.Import{
-					Module: moduleStr,
-					Field:  fieldStr,
-				})
-
-			default:
-				panic(module.Errorf("import kind not supported: %s", kind))
-			}
+		if returnCount1 := load.Varuint1(); returnCount1 {
+			sig.Result = typedecode.Value(load.Varint7())
 		}
-	},
 
-	module.SectionFunction: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count(module.MaxFunctions, "function") {
+		m.m.Types = append(m.m.Types, sig)
+	}
+}
+
+func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	for i := range load.Count(module.MaxImports, "import") {
+		moduleLen := load.Varuint32()
+		if moduleLen > maxStringLen {
+			panic(module.Errorf("module string is too long in import #%d", i))
+		}
+
+		moduleStr := string(load.Bytes(moduleLen))
+
+		fieldLen := load.Varuint32()
+		if fieldLen > maxStringLen {
+			panic(module.Errorf("field string is too long in import #%d", i))
+		}
+
+		fieldStr := string(load.Bytes(fieldLen))
+
+		kind := module.ExternalKind(load.Byte())
+
+		switch kind {
+		case module.ExternalKindFunction:
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.m.Types)) {
-				panic(module.Errorf("function type index out of bounds: %d", sigIndex))
+				panic(module.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
 			}
 
 			m.m.Funcs = append(m.m.Funcs, sigIndex)
-		}
-	},
 
-	module.SectionTable: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		switch load.Varuint32() {
-		case 0:
+			m.m.ImportFuncs = append(m.m.ImportFuncs, module.ImportFunc{
+				Import: module.Import{
+					Module: moduleStr,
+					Field:  fieldStr,
+				},
+			})
 
-		case 1:
-			if elementType := load.Varint7(); elementType != -0x10 {
-				panic(module.Errorf("unsupported table element type: %d", elementType))
+		case module.ExternalKindGlobal:
+			if len(m.m.Globals) >= maxGlobals {
+				panic(module.Error("too many imported globals"))
 			}
 
-			m.m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
-
-		default:
-			panic(module.Error("multiple tables not supported"))
-		}
-	},
-
-	module.SectionMemory: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		switch load.Varuint32() {
-		case 0:
-
-		case 1:
-			m.m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, wa.PageSize)
-
-		default:
-			panic(module.Error("multiple memories not supported"))
-		}
-	},
-
-	module.SectionGlobal: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for range load.Count(maxGlobals, "global") {
 			t := typedecode.Value(load.Varint7())
-			mutable := load.Varuint1()
-			init, _ := initexpr.Read(&m.m, load)
+
+			if mutable := load.Varuint1(); mutable {
+				panic(module.Errorf("unsupported mutable global in import #%d", i))
+			}
 
 			m.m.Globals = append(m.m.Globals, module.Global{
-				Type:    t,
-				Mutable: mutable,
-				Init:    init,
+				Type: t,
 			})
+
+			m.m.ImportGlobals = append(m.m.ImportGlobals, module.Import{
+				Module: moduleStr,
+				Field:  fieldStr,
+			})
+
+		default:
+			panic(module.Errorf("import kind not supported: %s", kind))
 		}
-	},
+	}
+}
 
-	module.SectionExport: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		m.m.ExportFuncs = make(map[string]uint32)
-
-		for i := range load.Count(maxExports, "export") {
-			fieldLen := load.Varuint32()
-			if fieldLen > maxStringLen {
-				panic(module.Errorf("field string is too long in export #%d", i))
-			}
-
-			fieldStr := load.Bytes(fieldLen)
-			kind := module.ExternalKind(load.Byte())
-			index := load.Varuint32()
-
-			switch kind {
-			case module.ExternalKindFunction:
-				if index >= uint32(len(m.m.Funcs)) {
-					panic(module.Errorf("export function index out of bounds: %d", index))
-				}
-				m.m.ExportFuncs[string(fieldStr)] = index
-
-			case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
-
-			default:
-				panic(module.Errorf("custom export kind: %s", kind))
-			}
+func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	for range load.Count(module.MaxFunctions, "function") {
+		sigIndex := load.Varuint32()
+		if sigIndex >= uint32(len(m.m.Types)) {
+			panic(module.Errorf("function type index out of bounds: %d", sigIndex))
 		}
-	},
 
-	module.SectionStart: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+		m.m.Funcs = append(m.m.Funcs, sigIndex)
+	}
+}
+
+func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	switch load.Varuint32() {
+	case 0:
+
+	case 1:
+		if elementType := load.Varint7(); elementType != -0x10 {
+			panic(module.Errorf("unsupported table element type: %d", elementType))
+		}
+
+		m.m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
+
+	default:
+		panic(module.Error("multiple tables not supported"))
+	}
+}
+
+func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	switch load.Varuint32() {
+	case 0:
+
+	case 1:
+		m.m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, wa.PageSize)
+
+	default:
+		panic(module.Error("multiple memories not supported"))
+	}
+}
+
+func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	for range load.Count(maxGlobals, "global") {
+		t := typedecode.Value(load.Varint7())
+		mutable := load.Varuint1()
+		init, _ := initexpr.Read(&m.m, load)
+
+		m.m.Globals = append(m.m.Globals, module.Global{
+			Type:    t,
+			Mutable: mutable,
+			Init:    init,
+		})
+	}
+}
+
+func loadExportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	m.m.ExportFuncs = make(map[string]uint32)
+
+	for i := range load.Count(maxExports, "export") {
+		fieldLen := load.Varuint32()
+		if fieldLen > maxStringLen {
+			panic(module.Errorf("field string is too long in export #%d", i))
+		}
+
+		fieldStr := load.Bytes(fieldLen)
+		kind := module.ExternalKind(load.Byte())
 		index := load.Varuint32()
-		if index >= uint32(len(m.m.Funcs)) {
-			panic(module.Errorf("start function index out of bounds: %d", index))
+
+		switch kind {
+		case module.ExternalKindFunction:
+			if index >= uint32(len(m.m.Funcs)) {
+				panic(module.Errorf("export function index out of bounds: %d", index))
+			}
+			m.m.ExportFuncs[string(fieldStr)] = index
+
+		case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
+
+		default:
+			panic(module.Errorf("custom export kind: %s", kind))
+		}
+	}
+}
+
+func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	index := load.Varuint32()
+	if index >= uint32(len(m.m.Funcs)) {
+		panic(module.Errorf("start function index out of bounds: %d", index))
+	}
+
+	sigIndex := m.m.Funcs[index]
+	sig := m.m.Types[sigIndex]
+	if len(sig.Params) > 0 || sig.Result != wa.Void {
+		panic(module.Errorf("invalid start function signature: %s", sig))
+	}
+
+	m.m.StartIndex = index
+	m.m.StartDefined = true
+}
+
+func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+	for i := range load.Count(maxElements, "element") {
+		if index := load.Varuint32(); index != 0 {
+			panic(module.Errorf("unsupported table index: %d", index))
 		}
 
-		sigIndex := m.m.Funcs[index]
-		sig := m.m.Types[sigIndex]
-		if len(sig.Params) > 0 || sig.Result != wa.Void {
-			panic(module.Errorf("invalid start function signature: %s", sig))
+		offset := initexpr.ReadOffset(&m.m, load)
+
+		numElem := load.Varuint32()
+
+		needSize := uint64(offset) + uint64(numElem)
+		if needSize > uint64(m.m.TableLimitValues.Initial) {
+			panic(module.Errorf("table segment #%d exceeds initial table size", i))
 		}
 
-		m.m.StartIndex = index
-		m.m.StartDefined = true
-	},
-
-	module.SectionElement: func(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-		for i := range load.Count(maxElements, "element") {
-			if index := load.Varuint32(); index != 0 {
-				panic(module.Errorf("unsupported table index: %d", index))
+		oldSize := len(m.m.TableFuncs)
+		if needSize > uint64(oldSize) {
+			buf := make([]uint32, needSize)
+			copy(buf, m.m.TableFuncs)
+			for i := oldSize; i < int(offset); i++ {
+				buf[i] = math.MaxInt32 // invalid function index
 			}
-
-			offset := initexpr.ReadOffset(&m.m, load)
-
-			numElem := load.Varuint32()
-
-			needSize := uint64(offset) + uint64(numElem)
-			if needSize > uint64(m.m.TableLimitValues.Initial) {
-				panic(module.Errorf("table segment #%d exceeds initial table size", i))
-			}
-
-			oldSize := len(m.m.TableFuncs)
-			if needSize > uint64(oldSize) {
-				buf := make([]uint32, needSize)
-				copy(buf, m.m.TableFuncs)
-				for i := oldSize; i < int(offset); i++ {
-					buf[i] = math.MaxInt32 // invalid function index
-				}
-				m.m.TableFuncs = buf
-			}
-
-			for j := int(offset); j < int(needSize); j++ {
-				elem := load.Varuint32()
-				if elem >= uint32(len(m.m.Funcs)) {
-					panic(module.Errorf("table element index out of bounds: %d", elem))
-				}
-
-				m.m.TableFuncs[j] = elem
-			}
+			m.m.TableFuncs = buf
 		}
-	},
+
+		for j := int(offset); j < int(needSize); j++ {
+			elem := load.Varuint32()
+			if elem >= uint32(len(m.m.Funcs)) {
+				panic(module.Errorf("table element index out of bounds: %d", elem))
+			}
+
+			m.m.TableFuncs[j] = elem
+		}
+	}
 }
 
 func (m *Module) Types() []wa.FuncType      { return m.m.Types }
