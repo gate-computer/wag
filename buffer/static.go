@@ -31,8 +31,7 @@ func MakeStatic(b []byte, capacity int) Static {
 	return Static{b, capacity}
 }
 
-// NewStatic buffer.  The slice must be empty, but it must be able to support
-// the specified capacity.
+// NewStatic buffer.  The slice must be able to support the specified capacity.
 func NewStatic(b []byte, capacity int) *Static {
 	s := MakeStatic(b, capacity)
 	return &s
