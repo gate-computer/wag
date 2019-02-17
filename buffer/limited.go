@@ -14,9 +14,18 @@ type Limited struct {
 	d Dynamic
 }
 
+// MakeLimited buffer with a maximum size.  The slice must be empty.
+//
+// This function can be used in field initializer expressions.  The initialized
+// field must not be copied.
+func MakeLimited(b []byte, maxSize int) Limited {
+	return Limited{MakeDynamicHint(b, maxSize)}
+}
+
 // NewLimited buffer with a maximum size.  The slice must be empty.
 func NewLimited(b []byte, maxSize int) *Limited {
-	return &Limited{makeDynamicHint(b, maxSize)}
+	l := MakeLimited(b, maxSize)
+	return &l
 }
 
 // Len doesn't panic.

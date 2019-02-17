@@ -16,7 +16,20 @@ type Dynamic struct {
 	maxSize int // For limiting allocation; not enforced by this implementation.
 }
 
-func makeDynamicHint(b []byte, maxSizeHint int) Dynamic {
+// MakeDynamic buffer.
+//
+// This function can be used in field initializer expressions.  The initialized
+// field must not be copied.
+func MakeDynamic(b []byte) Dynamic {
+	return MakeDynamicHint(b, 0)
+}
+
+// MakeDynamicHint avoids making excessive allocations if the maximum buffer
+// size can be estimated in advance.  The slice must be empty.
+//
+// This function can be used in field initializer expressions.  The initialized
+// field must not be copied.
+func MakeDynamicHint(b []byte, maxSizeHint int) Dynamic {
 	return Dynamic{b, maxSizeHint}
 }
 
@@ -28,7 +41,7 @@ func NewDynamic(b []byte) *Dynamic {
 // NewDynamicHint avoids making excessive allocations if the maximum buffer
 // size can be estimated in advance.  The slice must be empty.
 func NewDynamicHint(b []byte, maxSizeHint int) *Dynamic {
-	d := makeDynamicHint(b, maxSizeHint)
+	d := MakeDynamicHint(b, maxSizeHint)
 	return &d
 }
 
