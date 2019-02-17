@@ -16,14 +16,14 @@ type Static struct {
 	max int
 }
 
-// MakeStatic buffer.  The slice must be empty, but it must be able to support
-// the specified capacity.
+// MakeStatic buffer.  The slice must must be able to support the specified
+// capacity.
 //
 // This function can be used in field initializer expressions.  The initialized
 // field must not be copied.
 func MakeStatic(b []byte, capacity int) Static {
-	if len(b) != 0 {
-		panic("slice must be empty")
+	if len(b) > capacity {
+		panic("slice length exceeds static buffer capacity")
 	}
 	if cap(b) < capacity {
 		panic("static buffer capacity exceeds slice capacity")

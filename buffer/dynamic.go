@@ -17,13 +17,10 @@ type Dynamic struct {
 }
 
 func makeDynamicHint(b []byte, maxSizeHint int) Dynamic {
-	if len(b) != 0 {
-		panic("slice must be empty")
-	}
 	return Dynamic{b, maxSizeHint}
 }
 
-// NewDynamic buffer.  The slice must be empty.
+// NewDynamic buffer.
 func NewDynamic(b []byte) *Dynamic {
 	return NewDynamicHint(b, 0)
 }
