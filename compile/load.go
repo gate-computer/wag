@@ -52,7 +52,7 @@ const (
 	maxInitialMemoryLimit = 16384 // TODO
 	maxMaximumMemoryLimit = math.MaxInt32 >> wa.PageBits
 	maxGlobals            = 4096/obj.Word - 2 // (trap handler + memory limit)
-	maxExports            = 256
+	maxExports            = 128
 	maxElements           = 32768
 )
 
