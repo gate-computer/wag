@@ -19,14 +19,25 @@ type CallSite struct {
 
 // CallMap implements compile.ObjectMapper.  It stores all function addresses
 // and call sites, but no instruction information.
+//
+// Initial CallSites capacity may be allocated by initializing the field with a
+// non-nil, empty array.
 type CallMap struct {
 	FuncMap
 	CallSites []CallSite
 }
 
 func (m *CallMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
+	if len(m.CallSites) > 0 {
+		panic("CallSites is not empty")
+	}
+
 	m.FuncMap.InitObjectMap(numImportFuncs, numOtherFuncs)
-	m.CallSites = make([]CallSite, 0, numImportFuncs+numOtherFuncs) // conservative guess
+
+	if m.CallSites == nil {
+		// Conservative guess (assuming there are no unused functions).
+		m.CallSites = make([]CallSite, 0, numImportFuncs+numOtherFuncs)
+	}
 }
 
 func (m *CallMap) PutCallSite(retAddr uint32, stackOffset int32) {

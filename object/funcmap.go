@@ -11,12 +11,21 @@ import (
 
 // FuncMap implements compile.ObjectMapper.  It stores all function addresses,
 // but no call or instruction information.
+//
+// FuncAddrs may be preallocated by initializing the field with a non-nil,
+// empty array.
 type FuncMap struct {
 	FuncAddrs []uint32
 }
 
 func (m *FuncMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
-	m.FuncAddrs = make([]uint32, 0, numImportFuncs+numOtherFuncs)
+	if len(m.FuncAddrs) > 0 {
+		panic("FuncAddrs is not empty")
+	}
+
+	if num := numImportFuncs + numOtherFuncs; cap(m.FuncAddrs) < num {
+		m.FuncAddrs = make([]uint32, 0, num)
+	}
 }
 
 func (m *FuncMap) PutImportFuncAddr(addr uint32) {
