@@ -671,8 +671,7 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 	}
 }
 
-// LoadCustomSections reads a WebAssembly module's extension sections which
-// follow standard sections.
+// LoadCustomSections reads WebAssembly module's extension sections.
 func LoadCustomSections(config *Config, r Reader) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
@@ -689,7 +688,5 @@ func loadCustomSections(config *Config, r Reader) {
 
 	load := loader.L{R: r}
 
-	if id := section.Find(0, load, config.SectionMapper, config.CustomSectionLoader); id != 0 {
-		panic(module.Errorf("unexpected section id: 0x%x (after all standard sections)", id))
-	}
+	section.Find(0, load, config.SectionMapper, config.CustomSectionLoader)
 }
