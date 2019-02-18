@@ -72,6 +72,10 @@ func GenProgram(
 	asm.AlignFunc(p)
 	asm.Init(p)
 
+	// Virtual return point for resuming a program which was suspended before
+	// execution started.  This call site must be at index 0.
+	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word*2)
+
 	if m.StartDefined {
 		if int(m.StartIndex) >= initFuncCount {
 			initFuncCount = int(m.StartIndex) + 1
