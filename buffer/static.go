@@ -55,7 +55,7 @@ func (s *Static) Bytes() []byte {
 // Write doesn't panic.
 func (s *Static) Write(b []byte) (n int, err error) {
 	offset := len(s.buf)
-	size := offset + n
+	size := offset + len(b)
 	if size <= s.max {
 		s.buf = s.buf[:size]
 	} else {
