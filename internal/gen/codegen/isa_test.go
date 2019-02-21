@@ -5,11 +5,12 @@
 package codegen
 
 import (
+	"testing"
+
 	interfaces "github.com/tsavola/wag/internal/isa"
 )
 
-func init() {
-	// Consistency check
+func TestISAInterfaces(*testing.T) {
 	var _ interfaces.MacroAssembler = asm
 	var _ interfaces.Linker = linker
 }

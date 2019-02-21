@@ -25,24 +25,3 @@
 // (Buffer size limit errors implement also the ModuleError method.)
 //
 package wag
-
-import (
-	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/internal/module"
-)
-
-func init() {
-	type moduleError interface {
-		error
-		ModuleError() string
-	}
-
-	type bufferSizeError interface {
-		moduleError
-		BufferSizeLimit() string
-	}
-
-	var _ = module.Error("").(moduleError)
-	var _ bufferSizeError = buffer.ErrSizeLimit
-	var _ bufferSizeError = buffer.ErrStaticSize
-}

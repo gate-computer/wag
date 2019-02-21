@@ -9,8 +9,9 @@ package file
 
 import (
 	"io"
+	"testing"
 )
 
-func init() {
+func TestFileType(*testing.T) {
 	var _ io.WriterTo = new(File)
 }
