@@ -5,7 +5,7 @@
 #include "textflag.h"
 
 // func exec(textBase, stackLimit, memoryBase, stackPtr uintptr)
-TEXT ·exec(SB),NOSPLIT,$0-48
+TEXT ·exec(SB),NOSPLIT,$0-32
 	MOVQ	textBase+0(FP), R15
 	MOVQ	stackLimit+8(FP), BX
 	MOVQ	memoryBase+16(FP), R14
