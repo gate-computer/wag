@@ -5,7 +5,7 @@
 #include "textflag.h"
 
 // func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int) int
-TEXT ·run(SB),NOSPLIT,$0-356 // 112 (args) + 128 (siginfo) + 144 (rusage)
+TEXT ·run(SB),NOSPLIT,$0-112 // too small
 	JMP	run(SB)
 
 // func ObjectRuntime() (slice []byte, addr uint64)
