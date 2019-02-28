@@ -70,11 +70,13 @@ func GenProgram(
 		panic("bad text address after resume routine")
 	}
 	asm.AlignFunc(p)
-	asm.Init(p)
 
 	// Virtual return point for resuming a program which was suspended before
-	// execution started.  This call site must be at index 0.
+	// execution started.  This call site must be at index 0, and its address
+	// must match the start routine.
 	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word*2)
+
+	asm.Init(p)
 
 	if m.StartDefined {
 		if int(m.StartIndex) >= initFuncCount {
