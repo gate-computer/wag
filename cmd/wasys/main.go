@@ -133,7 +133,7 @@ func main() {
 
 	textMem := vecTextMem[vecSize:]
 	textAddr := memAddr(textMem)
-	textBuf := buffer.NewStatic(textMem[:0], len(textMem))
+	textBuf := buffer.NewStatic(textMem[:0:len(textMem)])
 
 	config := &wag.Config{
 		Text:            textBuf,

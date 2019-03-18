@@ -13,33 +13,25 @@ import (
 // default value is a zero-capacity buffer.
 type Static struct {
 	buf []byte
-	max int
 }
 
-// MakeStatic buffer.  The slice must must be able to support the specified
-// capacity.
+// MakeStatic buffer.
 //
 // This function can be used in field initializer expressions.  The initialized
 // field must not be copied.
-func MakeStatic(b []byte, capacity int) Static {
-	if len(b) > capacity {
-		panic("slice length exceeds static buffer capacity")
-	}
-	if cap(b) < capacity {
-		panic("static buffer capacity exceeds slice capacity")
-	}
-	return Static{b, capacity}
+func MakeStatic(b []byte) Static {
+	return Static{b}
 }
 
-// NewStatic buffer.  The slice must be able to support the specified capacity.
-func NewStatic(b []byte, capacity int) *Static {
-	s := MakeStatic(b, capacity)
+// NewStatic buffer.
+func NewStatic(b []byte) *Static {
+	s := MakeStatic(b)
 	return &s
 }
 
 // Capacity of the static buffer.
 func (s *Static) Cap() int {
-	return s.max
+	return cap(s.buf)
 }
 
 // Len doesn't panic.
@@ -56,10 +48,10 @@ func (s *Static) Bytes() []byte {
 func (s *Static) Write(b []byte) (n int, err error) {
 	offset := len(s.buf)
 	size := offset + len(b)
-	if size <= s.max {
+	if size <= cap(s.buf) {
 		s.buf = s.buf[:size]
 	} else {
-		s.buf = s.buf[:s.max]
+		s.buf = s.buf[:cap(s.buf)]
 		err = io.EOF
 	}
 	n = copy(s.buf[offset:], b)
@@ -69,7 +61,7 @@ func (s *Static) Write(b []byte) (n int, err error) {
 // PutByte panics with ErrStaticSize if the buffer is already full.
 func (s *Static) PutByte(value byte) {
 	offset := len(s.buf)
-	if offset >= s.max {
+	if offset >= cap(s.buf) {
 		panic(ErrStaticSize)
 	}
 	s.buf = s.buf[:offset+1]
@@ -87,17 +79,16 @@ func (s *Static) PutUint32(i uint32) {
 func (s *Static) Extend(n int) []byte {
 	offset := len(s.buf)
 	size := offset + n
-	if size > s.max {
+	if size > cap(s.buf) {
 		panic(ErrStaticSize)
 	}
 	s.buf = s.buf[:size]
 	return s.buf[offset:]
 }
 
-// ResizeBytes panics with ErrStaticSize if n is larger than maximum buffer
-// size.
+// ResizeBytes panics with ErrStaticSize if n is larger than buffer capacity.
 func (s *Static) ResizeBytes(n int) []byte {
-	if n > s.max {
+	if n > cap(s.buf) {
 		panic(ErrStaticSize)
 	}
 	s.buf = s.buf[:n]

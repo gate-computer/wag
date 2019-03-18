@@ -43,7 +43,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 	defer p.Close()
 
 	config := Config{
-		Text:            buffer.NewStatic(p.Text[:0], len(p.Text)),
+		Text:            buffer.NewStatic(p.Text[:0:len(p.Text)]),
 		MemoryAlignment: os.Getpagesize(),
 		Entry:           "benchmark_main",
 	}

@@ -72,7 +72,7 @@ func TestExec(t *testing.T) {
 	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 
 	var code = &CodeConfig{
-		Text:         buffer.NewStatic(p.Text[:0], len(p.Text)),
+		Text:         buffer.NewStatic(p.Text[:0:len(p.Text)]),
 		Mapper:       &p.DebugMap,
 		EventHandler: eventHandler,
 		LastInitFunc: entryFunc,

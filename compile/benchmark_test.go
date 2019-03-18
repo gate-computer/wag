@@ -89,7 +89,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 
 		for i := 0; i < b.N; i++ {
 			code := CodeConfig{
-				Text:         buffer.NewStatic(benchTextBuf[:0], len(benchTextBuf)),
+				Text:         buffer.NewStatic(benchTextBuf[:0:len(benchTextBuf)]),
 				EventHandler: eventHandler,
 			}
 
@@ -101,7 +101,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 	b.Run("Data", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			data := DataConfig{
-				GlobalsMemory: buffer.NewStatic(benchDataBuf[:0], len(benchDataBuf)),
+				GlobalsMemory: buffer.NewStatic(benchDataBuf[:0:len(benchDataBuf)]),
 			}
 
 			loadDataSection(&data, bytes.NewReader(wasm[dataPos:]), mod)
