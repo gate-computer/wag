@@ -46,7 +46,7 @@ func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names
 	}
 
 	var (
-		lineFmt   = fmt.Sprintf("#%%-%dx %%s%%s%%s\n", depthWidth)
+		lineFmt   = fmt.Sprintf("#%%-%dd %%s%%s%%s\n", depthWidth)
 		prefixFmt = fmt.Sprintf("0x%%0%dx in ", posWidth)
 	)
 
@@ -95,9 +95,11 @@ func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names
 				}
 			}
 
-			_, err = fmt.Fprintf(w, "%s\n", values)
-			if err != nil {
-				return
+			if values != "" {
+				_, err = fmt.Fprintln(w, values)
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
