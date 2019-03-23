@@ -5,6 +5,8 @@
 package codegen
 
 import (
+	"log"
+
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -18,6 +20,7 @@ import (
 
 var (
 	errCallParamsExceedStack = module.Error("function call parameter count exceeds stack operand count")
+	errCallParamTypeMismatch = module.Error("function call argument has wrong type")
 )
 
 func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
@@ -69,6 +72,13 @@ func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
 
 	if len(sig.Params) > f.StackDepth-f.FrameBase {
 		panic(errCallParamsExceedStack)
+	}
+
+	for i, t := range sig.Params {
+		if t != f.Operands[len(f.Operands)-len(sig.Params)+i].Type {
+			log.Printf("call target signature index: %d\n", sigIndex)
+			panic(errCallParamTypeMismatch)
+		}
 	}
 
 	return sig
