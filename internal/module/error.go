@@ -5,40 +5,17 @@
 package module
 
 import (
-	"fmt"
-	"io"
+	internal "github.com/tsavola/wag/internal/errors"
 )
 
-type moduleError string
-
 func Error(text string) error {
-	return moduleError(text)
+	return internal.Error(text)
 }
 
 func Errorf(format string, args ...interface{}) error {
-	return moduleError(fmt.Sprintf(format, args...))
-}
-
-func (s moduleError) Error() string       { return string(s) }
-func (s moduleError) ModuleError() string { return string(s) }
-
-type wrappedError struct {
-	text  string
-	cause error
+	return internal.Errorf(format, args...)
 }
 
 func WrapError(cause error, text string) error {
-	return &wrappedError{text, cause}
+	return internal.WrapError(cause, text)
 }
-
-func (e *wrappedError) Error() string       { return e.text }
-func (e *wrappedError) ModuleError() string { return e.text }
-func (e *wrappedError) Unwrap() error       { return e.cause }
-
-var ErrUnexpectedEOF unexpectedEOF
-
-type unexpectedEOF struct{}
-
-func (unexpectedEOF) Error() string       { return io.ErrUnexpectedEOF.Error() }
-func (unexpectedEOF) ModuleError() string { return io.ErrUnexpectedEOF.Error() }
-func (unexpectedEOF) Unwrap() error       { return io.ErrUnexpectedEOF }

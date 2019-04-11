@@ -5,11 +5,8 @@
 // Package buffer implements compile.CodeBuffer and compile.DataBuffer.
 package buffer
 
-var ErrSizeLimit error = &SizeError{"buffer size limit exceeded"}
+import (
+	module "github.com/tsavola/wag/internal/errors"
+)
 
-type SizeError struct {
-	s string
-}
-
-func (e *SizeError) Error() string       { return e.s }
-func (e *SizeError) ModuleError() string { return e.s }
+var ErrSizeLimit = module.Error("buffer size limit exceeded")

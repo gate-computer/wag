@@ -8,9 +8,11 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/tsavola/wag/internal/module"
+	internal "github.com/tsavola/wag/internal/errors"
 	"golang.org/x/xerrors"
 )
+
+var errUnexpectedEOF = internal.WrapError(io.ErrUnexpectedEOF, io.ErrUnexpectedEOF.Error())
 
 func Handle(x interface{}) (err error) {
 	if x != nil {
@@ -25,7 +27,7 @@ func Handle(x interface{}) (err error) {
 
 		switch {
 		case xerrors.Is(err, io.EOF):
-			err = module.ErrUnexpectedEOF
+			err = errUnexpectedEOF
 		}
 	}
 

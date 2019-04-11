@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tsavola/wag/buffer"
+	wagerrors "github.com/tsavola/wag/errors"
 	"github.com/tsavola/wag/internal/errorpanic"
 	"github.com/tsavola/wag/internal/module"
 	"golang.org/x/xerrors"
@@ -24,25 +25,26 @@ func TestModuleError(t *testing.T) {
 	var _ = module.Error("").(moduleError)
 	var _ = module.Errorf("").(moduleError)
 	var _ = module.WrapError(errors.New(""), "").(moduleError)
-	var _ moduleError = module.ErrUnexpectedEOF
 
-	if !xerrors.Is(module.ErrUnexpectedEOF, io.ErrUnexpectedEOF) {
-		t.Error(module.ErrUnexpectedEOF)
+	err := errors.New("")
+	if unwrapped := xerrors.Unwrap(module.WrapError(err, "")); unwrapped != err {
+		t.Error(unwrapped)
 	}
 }
 
 func TestErrorPanicEOF(t *testing.T) {
-	if err := errorpanic.Handle(io.EOF); !xerrors.Is(err, module.ErrUnexpectedEOF) {
+	err := errorpanic.Handle(io.EOF)
+	if !xerrors.Is(err, io.ErrUnexpectedEOF) {
+		t.Error(err)
+	}
+
+	var moduleError *wagerrors.ModuleError
+	if !xerrors.As(err, &moduleError) {
 		t.Error(err)
 	}
 }
 
-type bufferSizeError interface {
-	moduleError
-	BufferSizeLimit() string
-}
-
-func TestBufferSizeError(t *testing.T) {
+func TestBufferSizeLimit(t *testing.T) {
 	var _ = buffer.ErrSizeLimit.(moduleError)
 
 	wrapped := xerrors.Errorf("wrapped: %w", buffer.ErrSizeLimit)
@@ -50,10 +52,10 @@ func TestBufferSizeError(t *testing.T) {
 		t.Error(wrapped)
 	}
 
-	var sizeError *buffer.SizeError
-	if xerrors.As(wrapped, &sizeError) {
-		if sizeError != buffer.ErrSizeLimit {
-			t.Error(sizeError)
+	var moduleError *wagerrors.ModuleError
+	if xerrors.As(wrapped, &moduleError) {
+		if moduleError != buffer.ErrSizeLimit {
+			t.Error(moduleError)
 		}
 	} else {
 		t.Error(wrapped)
