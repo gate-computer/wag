@@ -6,6 +6,7 @@ package module
 
 import (
 	"fmt"
+	"io"
 )
 
 type moduleError string
@@ -33,3 +34,11 @@ func WrapError(cause error, text string) error {
 func (e *wrappedError) Error() string       { return e.text }
 func (e *wrappedError) ModuleError() string { return e.text }
 func (e *wrappedError) Unwrap() error       { return e.cause }
+
+var ErrUnexpectedEOF unexpectedEOF
+
+type unexpectedEOF struct{}
+
+func (unexpectedEOF) Error() string       { return io.ErrUnexpectedEOF.Error() }
+func (unexpectedEOF) ModuleError() string { return io.ErrUnexpectedEOF.Error() }
+func (unexpectedEOF) Unwrap() error       { return io.ErrUnexpectedEOF }

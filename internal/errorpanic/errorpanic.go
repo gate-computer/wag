@@ -5,7 +5,11 @@
 package errorpanic
 
 import (
+	"io"
 	"runtime"
+
+	"github.com/tsavola/wag/internal/module"
+	"golang.org/x/xerrors"
 )
 
 func Handle(x interface{}) (err error) {
@@ -17,6 +21,11 @@ func Handle(x interface{}) (err error) {
 
 		if _, ok := err.(runtime.Error); ok {
 			panic(x)
+		}
+
+		switch {
+		case xerrors.Is(err, io.EOF):
+			err = module.ErrUnexpectedEOF
 		}
 	}
 

@@ -27,9 +27,6 @@ func CopyStandardSection(w io.Writer, r reader.R, id ID, customLoader func(r Rea
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)
-			if err == io.EOF {
-				err = io.ErrUnexpectedEOF
-			}
 		}
 	}()
 
@@ -53,9 +50,6 @@ func SkipCustomSections(r reader.R, customLoader func(Reader, uint32) error) (er
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)
-			if err == io.EOF {
-				err = io.ErrUnexpectedEOF
-			}
 		}
 	}()
 

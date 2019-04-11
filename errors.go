@@ -13,7 +13,7 @@
 // Presence of the ModuleError method indicates that the error is caused by
 // unsupported or malformed WebAssembly module.  Other errors returned by
 // compilation functions are either read errors or internal compiler errors.
-// Read errors (such as EOF) are passed though as is.
+// Unexpected EOF is a ModuleError which wraps io.ErrUnexpectedEOF.
 //
 // Errors implementing the following interface indicate that generated code or
 // data doesn't fit in a target buffer:
