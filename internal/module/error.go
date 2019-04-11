@@ -32,4 +32,4 @@ func WrapError(cause error, text string) error {
 
 func (e *wrappedError) Error() string       { return e.text }
 func (e *wrappedError) ModuleError() string { return e.text }
-func (e *wrappedError) Cause() error        { return e.cause }
+func (e *wrappedError) Unwrap() error       { return e.cause }
