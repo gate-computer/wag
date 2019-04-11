@@ -5,7 +5,6 @@
 package gen
 
 import (
-	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/gen/operand"
@@ -14,6 +13,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/wa"
+	errors "golang.org/x/xerrors"
 )
 
 type Block struct {

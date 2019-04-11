@@ -5,7 +5,6 @@
 package x86
 
 import (
-	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/condition"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -18,6 +17,7 @@ import (
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
+	errors "golang.org/x/xerrors"
 )
 
 const (

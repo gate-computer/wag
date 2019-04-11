@@ -5,7 +5,6 @@
 package codegen
 
 import (
-	"github.com/pkg/errors"
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -17,6 +16,7 @@ import (
 	"github.com/tsavola/wag/internal/typedecode"
 	"github.com/tsavola/wag/wa"
 	"github.com/tsavola/wag/wa/opcode"
+	errors "golang.org/x/xerrors"
 )
 
 var (
