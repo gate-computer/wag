@@ -5,14 +5,11 @@
 // Package buffer implements compile.CodeBuffer and compile.DataBuffer.
 package buffer
 
-type sizeError string
+var ErrSizeLimit error = &SizeError{"buffer size limit exceeded"}
 
-func (s sizeError) Error() string           { return string(s) }
-func (s sizeError) ModuleError() string     { return string(s) }
-func (s sizeError) BufferSizeLimit() string { return string(s) }
+type SizeError struct {
+	s string
+}
 
-// Errors implementing interface{ BufferSizeLimit() string }.
-var (
-	ErrSizeLimit  = sizeError("buffer size limit exceeded")
-	ErrStaticSize = sizeError("static buffer capacity exceeded")
-)
+func (e *SizeError) Error() string       { return e.s }
+func (e *SizeError) ModuleError() string { return e.s }

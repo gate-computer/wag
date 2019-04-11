@@ -42,7 +42,20 @@ type bufferSizeError interface {
 	BufferSizeLimit() string
 }
 
-func TestBufferSizeErrors(t *testing.T) {
-	var _ bufferSizeError = buffer.ErrSizeLimit
-	var _ bufferSizeError = buffer.ErrStaticSize
+func TestBufferSizeError(t *testing.T) {
+	var _ = buffer.ErrSizeLimit.(moduleError)
+
+	wrapped := xerrors.Errorf("wrapped: %w", buffer.ErrSizeLimit)
+	if !xerrors.Is(wrapped, buffer.ErrSizeLimit) {
+		t.Error(wrapped)
+	}
+
+	var sizeError *buffer.SizeError
+	if xerrors.As(wrapped, &sizeError) {
+		if sizeError != buffer.ErrSizeLimit {
+			t.Error(sizeError)
+		}
+	} else {
+		t.Error(wrapped)
+	}
 }
