@@ -5,8 +5,6 @@
 package codegen
 
 import (
-	"log"
-
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/debug"
 	"github.com/tsavola/wag/internal/gen/link"
@@ -76,7 +74,6 @@ func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
 
 	for i, t := range sig.Params {
 		if t != f.Operands[len(f.Operands)-len(sig.Params)+i].Type {
-			log.Printf("call target signature index: %d\n", sigIndex)
 			panic(errCallParamTypeMismatch)
 		}
 	}
