@@ -222,7 +222,7 @@ func TestMoveIntImm(t *testing.T) {
 			}
 
 			text := code.Buf{
-				Buffer: buffer.NewStatic(exe[:0], len(exe)),
+				Buffer: buffer.NewStatic(exe[:0:len(exe)]),
 			}
 
 			moveIntImm(&text, r, val)
