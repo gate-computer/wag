@@ -15,17 +15,17 @@ import (
 )
 
 func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
-	op := in.Memory(props)
-	base, disp9 := checkAccess(f, op.SizeReach(), index, offset)
+	insn := in.Memory(props).OpcodeUnscaled()
+	base, disp9 := checkAccess(f, index, offset)
 
 	r := f.Regs.AllocResult(resultType)
-	f.Text.PutUint32(op.OpcodeUnscaled().RtRnI9(r, base, disp9))
+	f.Text.PutUint32(insn.RtRnI9(r, base, disp9))
 	return operand.Reg(resultType, r) // TODO: is it?
 }
 
 func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
-	op := in.Memory(props)
-	base, disp9 := checkAccess(f, op.SizeReach(), index, offset)
+	insn := in.Memory(props).OpcodeUnscaled()
+	base, disp9 := checkAccess(f, index, offset)
 
 	var value reg.R
 	if x.Storage == storage.Imm && x.ImmValue() == 0 {
@@ -35,59 +35,49 @@ func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align
 		f.Regs.Free(x.Type, value)
 	}
 
-	f.Text.PutUint32(op.OpcodeUnscaled().RtRnI9(value, base, disp9))
+	f.Text.PutUint32(insn.RtRnI9(value, base, disp9))
 }
 
 // checkAccess returns RegMemoryBase or RegScratch as base.
-func checkAccess(f *gen.Func, sizeReach uint64, index operand.O, offset uint32) (base reg.R, disp9 uint32) {
-	reachOffset := uint64(offset) + sizeReach
-
-	if reachOffset >= 0x80000000 {
+func checkAccess(f *gen.Func, index operand.O, offset uint32) (base reg.R, disp9 uint32) {
+	if offset >= 0x80000000 {
 		f.ValueBecameUnreachable(index)
 		return invalidAccess(f)
 	}
 
-	if index.Storage == storage.Imm {
+	switch index.Storage {
+	case storage.Imm:
 		value := uint64(index.ImmValue())
-
-		if value >= 0x80000000 {
-			return invalidAccess(f)
-		}
-
 		addr := value + uint64(offset)
-		reachAddr := addr + sizeReach
-
-		if reachAddr >= 0x80000000 {
+		if value >= 0x80000000 || addr >= 0x80000000 {
 			return invalidAccess(f)
 		}
 
-		if reachAddr < uint64(f.Module.MemoryLimitValues.Initial) {
-			// Call site is not mapped, so this optimization is part of
-			// portable ABI.
-			if addr <= 255 {
-				base = RegMemoryBase
-				disp9 = uint32(addr)
-			} else {
-				panic(addr)
-			}
-			return
+		switch {
+		case addr <= 255:
+			base = RegMemoryBase
+			disp9 = uint32(addr)
+
+		default:
+			TODO(addr)
 		}
 
-		panic(reachAddr)
-	} else {
+	default:
 		r, _ := getScratchReg(f, index)
+		// UXTW masks index register unconditionally.
 		f.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegMemoryBase, 0, in.UXTW, r, wa.I64))
 		f.Regs.Free(wa.I32, r)
 
 		var i uint32
-		for imm := reachOffset; imm != 0; imm >>= 12 {
+		for imm := uint64(offset); imm != 0; imm >>= 12 {
 			f.Text.PutUint32(in.ADDi.RdRnI12S2(RegScratch, RegScratch, in.Uint12(imm), i, wa.I64))
 			i++
 		}
+
+		base = RegScratch
+		disp9 = 0
 	}
 
-	base = RegScratch
-	disp9 = in.Int9(-int32(sizeReach))
 	return
 }
 

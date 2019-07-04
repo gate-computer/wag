@@ -140,24 +140,25 @@ func (op Logic) OpcodeReg() RegRegImm6RegShiftSf {
 	return RegRegImm6RegShiftSf(uint32(op)<<29 | 0x0a<<24 | 0<<21)
 }
 
-// Load/store instruction's most significant half-word | access size in bytes minus one
+// Load/store instruction's most significant half-word
 type Memory uint16
 
 const (
-	StoreB   = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6 | 0)
-	LoadB    = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6 | 0)
-	LoadSB64 = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 2<<6 | 0)
-	LoadSB32 = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 3<<6 | 0)
-	StoreH   = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6 | 1)
-	LoadH    = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6 | 1)
-	LoadSH64 = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 2<<6 | 1)
-	LoadSH32 = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 3<<6 | 1)
-	StoreW   = Memory(2<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6 | 3)
-	LoadW    = Memory(2<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6 | 3)
-	LoadSW64 = Memory(2<<14 | 7<<11 | 0<<10 | 0<<8 | 2<<6 | 3)
-	StoreD   = Memory(3<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6 | 7)
-	LoadD    = Memory(3<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6 | 7)
+	StoreB   = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6)
+	LoadB    = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6)
+	LoadSB64 = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 2<<6)
+	LoadSB32 = Memory(0<<14 | 7<<11 | 0<<10 | 0<<8 | 3<<6)
+	StoreH   = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6)
+	LoadH    = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6)
+	LoadSH64 = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 2<<6)
+	LoadSH32 = Memory(1<<14 | 7<<11 | 0<<10 | 0<<8 | 3<<6)
+	StoreW   = Memory(2<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6)
+	LoadW    = Memory(2<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6)
+	LoadSW64 = Memory(2<<14 | 7<<11 | 0<<10 | 0<<8 | 2<<6)
+	StoreD   = Memory(3<<14 | 7<<11 | 0<<10 | 0<<8 | 0<<6)
+	LoadD    = Memory(3<<14 | 7<<11 | 0<<10 | 0<<8 | 1<<6)
 )
 
-func (op Memory) SizeReach() uint64          { return uint64(op & 7) }
-func (op Memory) OpcodeUnscaled() RegRegImm9 { return RegRegImm9(uint32(op&^7) << 16) }
+func (op Memory) OpcodeUnscaled() RegRegImm9 {
+	return RegRegImm9(uint32(op) << 16)
+}
