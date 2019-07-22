@@ -16,19 +16,6 @@ TEXT ·run(SB),NOSPLIT,$0-120
 	MOVD	arg+88(FP), R5		// arg
 	B	run(SB)
 
-// func ObjectRuntime() (slice []byte, addr uint64)
-TEXT ·ObjectRuntime(SB),$0-32
-	BL	link_object_runtime_start(SB)
-	MOVD	LR, R0
-	BL	link_object_runtime_end(SB)
-	MOVD	LR, R1
-	SUB	R0, R1
-	MOVD	R0, slice_base+0(FP)
-	MOVD	R1, slice_len+8(FP)
-	MOVD	R1, slice_cap+16(FP)
-	MOVD	R0, addr+24(FP)
-	RET
-
 // func importTrapHandler() uint64
 TEXT ·importTrapHandler(SB),$0-8
 	B	import_trap_handler(SB)

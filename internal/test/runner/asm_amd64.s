@@ -8,17 +8,6 @@
 TEXT ·run(SB),NOSPLIT,$0-112 // too small
 	JMP	run(SB)
 
-// func ObjectRuntime() (slice []byte, addr uint64)
-TEXT ·ObjectRuntime(SB),$0-32
-	LEAQ	object_runtime_start(SB), AX
-	LEAQ	object_runtime_end(SB), BX
-	SUBQ	AX, BX
-	MOVQ	AX, slice_base+0(FP)
-	MOVQ	BX, slice_len+8(FP)
-	MOVQ	BX, slice_cap+16(FP)
-	MOVQ	AX, addr+24(FP)
-	RET
-
 // func importTrapHandler() uint64
 TEXT ·importTrapHandler(SB),$0-8
 	LEAQ	trap_handler(SB), AX

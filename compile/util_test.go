@@ -12,9 +12,6 @@ import (
 	"path"
 	"testing"
 
-	"github.com/tsavola/wag/internal/data"
-	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/object/file"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -151,50 +148,5 @@ func initFuzzCorpus(t *testing.T, filename string, r io.Reader) {
 		}
 
 		t.Skip("initializing fuzz corpus")
-	}
-}
-
-func dumpExecutable(filename string, p *runner.Program, globalsMemory data.Buffer, memoryOffset int) {
-	runtime, runtimeAddr := runner.ObjectRuntime()
-	entryAddr, entryArgs := p.GetStackEntry()
-
-	objFile := file.File{
-		Runtime:       runtime,
-		RuntimeAddr:   runtimeAddr,
-		EntryAddr:     entryAddr,
-		EntryArgs:     entryArgs,
-		Text:          p.Text,
-		GlobalsMemory: globalsMemory.Bytes(),
-		MemoryOffset:  memoryOffset,
-	}
-
-	f, err := os.Create(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	defer func() {
-		if err != nil {
-			os.Remove(filename)
-		}
-	}()
-
-	_, err = objFile.WriteTo(f)
-	if err != nil {
-		panic(err)
-	}
-
-	fi, err := f.Stat()
-	if err != nil {
-		panic(err)
-	}
-
-	mode := fi.Mode()
-	mode |= (mode & 0444) >> 2 // copy readable bits to executable bits
-
-	err = f.Chmod(mode)
-	if err != nil {
-		panic(err)
 	}
 }

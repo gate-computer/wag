@@ -4,32 +4,6 @@
 
 .text
 
-.global	object_runtime_start
-
-link_object_runtime_start:
-	bl	.Lafter_object_runtime_start
-
-	mov	x0, 0			// resume result
-	mov	x1, 0x80000000		// grow memory size
-	mov	x3, 0x100000		// stack offset
-	sub	x2, sp, x3		// stack limit
-	mov	x4, 1023		// slave fd
-	mov	x5, 0			// arg
-	mov	x7, 0x1000000		// init memory size
-	mov	x26, 0x300000000	// memory
-	mov	x27, 0x200000000	// text
-
-	sub	sp, sp, 256		// space for args and results
-	bl	run
-
-	mov	x0, 0			// exit status
-	mov	x8, 94			// exit_group syscall
-	svc	0
-	brk	0
-
-.Lafter_object_runtime_start:
-	ret
-
 .global	run
 
 run:
@@ -255,9 +229,4 @@ import_suspend_next_call:
 
 .Lafter_suspend_next_call:
 	str	x30, [sp, 8]
-	ret
-
-.global	object_runtime_end
-
-link_object_runtime_end:
 	ret

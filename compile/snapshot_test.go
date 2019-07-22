@@ -62,11 +62,6 @@ func TestSnapshot(t *testing.T) {
 		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.DebugMap.FuncAddrs, nil)
 	}
 
-	if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {
-		t.Logf("dumping executable: %s", filename)
-		dumpExecutable(filename, p, data.GlobalsMemory, mod.GlobalsSize())
-	}
-
 	var printBuf bytes.Buffer
 
 	r1, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)

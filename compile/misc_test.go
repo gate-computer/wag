@@ -64,11 +64,6 @@ func misc(t *testing.T, filename, expectOutput string) {
 		dump.Text(os.Stdout, code.Text.Bytes(), p.TextAddr(), p.DebugMap.FuncAddrs, nil)
 	}
 
-	if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {
-		t.Logf("dumping executable: %s", filename)
-		dumpExecutable(filename, p, data.GlobalsMemory, mod.GlobalsSize())
-	}
-
 	var printBuf bytes.Buffer
 
 	r, err := p.NewRunner(minMemorySize, maxMemorySize, stackSize)

@@ -492,11 +492,6 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			t.Logf("memory: %#v", data.GlobalsMemory.Bytes()[mod.GlobalsSize():])
 		}
 
-		if filename := os.Getenv("WAG_TEST_DUMP_EXE"); filename != "" {
-			t.Logf("dumping executable: %s", filename)
-			dumpExecutable(filename, p, data.GlobalsMemory, mod.GlobalsSize())
-		}
-
 		memGrowSize := maxMemorySize
 		if maxMemorySize > 0 && memGrowSize > maxMemorySize {
 			memGrowSize = maxMemorySize

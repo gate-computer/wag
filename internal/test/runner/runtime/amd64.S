@@ -14,40 +14,6 @@
 .text
 
 .align	16
-.global	object_runtime_start
-
-object_runtime_start:
-	mov	$0x300000000, %rax
-	mov	(%rax), %rcx		// stack frame size
-	add	%rcx, %rax		// at last item of stack frame data
-	shr	$3, %rcx		// stack item count
-	je	.Lnocopy
-
-.Lcopy:
-	mov	(%rax), %rbx
-	sub	$8, %rax
-	push	%rbx
-	loop	.Lcopy			// decrement rcx and jump if not zero
-
-.Lnocopy:
-	xor	%eax, %eax		// resume
-	mov	%rsp, %rbx		// stack ptr
-	mov	$0x100000, %rcx		// stack offset
-	sub	%rbx, %rbx		// stack limit
-	xor	%edx, %edx		// arg
-	mov	$1023, %edi		// slave fd
-	mov	$0x400000000, %r14	// memory
-	mov	$0x200000000, %r15	// text
-
-	sub	$256, %rsp		// space for args and results
-	call	run
-
-	mov	$0, %edi		// exit status
-	mov	$231, %eax		// exit_group syscall
-	syscall
-	hlt
-
-.align	16
 .global	run
 
 run:
@@ -419,8 +385,3 @@ snapshot:
 suspend_next_call:
 	mov	$-8, %rbx		// even value doesn't suspend loops
 	jmp	resume
-
-.align	16
-.global	object_runtime_end
-
-object_runtime_end:
