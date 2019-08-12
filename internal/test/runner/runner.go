@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -34,7 +35,7 @@ const (
 	vectorIndexTrapHandler     = -1
 )
 
-func run(text []byte, initialMemorySize int, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int) int
+func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
 
 func importTrapHandler() uint64
 func importCurrentMemory() uint64
@@ -492,7 +493,13 @@ func (e *Executor) run() {
 	globalsMemoryAddr := (*reflect.SliceHeader)(unsafe.Pointer(&e.runner.globalsMemory)).Data
 	memoryAddr := globalsMemoryAddr + uintptr(e.runner.memoryOffset)
 
-	runResult := run(e.runner.prog.getText(), int(e.runner.memorySize), memoryAddr, stack, stackOffset, initOffset, slaveSockets[1], e.testArg, resultPipe[1])
+	text := e.runner.prog.getText()
+
+	forkStack := make([]byte, 65536)
+
+	runResult := run(text, memoryAddr, stack, stackOffset, initOffset, slaveSockets[1], e.testArg, resultPipe[1], forkStack)
+
+	runtime.KeepAlive(forkStack)
 
 	if err := syscall.Close(resultPipe[1]); err != nil {
 		panic(err)
@@ -500,6 +507,10 @@ func (e *Executor) run() {
 
 	if runResult < 0 {
 		panic(fmt.Errorf("run failed with result: %d", runResult))
+	}
+
+	if s := syscall.WaitStatus(runResult); !(s.Exited() && s.ExitStatus() == 0) {
+		panic(fmt.Errorf("run failed with status: %v", s))
 	}
 
 	var result struct {
