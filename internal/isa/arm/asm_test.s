@@ -7,7 +7,7 @@
 #include "textflag.h"
 
 // func executeTestCode(exe []byte) uint64
-TEXT ·executeTestCode(SB),NOSPLIT,$0-32
+TEXT ·executeTestCode(SB),$0-32
 	MOVD	$0xbadc0debadb00613, R0
 	MOVD	R0, R1
 	MOVD	R0, R2
