@@ -70,6 +70,8 @@ spec testsuite is run, by first converting the tests to binary format:
 2. `make -C $GOPATH/src/github.com/tsavola/wag/testdata/wabt`
 3. `go test -ldflags="-linkmode=internal" -bench=. github.com/tsavola/wag/...`
 
+`-linkmode=internal` is required on x86-64, but must not be used on ARM64.
+
 
 Screenshot #1
 -------------
