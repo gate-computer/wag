@@ -509,7 +509,16 @@ func (e *Executor) run() {
 		panic(fmt.Errorf("run failed with result: %d", runResult))
 	}
 
-	if s := syscall.WaitStatus(runResult); !(s.Exited() && s.ExitStatus() == 0) {
+	switch s := syscall.WaitStatus(runResult); {
+	case s.Exited():
+		if s.ExitStatus() != 0 {
+			panic(fmt.Errorf("run failed with code: %d", s.ExitStatus()))
+		}
+
+	case s.Signaled():
+		panic(fmt.Errorf("run failed with signal: %s", s.Signal()))
+
+	default:
 		panic(fmt.Errorf("run failed with status: %v", s))
 	}
 
