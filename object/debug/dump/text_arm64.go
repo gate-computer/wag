@@ -8,6 +8,7 @@ package dump
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/bnagy/gapstone"
@@ -25,8 +26,28 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 	sequence := 0
 	skipTrapInsn := false
 
+	var (
+		r0  = regexp.MustCompile(`\b([wx])0\b`)
+		r1  = regexp.MustCompile(`\b([wx])1\b`)
+		r26 = regexp.MustCompile(`\b([wx])26\b`)
+		r27 = regexp.MustCompile(`\b([wx])27\b`)
+		x28 = regexp.MustCompile(`\bx28\b`)
+		w28 = regexp.MustCompile(`\bw28\b`)
+		r29 = regexp.MustCompile(`\b([wx])29\b`)
+		r30 = regexp.MustCompile(`\b([wx])30\b`)
+	)
+
 	for i := range insns {
 		insn := &insns[i]
+
+		insn.OpStr = r0.ReplaceAllString(insn.OpStr, "${1}result")
+		insn.OpStr = r1.ReplaceAllString(insn.OpStr, "${1}scratch")
+		insn.OpStr = r26.ReplaceAllString(insn.OpStr, "${1}memory")
+		insn.OpStr = r27.ReplaceAllString(insn.OpStr, "${1}text")
+		insn.OpStr = x28.ReplaceAllString(insn.OpStr, "xstacklimit4")
+		insn.OpStr = w28.ReplaceAllString(insn.OpStr, "wsuspendbit")
+		insn.OpStr = r29.ReplaceAllString(insn.OpStr, "${1}fakestack")
+		insn.OpStr = r30.ReplaceAllString(insn.OpStr, "${1}link")
 
 		if insn.Address < firstFuncAddr {
 			if skipTrapInsn {
