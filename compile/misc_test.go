@@ -74,7 +74,7 @@ func misc(t *testing.T, filename, expectOutput string) {
 
 	_, err = r.Run(0, mod.Types(), &printBuf)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 
 	output := printBuf.String()

@@ -91,17 +91,16 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r2.Run(0, mod.Types(), &printBuf)
-	r2.Close()
-	if err != nil {
-		t.Fatal(err)
+	if _, err := r2.Run(0, mod.Types(), &printBuf); err != nil {
+		t.Error(err)
 	}
+	r2.Close()
 
 	if printBuf.Len() > 0 {
 		t.Logf("print output:\n%s", printBuf.String())
 	}
 
 	if len(r2.Snapshots) != 0 {
-		t.Fatal(r2.Snapshots)
+		t.Error(r2.Snapshots)
 	}
 }

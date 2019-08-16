@@ -80,7 +80,7 @@ func TestExec(t *testing.T) {
 	loadCodeSection(code, &codeBuf, mod)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 
 	if printBuf.Len() > 0 {
