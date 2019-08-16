@@ -55,14 +55,14 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 				continue
 			}
 
-			if insn.Mnemonic == "sub" && strings.HasPrefix(insn.OpStr, "x30, x30, #0x") {
+			if insn.Mnemonic == "sub" && strings.HasPrefix(insn.OpStr, "xlink, xlink, #0x") {
 				targets[insn.Address] = "trap.call_stack_exhausted"
 				skipTrapInsn = true
 			}
 
-			if insn.Mnemonic == "movz" && strings.HasPrefix(insn.OpStr, "x0, #0x") {
+			if insn.Mnemonic == "movz" && strings.HasPrefix(insn.OpStr, "xresult, #0x") {
 				var n uint
-				fmt.Sscanf(insn.OpStr, "x0, #0x%x", &n)
+				fmt.Sscanf(insn.OpStr, "xresult, #0x%x", &n)
 				if id := trap.ID(n); id < trap.NumTraps {
 					targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
 				}
