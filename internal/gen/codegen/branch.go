@@ -332,7 +332,9 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 		if value.Type != wa.Void {
 			panic(errBranchLoopValue)
 		}
+		opReserveStackEntry(f)
 		asm.TrapIfLoopSuspendedSaveInt(f, r)
+		opReleaseStackEntry(f)
 		b.Suspension = true
 	}
 
