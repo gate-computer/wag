@@ -10,9 +10,8 @@ Features
 
 - The input is a wasm32 binary module.
 
-- The output is executable x86-64 or ARM64 machine code.  (ARM64 support is
-  incomplete.  Support for 32-bit or big-endian CPU architectures isn't
-  planned.)
+- The output is executable x86-64 or ARM64 machine code.  (Support for 32-bit
+  or big-endian CPU architectures isn't planned.)
 
 - It is only a compiler.  A runtime environment for the compiled program,
   including all import functions, needs to be implemented separately.  (But see
@@ -43,7 +42,7 @@ Status
 
 - Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
 
-- ARM64 backend supports "hello, world" but not much else.
+- ARM64 backend is missing floating point support.
 
 - The Go package API hasn't been finalized (but it's getting there).
 

@@ -33,16 +33,11 @@ const (
 	BinaryIntCmp = iota
 	BinaryIntAddsub
 	BinaryIntMul
-	BinaryIntDivS
-	BinaryIntDivU
-	BinaryIntRemS
-	BinaryIntRemU
+	BinaryIntDiv
+	BinaryIntRem
 	BinaryIntLogic
-	BinaryIntShl
-	BinaryIntShrS
-	BinaryIntShrU
+	BinaryIntShift
 	BinaryIntRotl
-	BinaryIntRotr
 
 	BinaryFloatEq
 	BinaryFloatNe
@@ -57,6 +52,10 @@ const (
 	BinaryFloatMin
 	BinaryFloatMax
 	BinaryFloatCopysign
+)
+
+const (
+	BinaryIntDivSigned = 1 << 8
 )
 
 const (
@@ -79,18 +78,18 @@ const (
 	IntAdd        = BinaryIntAddsub | uint(in.AddsubAdd)<<8
 	IntSub        = BinaryIntAddsub | uint(in.AddsubSub)<<8
 	IntMul        = BinaryIntMul
-	IntDivS       = BinaryIntDivS
-	IntDivU       = BinaryIntDivU
-	IntRemS       = BinaryIntRemS
-	IntRemU       = BinaryIntRemU
+	IntDivS       = BinaryIntDiv | BinaryIntDivSigned
+	IntDivU       = BinaryIntDiv
+	IntRemS       = BinaryIntRem | uint(in.DivisionSigned)<<8
+	IntRemU       = BinaryIntRem | uint(in.DivisionUnsigned)<<8
 	IntAnd        = BinaryIntLogic | uint(in.LogicAnd)<<8
 	IntOr         = BinaryIntLogic | uint(in.LogicOrr)<<8
 	IntXor        = BinaryIntLogic | uint(in.LogicEor)<<8
-	IntShl        = BinaryIntShl
-	IntShrS       = BinaryIntShrS
-	IntShrU       = BinaryIntShrU
+	IntShl        = BinaryIntShift | uint(in.VariableShiftL)<<8
+	IntShrS       = BinaryIntShift | uint(in.VariableShiftAR)<<8
+	IntShrU       = BinaryIntShift | uint(in.VariableShiftLR)<<8
 	IntRotl       = BinaryIntRotl
-	IntRotr       = BinaryIntRotr
+	IntRotr       = BinaryIntShift | uint(in.VariableShiftRR)<<8
 	FloatAdd      = BinaryFloatAdd
 	FloatSub      = BinaryFloatSub
 	FloatMul      = BinaryFloatMul
@@ -138,13 +137,24 @@ const (
 // Conversion
 
 const (
-	ExtendS = iota
-	ExtendU
-	Demote
-	Promote
-	TruncS
-	TruncU
-	ConvertS
-	ConvertU
-	Reinterpret
+	ConvertExtend = iota
+	ConvertDemote
+	ConvertPromote
+	ConvertTruncS
+	ConvertTruncU
+	ConvertConvertS
+	ConvertConvertU
+	ConvertReinterpret
+)
+
+const (
+	ExtendS     = ConvertExtend | uint(in.ExtendS)<<8
+	ExtendU     = ConvertExtend | uint(in.ExtendU)<<8
+	Demote      = ConvertDemote
+	Promote     = ConvertPromote
+	TruncS      = ConvertTruncS
+	TruncU      = ConvertTruncU
+	ConvertS    = ConvertConvertS
+	ConvertU    = ConvertConvertU
+	Reinterpret = ConvertReinterpret
 )

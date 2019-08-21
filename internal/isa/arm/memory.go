@@ -15,87 +15,87 @@ import (
 )
 
 func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
-	insn := in.Memory(props).OpcodeUnscaled()
-	base, disp9 := checkAccess(f, index, offset)
-
 	r := f.Regs.AllocResult(resultType)
-	f.Text.PutUint32(insn.RtRnI9(r, base, disp9))
-	return operand.Reg(resultType, r) // TODO: is it?
+	access(f, in.Memory(props), r, index, offset)
+	return operand.Reg(resultType, r)
 }
 
 func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
-	insn := in.Memory(props).OpcodeUnscaled()
-	base, disp9 := checkAccess(f, index, offset)
+	var r reg.R
 
-	var value reg.R
-	if x.Storage == storage.Imm && x.ImmValue() == 0 {
-		value = RegZero
-	} else {
-		value, _ = allocResultReg(f, x)
-		f.Regs.Free(x.Type, value)
+	switch {
+	case x.Storage == storage.Imm && x.ImmValue() == 0:
+		r = RegZero
+
+	default:
+		r, _ = allocResultReg(f, x)
+		f.Regs.Free(x.Type, r)
 	}
 
-	f.Text.PutUint32(insn.RtRnI9(value, base, disp9))
+	access(f, in.Memory(props), r, index, offset)
 }
 
-// checkAccess returns RegMemoryBase or RegScratch as base.
-func checkAccess(f *gen.Func, index operand.O, offset uint32) (base reg.R, disp9 uint32) {
+func access(f *gen.Func, op in.Memory, dataReg reg.R, index operand.O, offset uint32) {
 	if offset >= 0x80000000 {
 		f.ValueBecameUnreachable(index)
-		return invalidAccess(f)
+		asm.Trap(f, trap.MemoryAccessOutOfBounds)
+		return
 	}
+
+	var o output
 
 	switch index.Storage {
 	case storage.Imm:
 		value := uint64(index.ImmValue())
 		addr := value + uint64(offset)
 		if value >= 0x80000000 || addr >= 0x80000000 {
-			return invalidAccess(f)
+			asm.Trap(f, trap.MemoryAccessOutOfBounds)
+			return
 		}
 
 		switch {
 		case addr <= 255:
-			base = RegMemoryBase
-			disp9 = uint32(addr)
+			o.uint32(op.OpcodeUnscaled().RtRnI9(dataReg, RegMemoryBase, uint32(addr)))
 
 		default:
-			TODO(addr)
+			moveUintImm32(&o, RegScratch, uint32(addr))
+			o.uint32(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UXTW, RegScratch))
 		}
 
 	default:
 		r, _ := getScratchReg(f, index)
-		// UXTW masks index register unconditionally.
-		f.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegMemoryBase, 0, in.UXTW, r, wa.I64))
-		f.Regs.Free(wa.I32, r)
 
 		var i uint32
 		for imm := uint64(offset); imm != 0; imm >>= 12 {
-			f.Text.PutUint32(in.ADDi.RdRnI12S2(RegScratch, RegScratch, in.Uint12(imm), i, wa.I64))
+			o.uint32(in.ADDi.RdRnI12S2(r, r, in.Uint12(imm), i, wa.I32))
 			i++
 		}
 
-		base = RegScratch
-		disp9 = 0
+		// UXTW masks index register unconditionally.
+		o.uint32(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UXTW, r))
+
+		f.Regs.Free(wa.I32, r)
 	}
 
-	return
-}
-
-func invalidAccess(f *gen.Func) (base reg.R, disp9 uint32) {
-	asm.Trap(f, trap.MemoryAccessOutOfBounds)
-
-	f.Text.PutUint32(in.MOVZ.RdI16Hw(RegScratch, 0, 0, wa.I64))
-	base = RegScratch
-	disp9 = 0
-	return
+	o.copy(f.Text.Extend(o.size()))
 }
 
 func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {
-	TODO()
+	var o output
+
+	o.uint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetCurrentMemory), wa.I64))
+	o.uint32(in.BLR.Rn(RegScratch))
+	o.copy(f.Text.Extend(o.size()))
+
 	return f.Text.Addr
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func) int32 {
-	TODO()
+	var o output
+
+	o.uint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetGrowMemory), wa.I64))
+	o.uint32(in.BLR.Rn(RegScratch))
+	o.copy(f.Text.Extend(o.size()))
+
 	return f.Text.Addr
 }

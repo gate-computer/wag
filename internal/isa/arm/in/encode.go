@@ -28,10 +28,8 @@ func sizeLSB(t wa.Type) uint32 {
 }
 
 func Int9(i int32) uint32    { return uint32(i) & 0x1ff }
-func Int12(i int32) uint32   { return uint32(i) & 0xfff }
 func Uint12(i uint64) uint32 { return uint32(i) & 0xfff }
 func Int14(i int32) uint32   { return uint32(i) & 0x3fff }
-func Int16(i int64) uint32   { return uint32(i) & 0xffff }
 func Uint16(i uint64) uint32 { return uint32(i) & 0xffff }
 func Int19(i int32) uint32   { return uint32(i) & 0x7ffff }
 func Int26(i int32) uint32   { return uint32(i) & 0x3ffffff }
@@ -56,6 +54,21 @@ const (
 
 	HS = CS // greater than or equal to (unsigned)
 	LO = CC // less than (unsigned)
+)
+
+type S uint32
+
+const (
+	Unscaled = S(0 << 12)
+	Scaled   = S(1 << 12)
+)
+
+type Shift uint32
+
+const (
+	LSL = Shift(0 << 22)
+	LSR = Shift(1 << 22)
+	ASR = Shift(2 << 22)
 )
 
 type Ext uint32
@@ -92,13 +105,16 @@ type RegImm19Size uint32
 type RegRegCondRegSf uint32
 type RegRegImm3ExtRegSf uint32
 type RegRegImm6Imm6NSf uint32
-type RegRegImm6RegNSf uint32
 type RegRegImm6RegShiftSf uint32
 type RegRegImm9 uint32
 type RegRegImm9Size uint32
 type RegRegImm12ShiftSf uint32
 type RegRegImm12Size uint32
+type RegRegSf uint32
+type RegRegSOptionReg uint32
 type RegRegSOptionRegSize uint32
+type RegRegRegSf uint32
+type RegRegRegRegSf uint32
 
 func (op CondImm19) CondI19(cond Cond, imm uint32) uint32 {
 	return uint32(op) | imm<<5 | uint32(cond)
@@ -144,12 +160,8 @@ func (op RegRegImm6Imm6NSf) RdRnI6sI6r(rd, rn reg.R, imms, immr uint32, t wa.Typ
 	return uint32(op) | sfN(t) | immr<<16 | imms<<10 | uint32(rn)<<5 | uint32(rd)
 }
 
-func (op RegRegImm6RegNSf) RdRnI6Rm(rd, rn reg.R, imm uint32, rm reg.R, t wa.Type) uint32 {
-	return uint32(op) | sfN(t) | uint32(rm)<<16 | imm<<10 | uint32(rn)<<5 | uint32(rd)
-}
-
-func (op RegRegImm6RegShiftSf) RdRnI6RmS2(rd, rn reg.R, imm uint32, rm reg.R, shift uint32, t wa.Type) uint32 {
-	return uint32(op) | sf(t) | shift<<22 | uint32(rm)<<16 | imm<<10 | uint32(rn)<<5 | uint32(rd)
+func (op RegRegImm6RegShiftSf) RdRnI6RmS2(rd, rn reg.R, imm uint32, rm reg.R, shift Shift, t wa.Type) uint32 {
+	return uint32(op) | sf(t) | uint32(shift) | uint32(rm)<<16 | imm<<10 | uint32(rn)<<5 | uint32(rd)
 }
 
 func (op RegRegImm9) RtRnI9(rt, rn reg.R, imm uint32) uint32 {
@@ -168,6 +180,22 @@ func (op RegRegImm12Size) RdRnI12(rt, rn reg.R, imm uint32, t wa.Type) uint32 {
 	return uint32(op) | sizeLSB(t) | imm<<10 | uint32(rn)<<5 | uint32(rt)
 }
 
-func (op RegRegSOptionRegSize) RtRnSOptionRm(rt, rn reg.R, s, option uint32, rm reg.R, t wa.Type) uint32 {
-	return uint32(op) | sizeLSB(t) | uint32(rm)<<16 | option<<13 | s<<12 | uint32(rn)<<5 | uint32(rt)
+func (op RegRegSf) RdRn(rd, rn reg.R, t wa.Type) uint32 {
+	return uint32(op) | sf(t) | uint32(rn)<<5 | uint32(rd)
+}
+
+func (op RegRegSOptionReg) RtRnSOptionRm(rt, rn reg.R, s S, option Ext, rm reg.R) uint32 {
+	return uint32(op) | uint32(rm)<<16 | uint32(option) | uint32(s) | uint32(rn)<<5 | uint32(rt)
+}
+
+func (op RegRegSOptionRegSize) RtRnSOptionRm(rt, rn reg.R, s S, option Ext, rm reg.R, t wa.Type) uint32 {
+	return uint32(op) | sizeLSB(t) | uint32(rm)<<16 | uint32(option) | uint32(s) | uint32(rn)<<5 | uint32(rt)
+}
+
+func (op RegRegRegSf) RdRnRm(rd, rn, rm reg.R, t wa.Type) uint32 {
+	return uint32(op) | sf(t) | uint32(rm)<<16 | uint32(rn)<<5 | uint32(rd)
+}
+
+func (op RegRegRegRegSf) RdRnRaRm(rd, rn, ra, rm reg.R, t wa.Type) uint32 {
+	return uint32(op) | sf(t) | uint32(rm)<<16 | uint32(ra)<<10 | uint32(rn)<<5 | uint32(rd)
 }

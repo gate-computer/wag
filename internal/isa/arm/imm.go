@@ -54,3 +54,22 @@ func moveIntImm(text *code.Buf, r reg.R, val int64) {
 
 	o.copy(text.Extend(o.size()))
 }
+
+func moveUintImm32(o *output, r reg.R, data uint32) {
+	switch {
+	case data == 0:
+		o.uint32(in.MOVZ.RdI16Hw(r, 0, 0, wa.I64))
+
+	default:
+		insn := in.MOVZ // First chunk clears surroundings.
+
+		if chunk := data & 0xffff; chunk != 0 {
+			o.uint32(insn.RdI16Hw(r, chunk, 0, wa.I64))
+			insn = in.MOVK // Secondary chunks keep surroundings.
+		}
+
+		if chunk := data >> 16; chunk != 0 {
+			o.uint32(insn.RdI16Hw(r, chunk, 1, wa.I64))
+		}
+	}
+}

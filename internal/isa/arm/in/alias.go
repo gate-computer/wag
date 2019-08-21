@@ -10,7 +10,7 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-func LSL(rd, rn reg.R, uimm uint32, t wa.Type) uint32 {
+func LogicalShiftLeft(rd, rn reg.R, uimm uint32, t wa.Type) uint32 {
 	var s, r uint32
 	if t.Size() == 4 {
 		r = (32 - uimm) & 31

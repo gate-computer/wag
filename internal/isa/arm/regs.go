@@ -23,6 +23,7 @@ const (
 	RegSuspendBit     = reg.R(28) // 0 = suspend
 	RegFakeSP         = in.RegFakeSP
 	RegLink           = reg.R(30)
+	RegScratch2       = reg.R(30)
 	RegRealSP         = reg.R(31)
 	RegZero           = reg.R(31)
 	RegDiscard        = reg.R(31)
@@ -32,7 +33,12 @@ const (
 func TODO(args ...interface{}) interface{} {
 	msg := "TODO"
 	if len(args) > 0 {
-		msg = "TODO: " + fmt.Sprint(args...)
+		msg = ""
+		delim := "TODO: "
+		for _, x := range args {
+			msg += fmt.Sprint(delim, x)
+			delim = ", "
+		}
 	}
 	if _, file, line, ok := runtime.Caller(1); ok {
 		panic(fmt.Errorf("%s:%d: %s", file, line, msg))

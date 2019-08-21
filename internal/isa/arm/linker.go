@@ -22,8 +22,12 @@ var linker Linker
 
 type Linker struct{}
 
-func (Linker) UpdateNearLoad(text []byte, insnAddr int32) {
-	TODO()
+// UpdateNearLoad overwrites an instruction with an ADR instruction.
+func (Linker) UpdateNearLoad(text []byte, addr int32) {
+	loadAddr := addr - 4
+	offset := int32(len(text)) - loadAddr
+	insn := in.ADR.RdI19hiI2lo(RegScratch, uint32(offset)>>2, 0)
+	binary.LittleEndian.PutUint32(text[loadAddr:], insn)
 }
 
 func (Linker) UpdateNearBranch(text []byte, site int32) {

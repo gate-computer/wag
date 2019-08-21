@@ -23,7 +23,7 @@ import (
 
 const (
 	MaxFuncLocals      = 8191  // index must fit in uint16; TODO
-	MaxBranchTableSize = 32768 // TODO
+	MaxBranchTableSize = 32768 // TODO (65535 is maximum value supported by arm backend)
 )
 
 var (
@@ -322,6 +322,15 @@ func opReserveStackEntry(f *gen.Func) {
 
 	if debug.Enabled {
 		debug.Printf("stack depth: %d (push 1)", f.StackDepth)
+	}
+}
+
+// opReleaseStackEntry is opReserveStackEntry's counterpart.
+func opReleaseStackEntry(f *gen.Func) {
+	f.StackDepth--
+
+	if debug.Enabled {
+		debug.Printf("stack depth: %d (drop 1)", f.StackDepth)
 	}
 }
 
