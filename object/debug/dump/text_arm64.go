@@ -86,7 +86,7 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 			parts[2] = ""
 			prefix = strings.Join(parts, ", ")
 
-		case insn.Mnemonic == "adr":
+		case insn.Mnemonic == "adr" || strings.HasPrefix(insn.Mnemonic, "cb"):
 			parts := strings.SplitN(insn.OpStr, ", ", 2)
 			input = parts[1]
 			parts[1] = ""
