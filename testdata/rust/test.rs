@@ -10,7 +10,7 @@ extern "C" {
 #[no_mangle]
 pub fn main() {
     let s = "hello, world\n";
-    unsafe { write(0, s.as_ptr(), s.len()) }
+    unsafe { write(1, s.as_ptr(), s.len()) }
 }
 
 #[panic_handler]
