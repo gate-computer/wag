@@ -246,7 +246,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	p.Text.PutUint32(in.MOVZ.RdI16Hw(RegResult, 0, 0, wa.I64)) // Result if no entry func.
 
 	p.Text.PutUint32(in.PopIntReg(RegScratch))
-	p.Text.PutUint32(in.CBZ.RtI19(RegScratch, 2, wa.I32)) // Skip 2 next instructions.
+	p.Text.PutUint32(in.CBZ.RtI19(RegScratch, 3, wa.I32)) // Skip 2 next instructions.
 	p.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.I64))
 	p.Text.PutUint32(in.BLR.Rn(RegScratch))
 	retAddr = p.Text.Addr
