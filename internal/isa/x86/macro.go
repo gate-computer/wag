@@ -85,17 +85,6 @@ func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
 	in.LEA.RegStackDisp(&p.Text, wa.I64, RegStackPtr, int32(n*obj.Word))
 }
 
-func dropStableValue(f *gen.Func, x operand.O) {
-	switch x.Storage {
-	case storage.Stack:
-		in.LEA.RegStackDisp8(&f.Text, wa.I64, RegStackPtr, obj.Word)
-		f.StackValueConsumed()
-
-	case storage.Reg:
-		f.Regs.Free(x.Type, x.Reg())
-	}
-}
-
 func (MacroAssembler) Branch(p *gen.Prog, addr int32) {
 	in.JMPcd.Addr32(&p.Text, addr)
 }

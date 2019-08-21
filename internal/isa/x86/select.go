@@ -24,13 +24,9 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 		cond = condition.Ne
 
 	case storage.Imm:
-		if condOperand.ImmValue() != 0 {
-			dropStableValue(f, b)
-			return a
-		} else {
-			dropStableValue(f, a)
-			return b
-		}
+		asm.Move(f, RegScratch, condOperand)
+		condOperand = operand.Reg(wa.I32, RegScratch)
+		fallthrough
 
 	case storage.Reg:
 		r := condOperand.Reg()
