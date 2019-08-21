@@ -38,6 +38,9 @@ func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *se
 
 	for offset := uint64(0); true; {
 		is, err := engine.Disasm(text[offset:], uint64(textAddr)+offset, 0)
+		if err != nil {
+			fmt.Fprintf(w, "Disassembly error at %x: %v\n", uint64(textAddr)+offset, err)
+		}
 
 		if len(is) > 0 {
 			insns = append(insns, is...)
@@ -46,15 +49,36 @@ func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *se
 			offset = uint64(latest.Address+latest.Size) - uint64(textAddr)
 		}
 
-		if err != nil {
-			fmt.Fprintf(w, "Disassembly error at 0x%x\n", uint64(textAddr)+offset)
-		}
-
 		skipTo := (offset + 4) &^ 3 // try next 32-bit word
 		if skipTo >= uint64(len(text)) {
 			break
 		}
 		offset = skipTo
+	}
+
+	for i := 0; i < len(insns)-1; i++ {
+		end := insns[i].Address + insns[i].Size
+		next := insns[i+1].Address
+		if end < next {
+			size := next - end
+			if size > 4 {
+				size = 4
+			}
+
+			repr := "?"
+			if size == 4 {
+				repr = fmt.Sprintf("%08x", binary.LittleEndian.Uint32(text[uintptr(end)-textAddr:]))
+			}
+
+			insn := gapstone.Instruction{
+				InstructionHeader: gapstone.InstructionHeader{
+					Address:  end,
+					Size:     size,
+					Mnemonic: repr,
+				},
+			}
+			insns = append(insns[:i+1], append([]gapstone.Instruction{insn}, insns[i+1:]...)...)
+		}
 	}
 
 	firstFuncAddr := uint(textAddr) + uint(funcAddrs[0])

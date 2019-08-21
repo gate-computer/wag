@@ -73,27 +73,48 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 	for i := range insns {
 		insn := &insns[i]
 
-		if insn.Mnemonic == "b" || insn.Mnemonic == "bl" || strings.HasPrefix(insn.Mnemonic, "b.") {
-			var addr uint
-			if n, err := fmt.Sscanf(insn.OpStr, "#0x%x", &addr); err != nil {
-				panic(err)
-			} else if n != 1 {
-				panic(n)
-			}
+		var prefix string
+		var input string
 
-			name, found := targets[addr]
-			if !found {
-				name = fmt.Sprintf(".%x", sequence%0x10000)
-				sequence++
+		switch {
+		case insn.Mnemonic == "b" || insn.Mnemonic == "bl" || strings.HasPrefix(insn.Mnemonic, "b."):
+			input = insn.OpStr
 
-				if addr < insn.Address {
-					name += "\t\t\t; back"
-				}
+		case strings.HasPrefix(insn.Mnemonic, "tb"):
+			parts := strings.SplitN(insn.OpStr, ", ", 3)
+			input = parts[2]
+			parts[2] = ""
+			prefix = strings.Join(parts, ", ")
 
-				targets[addr] = name
-			}
+		case insn.Mnemonic == "adr":
+			parts := strings.SplitN(insn.OpStr, ", ", 2)
+			input = parts[1]
+			parts[1] = ""
+			prefix = strings.Join(parts, ", ")
 
-			insn.OpStr = name
+		default:
+			continue
 		}
+
+		var addr uint
+		if n, err := fmt.Sscanf(input, "#0x%x", &addr); err != nil {
+			panic(err)
+		} else if n != 1 {
+			panic(n)
+		}
+
+		name, found := targets[addr]
+		if !found {
+			name = fmt.Sprintf(".%x", sequence%0x10000)
+			sequence++
+
+			if addr < insn.Address {
+				name += "\t\t\t; back"
+			}
+
+			targets[addr] = name
+		}
+
+		insn.OpStr = prefix + name
 	}
 }
