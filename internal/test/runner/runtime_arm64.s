@@ -6,18 +6,19 @@
 
 #include "textflag.h"
 
-#define import(func) \
-	BL	after \
-	B	func<>(SB) \
-after:	MOVD	LR, ret+0(FP) \
-	RET
+#define import			\
+	BL	after		\
+	B	body		\
+after:	MOVD	LR, ret+0(FP)	\
+	RET			\
+body:	MOVD.W	LR, -8(R29)
 
-#define call_C(func) \
-	CALL	func(SB) \
-	MOVD.P	16(RSP), LR		// it was stored by Go assembler
+#define call_C(func) 		\
+	CALL	func(SB)	\
+	MOVD.P	8(R29), LR
 
-#define call_C_resume(func) \
-	call_C(func) \
+#define call_C_resume(func)	\
+	call_C(func)		\
 	B	resume<>(SB)
 
 // func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
@@ -32,6 +33,7 @@ TEXT ·run(SB),NOSPLIT,$0-128
 	MOVD	resultFd+88(FP), R7
 	MOVD	$state(SB), R8
 	MOVD	forkStack+96(FP), R9
+	MOVD	R8, 8(R2)		// store state ptr in unused half of vars
 	ADD	$65536, R9
 	MOVD	RSP, R10
 	MOVD	R9, RSP
@@ -50,9 +52,7 @@ TEXT resume<>(SB),NOSPLIT,$0
 
 // func importTrapHandler() uint64
 TEXT ·importTrapHandler(SB),NOSPLIT,$0-8
-	import(trapHandler)
-
-TEXT trapHandler<>(SB),NOSPLIT,$0
+	import
 	MOVD	R0, R2			// (result << 32) | trap_id
 	LSL	$4, g, R0		// stack limit (g = R28)
 	MOVD	R29, R1			// fake stack ptr
@@ -63,17 +63,13 @@ TEXT trapHandler<>(SB),NOSPLIT,$0
 
 // func importCurrentMemory() uint64
 TEXT ·importCurrentMemory(SB),NOSPLIT,$0-8
-	import(currentMemory)
-
-TEXT currentMemory<>(SB),NOSPLIT,$0
+	import
 	LSL	$4, g, R0		// stack limit (g = R28)
 	call_C_resume(current_memory)
 
 // func importGrowMemory() uint64
 TEXT ·importGrowMemory(SB),NOSPLIT,$0-8
-	import(growMemory)
-
-TEXT growMemory<>(SB),NOSPLIT,$0
+	import
 	MOVD	R0, R3			// grow pages
 	LSL	$4, g, R0		// stack limit (g = R28)
 	MOVD	R26, R1			// memory addr
@@ -82,47 +78,42 @@ TEXT growMemory<>(SB),NOSPLIT,$0
 
 // func importSpectestPrint() uint64
 TEXT ·importSpectestPrint(SB),NOSPLIT,$0-8
-	import(spectestPrint)
-
-TEXT spectestPrint<>(SB),NOSPLIT,$0
+	import
 	MOVD	R2, R0			// (argcount << 32) | sigindex
-	ADD	$16, RSP, R1		// args (RSP was adjusted by Go assembler)
+	ADD	$8, R29, R1		// args
 	MOVD	$state(SB), R2		// state
 	call_C_resume(spectest_print)
 
 // func importPutns() uint64
 TEXT ·importPutns(SB),NOSPLIT,$0-8
-	import(putns)
-
-TEXT putns<>(SB),NOSPLIT,$0
+	import
 	// TODO: args
 	call_C_resume(putns)
 
 // func importBenchmarkBegin() uint64
 TEXT ·importBenchmarkBegin(SB),NOSPLIT,$0-8
-	import(resume)			// TODO
+	import
+	B	resume<>(SB)		// TODO
 
 // func importBenchmarkEnd() uint64
 TEXT ·importBenchmarkEnd(SB),NOSPLIT,$0-8
-	import(resume)			// TODO
+	import
+	B	resume<>(SB)		// TODO
 
 // func importBenchmarkBarrier() uint64
 TEXT ·importBenchmarkBarrier(SB),NOSPLIT,$0-8
-	import(resume)			// TODO
+	import
+	B	resume<>(SB)		// TODO
 
 // func importGetArg() uint64
 TEXT ·importGetArg(SB),NOSPLIT,$0-8
-	import(getArg)
-
-TEXT getArg<>(SB),NOSPLIT,$0
+	import
 	MOVD	$state(SB), R0		// state
 	call_C_resume(get_arg)
 
 // func importSnapshot() uint64
 TEXT ·importSnapshot(SB),NOSPLIT,$0-8
-	import(snapshot)
-
-TEXT snapshot<>(SB),NOSPLIT,$0
+	import
 	LSL	$4, g, R0		// stack limit (g = R28)
 	MOVD	R29, R1			// fake stack ptr
 	MOVD	R26, R2			// memory addr
@@ -131,4 +122,5 @@ TEXT snapshot<>(SB),NOSPLIT,$0
 
 // func importSuspendNextCall() uint64
 TEXT ·importSuspendNextCall(SB),NOSPLIT,$0-8
-	import(resume)			// TODO
+	import
+	B	resume<>(SB)		// TODO

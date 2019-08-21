@@ -13,8 +13,8 @@
 
 #define SYS_SA_RESTORER 0x04000000
 
-#define SIGNAL_STACK_OFFSET (16 + 10000)                    // vars + signal stack
-#define STACK_LIMIT_OFFSET (SIGNAL_STACK_OFFSET + 128 + 16) // red zone + stack check
+#define STACK_CHECK_SPACE 16
+#define STACK_LIMIT_OFFSET (16 + 8000 + 128 + STACK_CHECK_SPACE) // vars + signal stack + red zone
 
 struct state {
 	int64_t arg;
@@ -127,7 +127,7 @@ int run(void *text, void *memory_addr, void *stack, int stack_offset, int init_o
 	}
 }
 
-void trap_handler(uintptr_t stack_limit, void *stack_ptr, uint64_t trap, struct state *state)
+static void handle_trap(uintptr_t stack_limit, void *stack_ptr, uint64_t trap, struct state *state)
 {
 	if (trap == 1) { // NoFunction
 		uint64_t cmd = -2;
@@ -154,6 +154,11 @@ void trap_handler(uintptr_t stack_limit, void *stack_ptr, uint64_t trap, struct 
 	sys_write(state->result_fd, buf, sizeof buf);
 
 	sys_exit_group(0);
+}
+
+void trap_handler(uintptr_t stack_limit, void *stack_ptr, uint64_t trap, struct state *state)
+{
+	handle_trap(stack_limit, stack_ptr, trap, state);
 }
 
 static inline unsigned int get_current_memory(void *stack_limit)
