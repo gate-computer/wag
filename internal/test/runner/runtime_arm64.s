@@ -93,17 +93,20 @@ TEXT ·importPutns(SB),NOSPLIT,$0-8
 // func importBenchmarkBegin() uint64
 TEXT ·importBenchmarkBegin(SB),NOSPLIT,$0-8
 	import
-	B	resume<>(SB)		// TODO
+	call_C_resume(benchmark_begin)
 
 // func importBenchmarkEnd() uint64
 TEXT ·importBenchmarkEnd(SB),NOSPLIT,$0-8
 	import
-	B	resume<>(SB)		// TODO
+	MOVD	8(R29), R0		// begin
+	call_C_resume(benchmark_end)
 
 // func importBenchmarkBarrier() uint64
 TEXT ·importBenchmarkBarrier(SB),NOSPLIT,$0-8
 	import
-	B	resume<>(SB)		// TODO
+	MOVD	16(R29), R0		// dummy
+	MOVD.P	8(R29), LR
+	B	resume<>(SB)
 
 // func importGetArg() uint64
 TEXT ·importGetArg(SB),NOSPLIT,$0-8
@@ -123,4 +126,5 @@ TEXT ·importSnapshot(SB),NOSPLIT,$0-8
 // func importSuspendNextCall() uint64
 TEXT ·importSuspendNextCall(SB),NOSPLIT,$0-8
 	import
+	MOVD.P	8(R29), LR		// TODO
 	B	resume<>(SB)		// TODO
