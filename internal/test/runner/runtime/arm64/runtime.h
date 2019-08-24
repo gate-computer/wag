@@ -30,19 +30,28 @@ static void (*get_sigsegv_handler(void))(int, siginfo_t *, void *)
 	asm volatile(
 		"          bl      .Lafter1        \n"
 		""
-		"          mov     x0, x30         \n" // start of sigsegv_handler
+		""         // start of sigsegv handler
+		"          ldr     x0, [x2, #416]  \n" // x29 in ucontext
+		"          sub     x0, x0, #8      \n"
+		"          str     x0, [x2, #416]  \n" // x29 in ucontext
+		"          ldr     x1, [x2, #440]  \n" // pc in ucontext
+		"          str     x1, [x0]        \n"
+		"          mov     x0, x30         \n"
 		"          bl      .Lafter3        \n"
 		""
-		"          lsl     x0, x28, #4     \n" // start of sigsegv exit routine
+		""         // start of sigsegv exit routine
+		"          lsl     x0, x28, #4     \n"
 		"          mov     x1, x29         \n"
 		"          mov     x2, #5          \n"
 		"          mov     x3, #8144       \n" // 16 + 8000 + 128
 		"          sub     x3, sp, x3      \n" // start of stack
 		"          ldr     x3, [x3, #8]    \n" // state ptr in vars
-		"          b       handle_trap     \n" // end of sigsegv exit routine
+		"          b       handle_trap     \n"
+		""         // end of sigsegv exit routine
 		""
-		".Lafter3: str     x30, [x2, #440] \n" // pc
-		"          ret     x0              \n" // end of sigsegv_handler
+		".Lafter3: str     x30, [x2, #440] \n" // pc in ucontext
+		"          ret     x0              \n"
+		""         // end of sigsegv handler
 		""
 		".Lafter1: mov     %0, x30         \n"
 		: "=r"(retval)
