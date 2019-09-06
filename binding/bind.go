@@ -11,7 +11,7 @@ import (
 )
 
 // Well-known indexes of the import vector.  Import function addresses precede
-// the trap handler address and the memory growth limit.
+// the current memory size.
 const (
 	VectorIndexLastImport    = -4
 	VectorIndexCurrentMemory = -3

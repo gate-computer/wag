@@ -75,10 +75,10 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 		CustomSectionLoader: customSections.Load,
 	}
 
-	// Parse the module specification while reading the WebAssembly sections
+	// Construct the Module object while reading the WebAssembly sections
 	// preceding the actual program code.  (The Module object needs to be
 	// available during compilation and when looking up entry functions, but
-	// the program can be executed without it.)
+	// the program can later be executed without it.)
 
 	var moduleConfig = &compile.ModuleConfig{
 		Config: loadingConfig,
@@ -139,8 +139,8 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 	}
 
 	// Find the export function which will be used as the optional entry point.
-	// (It is executed after the start function which is defined by the module
-	// specification.)  CallMap is used to look up the address.
+	// (It is executed after the optional start function which is defined by
+	// the module specification.)  CallMap is used to look up the address.
 
 	var (
 		entryIndex uint32
