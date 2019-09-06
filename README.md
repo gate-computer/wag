@@ -44,7 +44,7 @@ Status
 
 - ARM64 backend is missing floating point support.
 
-- The Go package API hasn't been finalized (but it's getting there).
+- See [milestone/1](https://github.com/tsavola/wag/milestone/1).
 
 
 Security
