@@ -31,7 +31,6 @@ const (
 
 // MaskAddr calculates the text address for reading a mask for the given type
 // size.  maskBaseAddr should be one of the Mask*Base constants.
-// commonRODataAddr is the ISA-specific location of the common read-only data.
 func MaskAddr(maskBaseAddr MaskBaseAddr, t wa.Type) int32 {
 	return int32(maskBaseAddr) + int32((t.Size()&8)<<1)
 }
