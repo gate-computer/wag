@@ -499,7 +499,7 @@ type CodeConfig struct {
 // LoadCodeSection reads a WebAssembly module's code section and generates
 // machine code.
 //
-// If CodeBuffer panics with an error, it will be returned by this function.
+// If CodeBuffer panicks with an error, it will be returned by this function.
 func LoadCodeSection(config *CodeConfig, r Reader, mod Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
@@ -569,7 +569,7 @@ type DataConfig struct {
 // LoadDataSection reads a WebAssembly module's data section and generates
 // initial contents of mutable program state (globals and linear memory).
 //
-// If DataBuffer panics with an error, it will be returned by this function.
+// If DataBuffer panicks with an error, it will be returned by this function.
 func LoadDataSection(config *DataConfig, r Reader, mod Module) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
