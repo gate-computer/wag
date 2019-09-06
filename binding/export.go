@@ -12,7 +12,7 @@ import (
 
 // GetMainFunc, the result type of which is void or i32.  Parameter count or
 // types are not checked.
-func GetMainFunc(mod *compile.Module, name string) (funcIndex uint32, sig wa.FuncType, err error) {
+func GetMainFunc(mod compile.Module, name string) (funcIndex uint32, sig wa.FuncType, err error) {
 	funcIndex, sig, found := mod.ExportFunc(name)
 	if !found {
 		err = module.Errorf("export function %q not found", name)

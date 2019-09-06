@@ -19,7 +19,7 @@ import (
 
 // EntryPolicy validates an entry function's signature while looking it up from
 // a module's exported functions.
-type EntryPolicy func(m *compile.Module, symbol string) (globalIndex uint32, sig wa.FuncType, err error)
+type EntryPolicy func(m compile.Module, symbol string) (globalIndex uint32, sig wa.FuncType, err error)
 
 // Config for a single compiler invocation.  Zero values are replaced with
 // effective defaults during compilation.
@@ -153,7 +153,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 			objectConfig.EntryPolicy = binding.GetMainFunc
 		}
 
-		entryIndex, entryType, err = objectConfig.EntryPolicy(&module, objectConfig.Entry)
+		entryIndex, entryType, err = objectConfig.EntryPolicy(module, objectConfig.Entry)
 		if err != nil {
 			return
 		}
