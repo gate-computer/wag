@@ -36,7 +36,7 @@ type BranchTable struct {
 }
 
 type Func struct {
-	Prog // initialized by GenProgram, preserved by GenFunction
+	Prog // Initialized by GenProgram, preserved by GenFunction
 
 	Regs regalloc.Allocator
 
@@ -46,7 +46,7 @@ type Func struct {
 	NumLocals  int // The non-param ones
 
 	Operands          []operand.O
-	FrameBase         int // Number of (stack) operands belonging on to parent blocks
+	FrameBase         int // Number of (stack) operands belonging to parent blocks
 	NumStableOperands int
 	StackDepth        int // The dynamic entries after locals
 	MaxStackDepth     int
