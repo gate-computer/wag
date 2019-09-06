@@ -9,17 +9,17 @@ type FuncType struct {
 	Result Type
 }
 
-func (f1 FuncType) Equal(f2 FuncType) bool {
-	if f1.Result != f2.Result {
+func (f FuncType) Equal(other FuncType) bool {
+	if f.Result != other.Result {
 		return false
 	}
 
-	if len(f1.Params) != len(f2.Params) {
+	if len(f.Params) != len(other.Params) {
 		return false
 	}
 
-	for i := range f1.Params {
-		if f1.Params[i] != f2.Params[i] {
+	for i := range f.Params {
+		if f.Params[i] != other.Params[i] {
 			return false
 		}
 	}
