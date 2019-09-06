@@ -27,10 +27,10 @@ const (
 	MaxImports    = MaxFunctions
 )
 
-type SectionId byte
+type SectionID byte
 
 const (
-	SectionCustom = SectionId(iota)
+	SectionCustom = SectionID(iota)
 	SectionType
 	SectionImport
 	SectionFunction
@@ -62,7 +62,7 @@ var sectionNames = []string{
 	SectionData:     "data",
 }
 
-func (id SectionId) String() string {
+func (id SectionID) String() string {
 	if int(id) < len(sectionNames) {
 		return sectionNames[id]
 	} else {

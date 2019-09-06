@@ -9,7 +9,7 @@ import (
 	"github.com/tsavola/wag/internal/module"
 )
 
-type ID = module.SectionId
+type ID = module.SectionID
 
 const (
 	Custom   = module.SectionCustom

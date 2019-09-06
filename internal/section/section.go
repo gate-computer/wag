@@ -14,13 +14,13 @@ import (
 )
 
 func Find(
-	findId module.SectionId,
+	findID module.SectionID,
 	load loader.L,
-	sectionMapper func(sectionId byte, r reader.R) (payloadLen uint32, err error),
+	sectionMapper func(sectionID byte, r reader.R) (payloadLen uint32, err error),
 	customLoader func(reader.R, uint32) error,
-) module.SectionId {
+) module.SectionID {
 	for {
-		sectionId, err := load.R.ReadByte()
+		sectionID, err := load.R.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return 0
@@ -28,14 +28,14 @@ func Find(
 			panic(err)
 		}
 
-		id := module.SectionId(sectionId)
+		id := module.SectionID(sectionID)
 
 		switch {
 		case id == module.SectionCustom:
 			var payloadLen uint32
 
 			if sectionMapper != nil {
-				payloadLen, err = sectionMapper(sectionId, load.R)
+				payloadLen, err = sectionMapper(sectionID, load.R)
 				if err != nil {
 					panic(err)
 				}
@@ -52,7 +52,7 @@ func Find(
 				panic(err)
 			}
 
-		case id == findId:
+		case id == findID:
 			return id
 
 		default:

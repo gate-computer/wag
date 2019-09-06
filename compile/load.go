@@ -87,7 +87,7 @@ type Config struct {
 	// SectionMapper is invoked for every section (standard or custom), just
 	// after the section id byte.  It must read and return the payload length
 	// (varuint32), but not the payload itself.
-	SectionMapper func(sectionId byte, r Reader) (payloadLen uint32, err error)
+	SectionMapper func(sectionID byte, r Reader) (payloadLen uint32, err error)
 
 	// CustomSectionLoader is invoked for every custom section.  It must read
 	// exactly payloadLen bytes, or return an error.  SectionMapper (if
@@ -134,10 +134,10 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		panic(module.Errorf("unsupported module version: %d", header.Version))
 	}
 
-	var seenId module.SectionId
+	var seenID module.SectionID
 
 	for {
-		sectionId, err := load.R.ReadByte()
+		sectionID, err := load.R.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -145,13 +145,13 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 			panic(err)
 		}
 
-		id := module.SectionId(sectionId)
+		id := module.SectionID(sectionID)
 
 		if id != module.SectionCustom {
-			if id <= seenId {
-				panic(module.Errorf("section 0x%x follows section 0x%x", id, seenId))
+			if id <= seenID {
+				panic(module.Errorf("section 0x%x follows section 0x%x", id, seenID))
 			}
-			seenId = id
+			seenID = id
 		}
 
 		if id >= module.NumMetaSections {
@@ -165,7 +165,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		var payloadLen uint32
 
 		if config.SectionMapper != nil {
-			payloadLen, err = config.SectionMapper(sectionId, r)
+			payloadLen, err = config.SectionMapper(sectionID, r)
 			if err != nil {
 				panic(err)
 			}

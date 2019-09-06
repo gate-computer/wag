@@ -103,12 +103,12 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 
 	copy(s.data, data)
 
-	snapshotId := uint64(len(r.Snapshots))
+	snapshotID := uint64(len(r.Snapshots))
 	r.Snapshots = append(r.Snapshots, s)
 
 	fmt.Fprintln(printer, "--- shot snapped ---")
 
-	if err := binary.Write(f, byteOrder, &snapshotId); err != nil {
+	if err := binary.Write(f, byteOrder, &snapshotID); err != nil {
 		panic(err)
 	}
 }

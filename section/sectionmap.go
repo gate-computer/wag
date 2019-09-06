@@ -11,7 +11,7 @@ import (
 
 const (
 	moduleHeaderSize = 8
-	sectionIdSize    = 1
+	sectionIDSize    = 1
 )
 
 type ByteRange struct {
@@ -49,19 +49,19 @@ func NewMap() *Map {
 func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
 	offset := int64(moduleHeaderSize)
 
-	return func(sectionId byte, r Reader) (payloadLen uint32, err error) {
+	return func(sectionID byte, r Reader) (payloadLen uint32, err error) {
 		payloadLen, payloadLenSize, err := loader.Varuint32(r)
 		if err != nil {
 			return
 		}
 
-		length := sectionIdSize + int64(payloadLenSize) + int64(payloadLen)
-		m.Sections[sectionId] = ByteRange{offset, length}
+		length := sectionIDSize + int64(payloadLenSize) + int64(payloadLen)
+		m.Sections[sectionID] = ByteRange{offset, length}
 		offset += length
 
-		if ID(sectionId) != Custom {
+		if ID(sectionID) != Custom {
 			// Default positions of remaining standard sections.
-			for i := int(sectionId) + 1; i < int(module.NumSections); i++ {
+			for i := int(sectionID) + 1; i < int(module.NumSections); i++ {
 				m.Sections[i].Offset = offset
 			}
 		}
