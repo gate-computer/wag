@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package wag provides a high-level WebAssembly compiler API.
+//
+// See the Compile function's source code for an example of how to use the
+// low-level compiler APIs (implemented in subpackages).
+//
 // Errors
 //
 // ModuleError type is accessible via errors subpackage.  Such errors may be
