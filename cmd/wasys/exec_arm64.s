@@ -12,7 +12,6 @@ TEXT ·exec(SB),NOSPLIT,$0-32
 	MOVD	stackPtr+24(FP), R29	// RegFakeSP
 
 	MOVD	R0, RSP			// RegRealSP
-	ADD	$16, R0			// func call link addr + its stack check trap link addr
 	LSR	$4, R0
 	MOVD	R0, g			// RegStackLimit4 (R28)
 

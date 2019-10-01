@@ -183,7 +183,7 @@ func main() {
 	copy(stackMem[stackOffset:], obj.StackFrame)
 
 	stackAddr := memAddr(stackMem)
-	stackLimit := stackAddr + signalStackReserve
+	stackLimit := stackAddr + 16 + signalStackReserve + 128 + 16
 	stackPtr := stackAddr + uintptr(stackOffset)
 
 	if stackLimit >= stackPtr {
