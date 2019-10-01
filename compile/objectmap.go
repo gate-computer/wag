@@ -13,8 +13,8 @@ type ObjectMapper = obj.ObjectMapper
 type dummyMap struct{}
 
 func (dummyMap) InitObjectMap(int, int)     {}
-func (dummyMap) PutImportFuncAddr(uint32)   {}
 func (dummyMap) PutFuncAddr(uint32)         {}
 func (dummyMap) PutCallSite(uint32, int32)  {}
+func (dummyMap) PutTrapSite(uint32, int32)  {}
 func (dummyMap) PutInsnAddr(uint32)         {}
 func (dummyMap) PutDataBlock(uint32, int32) {}

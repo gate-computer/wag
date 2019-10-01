@@ -254,7 +254,7 @@ func opPrepareDIV(f *gen.Func, a, b operand.O) (divisorReg reg.R, checkOverflow 
 	if checkZero {
 		in.TEST.RegReg(&f.Text, b.Type, divisorReg, divisorReg)
 		in.JNEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
-		in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.IntegerDivideByZero].Addr)
+		asm.Trap(f, trap.IntegerDivideByZero)
 	}
 
 	asm.Move(f, RegDividendLow, a)

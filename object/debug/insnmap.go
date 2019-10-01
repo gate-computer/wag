@@ -19,13 +19,13 @@ type InsnMapping struct {
 	BlockLen  int32  // Length of data block (when SourcePos is 0).
 }
 
-// InsnMap implements compile.ObjectMapper.  It stores function addresses, call
-// sites and instruction positions.
+// InsnMap implements compile.ObjectMapper.  It stores all available function,
+// call, trap and instruction information.
 //
 // The WebAssembly module must be loaded using InsnMap's pass-through reader,
 // or the source positions will be zero.
 type InsnMap struct {
-	object.CallMap
+	TrapMap
 	Insns []InsnMapping
 
 	reader posReader
@@ -39,8 +39,15 @@ func (m *InsnMap) Reader(input reader.R) reader.R {
 }
 
 func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
-	m.CallMap.InitObjectMap(numImportFuncs, numOtherFuncs)
+	m.TrapMap.InitObjectMap(numImportFuncs, numOtherFuncs)
 	m.reader.pos = 0
+}
+
+func (m *InsnMap) PutTrapSite(retAddr uint32, stackOffset int32) {
+	m.TrapSites = append(m.TrapSites, object.CallSite{
+		RetAddr:     retAddr,
+		StackOffset: stackOffset,
+	})
 }
 
 func (m *InsnMap) PutInsnAddr(objectPos uint32) {
@@ -62,21 +69,13 @@ func (m *InsnMap) putMapping(objectPos, sourcePos uint32, blockLen int32) {
 	}
 }
 
-func (m InsnMap) FindAddr(retAddr uint32) (funcIndex, callIndex, retInsnPos uint32, stackOffset int32, initial, ok bool) {
-	funcIndex, callIndex, _, stackOffset, initial, siteOk := m.CallMap.FindAddr(retAddr)
-	if !siteOk {
-		return
-	}
-
-	if initial {
-		ok = true
-		return
-	}
+func (m InsnMap) FindAddr(retAddr uint32,
+) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
+	init, funcIndex, callIndex, stackOffset, retInsnPos = m.TrapMap.FindAddr(retAddr)
 
 	retIndex := sort.Search(len(m.Insns), func(i int) bool {
 		return m.Insns[i].ObjectPos >= retAddr
 	})
-
 	if retIndex > 0 && retIndex < len(m.Insns) {
 		retInsnPos = m.Insns[retIndex].SourcePos
 		ok = true

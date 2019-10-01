@@ -14,7 +14,7 @@ import (
 )
 
 type TextMap interface {
-	FindAddr(retAddr uint32) (funcIndex, callIndex, retInsnPos uint32, stackOffset int32, initialCall, ok bool)
+	FindAddr(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32)
 }
 
 type Frame struct {
@@ -38,19 +38,24 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncTyp
 			return
 		}
 
-		funcIndex, _, retInsnPos, stackOffset, initial, ok := textMap.FindAddr(uint32(retAddr))
-		if !ok {
-			err = fmt.Errorf("call instruction not found for return address 0x%x", retAddr)
-			return
-		}
-
-		if initial {
-			if stackOffset != 8 {
+		init, funcIndex, callIndex, stackOffset, retInsnPos := textMap.FindAddr(uint32(retAddr))
+		if init {
+			if callIndex < 0 {
+				err = fmt.Errorf("unknown initial call return address 0x%x", retAddr)
+			} else if stackOffset != 8 {
 				err = fmt.Errorf("initial function call site 0x%x has inconsistent stack offset %d", retAddr, stackOffset)
 			}
 			return
 		}
 
+		if stackOffset < 0 {
+			err = fmt.Errorf("unknown return address 0x%x", retAddr)
+			return
+		}
+		if funcIndex < 0 {
+			err = fmt.Errorf("function not found for return address 0x%x", retAddr)
+			return
+		}
 		if stackOffset == 0 || stackOffset&7 != 0 {
 			err = fmt.Errorf("invalid stack offset %d", stackOffset)
 			return
@@ -74,7 +79,7 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncTyp
 		}
 
 		stacktrace = append(stacktrace, Frame{
-			FuncIndex:  int(funcIndex),
+			FuncIndex:  funcIndex,
 			RetInsnPos: int(retInsnPos),
 			Locals:     locals,
 		})

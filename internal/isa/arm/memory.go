@@ -78,6 +78,8 @@ func access(f *gen.Func, op in.Memory, dataReg reg.R, index operand.O, offset ui
 	}
 
 	o.copy(f.Text.Extend(o.size()))
+
+	f.MapTrapAddr(f.Text.Addr) // Address of instruction pointer during SIGSEGV handling.
 }
 
 func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {

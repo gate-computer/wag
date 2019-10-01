@@ -406,7 +406,7 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
-	f.MapCallAddr(f.Text.Addr) // Restart point.
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 
 	// If the following instructions are changed, JumpToStackTrapHandler must
 	// be changed to match the instruction sequence size.
@@ -422,7 +422,7 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	// sp - (limit + alloc)
 	o.uint32(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.I64))
 	o.uint32(in.Bc.CondI19(in.GE, 2)) // Skip trap instruction.
-	putTrapInsn(&o, f, trap.CallStackExhausted)
+	putUnmappedTrapInsn(&o, f, trap.CallStackExhausted)
 
 	o.copy(f.Text.Extend(o.size()))
 	return
@@ -492,6 +492,12 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 
 // putTrapInsn must generate exactly one instruction.
 func putTrapInsn(o *output, f *gen.Func, id trap.ID) {
+	putUnmappedTrapInsn(o, f, id)
+	f.MapTrapAddr(o.addr(&f.Text))
+}
+
+// putUnmappedTrapInsn must generate exactly one instruction.
+func putUnmappedTrapInsn(o *output, f *gen.Func, id trap.ID) {
 	o.uint32(in.BL.I26(in.Int26((f.TrapLinks[id].Addr - o.addr(&f.Text)) / 4)))
 }
 
@@ -499,10 +505,10 @@ func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
 	var o output
 
 	o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0)) // Skip trap instruction.
-	putTrapInsn(&o, f, trap.Suspended)
+	putUnmappedTrapInsn(&o, f, trap.Suspended)
 	o.copy(f.Text.Extend(o.size()))
 
-	f.MapCallAddr(f.Text.Addr)
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
@@ -510,8 +516,8 @@ func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 
 	o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, 4, 0)) // Skip until end.
 	o.uint32(in.PushIntReg(saveReg))
-	putTrapInsn(&o, f, trap.Suspended)
-	f.MapCallAddr(o.addr(&f.Text))
+	putUnmappedTrapInsn(&o, f, trap.Suspended)
+	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
 	o.uint32(in.PopIntReg(saveReg))
 	o.copy(f.Text.Extend(o.size()))
 }
@@ -529,10 +535,10 @@ func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 		o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0))
 	}
 
-	putTrapInsn(&o, f, trap.Suspended)
+	putUnmappedTrapInsn(&o, f, trap.Suspended)
 	o.copy(f.Text.Extend(o.size()))
 
-	f.MapCallAddr(f.Text.Addr)
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {

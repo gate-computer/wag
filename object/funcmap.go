@@ -9,8 +9,8 @@ import (
 	"sort"
 )
 
-// FuncMap implements compile.ObjectMapper.  It stores all function addresses,
-// but no call or instruction information.
+// FuncMap implements compile.ObjectMapper.  It stores function addresses, but
+// no call, trap or instruction information.
 //
 // FuncAddrs may be preallocated by initializing the field with a non-nil,
 // empty array.
@@ -28,27 +28,27 @@ func (m *FuncMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
 	}
 }
 
-func (m *FuncMap) PutImportFuncAddr(addr uint32) {
-	m.PutFuncAddr(addr)
-}
-
 func (m *FuncMap) PutFuncAddr(addr uint32) {
 	m.FuncAddrs = append(m.FuncAddrs, addr)
 }
 
 func (*FuncMap) PutCallSite(uint32, int32)  {}
+func (*FuncMap) PutTrapSite(uint32, int32)  {}
 func (*FuncMap) PutInsnAddr(uint32)         {}
 func (*FuncMap) PutDataBlock(uint32, int32) {}
 
-func (m FuncMap) FindAddr(retAddr uint32) (funcIndex, _, _ uint32, _ int32, initial, ok bool) {
+func (m FuncMap) FindAddr(retAddr uint32,
+) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
+	funcIndex = -1
+	callIndex = -1
+
 	if len(m.FuncAddrs) == 0 {
 		return
 	}
 
 	firstFuncAddr := m.FuncAddrs[0]
 	if retAddr > 0 && retAddr < firstFuncAddr {
-		initial = true
-		ok = true
+		init = true
 		return
 	}
 
@@ -65,8 +65,7 @@ func (m FuncMap) FindAddr(retAddr uint32) (funcIndex, _, _ uint32, _ int32, init
 		return retAddr <= funcEndAddr
 	})
 	if i < len(m.FuncAddrs) {
-		funcIndex = uint32(i)
-		ok = true
+		funcIndex = i
 	}
 	return
 }

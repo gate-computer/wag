@@ -453,7 +453,7 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
-	f.MapCallAddr(f.Text.Addr) // Restart point.
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 
 	// If the following instructions are changed, JumpToCallStackExhaustHandler
 	// must be changed to match the instruction sequence size.
@@ -539,14 +539,14 @@ func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.
 
 func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[id].Addr)
-	f.MapCallAddr(f.Text.Addr)
+	f.MapTrapAddr(f.Text.Addr)
 }
 
 func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
 	in.JEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction if bit is zero (no trap).
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
-	f.MapCallAddr(f.Text.Addr)
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
@@ -556,7 +556,7 @@ func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 
 	in.PUSH.Reg(&f.Text, in.OneSize, saveReg)
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
-	f.MapCallAddr(f.Text.Addr)
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 	in.POP.Reg(&f.Text, in.OneSize, saveReg)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), skipJump)
@@ -566,8 +566,8 @@ func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
 	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
 	in.JEcd.Addr32(&f.Text, elseAddr) // Branch to else if bit is zero (no trap).
 
-	asm.Trap(f, trap.Suspended)
-	f.MapCallAddr(f.Text.Addr)
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
+	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {

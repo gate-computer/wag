@@ -95,6 +95,14 @@ func (f *Func) ValueBecameUnreachable(x operand.O) {
 }
 
 func (f *Func) MapCallAddr(retAddr int32) {
-	// Add one stack level for link address.
-	f.Map.PutCallSite(uint32(retAddr), int32((f.NumLocals+f.StackDepth+1)*obj.Word))
+	f.Map.PutCallSite(uint32(retAddr), f.mapStackUsage())
+}
+
+func (f *Func) MapTrapAddr(retAddr int32) {
+	f.Map.PutTrapSite(uint32(retAddr), f.mapStackUsage())
+}
+
+func (f *Func) mapStackUsage() int32 {
+	// Add one entry for link address.
+	return int32((f.NumLocals + f.StackDepth + 1) * obj.Word)
 }

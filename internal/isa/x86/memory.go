@@ -123,6 +123,7 @@ func checkAccess(f *gen.Func, index operand.O, offset uint32) (base in.BaseReg, 
 		disp = int32(offset)
 	}
 
+	f.MapTrapAddr(f.Text.Addr) // Address of instruction pointer during SIGSEGV handling.
 	return
 }
 

@@ -17,8 +17,17 @@ type CallSite struct {
 	StackOffset int32  // Calling function's stack usage at time of call
 }
 
-// CallMap implements compile.ObjectMapper.  It stores all function addresses
-// and call sites, but no instruction information.
+func FindCallSite(a []CallSite, retAddr uint32) (i int, found bool) {
+	i = sort.Search(len(a), func(i int) bool {
+		return a[i].RetAddr >= retAddr
+	})
+	found = i < len(a) && a[i].RetAddr == retAddr
+	return
+}
+
+// CallMap implements compile.ObjectMapper.  It stores function addresses, and
+// sites of function calls and suspension points.  Other trap and instruction
+// information is not stored.
 //
 // Initial CallSites capacity may be allocated by initializing the field with a
 // non-nil, empty array.
@@ -44,19 +53,13 @@ func (m *CallMap) PutCallSite(retAddr uint32, stackOffset int32) {
 	m.CallSites = append(m.CallSites, CallSite{retAddr, stackOffset})
 }
 
-func (m CallMap) FindAddr(retAddr uint32) (funcIndex, callIndex, _ uint32, stackOffset int32, initial, ok bool) {
-	funcIndex, _, _, _, initial, funcOk := m.FuncMap.FindAddr(retAddr)
-	if !funcOk {
-		return
-	}
+func (m CallMap) FindAddr(retAddr uint32,
+) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
+	init, funcIndex, callIndex, stackOffset, retInsnPos = m.FuncMap.FindAddr(retAddr)
 
-	i := sort.Search(len(m.CallSites), func(i int) bool {
-		return m.CallSites[i].RetAddr >= retAddr
-	})
-	if i < len(m.CallSites) && m.CallSites[i].RetAddr == retAddr {
-		callIndex = uint32(i)
+	if i, found := FindCallSite(m.CallSites, retAddr); found {
+		callIndex = i
 		stackOffset = m.CallSites[i].StackOffset
-		ok = true
 	}
 	return
 }
