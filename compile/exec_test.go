@@ -19,7 +19,7 @@ import (
 
 func TestExec(t *testing.T) {
 	const (
-		filename = "../testdata/exec.wast"
+		filename = "../testdata/exec.wat"
 
 		maxTextSize = 65536
 		stackSize   = 16384

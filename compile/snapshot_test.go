@@ -18,7 +18,7 @@ import (
 
 func TestSnapshot(t *testing.T) {
 	const (
-		filename = "../testdata/snapshot.wast"
+		filename = "../testdata/snapshot.wat"
 
 		maxTextSize = 65536
 		stackSize   = 16384

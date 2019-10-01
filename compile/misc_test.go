@@ -17,10 +17,12 @@ import (
 )
 
 func TestCallWithDuplicatedOperand(t *testing.T) {
-	misc(t, "../testdata/call-with-duplicated-operand.wast", "32744 32 32\n")
+	if misc(t, "../testdata/call-with-duplicated-operand.wat", "") != "32744 32 32\n" {
+		t.Fail()
+	}
 }
 
-func misc(t *testing.T, filename, expectOutput string) {
+func misc(t *testing.T, filename, entry string) string {
 	const (
 		maxTextSize = 65536
 		stackSize   = 16384
@@ -79,7 +81,5 @@ func misc(t *testing.T, filename, expectOutput string) {
 
 	output := printBuf.String()
 	t.Logf("print output:\n%s", output)
-	if output != expectOutput {
-		t.Fail()
-	}
+	return output
 }
