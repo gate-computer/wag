@@ -485,6 +485,21 @@ func (m Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fou
 	return
 }
 
+func (m Module) StartFunc() (funcIndex uint32, defined bool) {
+	funcIndex = m.m.StartIndex
+	defined = m.m.StartDefined
+	return
+}
+
+func (m *Module) SetStartFunc(funcIndex uint32) {
+	m.m.StartIndex = funcIndex
+	m.m.StartDefined = true
+}
+
+func (m *Module) UnsetStartFunc() {
+	m.m.StartDefined = false
+}
+
 // CodeConfig for a single compiler invocation.  Either MaxTextSize or Text
 // should be specified, but not both.
 type CodeConfig struct {
