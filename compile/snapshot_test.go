@@ -13,6 +13,7 @@ import (
 
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/internal/test/wat"
 	"github.com/tsavola/wag/object/debug/dump"
 )
 
@@ -31,12 +32,12 @@ func TestSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wast2wasm(wasmData, false)
+	wasmReadCloser := wat.ToWasm("../testdata", wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
 	mod := loadInitialSections(nil, wasm)
-	bindVariadicImports(&mod, runner.Resolver)
+	bind(&mod, lib, nil)
 
 	p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "main"), nil)
 	if err != nil {
@@ -48,7 +49,7 @@ func TestSnapshot(t *testing.T) {
 		Text:   buffer.NewStatic(p.Text[:0:len(p.Text)]),
 		Mapper: &p.DebugMap,
 	}
-	loadCodeSection(code, wasm, mod)
+	loadCodeSection(code, wasm, mod, &lib.l)
 
 	var data = &DataConfig{}
 	loadDataSection(data, wasm, mod)
@@ -68,7 +69,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r1.Run(0, mod.Types(), &printBuf)
+	_, err = r1.Run(0, lib.l.Types, &printBuf)
 	r1.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r2.Run(0, mod.Types(), &printBuf); err != nil {
+	if _, err := r2.Run(0, lib.l.Types, &printBuf); err != nil {
 		t.Error(err)
 	}
 	r2.Close()

@@ -1,6 +1,6 @@
 (module
-  (import "spectest" "print" (func $print_i32 (param i32)))
-  (import "spectest" "print" (func $print_f32_f64 (param f32 f64)))
+  (import "" "print_i32" (func $print_i32 (param i32)))
+  (import "" "print_f32_f64" (func $print_f32_f64 (param f32 f64)))
 
   (export "main" (func $main))
 

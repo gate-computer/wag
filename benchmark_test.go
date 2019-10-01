@@ -48,7 +48,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		Entry:           "benchmark_main",
 	}
 
-	obj, err := Compile(&config, bytes.NewReader(data), runner.Resolver)
+	obj, err := Compile(&config, bytes.NewReader(data), lib)
 	if err != nil {
 		t.Fatal(err)
 	}

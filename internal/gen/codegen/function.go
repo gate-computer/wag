@@ -111,7 +111,7 @@ func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	}
 }
 
-func genFunction(f *gen.Func, load loader.L, funcIndex int, atomicCallStubs bool) {
+func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, atomicCallStubs bool) {
 	*f = gen.Func{
 		Prog: f.Prog,
 
@@ -122,21 +122,21 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int, atomicCallStubs bool
 		AtomicCallStubs: atomicCallStubs,
 	}
 
-	sigIndex := f.Module.Funcs[funcIndex]
-	sig := f.Module.Types[sigIndex]
-
 	if debug.Enabled {
 		debug.Printf("function %d %s", funcIndex, sig)
 		debug.Depth++
 	}
-
-	load.Varuint32() // body size
 
 	asm.AlignFunc(&f.Prog)
 	addr := f.Text.Addr
 	f.FuncLinks[funcIndex].Addr = addr
 	f.Map.PutFuncAddr(uint32(addr))
 	stackCheckAddr := asm.SetupStackFrame(f)
+
+	// Discard the function body size after PutFuncAddr so that the object
+	// mapper can observe source function positions in co-operation with the
+	// reader.
+	load.Varuint32()
 
 	f.ResultType = sig.Result
 	f.LocalTypes = sig.Params

@@ -24,4 +24,6 @@ type Prog struct {
 	Map       obj.ObjectMapper
 	FuncLinks []link.FuncL
 	TrapLinks [trap.NumTraps]link.L
+
+	ImportContext *module.Library // Set during import function generation.
 }

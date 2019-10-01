@@ -260,7 +260,7 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	return
 }
 
-func (MacroAssembler) JumpToImportFunc(p *gen.Prog, index int, variadic bool, argCount, sigIndex int) {
+func (MacroAssembler) CallImportVector(p *gen.Prog, index int, variadic bool, argCount, sigIndex int) {
 	var o output
 
 	if variadic {
@@ -280,7 +280,7 @@ func (MacroAssembler) JumpToImportFunc(p *gen.Prog, index int, variadic bool, ar
 		panic(fmt.Errorf("arm: import function index is out of range: %d", index))
 	}
 
-	o.uint32(in.BR.Rn(RegScratch))
+	o.uint32(in.BLR.Rn(RegScratch))
 
 	o.copy(p.Text.Extend(o.size()))
 }

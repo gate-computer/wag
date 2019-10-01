@@ -13,6 +13,7 @@ import (
 
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/internal/test/wat"
 	"github.com/tsavola/wag/object/debug/dump"
 )
 
@@ -35,24 +36,30 @@ func misc(t *testing.T, filename, entry string) string {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wast2wasm(wasmData, false)
+	wasmReadCloser := wat.ToWasm("../testdata", wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
-	p, err := runner.NewProgram(maxTextSize, 0, nil)
+	mod := loadInitialSections(nil, wasm)
+	bind(&mod, lib, nil)
+
+	var entryFunc uint32
+	if entry != "" {
+		entryFunc = findNiladicEntryFunc(mod, entry)
+		t.Logf("entry function index: %d", entryFunc)
+	}
+
+	p, err := runner.NewProgram(maxTextSize, entryFunc, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer p.Close()
 
-	mod := loadInitialSections(nil, wasm)
-	bindVariadicImports(&mod, runner.Resolver)
-
 	var code = &CodeConfig{
 		Text:   buffer.NewStatic(p.Text[:0:len(p.Text)]),
 		Mapper: &p.DebugMap,
 	}
-	loadCodeSection(code, wasm, mod)
+	loadCodeSection(code, wasm, mod, &lib.l)
 
 	var data = &DataConfig{}
 	loadDataSection(data, wasm, mod)
@@ -74,7 +81,7 @@ func misc(t *testing.T, filename, entry string) string {
 	}
 	defer r.Close()
 
-	_, err = r.Run(0, mod.Types(), &printBuf)
+	_, err = r.Run(0, lib.l.Types, &printBuf)
 	if err != nil {
 		t.Error(err)
 	}

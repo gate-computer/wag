@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -20,9 +21,11 @@ import (
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
+	"github.com/tsavola/wag/internal/test/wat"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
+	"github.com/tsavola/wag/wa"
 )
 
 const (
@@ -427,7 +430,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 	}
 
 	{
-		wasmReadCloser := wast2wasm(sexp.Unparse(module), quiet)
+		wasmReadCloser := wat.ToWasm("../testdata", sexp.Unparse(module), quiet)
 		defer wasmReadCloser.Close()
 
 		initFuzzCorpus(t, "spec."+filename, wasmReadCloser)
@@ -440,7 +443,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 		}
 
 		mod := loadInitialSections(&ModuleConfig{common}, wasm)
-		bindVariadicImports(&mod, runner.Resolver)
+		bind(&mod, lib, globals{})
 
 		var timedout bool
 
@@ -463,7 +466,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			Config: common,
 		}
 
-		loadCodeSection(code, wasm, mod)
+		loadCodeSection(code, wasm, mod, &lib.l)
 		loadDataSection(data, wasm, mod)
 		loadCustomSections(&common, wasm)
 		p.Seal()
@@ -509,7 +512,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 
 		if realStartName != "" {
 			var printBuf bytes.Buffer
-			result, err := r.Run(0, mod.Types(), &printBuf)
+			result, err := r.Run(0, lib.l.Types, &printBuf)
 			if printBuf.Len() > 0 {
 				t.Logf("run: module %s: print:\n%s", filename, printBuf.String())
 			}
@@ -539,7 +542,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 				defer func() {
 					panicked = recover()
 				}()
-				result, err = r.Run(int64(id), mod.Types(), &printBuf)
+				result, err = r.Run(int64(id), lib.l.Types, &printBuf)
 			}()
 
 			timer := time.NewTimer(timeout)
@@ -627,4 +630,18 @@ func invoke2call(exports map[string]string, x interface{}) {
 			invoke2call(exports, e)
 		}
 	}
+}
+
+type globals struct{}
+
+func (globals) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
+	if module == "spectest" {
+		switch field {
+		case "global", "global_i32":
+			return
+		}
+	}
+
+	err = errors.New("unknown global")
+	return
 }

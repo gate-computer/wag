@@ -30,19 +30,23 @@ var (
 	verbose = false
 )
 
-type importFunc struct {
-	index  int
-	params int
-}
-
 var (
-	importFuncs  = make(map[string]importFunc)
+	importFuncs  = make(map[string]int)
 	importVector []byte
 )
 
-type resolver struct{}
+type sysResolver struct{}
 
-func (resolver) ResolveFunc(module, field string, sig wa.FuncType) (index int, err error) {
+func (sysResolver) ResolveFunc(module, field string, sig wa.FuncType) (index int, err error) {
+	index = importFuncs[field]
+	return
+}
+
+type libResolver struct {
+	lib compile.Library
+}
+
+func (r libResolver) ResolveFunc(module, field string, sig wa.FuncType) (index uint32, err error) {
 	if verbose {
 		log.Printf("import %s%s", field, sig)
 	}
@@ -52,21 +56,24 @@ func (resolver) ResolveFunc(module, field string, sig wa.FuncType) (index int, e
 		return
 	}
 
-	i := importFuncs[field]
-	if i.index == 0 {
-		err = fmt.Errorf("import function not supported: %s", field)
-		return
+	name := field + "_"
+	for _, t := range sig.Params {
+		name += t.String()
 	}
-	if len(sig.Params) != i.params {
-		err = fmt.Errorf("%s: import function has wrong number of parameters: import signature has %d, syscall wrapper has %d", field, len(sig.Params), i.params)
+	if sig.Result != wa.Void {
+		name += "_" + sig.Result.String()
+	}
+
+	index, sig, found := r.lib.ExportFunc(name)
+	if !found {
+		err = fmt.Errorf("import function not supported: %s%s", field, sig)
 		return
 	}
 
-	index = i.index
 	return
 }
 
-func (resolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
+func (libResolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
 	err = fmt.Errorf("imported global not supported: %s %s", module, field)
 	return
 }
@@ -135,12 +142,18 @@ func main() {
 	textAddr := memAddr(textMem)
 	textBuf := buffer.NewStatic(textMem[:0:len(textMem)])
 
+	lib, err := wag.CompileLibrary(bytes.NewReader(libWASM), sysResolver{})
+	if err != nil {
+		panic(err)
+	}
+
 	config := &wag.Config{
+		ImportResolver:  libResolver{lib},
 		Text:            textBuf,
 		MemoryAlignment: os.Getpagesize(),
 		Entry:           entry,
 	}
-	obj, err := wag.Compile(config, progReader, resolver{})
+	obj, err := wag.Compile(config, progReader, lib)
 	if dumpText && len(obj.Text) > 0 {
 		e := dump.Text(os.Stdout, obj.Text, textAddr, obj.FuncAddrs, &obj.Names)
 		if err == nil {

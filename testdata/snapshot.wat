@@ -1,6 +1,6 @@
 (module
-  (import "spectest" "print" (func $print_i32 (param i32)))
-  (import "wag" "snapshot" (func $snapshot (result i32)))
+  (import "" "print_i32" (func $print_i32 (param i32)))
+  (import "" "snapshot" (func $snapshot (result i32)))
 
   (export "main" (func $main))
 

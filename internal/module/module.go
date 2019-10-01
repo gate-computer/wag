@@ -102,8 +102,7 @@ type Import struct {
 
 type ImportFunc struct {
 	Import
-	VecIndex int
-	Variadic bool
+	LibraryFunc uint32
 }
 
 type ResizableLimits struct {
@@ -129,4 +128,18 @@ type M struct {
 	StartIndex        uint32
 	StartDefined      bool
 	TableFuncs        []uint32
+}
+
+type ImportIndex struct {
+	Import
+	VectorIndex int
+	Variadic    bool
+}
+
+type Library struct {
+	Types       []wa.FuncType
+	Funcs       []uint32
+	ImportFuncs []ImportIndex
+	ExportFuncs map[string]uint32
+	CodeFuncs   [][]byte
 }

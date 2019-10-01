@@ -13,6 +13,7 @@ import (
 
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
+	"github.com/tsavola/wag/internal/test/wat"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
 )
@@ -32,12 +33,12 @@ func TestExec(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wast2wasm(wasmData, false)
+	wasmReadCloser := wat.ToWasm("../testdata", wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
 	mod := loadInitialSections(nil, wasm)
-	bindVariadicImports(&mod, runner.Resolver)
+	bind(&mod, lib, nil)
 
 	var codeBuf bytes.Buffer
 
@@ -65,7 +66,7 @@ func TestExec(t *testing.T) {
 	defer r.Close()
 
 	var printBuf bytes.Buffer
-	e, eventHandler := r.NewExecutor(mod.Types(), &printBuf)
+	e, eventHandler := r.NewExecutor(lib.l.Types, &printBuf)
 
 	var data = &DataConfig{}
 	loadDataSection(data, wasm, mod)
@@ -77,7 +78,7 @@ func TestExec(t *testing.T) {
 		EventHandler: eventHandler,
 		LastInitFunc: entryFunc,
 	}
-	loadCodeSection(code, &codeBuf, mod)
+	loadCodeSection(code, &codeBuf, mod, &lib.l)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
 		t.Error(err)

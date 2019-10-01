@@ -14,7 +14,6 @@ import (
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/compile/event"
 	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wa"
 )
 
 var benchDir = "../wag-bench" // Relative to project root directory.
@@ -80,7 +79,11 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 
 		for i := 0; i < b.N; i++ {
 			mod = loadInitialSections(nil, bytes.NewReader(wasm))
-			bindVariadicImports(&mod, dummyReso{})
+
+			for i := 0; i < mod.NumImportFuncs(); i++ {
+				// Arbitrary (but existing) implementation.
+				mod.SetImportFunc(i, uint32(lib.NumImportFuncs()))
+			}
 		}
 	})
 
@@ -94,7 +97,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 			}
 
 			code.LastInitFunc, _, _ = mod.ExportFunc(entrySymbol)
-			loadCodeSection(&code, bytes.NewReader(wasm[codePos:]), mod)
+			loadCodeSection(&code, bytes.NewReader(wasm[codePos:]), mod, &lib.l)
 		}
 	})
 
@@ -107,14 +110,4 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 			loadDataSection(&data, bytes.NewReader(wasm[dataPos:]), mod)
 		}
 	})
-}
-
-type dummyReso struct{}
-
-func (dummyReso) ResolveVariadicFunc(string, string, wa.FuncType) (_ bool, _ int, _ error) {
-	return
-}
-
-func (dummyReso) ResolveGlobal(string, string, wa.Type) (_ uint64, _ error) {
-	return
 }

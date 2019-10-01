@@ -8,41 +8,48 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 
+	"github.com/tsavola/wag/internal/reader"
+	"github.com/tsavola/wag/internal/test/library"
+	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/wa"
 )
 
-const (
-	binDir = "../testdata/wabt/bin"
+var lib = *library.Load("../testdata", runner.Resolver, func(r reader.R) library.Library {
+	mod := loadInitialSections(nil, r)
+	lib := mod.asLibrary()
+	return &lib
+}).(*Library)
 
-	dumpWAST = false
-	dumpWASM = false
-)
-
-type variadicImportResolver interface {
-	ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic bool, index int, err error)
+type globalResolver interface {
 	ResolveGlobal(module, field string, t wa.Type) (init uint64, err error)
 }
 
-func bindVariadicImports(mod *Module, reso variadicImportResolver) {
-	var err error
+func bind(mod *Module, lib Library, reso globalResolver) {
+	for i := 0; i < mod.NumImportFuncs(); i++ {
+		_, field, modSig := mod.ImportFunc(i)
 
-	for i := range mod.m.ImportFuncs {
-		imp := &mod.m.ImportFuncs[i]
-		imp.Variadic, imp.VecIndex, err = reso.ResolveVariadicFunc(mod.ImportFunc(i))
-		if err != nil {
-			panic(err)
+		index, libSig, found := lib.ExportFunc(field)
+		if !found {
+			panic(field)
 		}
+
+		if !libSig.Equal(modSig) {
+			panic(modSig)
+		}
+
+		mod.SetImportFunc(i, index)
 	}
 
-	for i := range mod.m.ImportGlobals {
-		mod.m.Globals[i].Init, err = reso.ResolveGlobal(mod.ImportGlobal(i))
+	for i := 0; i < mod.NumImportGlobals(); i++ {
+		init, err := reso.ResolveGlobal(mod.ImportGlobal(i))
 		if err != nil {
 			panic(err)
 		}
+
+		mod.SetImportGlobal(i, init)
 	}
 }
 
@@ -55,81 +62,6 @@ func findNiladicEntryFunc(mod Module, name string) (funcIndex uint32) {
 		panic("entry function has parameters")
 	}
 	return
-}
-
-func wast2wasm(expString []byte, quiet bool) io.ReadCloser {
-	f, err := ioutil.TempFile("", "")
-	if err != nil {
-		panic(err)
-	}
-	_, err = f.Write(expString)
-	f.Close()
-	if err != nil {
-		os.Remove(f.Name())
-		panic(err)
-	}
-
-	if dumpWAST {
-		f3, err := ioutil.TempFile("", "")
-		if err != nil {
-			panic(err)
-		}
-		defer f3.Close()
-
-		cmd3 := exec.Command(path.Join(binDir, "wat2wasm"), "--no-check", "-o", f3.Name(), f.Name())
-		cmd3.Stdout = os.Stdout
-		cmd3.Stderr = os.Stderr
-		if err := cmd3.Run(); err != nil {
-			os.Remove(f3.Name())
-			os.Remove(f.Name())
-			panic(err)
-		}
-
-		cmd2 := exec.Command(path.Join(binDir, "wasm2wat"), "--no-check", "-o", "/dev/stdout", f3.Name())
-		cmd2.Stdout = os.Stdout
-		cmd2.Stderr = os.Stderr
-		if err := cmd2.Run(); err != nil {
-			os.Remove(f.Name())
-			panic(err)
-		}
-	}
-
-	if dumpWASM {
-		cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--no-check", "-v", f.Name())
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			os.Remove(f.Name())
-			panic(err)
-		}
-	}
-
-	f2, err := ioutil.TempFile("", "")
-	if err != nil {
-		os.Remove(f.Name())
-		panic(err)
-	}
-	os.Remove(f2.Name())
-
-	cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--debug-names", "--no-check", "-o", "/dev/stdout", f.Name())
-	cmd.Stdout = f2
-	if !quiet {
-		cmd.Stderr = os.Stderr
-	}
-
-	if err := cmd.Run(); err != nil {
-		f2.Close()
-		os.Remove(f.Name())
-		panic(err)
-	}
-
-	if _, err := f2.Seek(0, io.SeekStart); err != nil {
-		f2.Close()
-		os.Remove(f.Name())
-		panic(err)
-	}
-
-	return f2
 }
 
 func initFuzzCorpus(t *testing.T, filename string, r io.Reader) {

@@ -25,14 +25,40 @@ func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
+
+	if f.ImportContext != nil {
+		opCallInImportFunc(f, funcIndex)
+	} else {
+		opCallInNormalFunc(f, op, funcIndex)
+	}
+	return
+}
+
+func opCallInNormalFunc(f *gen.Func, op opcode.Opcode, funcIndex uint32) {
 	if funcIndex >= uint32(len(f.Module.Funcs)) {
 		panic(module.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
-	sig := checkCallOperandCount(f, f.Module.Funcs[funcIndex])
+	sig := f.Module.Types[f.Module.Funcs[funcIndex]]
+	checkCallOperandCount(f, sig)
 	opCall(f, &f.FuncLinks[funcIndex].L)
+
+	// The called function's initial suspension point was certainly executed.
+	if len(f.BranchTargets) > 0 {
+		getCurrentBlock(f).Suspension = true
+	}
+
 	opFinalizeCall(f, sig)
-	return
+}
+
+func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
+	imp := f.ImportContext.ImportFuncs[funcIndex]
+	sigIndex := f.ImportContext.Funcs[funcIndex]
+	sig := f.ImportContext.Types[sigIndex]
+	checkCallOperandCount(f, sig)
+	asm.CallImportVector(&f.Prog, imp.VectorIndex, imp.Variadic, len(sig.Params), int(sigIndex))
+	f.MapCallAddr(f.Text.Addr)
+	opFinalizeCall(f, sig)
 }
 
 func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
@@ -55,15 +81,20 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 		asm.Move(f, funcIndexReg, funcIndex)
 	}
 
-	sig := checkCallOperandCount(f, sigIndex)
+	sig := f.Module.Types[sigIndex]
+	checkCallOperandCount(f, sig)
 	opCallIndirect(f, int32(sigIndex), funcIndexReg)
+
+	// The called function's initial suspension point was certainly executed.
+	if len(f.BranchTargets) > 0 {
+		getCurrentBlock(f).Suspension = true
+	}
+
 	opFinalizeCall(f, sig)
 	return
 }
 
-func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
-	sig := f.Module.Types[sigIndex]
-
+func checkCallOperandCount(f *gen.Func, sig wa.FuncType) {
 	if debug.Enabled {
 		debug.Printf("sig: %s", sig)
 	}
@@ -77,8 +108,6 @@ func checkCallOperandCount(f *gen.Func, sigIndex uint32) wa.FuncType {
 			panic(errCallParamTypeMismatch)
 		}
 	}
-
-	return sig
 }
 
 func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
@@ -86,11 +115,6 @@ func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
 
 	opDropCallOperands(f, len(sig.Params))
 	pushResultRegOperand(f, sig.Result)
-
-	// The called function's initial suspension point was certainly executed
-	if len(f.BranchTargets) > 0 {
-		getCurrentBlock(f).Suspension = true
-	}
 }
 
 func opCall(f *gen.Func, l *link.L) {

@@ -260,6 +260,7 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 					Module: moduleStr,
 					Field:  fieldStr,
 				},
+				LibraryFunc: math.MaxUint32, // Outrageous value by default.
 			})
 
 		case module.ExternalKindGlobal:
@@ -465,8 +466,8 @@ func (m Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	return
 }
 
-func (m *Module) SetImportFunc(i int, vecIndex int)  { m.m.ImportFuncs[i].VecIndex = vecIndex }
-func (m *Module) SetImportGlobal(i int, init uint64) { m.m.Globals[i].Init = init }
+func (m *Module) SetImportFunc(i int, libFunc uint32) { m.m.ImportFuncs[i].LibraryFunc = libFunc }
+func (m *Module) SetImportGlobal(i int, init uint64)  { m.m.Globals[i].Init = init }
 
 func (m Module) GlobalsSize() int {
 	size := len(m.m.Globals) * obj.Word
@@ -515,16 +516,16 @@ type CodeConfig struct {
 // machine code.
 //
 // If CodeBuffer panicks with an error, it will be returned by this function.
-func LoadCodeSection(config *CodeConfig, r Reader, mod Module) (err error) {
+func LoadCodeSection(config *CodeConfig, r Reader, mod Module, lib Library) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
 
-	loadCodeSection(config, r, mod)
+	loadCodeSection(config, r, mod, &lib.l)
 	return
 }
 
-func loadCodeSection(config *CodeConfig, r Reader, mod Module) {
+func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Library) {
 	var payloadLen uint32
 
 	load := loader.L{R: r}
@@ -571,7 +572,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module) {
 		mapper = dummyMap{}
 	}
 
-	codegen.GenProgram(config.Text, mapper, load, &mod.m, config.EventHandler, int(config.LastInitFunc)+1)
+	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1)
 }
 
 // DataConfig for a single compiler invocation.

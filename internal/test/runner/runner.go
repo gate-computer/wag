@@ -72,8 +72,6 @@ var importFuncs = map[string]map[string]imports.Func{
 				Result: wa.I32,
 			},
 		},
-	},
-	"env": {
 		"putns": imports.Func{
 			VecIndex: vectorIndexLastImportFunc - 3,
 			Addr:     importPutns(),
@@ -141,19 +139,6 @@ func (res) ResolveVariadicFunc(module, field string, sig wa.FuncType) (variadic 
 
 func (r res) ResolveFunc(module, field string, sig wa.FuncType) (index int, err error) {
 	_, index, err = r.ResolveVariadicFunc(module, field, sig)
-	return
-}
-
-func (res) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
-	switch module {
-	case "spectest":
-		switch field {
-		case "global", "global_i32":
-			return
-		}
-	}
-
-	err = fmt.Errorf("imported %s global not found: %s %s", t, module, field)
 	return
 }
 

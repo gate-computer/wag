@@ -295,12 +295,12 @@ func reinit(p *gen.Prog) {
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 }
 
-func (MacroAssembler) JumpToImportFunc(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int) {
+func (MacroAssembler) CallImportVector(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int) {
 	if variadic {
 		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
 	}
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, int32(vecIndex*8))
-	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
+	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {

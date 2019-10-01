@@ -39,7 +39,12 @@ func TestSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = compile.LoadCodeSection(&compile.CodeConfig{Config: loadConfig}, r, mod)
+	for i := 0; i < mod.NumImportFuncs(); i++ {
+		// Arbitrary (but existing) implementation.
+		mod.SetImportFunc(i, uint32(lib.NumImportFuncs()))
+	}
+
+	err = compile.LoadCodeSection(&compile.CodeConfig{Config: loadConfig}, r, mod, lib)
 	if err != nil {
 		t.Fatal(err)
 	}

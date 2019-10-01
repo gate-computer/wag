@@ -5,6 +5,8 @@
 package wag
 
 import (
+	"fmt"
+
 	"github.com/tsavola/wag/binding"
 	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/object/debug"
@@ -13,6 +15,30 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
+func CompileLibrary(r compile.Reader, imports binding.LibraryImportResolver) (lib compile.Library, err error) {
+	mod, err := compile.LoadInitialSections(nil, r)
+	if err != nil {
+		return
+	}
+
+	lib, err = mod.AsLibrary()
+	if err != nil {
+		return
+	}
+
+	err = binding.BindLibraryImports(&lib, imports)
+	if err != nil {
+		return
+	}
+
+	err = lib.LoadSections(r)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 // EntryPolicy validates an entry function's signature while looking it up from
 // a module's exported functions.
 type EntryPolicy func(m compile.Module, symbol string) (globalIndex uint32, sig wa.FuncType, err error)
@@ -20,12 +46,13 @@ type EntryPolicy func(m compile.Module, symbol string) (globalIndex uint32, sig 
 // Config for a single compiler invocation.  Zero values are replaced with
 // effective defaults during compilation.
 type Config struct {
-	Text            compile.CodeBuffer // Defaults to dynamically sized buffer.
-	GlobalsMemory   compile.DataBuffer // Defaults to dynamically sized buffer.
-	MemoryAlignment int                // Defaults to minimal valid alignment.
-	Entry           string             // No entry function by default.
-	EntryPolicy     EntryPolicy        // Defaults to binding.GetMainFunc.
-	EntryArgs       []uint64           // Defaults to zeros (subject to policy).
+	ImportResolver  binding.ImportResolver // Imports are mapped to the library by default.
+	Text            compile.CodeBuffer     // Defaults to dynamically sized buffer.
+	GlobalsMemory   compile.DataBuffer     // Defaults to dynamically sized buffer.
+	MemoryAlignment int                    // Defaults to minimal valid alignment.
+	Entry           string                 // No entry function by default.
+	EntryPolicy     EntryPolicy            // Defaults to binding.GetMainFunc.
+	EntryArgs       []uint64               // Defaults to zeros (subject to policy).
 }
 
 // Object code with debug information.  The fields are roughly in order of
@@ -50,7 +77,7 @@ type Object struct {
 // error.
 //
 // See the source code for examples of how to use the lower-level APIs.
-func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResolver) (object *Object, err error) {
+func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (object *Object, err error) {
 	if objectConfig == nil {
 		objectConfig = new(Config)
 	}
@@ -90,7 +117,11 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 
 	// Fill in host function addresses and global variables' values.
 
-	err = binding.BindImports(&module, imports)
+	if objectConfig.ImportResolver == nil {
+		objectConfig.ImportResolver = resolver{lib}
+	}
+
+	err = binding.BindImports(&module, objectConfig.ImportResolver)
 	if err != nil {
 		return
 	}
@@ -107,7 +138,7 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 		Config: loadingConfig,
 	}
 
-	err = compile.LoadCodeSection(codeConfig, r, module)
+	err = compile.LoadCodeSection(codeConfig, r, module, lib)
 	objectConfig.Text = codeConfig.Text
 	object.Text = codeConfig.Text.Bytes()
 	if err != nil {
@@ -184,4 +215,31 @@ func Compile(objectConfig *Config, r compile.Reader, imports binding.ImportResol
 // alignSize rounds up.
 func alignSize(size, alignment int) int {
 	return (size + (alignment - 1)) &^ (alignment - 1)
+}
+
+// resolver looks up program module's imports from the intermediate
+// library module.
+type resolver struct {
+	lib compile.Library
+}
+
+func (r resolver) ResolveFunc(module, field string, sig wa.FuncType) (funcIndex uint32, err error) {
+	funcIndex, actualSig, fieldFound := r.lib.ExportFunc(field)
+	if module != "env" || !fieldFound {
+		err = fmt.Errorf("unknown function imported: %q.%q", module, field)
+		return
+	}
+
+	if !sig.Equal(actualSig) {
+		err = fmt.Errorf("function %s.%s%s imported with wrong type: %s", module, field, actualSig, sig)
+		return
+	}
+
+	return
+}
+
+func (r resolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
+	// Globals are not supported by library.
+	err = fmt.Errorf("unknown global imported: %q.%q", module, field)
+	return
 }

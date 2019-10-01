@@ -90,6 +90,12 @@ type MacroAssembler interface {
 	// Call may use RegResult and update condition flags.
 	Call(p *gen.Prog, addr int32) (retAddr int32)
 
+	// CallImportVector may use RegResult and update condition flags.
+	//
+	// Void functions must make sure that they don't return any sensitive
+	// information in result register.
+	CallImportVector(p *gen.Prog, vectorIndex int, variadic bool, argc, sigIndex int)
+
 	// CallIndirect may use RegResult and update condition flags.  It takes
 	// ownership of funcIndexReg.
 	CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32
@@ -125,12 +131,6 @@ type MacroAssembler interface {
 	// InitCallEntry may use RegResult and update condition flags.  It must
 	// insert nop instructions until text address is 16-byte aligned.
 	InitCallEntry(p *gen.Prog) (retAddr int32)
-
-	// JumpToImportFunc may use RegResult and update condition flags.
-	//
-	// Void functions must make sure that they don't return any sensitive
-	// information in result register.
-	JumpToImportFunc(p *gen.Prog, vectorIndex int, variadic bool, argc, sigIndex int)
 
 	// JumpToTrapHandler may use RegResult and update condition flags.  It MUST
 	// NOT generate over 16 bytes of code.

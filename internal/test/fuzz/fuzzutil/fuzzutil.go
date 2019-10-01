@@ -42,17 +42,6 @@ func (resolver) ResolveFunc(module, field string, sig wa.FuncType) (index int, e
 	return
 }
 
-func (resolver) ResolveGlobal(module, field string, t wa.Type) (value uint64, err error) {
-	h := crc64.New(crc64Table)
-	h.Write([]byte(module))
-	h.Write([]byte(field))
-	value = h.Sum64()
-	if value%7 == 0 {
-		err = errFuzzImport
-	}
-	return
-}
-
 func IsFine(err error) bool {
 	switch err {
 	case io.EOF, io.ErrClosedPipe, io.ErrUnexpectedEOF:

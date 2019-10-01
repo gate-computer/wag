@@ -72,7 +72,7 @@ func fuzzCorpusTest(t *testing.T, filename string) {
 		GlobalsMemory: fuzzutil.NewGlobalsMemoryBuffer(),
 	}
 
-	_, err = Compile(config, bytes.NewReader(data), fuzzutil.Resolver)
+	_, err = Compile(config, bytes.NewReader(data), lib)
 	if err != nil {
 		if fuzzutil.IsFine(err) {
 			t.Log(err)

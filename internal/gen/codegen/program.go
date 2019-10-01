@@ -5,6 +5,7 @@
 package codegen
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"math"
@@ -28,6 +29,7 @@ func GenProgram(
 	objMap obj.ObjectMapper,
 	load loader.L,
 	m *module.M,
+	lib *module.Library,
 	eventHandler func(event.Event),
 	initFuncCount int,
 ) {
@@ -111,17 +113,21 @@ func GenProgram(
 		}
 	}
 
+	p.ImportContext = lib // Generate import functions in library context.
+
 	for i, imp := range m.ImportFuncs {
-		addr := genImportTrampoline(p, m, i, imp)
-		p.FuncLinks[i].Addr = addr
+		code := bytes.NewReader(lib.CodeFuncs[imp.LibraryFunc-uint32(len(lib.ImportFuncs))])
+		genFunction(&funcStorage, loader.L{R: code}, i, lib.Types[lib.Funcs[imp.LibraryFunc]], false)
 	}
+
+	p.ImportContext = nil
 
 	if eventHandler == nil {
 		initFuncCount = len(m.Funcs)
 	}
 
 	for i := len(m.ImportFuncs); i < initFuncCount; i++ {
-		genFunction(&funcStorage, load, i, false)
+		genFunction(&funcStorage, load, i, m.Types[m.Funcs[i]], false)
 		linker.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
@@ -156,7 +162,7 @@ func GenProgram(
 		eventHandler(event.Init)
 
 		for i := initFuncCount; i < len(m.Funcs); i++ {
-			genFunction(&funcStorage, load, i, true)
+			genFunction(&funcStorage, load, i, m.Types[m.Funcs[i]], true)
 		}
 
 		eventHandler(event.FunctionBarrier)
