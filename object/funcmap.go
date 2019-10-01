@@ -62,7 +62,7 @@ func (m FuncMap) FindAddr(retAddr uint32,
 			funcEndAddr = m.FuncAddrs[i]
 		}
 
-		return retAddr <= funcEndAddr
+		return retAddr < funcEndAddr
 	})
 	if i < len(m.FuncAddrs) {
 		funcIndex = i
