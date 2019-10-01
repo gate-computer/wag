@@ -28,19 +28,19 @@ type InsnMap struct {
 	TrapMap
 	Insns []InsnMapping
 
-	reader posReader
+	reader reader.PosReader
 }
 
 // Reader gets the pass-through reader.  It must not be wrapped in a buffered
 // reader (the input reader can be).
 func (m *InsnMap) Reader(input reader.R) reader.R {
-	m.reader = posReader{r: input}
+	m.reader = reader.PosReader{R: input}
 	return &m.reader
 }
 
 func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
 	m.TrapMap.InitObjectMap(numImportFuncs, numOtherFuncs)
-	m.reader.pos = 0
+	m.reader.Pos = 0
 }
 
 func (m *InsnMap) PutTrapSite(retAddr uint32, stackOffset int32) {
@@ -51,7 +51,7 @@ func (m *InsnMap) PutTrapSite(retAddr uint32, stackOffset int32) {
 }
 
 func (m *InsnMap) PutInsnAddr(objectPos uint32) {
-	m.putMapping(objectPos, m.reader.pos, 0)
+	m.putMapping(objectPos, m.reader.Pos, 0)
 }
 
 func (m *InsnMap) PutDataBlock(objectPos uint32, blockLen int32) {
@@ -78,34 +78,6 @@ func (m InsnMap) FindAddr(retAddr uint32,
 	})
 	if retIndex > 0 && retIndex < len(m.Insns) {
 		retInsnPos = m.Insns[retIndex].SourcePos
-		ok = true
-	}
-	return
-}
-
-type posReader struct {
-	r   reader.R
-	pos uint32
-}
-
-func (pr *posReader) Read(b []byte) (n int, err error) {
-	n, err = pr.r.Read(b)
-	pr.pos += uint32(n)
-	return
-}
-
-func (pr *posReader) ReadByte() (b byte, err error) {
-	b, err = pr.r.ReadByte()
-	if err == nil {
-		pr.pos++
-	}
-	return
-}
-
-func (pr *posReader) UnreadByte() (err error) {
-	err = pr.r.UnreadByte()
-	if err == nil {
-		pr.pos--
 	}
 	return
 }
