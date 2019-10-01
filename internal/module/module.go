@@ -125,8 +125,6 @@ type M struct {
 	MemoryLimitValues ResizableLimits
 	Globals           []Global
 	ImportGlobals     []Import
-	EntryIndex        uint32
-	EntryDefined      bool
 	ExportFuncs       map[string]uint32
 	StartIndex        uint32
 	StartDefined      bool
