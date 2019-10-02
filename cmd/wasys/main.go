@@ -24,7 +24,6 @@ import (
 )
 
 const linearMemoryAddressSpace = 8 * 1024 * 1024 * 1024
-const signalStackReserve = 8192
 
 var (
 	verbose = false
@@ -196,7 +195,7 @@ func main() {
 	copy(stackMem[stackOffset:], obj.StackFrame)
 
 	stackAddr := memAddr(stackMem)
-	stackLimit := stackAddr + 16 + signalStackReserve + 128 + 16
+	stackLimit := stackAddr + 32 + 8192 + 240 + 8 + 8
 	stackPtr := stackAddr + uintptr(stackOffset)
 
 	if stackLimit >= stackPtr {
