@@ -56,7 +56,12 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 	sigIndex := f.ImportContext.Funcs[funcIndex]
 	sig := f.ImportContext.Types[sigIndex]
 	checkCallOperandCount(f, sig)
-	asm.CallImportVector(&f.Prog, imp.VectorIndex, imp.Variadic, len(sig.Params), int(sigIndex))
+
+	// See the comment in opBranchIf.
+	if !getCurrentBlock(f).WeakDead {
+		asm.CallImportVector(&f.Prog, imp.VectorIndex, imp.Variadic, len(sig.Params), int(sigIndex))
+	}
+
 	f.MapCallAddr(f.Text.Addr)
 	opFinalizeCall(f, sig)
 }

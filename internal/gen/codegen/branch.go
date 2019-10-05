@@ -519,9 +519,26 @@ func opBranch(f *gen.Func, l *link.L) {
 func opBranchIf(f *gen.Func, cond operand.O, l *link.L) {
 	if l.Addr != 0 {
 		asm.BranchIf(f, cond, l.Addr)
-	} else {
-		l.AddSites(asm.BranchIfStub(f, cond, true, false))
+		return
 	}
+
+	// This specific optimization allows adding reserved call sites to
+	// libraries with low runtime overhead.  The following wasm code generates
+	// a single unconditional branch instruction which is effectively a nop:
+	//
+	//     (block
+	//         (br_if 0 (i32.const 1))
+	//         (call $placeholder))
+	//
+	// The branch instruction is generated so that all gen functions don't have
+	// to check WeakDead state.
+	if cond.Storage == storage.Imm && int32(cond.ImmValue()) != 0 {
+		l.AddSite(asm.BranchStub(&f.Prog))
+		getCurrentBlock(f).WeakDead = true
+		return
+	}
+
+	l.AddSites(asm.BranchIfStub(f, cond, true, false))
 }
 
 func opBranchIfOutOfBounds(f *gen.Func, indexReg reg.R, upperBound int32, l *link.L) {
