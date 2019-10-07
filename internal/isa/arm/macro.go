@@ -163,21 +163,19 @@ func compareBounds(indexReg reg.R, upperBound int32) (o output) {
 	return
 }
 
-func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {
+func (MacroAssembler) Call(p *gen.Prog, addr int32) {
 	offset := -p.Text.Addr // NoFunction trap as placeholder.
 	if addr != 0 {
 		offset = addr - p.Text.Addr
 	}
 	p.Text.PutUint32(in.BL.I26(in.Int26(offset / 4)))
-	return p.Text.Addr
 }
 
-func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) (retAddr int32) {
+func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) {
 	p.Text.PutUint32(in.BL.I26(in.Int26(-p.Text.Addr / 4)))
-	return p.Text.Addr
 }
 
-func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, r reg.R) int32 {
+func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, r reg.R) {
 	o := compareBounds(r, int32(len(f.Module.TableFuncs)))
 	putTrapInsn(&o, f, trap.IndirectCallIndexOutOfBounds)
 
@@ -193,8 +191,6 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, r reg.R) int32 {
 	o.copy(f.Text.Extend(o.size()))
 
 	f.Regs.Free(wa.I64, r)
-
-	return f.Text.Addr
 }
 
 func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {

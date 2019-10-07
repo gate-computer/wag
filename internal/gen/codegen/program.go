@@ -76,7 +76,7 @@ func GenProgram(
 	// Virtual return point for resuming a program which was suspended before
 	// execution started.  This call site must be at index 0, and its address
 	// must match the start routine.
-	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word*2)
+	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth excludes entry args, includes entry addr.
 
 	asm.Init(p)
 
@@ -84,16 +84,16 @@ func GenProgram(
 		if int(m.StartIndex) >= initFuncCount {
 			initFuncCount = int(m.StartIndex) + 1
 		}
-		retAddr := asm.CallMissing(p, false)
-		p.Map.PutCallSite(uint32(retAddr), obj.Word*2) // stack depth excluding entry args (including link addr)
-		p.FuncLinks[m.StartIndex].AddSite(retAddr)
+		asm.CallMissing(p, false)
+		p.FuncLinks[m.StartIndex].AddSite(p.Text.Addr)
 	}
+	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth excludes entry args, includes entry addr.
 
 	if p.Text.Addr <= abi.TextAddrStart || p.Text.Addr > abi.TextAddrEnter {
 		panic("bad text address after init routine and start function call")
 	}
 	retAddr := asm.InitCallEntry(p)
-	p.Map.PutCallSite(uint32(retAddr), obj.Word) // stack depth excluding entry args (including link addr)
+	p.Map.PutCallSite(uint32(retAddr), 0) // Depth excludes entry args.
 
 	if p.Text.Addr > rodata.CommonsAddr {
 		panic("bad text address after init routines")

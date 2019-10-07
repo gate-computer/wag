@@ -164,17 +164,15 @@ func compareBounds(p *gen.Prog, indexReg reg.R, upperBound int32) {
 	in.CMP.RegReg(&p.Text, wa.I32, RegScratch, indexReg)
 }
 
-func (MacroAssembler) Call(p *gen.Prog, addr int32) (retAddr int32) {
+func (MacroAssembler) Call(p *gen.Prog, addr int32) {
 	in.CALLcd.Addr32(&p.Text, addr)
-	return p.Text.Addr
 }
 
-func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) (retAddr int32) {
+func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) {
 	in.CALLcd.MissingFunction(&p.Text, atomic)
-	return p.Text.Addr
 }
 
-func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32 {
+func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) {
 	compareBounds(&f.Prog, funcIndexReg, int32(len(f.Module.TableFuncs))) // zero-extension
 	in.JLEcb.Stub8(&f.Text)
 	outOfBoundsJump := f.Text.Addr
@@ -197,7 +195,6 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg
 
 	in.ADD.RegReg(&f.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
-	return f.Text.Addr
 }
 
 func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {

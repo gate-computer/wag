@@ -123,19 +123,18 @@ func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
 }
 
 func opCall(f *gen.Func, l *link.L) {
-	var retAddr int32
 	if l.Addr != 0 {
-		retAddr = asm.Call(&f.Prog, l.Addr)
+		asm.Call(&f.Prog, l.Addr)
 	} else {
-		retAddr = asm.CallMissing(&f.Prog, f.AtomicCallStubs)
+		asm.CallMissing(&f.Prog, f.AtomicCallStubs)
 	}
-	f.MapCallAddr(retAddr)
+	f.MapCallAddr(f.Text.Addr)
 	if l.Addr == 0 {
-		l.AddSite(retAddr)
+		l.AddSite(f.Text.Addr)
 	}
 }
 
 func opCallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) {
-	retAddr := asm.CallIndirect(f, sigIndex, funcIndexReg)
-	f.MapCallAddr(retAddr)
+	asm.CallIndirect(f, sigIndex, funcIndexReg)
+	f.MapCallAddr(f.Text.Addr)
 }

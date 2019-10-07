@@ -88,7 +88,7 @@ type MacroAssembler interface {
 	BranchIndirect(f *gen.Func, addr reg.R)
 
 	// Call may use RegResult and update condition flags.
-	Call(p *gen.Prog, addr int32) (retAddr int32)
+	Call(p *gen.Prog, addr int32)
 
 	// CallImportVector may use RegResult and update condition flags.
 	//
@@ -98,10 +98,10 @@ type MacroAssembler interface {
 
 	// CallIndirect may use RegResult and update condition flags.  It takes
 	// ownership of funcIndexReg.
-	CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) int32
+	CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R)
 
 	// CallMissing may use RegResult and update condition flags.
-	CallMissing(p *gen.Prog, atomic bool) (retAddr int32)
+	CallMissing(p *gen.Prog, atomic bool)
 
 	// ClearIntResultReg may use RegResult and update condition flags.
 	ClearIntResultReg(p *gen.Prog)
