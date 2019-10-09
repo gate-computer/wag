@@ -53,7 +53,7 @@ func TestExec(t *testing.T) {
 
 	entryFunc := findNiladicEntryFunc(mod, "main")
 
-	p, err := runner.NewProgram(maxTextSize, entryFunc, nil)
+	p, err := runner.NewProgram(maxTextSize, entryFunc)
 	if err != nil {
 		t.Fatal(err)
 	}

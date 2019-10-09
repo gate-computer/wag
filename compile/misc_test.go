@@ -49,7 +49,7 @@ func misc(t *testing.T, filename, entry string) string {
 		t.Logf("entry function index: %d", entryFunc)
 	}
 
-	p, err := runner.NewProgram(maxTextSize, entryFunc, nil)
+	p, err := runner.NewProgram(maxTextSize, entryFunc)
 	if err != nil {
 		t.Fatal(err)
 	}

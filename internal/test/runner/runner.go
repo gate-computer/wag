@@ -161,7 +161,6 @@ type Program struct {
 	DebugMap debug.InsnMap
 
 	entryFunc uint32
-	entryArgs []uint64
 	entryAddr uint32
 
 	data         []byte
@@ -170,10 +169,9 @@ type Program struct {
 	callSites map[int]callSite
 }
 
-func NewProgram(maxTextSize int, entryFunc uint32, entryArgs []uint64) (p *Program, err error) {
+func NewProgram(maxTextSize int, entryFunc uint32) (p *Program, err error) {
 	p = &Program{
 		entryFunc: entryFunc,
-		entryArgs: entryArgs,
 	}
 
 	const vecSize = 4096
@@ -243,19 +241,12 @@ func (p *Program) resolveEntry() {
 	p.entryAddr = p.DebugMap.FuncAddrs[p.entryFunc]
 }
 
-func (p *Program) GetStackEntry() (addr uint32, args []uint64) {
-	p.getStack()
-	addr = p.entryAddr
-	args = p.entryArgs
-	return
-}
-
 func (p *Program) getStack() []byte {
 	if p.entryFunc != 0 && p.entryAddr == 0 {
 		p.resolveEntry()
 	}
 
-	return stack.EntryFrame(p.entryAddr, p.entryArgs)
+	return stack.EntryFrame(p.entryAddr)
 }
 
 func (*Program) getResume() int {

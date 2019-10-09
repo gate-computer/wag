@@ -39,7 +39,7 @@ func TestSnapshot(t *testing.T) {
 	mod := loadInitialSections(nil, wasm)
 	bind(&mod, lib, nil)
 
-	p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "main"), nil)
+	p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "main"))
 	if err != nil {
 		t.Fatal(err)
 	}

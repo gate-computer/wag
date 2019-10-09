@@ -10,22 +10,24 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-// GetMainFunc, the result type of which is void or i32.  Parameter count or
-// types are not checked.
-func GetMainFunc(mod compile.Module, name string) (funcIndex uint32, sig wa.FuncType, err error) {
+// EntryFunc looks up an export function which is suitable as an entry point.
+// Its result type must be void or i32, and it must not take any parameters.
+func EntryFunc(mod compile.Module, name string) (funcIndex uint32, err error) {
 	funcIndex, sig, found := mod.ExportFunc(name)
 	if !found {
-		err = module.Errorf("export function %q not found", name)
+		err = module.Errorf("entry function %q not found", name)
 		return
 	}
 
-	switch sig.Result {
-	case wa.Void, wa.I32:
-		// ok
-		return
-
-	default:
-		err = module.Errorf("export function %q has wrong result type %s", name, sig.Result)
+	if !IsEntryFuncType(sig) {
+		err = module.Errorf("entry function %s%s has incompatible signature", name, sig)
 		return
 	}
+
+	return
+}
+
+// IsEntryFuncType checks if the signature is suitable for an entry function.
+func IsEntryFuncType(sig wa.FuncType) bool {
+	return len(sig.Params) == 0 && (sig.Result == wa.Void || sig.Result == wa.I32)
 }

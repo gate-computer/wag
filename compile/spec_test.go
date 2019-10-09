@@ -447,7 +447,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 
 		var timedout bool
 
-		p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "test"), nil)
+		p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "test"))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -41,7 +41,7 @@ func CompileLibrary(r compile.Reader, imports binding.LibraryImportResolver) (li
 
 // EntryPolicy validates an entry function's signature while looking it up from
 // a module's exported functions.
-type EntryPolicy func(m compile.Module, symbol string) (globalIndex uint32, sig wa.FuncType, err error)
+type EntryPolicy func(m compile.Module, symbol string) (globalIndex uint32, err error)
 
 // Config for a single compiler invocation.  Zero values are replaced with
 // effective defaults during compilation.
@@ -51,8 +51,6 @@ type Config struct {
 	GlobalsMemory   compile.DataBuffer     // Defaults to dynamically sized buffer.
 	MemoryAlignment int                    // Defaults to minimal valid alignment.
 	Entry           string                 // No entry function by default.
-	EntryPolicy     EntryPolicy            // Defaults to binding.GetMainFunc.
-	EntryArgs       []uint64               // Defaults to zeros (subject to policy).
 }
 
 // Object code with debug information.  The fields are roughly in order of
@@ -171,16 +169,11 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	var (
 		entryIndex uint32
-		entryType  wa.FuncType
 		entryAddr  uint32
 	)
 
 	if objectConfig.Entry != "" {
-		if objectConfig.EntryPolicy == nil {
-			objectConfig.EntryPolicy = binding.GetMainFunc
-		}
-
-		entryIndex, entryType, err = objectConfig.EntryPolicy(module, objectConfig.Entry)
+		entryIndex, err = binding.EntryFunc(module, objectConfig.Entry)
 		if err != nil {
 			return
 		}
@@ -189,18 +182,8 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	}
 
 	// Form a stack frame for the init routine which calls the entry function.
-	// Add zeros if all arguments weren't provided but the policy was lenient.
 
-	var entryArgs []uint64
-
-	if n := len(entryType.Params); len(objectConfig.EntryArgs) >= n {
-		entryArgs = objectConfig.EntryArgs[:n]
-	} else {
-		entryArgs = make([]uint64, n)
-		copy(entryArgs, objectConfig.EntryArgs)
-	}
-
-	object.StackFrame = stack.EntryFrame(entryAddr, entryArgs)
+	object.StackFrame = stack.EntryFrame(entryAddr)
 
 	// Read the whole binary module to get the name section.
 

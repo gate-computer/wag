@@ -36,7 +36,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := runner.NewProgram(maxTextSize, 0, nil)
+	p, err := runner.NewProgram(maxTextSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
