@@ -118,19 +118,14 @@ type MacroAssembler interface {
 	// updating the virtual stack pointer.
 	DropStackValues(p *gen.Prog, n int)
 
+	// Enter may use RegResult and update condition flags.
+	Enter(p *gen.Prog)
+
 	// GrowMemory may allocate registers, use RegResult and update condition
 	// flags.  The generated instruction sequence is part of ISA-specific ABI:
 	// the instruction sequence size up to and including the function call
 	// instruction must be predictable.
 	GrowMemory(f *gen.Func) (site int32)
-
-	// Init may use RegResult and update condition flags.  It MUST NOT generate
-	// over 16 bytes of code.
-	Init(p *gen.Prog)
-
-	// InitCallEntry may use RegResult and update condition flags.  It must
-	// insert nop instructions until text address is 16-byte aligned.
-	InitCallEntry(p *gen.Prog) (retAddr int32)
 
 	// JumpToTrapHandler may use RegResult and update condition flags.  It MUST
 	// NOT generate over 16 bytes of code.

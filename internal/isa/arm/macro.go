@@ -17,7 +17,6 @@ import (
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/arm/in"
 	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/object/abi"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
 )
@@ -225,19 +224,19 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 }
 
 func (MacroAssembler) Resume(p *gen.Prog) {
-	padUntil(p, PadWord, abi.TextAddrResume)
 	p.Text.PutUint32(in.RET.Rn(RegLink)) // Return from trap handler or import function call.
 }
 
-func (MacroAssembler) Init(p *gen.Prog) {
-	padUntil(p, PadWord, abi.TextAddrStart)
-	p.Text.PutUint32(NopWord)
-}
+func (MacroAssembler) Enter(p *gen.Prog) {
+	// Start function
 
-func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
-	padUntil(p, NopWord, abi.TextAddrEnter)
+	p.Text.PutUint32(in.PopIntReg(RegScratch))
+	p.Text.PutUint32(in.CBZ.RtI19(RegScratch, 3, wa.I32)) // Skip 2 next instructions.
+	p.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.I64))
+	p.Text.PutUint32(in.BLR.Rn(RegScratch))
+	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth includes entry address.
 
-	// Entry routine
+	// Entry function
 
 	p.Text.PutUint32(in.MOVZ.RdI16Hw(RegResult, 0, 0, wa.I64)) // Result if no entry func.
 
@@ -245,15 +244,13 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	p.Text.PutUint32(in.CBZ.RtI19(RegScratch, 3, wa.I32)) // Skip 2 next instructions.
 	p.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.I64))
 	p.Text.PutUint32(in.BLR.Rn(RegScratch))
-	retAddr = p.Text.Addr
+	p.Map.PutCallSite(uint32(p.Text.Addr), 0) // No function addresses remain on stack.
 
 	// Exit
 
 	p.Text.PutUint32(in.LogicalShiftLeft(RegResult, RegResult, 32, wa.I64))
 	p.Text.PutUint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
 	p.Text.PutUint32(in.BR.Rn(RegScratch))
-
-	return
 }
 
 func (MacroAssembler) CallImportVector(p *gen.Prog, index int, variadic bool, argCount, sigIndex int) {

@@ -31,3 +31,8 @@ func EntryFunc(mod compile.Module, name string) (funcIndex uint32, err error) {
 func IsEntryFuncType(sig wa.FuncType) bool {
 	return len(sig.Params) == 0 && (sig.Result == wa.Void || sig.Result == wa.I32)
 }
+
+// IsStartFuncType checks if the signature is suitable for a start function.
+func IsStartFuncType(sig wa.FuncType) bool {
+	return sig.Equal(wa.FuncType{})
+}

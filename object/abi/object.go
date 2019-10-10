@@ -7,6 +7,5 @@ package abi
 const (
 	TextAddrNoFunction = 0x00 // NoFunction trap handler.
 	TextAddrResume     = 0x10 // Return from import function or trap handler.
-	TextAddrStart      = 0x20 // Call start and entry functions, and exit.
-	TextAddrEnter      = 0x30 // Call entry function and exit.
+	TextAddrEnter      = 0x20 // Call start and entry functions, and exit.
 )

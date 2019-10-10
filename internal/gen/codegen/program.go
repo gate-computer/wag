@@ -68,32 +68,16 @@ func GenProgram(
 	asm.AlignFunc(p)
 	asm.Resume(p)
 
-	if p.Text.Addr <= abi.TextAddrResume || p.Text.Addr > abi.TextAddrStart {
+	if p.Text.Addr <= abi.TextAddrResume || p.Text.Addr > abi.TextAddrEnter {
 		panic("bad text address after resume routine")
 	}
 	asm.AlignFunc(p)
 
 	// Virtual return point for resuming a program which was suspended before
 	// execution started.  This call site must be at index 0, and its address
-	// must match the start routine.
-	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth excludes entry args, includes entry addr.
-
-	asm.Init(p)
-
-	if m.StartDefined {
-		if int(m.StartIndex) >= initFuncCount {
-			initFuncCount = int(m.StartIndex) + 1
-		}
-		asm.CallMissing(p, false)
-		p.FuncLinks[m.StartIndex].AddSite(p.Text.Addr)
-	}
-	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth excludes entry args, includes entry addr.
-
-	if p.Text.Addr <= abi.TextAddrStart || p.Text.Addr > abi.TextAddrEnter {
-		panic("bad text address after init routine and start function call")
-	}
-	retAddr := asm.InitCallEntry(p)
-	p.Map.PutCallSite(uint32(retAddr), 0) // Depth excludes entry args.
+	// must match the TextAddrEnter routine.
+	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word*2) // Depth includes start and entry addresses.
+	asm.Enter(p)
 
 	if p.Text.Addr > rodata.CommonsAddr {
 		panic("bad text address after init routines")

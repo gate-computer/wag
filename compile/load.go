@@ -2,7 +2,72 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package compile implements a WebAssembly compiler.
+/*
+Package compile implements a WebAssembly compiler.
+
+
+Text
+
+WebAssembly (version 1) sections which affect to the immutable text (machine
+code):
+
+	Type
+	Import
+	Function
+	Table
+	Memory (*)
+	Global (*)
+	Element
+	Code
+
+(*) Memory sizes and global values do not affect text, only their counts and
+types do.
+
+Sections which have no effect on text:
+
+	Export
+	Start
+	Data
+	Custom sections
+
+Vector-based import function indexes also affect text, but their addresses are
+configured at run-time by mapping the vector immediately before text.
+
+
+Globals and memory
+
+The memory, global and data sections comprise a single mutable buffer.
+
+
+Stack
+
+Any effect the export and start sections have happens via the run-time stack
+buffer, which must be initialized with optional start and entry function
+addresses.
+
+Stack regions from low to high address:
+
+	1. Space for runtime-specific variables (size must be a multiple of 32).
+	2. Space for signal stacks and red zones (size must be a multiple of 32).
+	3. 240 bytes for use by trap handlers and vector-based import functions.
+	4. 8 bytes for trap handler return address (included in call stack).
+	5. 8 bytes for an extra function call (included in call stack).
+	6. The rest of the call stack (size must be a multiple of 8).
+	7. Start function address (4 bytes padded to 8).
+	8. Entry function address (4 bytes padded to 8).
+
+Function addresses are relative to the start of text.  Zero address causes the
+function to be skipped.
+
+Stack pointer is initially positioned between regions 6 and 7.  Function
+prologue compares the stack pointer against the threshold between regions 5 and
+6 (the stack limit).
+
+(Size requirements for regions 1-5 cause their total size to be a multiple of
+32, so that the stack limit divided by 16 is an even number.  It's necessary
+for the ARM64 backend's suspension logic.)
+
+*/
 package compile
 
 import (
@@ -490,15 +555,6 @@ func (m Module) StartFunc() (funcIndex uint32, defined bool) {
 	funcIndex = m.m.StartIndex
 	defined = m.m.StartDefined
 	return
-}
-
-func (m *Module) SetStartFunc(funcIndex uint32) {
-	m.m.StartIndex = funcIndex
-	m.m.StartDefined = true
-}
-
-func (m *Module) UnsetStartFunc() {
-	m.m.StartDefined = false
 }
 
 // CodeConfig for a single compiler invocation.  Either MaxTextSize or Text

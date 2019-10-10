@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 
@@ -51,9 +52,14 @@ func TestExec(t *testing.T) {
 	minMemorySize := mod.InitialMemorySize()
 	maxMemorySize := mod.MemorySizeLimit()
 
+	startFunc, defined := mod.StartFunc()
+	if !defined {
+		startFunc = math.MaxUint32
+	}
+
 	entryFunc := findNiladicEntryFunc(mod, "main")
 
-	p, err := runner.NewProgram(maxTextSize, entryFunc)
+	p, err := runner.NewProgram(maxTextSize, startFunc, entryFunc)
 	if err != nil {
 		t.Fatal(err)
 	}

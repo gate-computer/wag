@@ -23,7 +23,6 @@ import (
 const (
 	FuncAlignment = 16
 
-	NopByte = 0x90
 	PadByte = 0xcc // INT3 instruction
 )
 
@@ -57,21 +56,21 @@ var asm MacroAssembler
 type MacroAssembler struct{}
 
 func (MacroAssembler) AlignData(p *gen.Prog, alignment int) {
-	pad(p, PadByte, (alignment-int(p.Text.Addr))&(alignment-1))
+	pad(p, (alignment-int(p.Text.Addr))&(alignment-1))
 }
 
 func (MacroAssembler) AlignFunc(p *gen.Prog) {
-	pad(p, PadByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
+	pad(p, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
 }
 
 func (MacroAssembler) PadUntil(p *gen.Prog, addr int32) {
-	pad(p, PadByte, int(addr)-int(p.Text.Addr))
+	pad(p, int(addr)-int(p.Text.Addr))
 }
 
-func pad(p *gen.Prog, filler byte, length int) {
+func pad(p *gen.Prog, length int) {
 	gap := p.Text.Extend(length)
 	for i := range gap {
-		gap[i] = filler
+		gap[i] = PadByte
 	}
 }
 
@@ -230,36 +229,43 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 
 func (MacroAssembler) Resume(p *gen.Prog) {
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
-	in.RET.Simple(&p.Text) // return from trap handler or import function call
+	in.RET.Simple(&p.Text) // Return from trap handler or import function call.
 }
 
-func (MacroAssembler) Init(p *gen.Prog) {
-	reinit(p)
-}
+func (MacroAssembler) Enter(p *gen.Prog) {
+	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 
-func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
-	pad(p, NopByte, (FuncAlignment-int(p.Text.Addr))&(FuncAlignment-1))
+	// Start function
 
-	// Entry routine
-
-	reinit(p)
-
-	in.XOR.RegReg(&p.Text, wa.I32, RegResult, RegResult) // result if no entry func
-
-	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // entry func text addr
+	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // Start function address.
 	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
 	in.JEcb.Stub8(&p.Text)
-	nullJump := p.Text.Addr
+	skipStart := p.Text.Addr
 
 	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
-	retAddr = p.Text.Addr
+	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth includes entry address.
 
-	linker.UpdateNearBranch(p.Text.Bytes(), nullJump)
+	linker.UpdateNearBranch(p.Text.Bytes(), skipStart)
+
+	// Entry function
+
+	in.XOR.RegReg(&p.Text, wa.I32, RegResult, RegResult) // Result if no entry function.
+
+	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // Entry function address.
+	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
+	in.JEcb.Stub8(&p.Text)
+	skipEntry := p.Text.Addr
+
+	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
+	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
+	p.Map.PutCallSite(uint32(p.Text.Addr), 0) // No function addresses remain on stack.
+
+	linker.UpdateNearBranch(p.Text.Bytes(), skipEntry)
 
 	// Exit
 
-	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // exit text at top, trap id (0) at bottom
+	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // Result at top, trap id (0) at bottom.
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 
@@ -284,12 +290,6 @@ func (MacroAssembler) InitCallEntry(p *gen.Prog) (retAddr int32) {
 	asm.StoreStackReg(p, wa.I64, 0, RegScratch)
 	in.XOR.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
 	in.RET.Simple(&p.Text)
-
-	return
-}
-
-func reinit(p *gen.Prog) {
-	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 }
 
 func (MacroAssembler) CallImportVector(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int) {

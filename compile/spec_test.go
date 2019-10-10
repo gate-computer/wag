@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -445,9 +446,14 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 		mod := loadInitialSections(&ModuleConfig{common}, wasm)
 		bind(&mod, lib, globals{})
 
+		startFunc, defined := mod.StartFunc()
+		if !defined {
+			startFunc = math.MaxUint32
+		}
+
 		var timedout bool
 
-		p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "test"))
+		p, err := runner.NewProgram(maxTextSize, startFunc, findNiladicEntryFunc(mod, "test"))
 		if err != nil {
 			t.Fatal(err)
 		}

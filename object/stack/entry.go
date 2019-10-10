@@ -11,8 +11,9 @@ import (
 	"github.com/tsavola/wag/internal/obj"
 )
 
-func EntryFrame(entryFuncAddr uint32) (frame []byte) {
-	frame = make([]byte, obj.Word)
-	binary.LittleEndian.PutUint64(frame, uint64(entryFuncAddr))
+func InitFrame(startFuncAddr, entryFuncAddr uint32) (frame []byte) {
+	frame = make([]byte, obj.Word*2)
+	binary.LittleEndian.PutUint64(frame[0:], uint64(startFuncAddr))
+	binary.LittleEndian.PutUint64(frame[8:], uint64(entryFuncAddr))
 	return
 }

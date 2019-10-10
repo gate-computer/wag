@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 
@@ -43,13 +44,18 @@ func misc(t *testing.T, filename, entry string) string {
 	mod := loadInitialSections(nil, wasm)
 	bind(&mod, lib, nil)
 
-	var entryFunc uint32
+	startFunc, defined := mod.StartFunc()
+	if !defined {
+		startFunc = math.MaxUint32
+	}
+
+	entryFunc := uint32(math.MaxUint32)
 	if entry != "" {
 		entryFunc = findNiladicEntryFunc(mod, entry)
 		t.Logf("entry function index: %d", entryFunc)
 	}
 
-	p, err := runner.NewProgram(maxTextSize, entryFunc)
+	p, err := runner.NewProgram(maxTextSize, startFunc, entryFunc)
 	if err != nil {
 		t.Fatal(err)
 	}

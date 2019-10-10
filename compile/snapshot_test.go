@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 
@@ -39,7 +40,7 @@ func TestSnapshot(t *testing.T) {
 	mod := loadInitialSections(nil, wasm)
 	bind(&mod, lib, nil)
 
-	p, err := runner.NewProgram(maxTextSize, findNiladicEntryFunc(mod, "main"))
+	p, err := runner.NewProgram(maxTextSize, math.MaxUint32, findNiladicEntryFunc(mod, "main"))
 	if err != nil {
 		t.Fatal(err)
 	}

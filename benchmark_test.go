@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io/ioutil"
+	"math"
 	"os"
 	"runtime"
 	"testing"
@@ -36,7 +37,7 @@ func TestBenchmarkRunNqueens(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := runner.NewProgram(maxTextSize, 0)
+	p, err := runner.NewProgram(maxTextSize, math.MaxUint32, math.MaxUint32)
 	if err != nil {
 		t.Fatal(err)
 	}

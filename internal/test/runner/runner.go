@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"reflect"
 	"runtime"
@@ -160,6 +161,8 @@ type Program struct {
 	Text     []byte
 	DebugMap debug.InsnMap
 
+	startFunc uint32
+	startAddr uint32
 	entryFunc uint32
 	entryAddr uint32
 
@@ -169,8 +172,9 @@ type Program struct {
 	callSites map[int]callSite
 }
 
-func NewProgram(maxTextSize int, entryFunc uint32) (p *Program, err error) {
+func NewProgram(maxTextSize int, startFunc, entryFunc uint32) (p *Program, err error) {
 	p = &Program{
+		startFunc: startFunc,
 		entryFunc: entryFunc,
 	}
 
@@ -234,23 +238,21 @@ func (p *Program) SetEntryAddr(addr uint32) {
 }
 
 func (p *Program) resolveEntry() {
-	if p.entryFunc == 0 || p.entryAddr != 0 {
-		return
+	if p.startFunc != math.MaxUint32 && p.startAddr == 0 {
+		p.startAddr = p.DebugMap.FuncAddrs[p.startFunc]
 	}
-
-	p.entryAddr = p.DebugMap.FuncAddrs[p.entryFunc]
+	if p.entryFunc != math.MaxUint32 && p.entryAddr == 0 {
+		p.entryAddr = p.DebugMap.FuncAddrs[p.entryFunc]
+	}
 }
 
 func (p *Program) getStack() []byte {
-	if p.entryFunc != 0 && p.entryAddr == 0 {
-		p.resolveEntry()
-	}
-
-	return stack.EntryFrame(p.entryAddr)
+	p.resolveEntry()
+	return stack.InitFrame(p.startAddr, p.entryAddr)
 }
 
 func (*Program) getResume() int {
-	return abi.TextAddrStart
+	return abi.TextAddrEnter
 }
 
 type Runner struct {

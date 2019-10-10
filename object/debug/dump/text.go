@@ -85,7 +85,6 @@ func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *se
 
 	targets := map[uint]string{
 		uint(textAddr) + abi.TextAddrResume: "resume",
-		uint(textAddr) + abi.TextAddrStart:  "start",
 		uint(textAddr) + abi.TextAddrEnter:  "enter",
 	}
 

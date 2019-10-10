@@ -2,6 +2,25 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/*
+Package wag provides a high-level WebAssembly compiler API.
+
+See the Compile function's source code for an example of how to use the
+low-level compiler APIs (implemented in subpackages).
+
+
+Errors
+
+ModuleError type is accessible via errors subpackage.  Such errors may be
+returned by compilation and other parsing functions.  Other types of errors
+indicate either a read error or an internal compiler error.  Unexpected EOF is
+a ModuleError which wraps io.ErrUnexpectedEOF.
+
+Default buffer implementations use the buffer.ErrSizeLimit error to indicate
+that generated code or data doesn't fit in a target buffer.  It is a
+ModuleError (the module didn't conform to size constraints).
+
+*/
 package wag
 
 import (
@@ -56,8 +75,8 @@ type Config struct {
 // Object code with debug information.  The fields are roughly in order of
 // appearance during compilation.
 //
-// Executing the code requires a platform-specific mechanism; it's not
-// supported by this package.
+// Executing the code requires a platform-specific mechanism.  It is not
+// supported by this package, but see the compile subpackage for information.
 type Object struct {
 	FuncTypes         []wa.FuncType       // Signatures for debug output.
 	InitialMemorySize int                 // Current memory allocation.
@@ -163,9 +182,15 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		return
 	}
 
-	// Find the export function which will be used as the optional entry point.
-	// (It is executed after the optional start function which is defined by
-	// the module specification.)  CallMap is used to look up the address.
+	// Find the optional start function, and the export function which will be
+	// used as the optional entry point.  CallMap is used to look up their
+	// addresses.
+
+	var startAddr uint32
+
+	if startIndex, defined := module.StartFunc(); defined {
+		startAddr = object.FuncAddrs[startIndex]
+	}
 
 	var (
 		entryIndex uint32
@@ -181,9 +206,9 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		entryAddr = object.FuncAddrs[entryIndex]
 	}
 
-	// Form a stack frame for the init routine which calls the entry function.
+	// Form a stack frame for the init routine which calls the functions.
 
-	object.StackFrame = stack.EntryFrame(entryAddr)
+	object.StackFrame = stack.InitFrame(startAddr, entryAddr)
 
 	// Read the whole binary module to get the name section.
 
