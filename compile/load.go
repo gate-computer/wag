@@ -111,39 +111,38 @@ type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
 
 const (
-	maxStringLen          = 255   // TODO
-	maxTableLimit         = 32768 // TODO
-	maxInitialMemoryLimit = 16384 // TODO
-	maxMaximumMemoryLimit = math.MaxInt32 >> wa.PageBits
-	maxGlobals            = 4096/obj.Word - 2 // (trap handler + memory limit)
-	maxExports            = 64
-	maxElements           = 32768
+	maxStringLen  = 255   // TODO
+	maxTableSize  = 32768 // TODO
+	MaxMemorySize = math.MaxInt32 / wa.PageSize
+	maxGlobals    = 4096/obj.Word - 2 // (trap handler + memory limit)
+	maxExports    = 64
+	maxElements   = 32768
 )
 
-func readResizableLimits(load loader.L, maxInitial, maxMaximum uint32, scale int) module.ResizableLimits {
-	maximumFieldIsPresent := load.Varuint1()
+func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string,
+) (limits module.ResizableLimits) {
+	maxFieldIsPresent := load.Varuint1()
 
-	initial := load.Varuint32()
-	if initial > maxInitial {
-		panic(module.Errorf("initial memory size is too large: %d", initial))
+	init := load.Varuint32()
+	if init > maxInit {
+		panic(module.Errorf("initial %s size is too large: %d", kind, init))
 	}
+	limits.Init = int(init) * scale
 
-	maximum := maxMaximum
-
-	if maximumFieldIsPresent {
-		maximum = load.Varuint32()
-		if maximum > maxMaximum {
-			maximum = maxMaximum
+	if maxFieldIsPresent {
+		max := load.Varuint32()
+		if max > maxMax {
+			max = maxMax
 		}
-		if maximum < initial {
-			panic(module.Errorf("maximum memory size %d is smaller than initial memory size %d", maximum, initial))
+		if max < init {
+			panic(module.Errorf("maximum %s size %d is smaller than initial %s size %d", kind, max, kind, init))
 		}
+		limits.Max = int(max) * scale
+	} else {
+		limits.Max = -1
 	}
 
-	return module.ResizableLimits{
-		Initial: int(initial) * scale,
-		Maximum: int(maximum) * scale,
-	}
+	return
 }
 
 // Config for loading WebAssembly module sections.
@@ -373,7 +372,10 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 			panic(module.Errorf("unsupported table element type: %d", elementType))
 		}
 
-		m.m.TableLimitValues = readResizableLimits(load, maxTableLimit, maxTableLimit, 1)
+		m.m.TableLimit = readResizableLimits(load, maxTableSize, maxTableSize, 1, "table")
+		if m.m.TableLimit.Max < 0 {
+			m.m.TableLimit.Max = maxTableSize
+		}
 
 	default:
 		panic(module.Error("multiple tables not supported"))
@@ -385,7 +387,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	case 0:
 
 	case 1:
-		m.m.MemoryLimitValues = readResizableLimits(load, maxInitialMemoryLimit, maxMaximumMemoryLimit, wa.PageSize)
+		m.m.MemoryLimit = readResizableLimits(load, MaxMemorySize, MaxMemorySize, wa.PageSize, "memory")
 
 	default:
 		panic(module.Error("multiple memories not supported"))
@@ -461,7 +463,7 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 		numElem := load.Varuint32()
 
 		needSize := uint64(offset) + uint64(numElem)
-		if needSize > uint64(m.m.TableLimitValues.Initial) {
+		if needSize > uint64(m.m.TableLimit.Init) {
 			panic(module.Errorf("table segment #%d exceeds initial table size", i))
 		}
 
@@ -497,8 +499,8 @@ func (m Module) FuncTypes() []wa.FuncType {
 	return sigs
 }
 
-func (m Module) InitialMemorySize() int { return m.m.MemoryLimitValues.Initial }
-func (m Module) MemorySizeLimit() int   { return m.m.MemoryLimitValues.Maximum }
+func (m Module) InitialMemorySize() int { return m.m.MemoryLimit.Init }
+func (m Module) MemorySizeLimit() int   { return m.m.MemoryLimit.Max }
 
 func (m Module) GlobalTypes() []wa.GlobalType {
 	gs := make([]wa.GlobalType, len(m.m.Globals))

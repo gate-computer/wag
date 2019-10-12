@@ -80,7 +80,7 @@ type Config struct {
 type Object struct {
 	FuncTypes         []wa.FuncType       // Signatures for debug output.
 	InitialMemorySize int                 // Current memory allocation.
-	MemorySizeLimit   int                 // Maximum valid value if not limited.
+	MemorySizeLimit   int                 // -1 if not limited.
 	Text              []byte              // Machine code and read-only data.
 	debug.InsnMap                         // Stack unwinding and debug metadata.
 	MemoryOffset      int                 // Threshold between globals and memory.

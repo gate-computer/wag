@@ -83,7 +83,7 @@ func readSegmentHeader(load loader.L, m *module.M, segmentIndex int) (offset, si
 	offset = initexpr.ReadOffset(m, load)
 	size = load.Varuint32()
 
-	if uint64(offset)+uint64(size) > uint64(m.MemoryLimitValues.Initial) {
+	if uint64(offset)+uint64(size) > uint64(m.MemoryLimit.Init) {
 		panic(module.Errorf("memory segment #%d exceeds initial memory size", segmentIndex))
 	}
 

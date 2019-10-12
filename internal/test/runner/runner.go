@@ -272,6 +272,9 @@ type Runner struct {
 }
 
 func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+	if growMemorySize < 0 {
+		growMemorySize = int(math.MaxInt32/wa.PageSize) * wa.PageSize
+	}
 	binary.LittleEndian.PutUint64(p.vec[len(p.vec)+vectorIndexGrowMemoryLimit*8:], uint64(growMemorySize)/wa.PageSize)
 
 	r, err = newRunner(p, initMemorySize, growMemorySize, stackSize)

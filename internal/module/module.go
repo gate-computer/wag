@@ -106,8 +106,8 @@ type ImportFunc struct {
 }
 
 type ResizableLimits struct {
-	Initial int
-	Maximum int
+	Init int
+	Max  int // -1 if unlimited (memory).
 }
 
 type Global struct {
@@ -117,17 +117,17 @@ type Global struct {
 }
 
 type M struct {
-	Types             []wa.FuncType
-	Funcs             []uint32
-	ImportFuncs       []ImportFunc
-	TableLimitValues  ResizableLimits
-	MemoryLimitValues ResizableLimits
-	Globals           []Global
-	ImportGlobals     []Import
-	ExportFuncs       map[string]uint32
-	StartIndex        uint32
-	StartDefined      bool
-	TableFuncs        []uint32
+	Types         []wa.FuncType
+	Funcs         []uint32
+	ImportFuncs   []ImportFunc
+	TableLimit    ResizableLimits
+	MemoryLimit   ResizableLimits
+	Globals       []Global
+	ImportGlobals []Import
+	ExportFuncs   map[string]uint32
+	StartIndex    uint32
+	StartDefined  bool
+	TableFuncs    []uint32
 }
 
 type ImportIndex struct {
