@@ -95,6 +95,7 @@ import (
 
 const (
 	DefaultMaxTextSize = 0x7fff0000 // below 2 GB to mitigate address calculation bugs
+	MaxMemorySize      = math.MaxInt32
 
 	defaultTextBufferSize   = wa.PageSize // arbitrary
 	defaultMemoryBufferSize = wa.PageSize // arbitrary
@@ -111,12 +112,12 @@ type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
 
 const (
-	maxStringLen  = 255   // TODO
-	maxTableSize  = 32768 // TODO
-	MaxMemorySize = math.MaxInt32 / wa.PageSize
-	maxGlobals    = 4096/obj.Word - 2 // (trap handler + memory limit)
-	maxExports    = 64
-	maxElements   = 32768
+	maxStringLen   = 255   // TODO
+	maxTableSize   = 32768 // TODO
+	maxMemoryLimit = MaxMemorySize / wa.PageSize
+	maxGlobals     = 4096/obj.Word - 2 // (trap handler + memory limit)
+	maxExports     = 64
+	maxElements    = 32768
 )
 
 func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string,
@@ -387,7 +388,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	case 0:
 
 	case 1:
-		m.m.MemoryLimit = readResizableLimits(load, MaxMemorySize, MaxMemorySize, wa.PageSize, "memory")
+		m.m.MemoryLimit = readResizableLimits(load, maxMemoryLimit, maxMemoryLimit, wa.PageSize, "memory")
 
 	default:
 		panic(module.Error("multiple memories not supported"))
