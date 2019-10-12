@@ -85,7 +85,7 @@ type Object struct {
 	debug.InsnMap                         // Stack unwinding and debug metadata.
 	MemoryOffset      int                 // Threshold between globals and memory.
 	GlobalsMemory     []byte              // Global values and memory contents.
-	StackFrame        []byte              // Entry function address and arguments.
+	StackFrame        []byte              // Start and entry function addresses.
 	Names             section.NameSection // Symbols for debug output.
 }
 

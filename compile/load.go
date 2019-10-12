@@ -8,8 +8,7 @@ Package compile implements a WebAssembly compiler.
 
 Text
 
-WebAssembly (version 1) sections which affect to the immutable text (machine
-code):
+Module sections (wasm v1) which affect the immutable text (machine code):
 
 	Type
 	Import
