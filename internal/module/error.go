@@ -9,13 +9,13 @@ import (
 )
 
 func Error(text string) error {
-	return internal.Error(text)
+	return internal.ModuleError(text)
 }
 
 func Errorf(format string, args ...interface{}) error {
-	return internal.Errorf(format, args...)
+	return internal.ModuleErrorf(format, args...)
 }
 
 func WrapError(cause error, text string) error {
-	return internal.WrapError(cause, text)
+	return internal.WrapModuleError(cause, text)
 }

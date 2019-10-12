@@ -8,23 +8,24 @@ import (
 	"fmt"
 )
 
-type ModuleError struct {
+type moduleError struct {
 	text  string
 	cause error
 }
 
-func Error(text string) error {
-	return &ModuleError{text, nil}
+func ModuleError(text string) error {
+	return &moduleError{text, nil}
 }
 
-func Errorf(format string, args ...interface{}) error {
-	return &ModuleError{fmt.Sprintf(format, args...), nil}
+func ModuleErrorf(format string, args ...interface{}) error {
+	return &moduleError{fmt.Sprintf(format, args...), nil}
 }
 
-func WrapError(cause error, text string) error {
-	return &ModuleError{text, cause}
+func WrapModuleError(cause error, text string) error {
+	return &moduleError{text, cause}
 }
 
-func (e *ModuleError) Error() string       { return e.text }
-func (e *ModuleError) ModuleError() string { return e.text }
-func (e *ModuleError) Unwrap() error       { return e.cause }
+func (e *moduleError) Error() string       { return e.text }
+func (e *moduleError) PublicError() string { return e.text }
+func (e *moduleError) ModuleError()        {}
+func (e *moduleError) Unwrap() error       { return e.cause }

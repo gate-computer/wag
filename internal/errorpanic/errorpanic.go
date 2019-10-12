@@ -8,11 +8,8 @@ import (
 	"io"
 	"runtime"
 
-	internal "github.com/tsavola/wag/internal/errors"
-	"golang.org/x/xerrors"
+	errors "golang.org/x/xerrors"
 )
-
-var errUnexpectedEOF = internal.WrapError(io.ErrUnexpectedEOF, io.ErrUnexpectedEOF.Error())
 
 func Handle(x interface{}) (err error) {
 	if x != nil {
@@ -25,11 +22,17 @@ func Handle(x interface{}) (err error) {
 			panic(x)
 		}
 
-		switch {
-		case xerrors.Is(err, io.EOF):
-			err = errUnexpectedEOF
+		if errors.Is(err, io.EOF) {
+			err = unexpectedEOF{}
 		}
 	}
 
 	return
 }
+
+type unexpectedEOF struct{}
+
+func (unexpectedEOF) Error() string       { return "unexpected EOF" }
+func (unexpectedEOF) PublicError() string { return "unexpected EOF" }
+func (unexpectedEOF) ModuleError()        {}
+func (unexpectedEOF) Unwrap() error       { return io.ErrUnexpectedEOF }

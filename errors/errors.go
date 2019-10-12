@@ -5,10 +5,22 @@
 // Package errors exports common error types without unnecessary dependencies.
 package errors
 
-import (
-	internal "github.com/tsavola/wag/internal/errors"
-)
+// PublicError provides a message which can be used in communications.  The
+// Error() method returns a message suitable for internal logging etc.
+type PublicError interface {
+	error
+	PublicError() string
+}
 
 // ModuleError indicates that the error is caused by unsupported or malformed
-// WebAssembly module.  It may wrap an underlying error.
-type ModuleError = internal.ModuleError
+// WebAssembly module.
+type ModuleError interface {
+	PublicError
+	ModuleError()
+}
+
+// ResourceLimit was reached.
+type ResourceLimit interface {
+	PublicError
+	ResourceLimit()
+}

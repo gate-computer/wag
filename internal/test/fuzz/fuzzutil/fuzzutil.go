@@ -12,6 +12,7 @@ import (
 
 	"github.com/tsavola/wag/binding"
 	"github.com/tsavola/wag/buffer"
+	werrors "github.com/tsavola/wag/errors"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/wa"
 )
@@ -49,7 +50,10 @@ func IsFine(err error) bool {
 	}
 
 	switch err.(type) {
-	case interface{ ModuleError() string }:
+	case werrors.ModuleError:
+		return true
+
+	case werrors.ResourceLimit:
 		return true
 	}
 

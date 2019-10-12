@@ -11,14 +11,10 @@ low-level compiler APIs (implemented in subpackages).
 
 Errors
 
-ModuleError type is accessible via errors subpackage.  Such errors may be
-returned by compilation and other parsing functions.  Other types of errors
-indicate either a read error or an internal compiler error.  Unexpected EOF is
-a ModuleError which wraps io.ErrUnexpectedEOF.
-
-Default buffer implementations use the buffer.ErrSizeLimit error to indicate
-that generated code or data doesn't fit in a target buffer.  It is a
-ModuleError (the module didn't conform to size constraints).
+ModuleError and ResourceLimit error types are accessible via errors subpackage.
+Such errors may be returned by compilation and other parsing functions.  Other
+types of errors indicate either a read error or an internal compiler error.
+(Unexpected EOF is a ModuleError which wraps io.ErrUnexpectedEOF.)
 
 */
 package wag
