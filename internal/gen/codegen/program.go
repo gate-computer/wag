@@ -65,14 +65,13 @@ func GenProgram(
 	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
 		panic("bad text address after NoFunction trap handler")
 	}
-	asm.AlignFunc(p)
+	asm.PadUntil(p, abi.TextAddrResume)
 	asm.Resume(p)
 
 	if p.Text.Addr <= abi.TextAddrResume || p.Text.Addr > abi.TextAddrEnter {
 		panic("bad text address after resume routine")
 	}
-	asm.AlignFunc(p)
-
+	asm.PadUntil(p, abi.TextAddrEnter)
 	// Virtual return point for resuming a program which was suspended before
 	// execution started.  This call site must be at index 0, and its address
 	// must match the TextAddrEnter routine.
