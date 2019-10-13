@@ -115,7 +115,7 @@ const (
 	maxStringLen   = 255   // TODO
 	maxTableSize   = 32768 // TODO
 	maxMemoryLimit = MaxMemorySize / wa.PageSize
-	maxGlobals     = 4096/obj.Word - 2 // (trap handler + memory limit)
+	maxGlobals     = 32 - 2 // max supported by arm backend - (trap handler + memory limit)
 	maxExports     = 64
 	maxElements    = 32768
 )
