@@ -515,7 +515,7 @@ func (MacroAssembler) StoreStackImm(p *gen.Prog, t wa.Type, offset int32, value 
 	case value == 0:
 		in.MOVmr.RegStackDisp(&p.Text, wa.I64, RegZero, offset)
 
-	case t.Size() == 4:
+	case t.Size() == wa.Size32:
 		in.MOVi.StackDispImm32(&p.Text, wa.I32, offset, int32(value))
 
 	default:

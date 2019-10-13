@@ -12,7 +12,7 @@ import (
 
 func LogicalShiftLeft(rd, rn reg.R, uimm uint32, t wa.Type) uint32 {
 	var s, r uint32
-	if t.Size() == 4 {
+	if t.Size() == wa.Size32 {
 		r = (32 - uimm) & 31
 		s = (31 - uimm&31)
 	} else {

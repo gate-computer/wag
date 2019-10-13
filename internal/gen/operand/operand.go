@@ -46,6 +46,10 @@ func Flags(cond condition.C) O {
 	return O{storage.Flags, wa.I32, uint64(cond)}
 }
 
+func (o O) Size() wa.Size {
+	return o.Type.Size()
+}
+
 func (o *O) SetPlaceholder() {
 	o.Storage = storage.Imm // Least dangerous
 	if debug.Enabled {
@@ -63,7 +67,7 @@ func (o *O) SetStack() {
 }
 
 func (o O) ImmValue() int64 {
-	if o.Type.Size() == 4 {
+	if o.Size() == wa.Size32 {
 		return int64(int32(uint32(o.payload)))
 	} else {
 		return int64(o.payload)

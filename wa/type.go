@@ -24,6 +24,13 @@ func (cat ScalarCategory) String() string {
 	}
 }
 
+type Size uint8
+
+const (
+	Size32 = Size(4)
+	Size64 = Size(8)
+)
+
 type Type uint8
 
 const (
@@ -40,8 +47,8 @@ func (t Type) Category() ScalarCategory {
 }
 
 // Size in bytes.
-func (t Type) Size() uint8 {
-	return uint8(t) & (4 | 8)
+func (t Type) Size() Size {
+	return Size(t) & (4 | 8)
 }
 
 func (t Type) String() string {

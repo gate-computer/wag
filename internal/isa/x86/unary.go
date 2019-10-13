@@ -31,7 +31,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 			in.BSR.RegReg(&f.Text, x.Type, RegScratch, r)
 			in.MOVi.RegImm32(&f.Text, x.Type, r, -1)
 			in.CMOVE.RegReg(&f.Text, x.Type, RegScratch, r)
-			in.MOVi.RegImm32(&f.Text, x.Type, r, (int32(x.Type.Size())<<3)-1)
+			in.MOVi.RegImm32(&f.Text, x.Type, r, (int32(x.Size())<<3)-1)
 			in.SUB.RegReg(&f.Text, x.Type, r, RegScratch)
 		}
 		return operand.Reg(x.Type, r)
@@ -42,7 +42,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 			in.TZCNT.RegReg(&f.Text, x.Type, r, r)
 		} else {
 			in.BSF.RegReg(&f.Text, x.Type, r, r)
-			in.MOVi.RegImm32(&f.Text, x.Type, RegScratch, int32(x.Type.Size())<<3)
+			in.MOVi.RegImm32(&f.Text, x.Type, RegScratch, int32(x.Size())<<3)
 			in.CMOVE.RegReg(&f.Text, x.Type, r, RegScratch)
 		}
 		return operand.Reg(x.Type, r)
