@@ -148,10 +148,9 @@ func binaryIntMul(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 }
 
 func binaryIntDivU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
-	divisorReg, _ := opPrepareDIV(f, a, b)
+	divisorReg := opPrepareDiv(f, a, b)
 
 	// RegDividendHigh is RegZero.
-
 	in.DIV.Reg(&f.Text, b.Type, divisorReg)
 	f.Regs.Free(b.Type, divisorReg)
 
@@ -160,10 +159,9 @@ func binaryIntDivU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 }
 
 func binaryIntRemU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
-	divisorReg, _ := opPrepareDIV(f, a, b)
+	divisorReg := opPrepareDiv(f, a, b)
 
 	// RegDividendHigh is RegZero.
-
 	in.DIV.Reg(&f.Text, b.Type, divisorReg)
 	f.Regs.Free(b.Type, divisorReg)
 
@@ -175,27 +173,25 @@ func binaryIntRemU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 }
 
 func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
-	divisorReg, checkOverflow := opPrepareIDIV(f, a, b)
+	divisorReg := opPrepareDiv(f, a, b)
 
-	if checkOverflow {
-		var okJumps []int32
-
-		if a.Type == wa.I32 {
-			in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
-		} else {
-			in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseText, rodata.Mask80Addr64)
-		}
-		in.JNEcb.Stub8(&f.Text)
-		okJumps = append(okJumps, f.Text.Addr)
-
-		in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
-		in.JNEcb.Stub8(&f.Text)
-		okJumps = append(okJumps, f.Text.Addr)
-
-		asm.Trap(f, trap.IntegerOverflow)
-
-		linker.UpdateNearBranches(f.Text.Bytes(), okJumps)
+	if a.Type == wa.I32 {
+		in.CMPi.RegImm32(&f.Text, a.Type, RegDividendLow, -0x80000000)
+	} else {
+		in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseText, rodata.Mask80Addr64)
 	}
+	in.JNEcb.Stub8(&f.Text)
+	skip1 := f.Text.Addr
+
+	in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
+	in.JNEcb.Stub8(&f.Text)
+	skip2 := f.Text.Addr
+
+	asm.Trap(f, trap.IntegerOverflow)
+
+	text := f.Text.Bytes()
+	linker.UpdateNearBranch(text, skip1)
+	linker.UpdateNearBranch(text, skip2)
 
 	in.CDQ.Type(&f.Text, a.Type) // Sign-extend dividend low bits to high bits.
 	in.IDIV.Reg(&f.Text, b.Type, divisorReg)
@@ -206,21 +202,20 @@ func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 }
 
 func binaryIntRemS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
-	divisorReg, checkOverflow := opPrepareIDIV(f, a, b)
+	divisorReg := opPrepareDiv(f, a, b)
 
-	var overflowJumps []int32
-
-	if checkOverflow {
-		in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
-		in.JEcb.Stub8(&f.Text)
-		overflowJumps = append(overflowJumps, f.Text.Addr)
-	}
+	// RegDividendHigh (remainer) is RegZero, so correct result is already in
+	// place if the division is skipped.
+	in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
+	in.JEcb.Stub8(&f.Text)
+	skip := f.Text.Addr
 
 	in.CDQ.Type(&f.Text, a.Type) // Sign-extend dividend low bits to high bits.
 	in.IDIV.Reg(&f.Text, b.Type, divisorReg)
-	f.Regs.Free(b.Type, divisorReg)
 
-	linker.UpdateNearBranches(f.Text.Bytes(), overflowJumps)
+	linker.UpdateNearBranch(f.Text.Bytes(), skip)
+
+	f.Regs.Free(b.Type, divisorReg)
 
 	resultReg := f.Regs.AllocResult(a.Type)
 	in.MOV.RegReg(&f.Text, a.Type, resultReg, RegDividendHigh) // Remainder
@@ -229,10 +224,7 @@ func binaryIntRemS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, resultReg)
 }
 
-func opPrepareDIV(f *gen.Func, a, b operand.O) (divisorReg reg.R, checkOverflow bool) {
-	checkOverflow = true
-	checkZero := true
-
+func opPrepareDiv(f *gen.Func, a, b operand.O) (divisorReg reg.R) {
 	if b.Storage == storage.Reg {
 		if b.Reg() == RegDividendLow {
 			in.MOV.RegReg(&f.Text, b.Type, RegScratch, RegDividendLow)
@@ -243,36 +235,13 @@ func opPrepareDIV(f *gen.Func, a, b operand.O) (divisorReg reg.R, checkOverflow 
 	} else {
 		asm.Move(f, RegScratch, b)
 		divisorReg = RegScratch
-
-		if b.Storage == storage.Imm {
-			divisor := b.ImmValue()
-			checkOverflow = (divisor == -1)
-			checkZero = (divisor == 0)
-		}
 	}
 
-	if checkZero {
-		in.TEST.RegReg(&f.Text, b.Type, divisorReg, divisorReg)
-		in.JNEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
-		asm.Trap(f, trap.IntegerDivideByZero)
-	}
+	in.TEST.RegReg(&f.Text, b.Type, divisorReg, divisorReg)
+	in.JNEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction.
+	asm.Trap(f, trap.IntegerDivideByZero)
 
 	asm.Move(f, RegDividendLow, a)
-	return
-}
-
-func opPrepareIDIV(f *gen.Func, a, b operand.O) (divisorReg reg.R, checkOverflow bool) {
-	divisorReg, checkOverflow = opPrepareDIV(f, a, b)
-
-	if checkOverflow && a.Storage == storage.Imm {
-		dividend := a.ImmValue()
-		if a.Type == wa.I32 {
-			checkOverflow = (dividend == -0x80000000)
-		} else {
-			checkOverflow = (dividend == -0x8000000000000000)
-		}
-	}
-
 	return
 }
 
