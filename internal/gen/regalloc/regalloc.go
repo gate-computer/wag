@@ -56,6 +56,16 @@ func (a *Allocator) Free(t wa.Type, r reg.R) {
 	a.categories[t.Category()].free(r)
 }
 
+// Free2 can be called also with reg.Result or reg.ScratchISA.
+func (a *Allocator) Free2(t wa.Type, r1, r2 reg.R) {
+	if debug.Enabled {
+		debug.Printf("free %s register: %s", t.Category(), r1)
+		debug.Printf("free %s register: %s", t.Category(), r2)
+	}
+
+	a.categories[t.Category()].free2(r1, r2)
+}
+
 func (a Allocator) CheckNoneAllocated() {
 	a.categories[wa.Int].checkNoneAllocated(allocatableInt, "int registers still allocated")
 	a.categories[wa.Float].checkNoneAllocated(allocatableFloat, "float registers still allocated")
@@ -82,6 +92,10 @@ func (s *state) allocResult() reg.R {
 
 func (s *state) free(r reg.R) {
 	s.available |= (1 << r) &^ 0x3 // ignore result and scratch regs
+}
+
+func (s *state) free2(r1, r2 reg.R) {
+	s.available |= ((1 << r1) | (1 << r2)) &^ 0x3 // ignore result and scratch regs
 }
 
 func (s state) checkNoneAllocated(allocatable bitmap, msg string) {

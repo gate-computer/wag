@@ -339,8 +339,7 @@ func binaryFloatCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
 
 	in.UCOMISSD.RegReg(&f.Text, a.Type, aReg, bReg)
 
-	f.Regs.Free(b.Type, bReg)
-	f.Regs.Free(a.Type, aReg)
+	f.Regs.Free2(a.Type, aReg, bReg)
 	return operand.Flags(condition.C(cond))
 }
 

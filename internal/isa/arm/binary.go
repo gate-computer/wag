@@ -23,8 +23,7 @@ func (MacroAssembler) Binary(f *gen.Func, props uint16, a, b operand.O) operand.
 	switch uint8(props) {
 	case prop.BinaryIntCmp:
 		f.Text.PutUint32(in.SUBSe.RdRnI3ExtRm(RegDiscard, aReg, 0, in.UXTX, bReg, a.Type))
-		f.Regs.Free(a.Type, aReg)
-		f.Regs.Free(b.Type, bReg)
+		f.Regs.Free2(a.Type, aReg, bReg)
 		return operand.Flags(condition.C(props >> 8))
 
 	case prop.BinaryIntAddsub:
