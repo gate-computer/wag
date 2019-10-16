@@ -170,6 +170,10 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 					type2 = "wa." + strings.ToUpper(m[3])
 				)
 
+				if m[2] == "reinterpret" {
+					props += typeCategory(m[3][:1])
+				}
+
 				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, props)
 			} else if m := regexp.MustCompile(`^(.)(..)\.(load|store)(.*)$`).FindStringSubmatch(op.name); m != nil {
 				var (

@@ -160,6 +160,8 @@ const (
 	ConvertU
 	Reinterpret
 
-	Demote  = Mote
-	Promote = Mote
+	Demote           = Mote
+	Promote          = Mote
+	ReinterpretInt   = Reinterpret
+	ReinterpretFloat = Reinterpret
 )

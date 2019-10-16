@@ -148,13 +148,14 @@ const (
 )
 
 const (
-	ExtendS     = ConvertExtend | uint(in.ExtendS)<<8
-	ExtendU     = ConvertExtend | uint(in.ExtendU)<<8
-	Demote      = ConvertDemote
-	Promote     = ConvertPromote
-	TruncS      = ConvertTruncS
-	TruncU      = ConvertTruncU
-	ConvertS    = ConvertConvertS
-	ConvertU    = ConvertConvertU
-	Reinterpret = ConvertReinterpret
+	ExtendS          = ConvertExtend | uint(in.ExtendS)<<8
+	ExtendU          = ConvertExtend | uint(in.ExtendU)<<8
+	Demote           = ConvertDemote
+	Promote          = ConvertPromote
+	TruncS           = ConvertTruncS
+	TruncU           = ConvertTruncU
+	ConvertS         = ConvertConvertS
+	ConvertU         = ConvertConvertU
+	ReinterpretInt   = ConvertReinterpret
+	ReinterpretFloat = ConvertReinterpret
 )
