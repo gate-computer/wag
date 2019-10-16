@@ -8,7 +8,7 @@
 
 // func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
 TEXT ·run(SB),NOSPLIT,$0-128
-loop:	JMP	loop
+	BL	runtime·exit(SB)
 
 // func importTrapHandler() uint64
 TEXT ·importTrapHandler(SB),$0-8
