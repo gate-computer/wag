@@ -140,7 +140,7 @@ static void handle_trap(uintptr_t stack_limit, void *stack_ptr, uint64_t trap, s
 	}
 
 	if (trap == 3 && (stack_limit & 1) == 1) { // CallStackExhausted due to suspension
-		stack_limit &= 0x7ffffffffffffffeULL;
+		stack_limit &= 0xbffffffffffffffeULL;
 		trap = 1; // Suspended
 	}
 
