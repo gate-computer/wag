@@ -43,8 +43,6 @@ Status
 
 - Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
 
-- ARM64 backend is missing floating point support.
-
 - See [milestone/1](https://github.com/tsavola/wag/milestone/1).
 
 
