@@ -51,6 +51,11 @@ var conditionInsns = [22]in.CCInsn{
 	condition.UnorderedOrLt: in.InsnLtU,
 }
 
+var suspendRewindOffsets = [2]int8{
+	0: 8,  // See BranchSuspend; near jump.
+	1: 12, // See BranchSuspend; far jump.
+}
+
 var asm MacroAssembler
 
 type MacroAssembler struct{}
@@ -228,6 +233,9 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 }
 
 func (MacroAssembler) Resume(p *gen.Prog) {
+	// Zero register zeroing conveniently sets the zero flag, which is required
+	// by BranchSuspend.
+
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 	in.RET.Simple(&p.Text) // Return from trap handler or import function call.
 }
@@ -300,16 +308,21 @@ func (MacroAssembler) CallImportVector(p *gen.Prog, vecIndex int, variadic bool,
 	in.CALLcd.Addr32(&p.Text, abi.TextAddrRetpoline)
 }
 
-func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {
-	jumpToTrapHandler(p, id)
+func (MacroAssembler) TrapHandler(p *gen.Prog, id trap.ID) {
+	trapHandler(p, id)
 }
 
-func (MacroAssembler) JumpToStackTrapHandler(p *gen.Prog) {
+func (MacroAssembler) TrapHandlerRewindCallStackExhausted(p *gen.Prog) {
 	in.SUBi.StackImm8(&p.Text, wa.I64, 18) // See SetupStackFrame.
-	jumpToTrapHandler(p, trap.CallStackExhausted)
+	trapHandler(p, trap.CallStackExhausted)
 }
 
-func jumpToTrapHandler(p *gen.Prog, id trap.ID) {
+func (MacroAssembler) TrapHandlerRewindSuspended(p *gen.Prog, index int) {
+	in.SUBi.StackImm8(&p.Text, wa.I64, suspendRewindOffsets[index])
+	trapHandler(p, trap.Suspended)
+}
+
+func trapHandler(p *gen.Prog, id trap.ID) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcd.Addr32(&p.Text, abi.TextAddrRetpoline)
@@ -452,8 +465,9 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	f.MapCallAddr(f.Text.Addr) // Resume address.
 
-	// If the following instructions are changed, JumpToCallStackExhaustHandler
-	// must be changed to match the instruction sequence size.
+	// If the following instructions are changed,
+	// TrapHandlerRewindCallStackExhausted must be changed to match the
+	// instruction sequence size.
 
 	in.LEA.RegStackStub32(&f.Text, wa.I64, RegScratch)
 	stackCheckAddr = f.Text.Addr
@@ -539,15 +553,8 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	f.MapTrapAddr(f.Text.Addr)
 }
 
-func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
-	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
-	in.JEcb.Rel8(&f.Text, in.CALLcd.Size()) // Skip next instruction if bit is zero (no trap).
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
-	f.MapCallAddr(f.Text.Addr) // Resume address.
-}
-
-func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
-	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
+func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
+	in.TEST8.RegRegStackLimit(&f.Text)
 	in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).
 	skipJump := f.Text.Addr
 
@@ -559,12 +566,22 @@ func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
 	linker.UpdateNearBranch(f.Text.Bytes(), skipJump)
 }
 
-func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
-	in.TEST8i.OneSizeRegImm(&f.Text, RegSuspendBit, 1)
-	in.JEcd.Addr32(&f.Text, elseAddr) // Branch to else if bit is zero (no trap).
+func (MacroAssembler) BranchSuspend(f *gen.Func, addr int32) {
+	// Don't include this first instruction in the rewind sequence to make sure
+	// that call sites have distinct addresses.  Zero flag must be set by
+	// Resume.
+	in.TEST8.RegRegStackLimit(&f.Text)
 
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
 	f.MapCallAddr(f.Text.Addr) // Resume address.
+
+	// If the following instructions are changed, suspendRewindOffsets must be
+	// changed to match the instruction sequence sizes.
+	far := in.JEc.Addr(&f.Text, addr)
+	i := 0
+	if far {
+		i = 1
+	}
+	in.CALLcd.Addr32(&f.Text, f.TrapLinkRewindSuspended[i].Addr)
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {

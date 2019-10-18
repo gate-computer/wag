@@ -49,9 +49,9 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		insn.OpStr = strings.Replace(insn.OpStr, "%edx", "zero", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%rdx", "zero", -1)
 
-		insn.OpStr = strings.Replace(insn.OpStr, "%bl", "suspendbit", -1)
-		insn.OpStr = strings.Replace(insn.OpStr, "%bh", "suspendbit", -1)
-		insn.OpStr = strings.Replace(insn.OpStr, "%ebx", "suspendbit", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%bl", "stacklimitb", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%bh", "stacklimitw", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%ebx", "stacklimit", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%rbx", "stacklimit", -1)
 
 		insn.OpStr = strings.Replace(insn.OpStr, "%rsp", "sp", -1)
@@ -111,8 +111,19 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 			}
 
 			if insn.Mnemonic == "subq" && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", (sp)") {
-				targets[insn.Address] = "trap.call_stack_exhausted"
-				skipTrapInsn = true
+				switch insn.OpStr {
+				case "$0x12, (sp)":
+					targets[insn.Address] = "trap.call_stack_exhausted.rewind"
+					skipTrapInsn = true
+
+				case "$8, (sp)":
+					targets[insn.Address] = "trap.suspended.rewind.near"
+					skipTrapInsn = true
+
+				case "$0xc, (sp)":
+					targets[insn.Address] = "trap.suspended.rewind.far"
+					skipTrapInsn = true
+				}
 			}
 
 			if (insn.Mnemonic == "movl" || insn.Mnemonic == "shlq") && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", result") {

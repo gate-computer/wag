@@ -7,6 +7,7 @@ package gen
 import (
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen/link"
+	"github.com/tsavola/wag/internal/isa/program"
 	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/obj"
 	"github.com/tsavola/wag/trap"
@@ -19,11 +20,13 @@ const (
 )
 
 type Prog struct {
-	Module    *module.M
-	Text      code.Buf
-	Map       obj.ObjectMapper
-	FuncLinks []link.FuncL
-	TrapLinks [trap.NumTraps]link.L
+	Module                  *module.M
+	Text                    code.Buf
+	Map                     obj.ObjectMapper
+	FuncLinks               []link.FuncL
+	TrapLinks               [trap.NumTraps]link.L
+	TrapLinkRewindSuspended [program.NumTrapLinkRewindSuspended]link.L
+	LastCallAddr            int32 // Needed only by arm backend.
 
 	ImportContext *module.Library // Set during import function generation.
 }

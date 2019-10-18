@@ -43,7 +43,7 @@ static void (*get_sigsegv_handler(void))(int, siginfo_t *, void *)
 		"          lsl     x0, x28, #4     \n"
 		"          mov     x1, x29         \n"
 		"          mov     x2, #5          \n"
-		"          mov     x3, #8144       \n" // 16 + 8000 + 128
+		"          mov     x3, #12032      \n" // STACK_LIMIT_OFFSET - STACK_FOR_RT_CALLS
 		"          sub     x3, sp, x3      \n" // start of stack
 		"          ldr     x3, [x3, #8]    \n" // state ptr in vars
 		"          b       handle_trap     \n"
@@ -83,7 +83,7 @@ static void (*get_signal_restorer(void))(void)
 NORETURN
 static void start(void *text, void *memory_addr, void *stack_limit, void *stack_ptr, void *init_routine)
 {
-	register uintptr_t x0 asm("x0") = (uintptr_t) stack_limit - STACK_CHECK_SPACE;
+	register uintptr_t x0 asm("x0") = (uintptr_t) stack_limit - STACK_FOR_RT_CALLS;
 	register void *x1 asm("x1") = init_routine;
 	register void *x26 asm("x26") = memory_addr;
 	register void *x27 asm("x27") = text;

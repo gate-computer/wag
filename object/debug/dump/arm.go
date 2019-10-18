@@ -45,7 +45,7 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		insn.OpStr = r26.ReplaceAllString(insn.OpStr, "${1}memory")
 		insn.OpStr = r27.ReplaceAllString(insn.OpStr, "${1}text")
 		insn.OpStr = x28.ReplaceAllString(insn.OpStr, "xstacklimit4")
-		insn.OpStr = w28.ReplaceAllString(insn.OpStr, "wsuspendbit")
+		insn.OpStr = w28.ReplaceAllString(insn.OpStr, "wstacklimit4")
 		insn.OpStr = r29.ReplaceAllString(insn.OpStr, "${1}fakestack")
 		insn.OpStr = r30.ReplaceAllString(insn.OpStr, "${1}link")
 
@@ -55,9 +55,16 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 				continue
 			}
 
-			if insn.Mnemonic == "sub" && strings.HasPrefix(insn.OpStr, "xlink, xlink, #0x") {
-				targets[insn.Address] = "trap.call_stack_exhausted"
-				skipTrapInsn = true
+			if insn.Mnemonic == "sub" && strings.HasPrefix(insn.OpStr, "xlink, xlink, #") {
+				switch insn.OpStr {
+				case "xlink, xlink, #0x10":
+					targets[insn.Address] = "trap.call_stack_exhausted.rewind"
+					skipTrapInsn = true
+
+				case "xlink, xlink, #8":
+					targets[insn.Address] = "trap.suspended.rewind"
+					skipTrapInsn = true
+				}
 			}
 
 			if insn.Mnemonic == "movz" && strings.HasPrefix(insn.OpStr, "xresult, #0x") {

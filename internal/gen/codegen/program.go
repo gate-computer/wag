@@ -60,7 +60,7 @@ func GenProgram(
 	if p.Text.Addr != abi.TextAddrNoFunction {
 		panic(errors.New("unexpected initial text address"))
 	}
-	asm.JumpToTrapHandler(p, trap.NoFunction)
+	asm.TrapHandler(p, trap.NoFunction)
 
 	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
 		panic("bad text address after NoFunction trap handler")
@@ -89,11 +89,18 @@ func GenProgram(
 
 		switch id {
 		case trap.CallStackExhausted:
-			asm.JumpToStackTrapHandler(p)
+			asm.TrapHandlerRewindCallStackExhausted(p)
 
 		default:
-			asm.JumpToTrapHandler(p, id)
+			asm.TrapHandler(p, id)
 		}
+	}
+
+	for i := range p.TrapLinkRewindSuspended {
+		asm.AlignFunc(p)
+		p.TrapLinkRewindSuspended[i].Addr = p.Text.Addr
+
+		asm.TrapHandlerRewindSuspended(p, i)
 	}
 
 	p.ImportContext = lib // Generate import functions in library context.

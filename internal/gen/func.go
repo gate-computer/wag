@@ -97,6 +97,7 @@ func (f *Func) ValueBecameUnreachable(x operand.O) {
 
 func (f *Func) MapCallAddr(retAddr int32) {
 	f.Map.PutCallSite(uint32(retAddr), f.mapStackUsage())
+	f.LastCallAddr = retAddr // Needed only by arm backend.
 }
 
 func (f *Func) MapTrapAddr(retAddr int32) {

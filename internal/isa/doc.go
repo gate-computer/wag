@@ -87,6 +87,10 @@ type MacroAssembler interface {
 	// ownership of address register, which has already been zero-extended.
 	BranchIndirect(f *gen.Func, addr reg.R)
 
+	// BranchSuspend may use RegResult and update condition flags.  The address
+	// is nonzero.
+	BranchSuspend(f *gen.Func, addr int32)
+
 	// Call may use RegResult and update condition flags.
 	Call(p *gen.Prog, addr int32)
 
@@ -127,12 +131,16 @@ type MacroAssembler interface {
 	// instruction must be predictable.
 	GrowMemory(f *gen.Func) (site int32)
 
-	// JumpToTrapHandler may use RegResult and update condition flags.  It MUST
-	// NOT generate over 16 bytes of code.
-	JumpToTrapHandler(p *gen.Prog, id trap.ID)
+	// TrapHandlerRewindCallStackExhausted may use RegResult and update
+	// condition flags.
+	TrapHandlerRewindCallStackExhausted(p *gen.Prog)
 
-	// JumpToStackTrapHandler may use RegResult and update condition flags.
-	JumpToStackTrapHandler(p *gen.Prog)
+	// TrapHandlerRewindSuspended may use RegResult and update condition flags.
+	TrapHandlerRewindSuspended(p *gen.Prog, index int)
+
+	// TrapHandler may use RegResult and update condition flags.  It MUST NOT
+	// generate over 16 bytes of code.
+	TrapHandler(p *gen.Prog, id trap.ID)
 
 	// Load may allocate registers, use RegResult and update condition flags.
 	// The index operand may be RegResult or the condition flags.
@@ -206,17 +214,11 @@ type MacroAssembler interface {
 	// StoreStackReg has default restrictions.
 	StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.R)
 
+	// SuspendSaveInt may update condition flags.
+	SuspendSaveInt(f *gen.Func, saveReg reg.R)
+
 	// Trap may use RegResult and update condition flags.
 	Trap(f *gen.Func, id trap.ID)
-
-	// TrapIfLoopSuspended may use RegResult and update condition flags.
-	TrapIfLoopSuspended(f *gen.Func)
-
-	// TrapIfLoopSuspendedSaveInt may update condition flags.
-	TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R)
-
-	// TrapIfLoopSuspendedElse may use RegResult and update condition flags.
-	TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32)
 
 	// Unary may allocate registers, use RegResult and update condition flags.
 	// The operand argument may be RegResult or condition flags.

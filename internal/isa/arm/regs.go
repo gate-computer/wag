@@ -17,7 +17,6 @@ const (
 	RegMemoryBase     = reg.R(26)
 	RegTextBase       = reg.R(27)
 	RegStackLimit4    = reg.R(28)
-	RegSuspendBit     = reg.R(28) // 1 = suspend
 	RegFakeSP         = in.RegFakeSP
 	RegLink           = reg.R(30)
 	RegScratch2       = reg.R(30)

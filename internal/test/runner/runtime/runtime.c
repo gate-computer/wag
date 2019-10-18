@@ -13,8 +13,8 @@
 
 #define SYS_SA_RESTORER 0x04000000
 
-#define STACK_CHECK_SPACE 16
-#define STACK_LIMIT_OFFSET (16 + 8000 + 128 + STACK_CHECK_SPACE) // vars + signal stack + red zone
+#define STACK_LIMIT_OFFSET 12288
+#define STACK_FOR_RT_CALLS 256
 
 struct state {
 	int64_t arg;

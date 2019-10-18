@@ -53,7 +53,8 @@ const (
 	SUBi    = MI(0x81<<16 | 0x83<<8 | 5<<opcodeBase)
 	XORi    = MI(0x81<<16 | 0x83<<8 | 6<<opcodeBase)
 	CMPi    = MI(0x81<<16 | 0x83<<8 | 7<<opcodeBase)
-	TEST    = RM(0x85) // MR opcode
+	TEST8   = RMdata8(0x84) // MR opcode
+	TEST    = RM(0x85)      // MR opcode
 	MOV8mr  = RMdata8(0x88)
 	MOV16mr = RMdata16(0x89)
 	MOVmr   = RM(0x89) // RegReg is untested
@@ -116,7 +117,6 @@ const (
 	CALLcd  = Dd(0xe8)
 	JMPcd   = Dd(0xe9)
 	JMPcb   = Db(0xeb)
-	TEST8i  = MI8(0xf6<<8 | 0<<opcodeBase)
 	NEG     = M(0xf7<<8 | 3<<opcodeBase)
 	DIV     = M(0xf7<<8 | 6<<opcodeBase)
 	IDIV    = M(0xf7<<8 | 7<<opcodeBase)
@@ -125,6 +125,7 @@ const (
 	PUSH    = M(0xff<<8 | 6<<opcodeBase)
 
 	// GP opcode pairs
+	JEc  = D12(JEcd)<<16 | D12(JEcb)
 	JPc  = D12(JPcd)<<16 | D12(JPcb)
 	JLEc = D12(JLEcd)<<16 | D12(JLEcb)
 

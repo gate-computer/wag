@@ -283,6 +283,18 @@ func TestInsnRMint(test *testing.T) {
 		}
 	}
 
+	// Test RegRegStackLimit
+	for _, i := range []struct {
+		mn string
+		op RMdata8
+	}{
+		{"test", TEST8},
+	} {
+		testEncode(test, i.mn, "bl, bl", func(text *code.Buf) {
+			i.op.RegRegStackLimit(text)
+		})
+	}
+
 	for _, ignoredType := range intTypes {
 		for _, r := range allRegs {
 			for _, base := range baseRegs {
@@ -398,25 +410,6 @@ func TestInsnMI(test *testing.T) {
 						})
 					}
 				}
-			}
-		}
-	}
-
-	// Test OneSizeRegImm8
-	for _, i := range []struct {
-		mn string
-		op MI8
-	}{
-		{"mov", MOV8i},
-		{"test", TEST8i},
-	} {
-		for _, r := range allRegs {
-			opStr := fmt.Sprintf("%s, IMM", regNamesI8[r])
-
-			for _, val := range testImm8 {
-				testEncodeImm(test, i.mn, opStr, val, func(text *code.Buf) {
-					i.op.OneSizeRegImm(text, r, int64(val))
-				})
 			}
 		}
 	}

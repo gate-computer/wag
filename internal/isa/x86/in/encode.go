@@ -372,6 +372,13 @@ func (op RMprefix) RegStackDisp(text *code.Buf, t wa.Type, r reg.R, disp int32) 
 
 type RMdata8 byte // opcode byte
 
+func (op RMdata8) RegRegStackLimit(text *code.Buf) {
+	var o output
+	o.byte(byte(op))
+	o.mod(ModReg, regRO(RegStackLimit), regRM(RegStackLimit))
+	o.copy(text.Extend(o.len()))
+}
+
 func (op RMdata8) RegMemDisp(text *code.Buf, _ wa.Type, r reg.R, base BaseReg, disp int32) {
 	var mod, dispSize = dispModSize(disp)
 	var o output
@@ -475,18 +482,9 @@ func (op MI) StackDispImm32(text *code.Buf, t wa.Type, disp, val int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-// MI instructions with 8-bit operand size implementing generic interface
+// MI instructions with 8-bit operand size
 
 type MI8 uint16 // opcode byte and ModRO byte
-
-func (op MI8) OneSizeRegImm(text *code.Buf, r reg.R, val8 int64) {
-	var o output
-	o.rex(regRexB(r))
-	o.byte(byte(op >> 8))
-	o.mod(ModReg, ModRO(op), regRM(r))
-	o.int8(int8(val8))
-	o.copy(text.Extend(o.len()))
-}
 
 // MemDispImm ignores the type argument.
 func (op MI8) MemDispImm(text *code.Buf, _ wa.Type, base BaseReg, disp int32, val8 int64) {
@@ -572,7 +570,7 @@ func (Db) Size() int8  { return 2 }
 func (Dd) Size() int8  { return 5 }
 func (D2d) Size() int8 { return 6 }
 
-func (ops D12) Addr(text *code.Buf, addr int32) {
+func (ops D12) Addr(text *code.Buf, addr int32) (far bool) {
 	const (
 		insnSize8  = 2
 		insnSize32 = 6
@@ -587,9 +585,11 @@ func (ops D12) Addr(text *code.Buf, addr int32) {
 		disp = addrDisp(text.Addr, insnSize32, addr)
 		o.word(uint16(ops >> 16))
 		o.int32(disp)
+		far = true
 	}
 
 	o.copy(text.Extend(o.len()))
+	return
 }
 
 func (ops D12) AddrStub(text *code.Buf) {

@@ -158,15 +158,11 @@ func genBr(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend b
 		}
 
 		if b := getCurrentBlock(f); target.Label.Addr != 0 && !b.Suspension {
-			if debug.Enabled {
-				debug.Printf("loop")
-			}
-
-			asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
+			asm.BranchSuspend(f, target.Label.Addr)
 			b.Suspension = true
+		} else {
+			opBranch(f, &target.Label)
 		}
-
-		opBranch(f, &target.Label)
 	}
 
 	deadend = true
@@ -221,8 +217,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		if drop != 0 {
 			asm.DropStackValues(&f.Prog, drop)
 		}
-		asm.TrapIfLoopSuspendedElse(f, target.Label.Addr)
-		asm.Branch(&f.Prog, target.Label.Addr)
+		asm.BranchSuspend(f, target.Label.Addr)
 
 		linker.UpdateNearBranches(f.Text.Bytes(), retAddrs)
 
@@ -333,7 +328,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 			panic(errBranchLoopValue)
 		}
 		opReserveStackEntry(f)
-		asm.TrapIfLoopSuspendedSaveInt(f, r)
+		asm.SuspendSaveInt(f, r)
 		opReleaseStackEntry(f)
 		b.Suspension = true
 	}

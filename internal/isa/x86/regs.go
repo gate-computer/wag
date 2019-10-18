@@ -17,8 +17,7 @@ const (
 	RegZero           = in.RegZero       // rdx
 	RegDividendHigh   = reg.R(2)         // rdx
 	_                 = reg.R(2)         //     xmm2  <- AllocFloatFirst
-	RegStackLimit     = reg.R(3)         // rbx
-	RegSuspendBit     = reg.R(3)         // rbx
+	RegStackLimit     = in.RegStackLimit // rbx
 	RegStackPtr       = reg.R(4)         // rsp
 	RegImportVariadic = reg.R(5)         // rbp       <- AllocIntFirst
 	_                 = reg.R(6)         // rsi

@@ -285,22 +285,30 @@ func (MacroAssembler) CallImportVector(p *gen.Prog, index int, variadic bool, ar
 	o.copy(p.Text.Extend(o.size))
 }
 
-func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {
+func (MacroAssembler) TrapHandler(p *gen.Prog, id trap.ID) {
 	var o outbuf
 
-	o.jumpToTrapHandler(p, id)
+	o.trapHandler(p, id)
 	o.copy(p.Text.Extend(o.size))
 }
 
-func (MacroAssembler) JumpToStackTrapHandler(p *gen.Prog) {
+func (MacroAssembler) TrapHandlerRewindCallStackExhausted(p *gen.Prog) {
 	var o outbuf
 
-	o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, 5*4, 0, wa.Size64)) // See SetupStackFrame.
-	o.jumpToTrapHandler(p, trap.CallStackExhausted)
+	o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, 4*4, 0, wa.Size64)) // See SetupStackFrame.
+	o.trapHandler(p, trap.CallStackExhausted)
 	o.copy(p.Text.Extend(o.size))
 }
 
-func (o *outbuf) jumpToTrapHandler(p *gen.Prog, id trap.ID) {
+func (MacroAssembler) TrapHandlerRewindSuspended(p *gen.Prog, index int) {
+	var o outbuf
+
+	o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, 2*4, 0, wa.Size64)) // See BranchSuspend.
+	o.trapHandler(p, trap.Suspended)
+	o.copy(p.Text.Extend(o.size))
+}
+
+func (o *outbuf) trapHandler(p *gen.Prog, id trap.ID) {
 	o.insn(in.MOVZ.RdI16Hw(RegResult, uint32(id), 0, wa.Size64))
 	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
 	o.insn(in.BR.Rn(RegScratch))
@@ -424,14 +432,15 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
-	f.MapCallAddr(f.Text.Addr) // Resume address.
-
-	// If the following instructions are changed, JumpToStackTrapHandler must
-	// be changed to match the instruction sequence size.
-
 	var o outbuf
 
 	o.insn(in.PushReg(RegLink, wa.I64))
+
+	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
+
+	// If the following instructions are changed,
+	// TrapHandlerRewindCallStackExhausted must be changed to match the
+	// instruction sequence size.
 
 	o.insn(in.BRK.I16(0)) // Placeholder for ADD (target is RegScratch).
 	stackCheckAddr = o.addr(&f.Text)
@@ -440,7 +449,7 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	// sp - (limit + alloc)
 	o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.Size64))
 	o.insn(in.Bc.CondI19(in.GE, 2)) // Skip trap instruction.
-	o.unmappedTrap(f, trap.CallStackExhausted)
+	o.unmappedTrap(f, f.TrapLinks[trap.CallStackExhausted])
 	o.copy(f.Text.Extend(o.size))
 	return
 }
@@ -507,53 +516,45 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 
 // trap must generate exactly one instruction.
 func (o *outbuf) trap(f *gen.Func, id trap.ID) {
-	o.unmappedTrap(f, id)
+	o.unmappedTrap(f, f.TrapLinks[id])
 	f.MapTrapAddr(o.addr(&f.Text))
 }
 
 // unmappedTrap must generate exactly one instruction.
-func (o *outbuf) unmappedTrap(f *gen.Func, id trap.ID) {
-	o.insn(in.BL.I26(in.Int26((f.TrapLinks[id].Addr - o.addr(&f.Text)) / 4)))
+func (o *outbuf) unmappedTrap(f *gen.Func, handler link.L) {
+	o.insn(in.BL.I26(in.Int26((handler.Addr - o.addr(&f.Text)) / 4)))
 }
 
-func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
+func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
 	var o outbuf
 
-	o.insn(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0)) // Skip trap instruction.
-	o.unmappedTrap(f, trap.Suspended)
-	o.copy(f.Text.Extend(o.size))
-
-	f.MapCallAddr(f.Text.Addr) // Resume address.
-}
-
-func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
-	var o outbuf
-
-	o.insn(in.TBZ.RtI14Bit(RegSuspendBit, 4, 0)) // Skip until end.
+	o.insn(in.TBZ.RtI14Bit(RegStackLimit4, 4, 0)) // Skip until end.
 	o.insn(in.PushReg(saveReg, wa.I64))
-	o.unmappedTrap(f, trap.Suspended)
+	o.unmappedTrap(f, f.TrapLinks[trap.Suspended])
 	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
 	o.insn(in.PopReg(saveReg, wa.I64))
 	o.copy(f.Text.Extend(o.size))
 }
 
-func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
+func (MacroAssembler) BranchSuspend(f *gen.Func, addr int32) {
 	var o outbuf
 
-	switch offset := (elseAddr - f.Text.Addr) / 4; {
-	case offset >= -8192:
-		o.insn(in.TBZ.RtI14Bit(RegSuspendBit, in.Int14(offset), 0))
+	if offset := (addr - f.Text.Addr) / 4; offset >= -8192 && f.Text.Addr != f.LastCallAddr {
+		f.MapCallAddr(f.Text.Addr) // Resume address.
 
-	default:
-		// Instead of branching to else, assume that the same effect can be
-		// achieved by skipping the trap.
-		o.insn(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0))
+		// If the following instructions are changed,
+		// TrapHandlerRewindSuspended must be changed to match the instruction
+		// sequence size.
+		o.insn(in.TBZ.RtI14Bit(RegStackLimit4, in.Int14(offset), 0))
+		o.unmappedTrap(f, f.TrapLinkRewindSuspended[0])
+	} else {
+		o.insn(in.TBZ.RtI14Bit(RegStackLimit4, 2, 0))
+		o.unmappedTrap(f, f.TrapLinks[trap.Suspended])
+		f.MapCallAddr(f.Text.Addr) // Resume address.
+		o.insn(in.B.I26(in.Int26((addr - o.addr(&f.Text)) / 4)))
 	}
 
-	o.unmappedTrap(f, trap.Suspended)
 	o.copy(f.Text.Extend(o.size))
-
-	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {
