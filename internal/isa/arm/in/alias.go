@@ -10,9 +10,9 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-func LogicalShiftLeft(rd, rn reg.R, uimm uint32, t wa.Type) uint32 {
+func LogicalShiftLeft(rd, rn reg.R, uimm uint32, t wa.Size) uint32 {
 	var s, r uint32
-	if t.Size() == wa.Size32 {
+	if t == wa.Size32 {
 		r = (32 - uimm) & 31
 		s = (31 - uimm&31)
 	} else {
@@ -22,10 +22,10 @@ func LogicalShiftLeft(rd, rn reg.R, uimm uint32, t wa.Type) uint32 {
 	return UBFM.RdRnI6sI6r(rd, rn, s, r, t)
 }
 
-func PushIntReg(r reg.R) uint32 {
-	return STRpre.RtRnI9(r, RegFakeSP, Int9(-obj.Word), wa.I64)
+func PushReg(r reg.R, t wa.Type) uint32 {
+	return STRpre.RtRnI9(r, RegFakeSP, Int9(-obj.Word), t)
 }
 
-func PopIntReg(r reg.R) uint32 {
-	return LDRpost.RtRnI9(r, RegFakeSP, Int9(obj.Word), wa.I64)
+func PopReg(r reg.R, t wa.Type) uint32 {
+	return LDRpost.RtRnI9(r, RegFakeSP, Int9(obj.Word), t)
 }

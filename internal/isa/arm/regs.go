@@ -5,9 +5,6 @@
 package arm
 
 import (
-	"fmt"
-	"runtime"
-
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/isa/arm/in"
 )
@@ -28,21 +25,3 @@ const (
 	RegZero           = reg.R(31)
 	RegDiscard        = reg.R(31)
 )
-
-//go:noinline
-func TODO(args ...interface{}) interface{} {
-	msg := "TODO"
-	if len(args) > 0 {
-		msg = ""
-		delim := "TODO: "
-		for _, x := range args {
-			msg += fmt.Sprint(delim, x)
-			delim = ", "
-		}
-	}
-	if _, file, line, ok := runtime.Caller(1); ok {
-		panic(fmt.Errorf("%s:%d: %s", file, line, msg))
-	} else {
-		panic(msg)
-	}
-}

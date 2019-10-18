@@ -12,15 +12,65 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, source operand.O) (result operand.O) {
-	switch uint8(props) {
-	case prop.ConvertExtend:
-		op := in.Bitfield(props >> 8)
-		r, _ := allocResultReg(f, source)
-		f.Text.PutUint32(op.Opcode().RdRnI6sI6r(r, r, 31, 0, wa.I64))
-		return operand.Reg(resultType, r)
+func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, source operand.O) operand.O {
+	return convertOps[props&prop.MaskConvert](f, props, resultType, source)
+}
 
-	default:
-		return TODO(props, resultType, source).(operand.O)
-	}
+var convertOps = [prop.MaskConvert + 1]func(*gen.Func, uint16, wa.Type, operand.O) operand.O{
+	prop.ConvertExtend:     convertExtend,
+	prop.ConvertMote:       convertFloat,
+	prop.ConvertFloatToInt: convertFloatToInt,
+	prop.ConvertIntToFloat: convertIntToFloat,
+}
+
+func convertExtend(f *gen.Func, props uint16, resultType wa.Type, source operand.O) operand.O {
+	var o outbuf
+
+	insn := in.Bitfield(props >> 8).Opcode()
+
+	r := o.allocResultReg(f, source)
+	o.insn(insn.RdRnI6sI6r(r, r, 31, 0, wa.Size64))
+	o.copy(f.Text.Extend(o.size))
+
+	return operand.Reg(resultType, r)
+}
+
+func convertFloat(f *gen.Func, props uint16, resultType wa.Type, source operand.O) operand.O {
+	var o outbuf
+
+	insn := in.UnaryFloat(props >> 8).Opcode()
+
+	r := o.allocResultReg(f, source)
+	o.insn(insn.RdRn(r, r, source.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	return operand.Reg(resultType, r)
+}
+
+func convertFloatToInt(f *gen.Func, props uint16, resultType wa.Type, source operand.O) operand.O {
+	var o outbuf
+
+	insn := in.ConvertCategory(props >> 8).Opcode()
+
+	resultReg := f.Regs.AllocResult(wa.I64)
+	sourceReg := o.getScratchReg(f, source)
+	o.insn(insn.RdRn(resultReg, sourceReg, source.Size(), resultType.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	f.Regs.Free(wa.F64, sourceReg)
+	return operand.Reg(resultType, resultReg)
+}
+
+func convertIntToFloat(f *gen.Func, props uint16, resultType wa.Type, source operand.O) operand.O {
+	var o outbuf
+
+	insn := in.ConvertCategory(props >> 8).Opcode()
+
+	resultReg := f.Regs.AllocResult(wa.F64)
+	sourceReg := o.getScratchReg(f, source)
+	o.insn(insn.RdRn(resultReg, sourceReg, resultType.Size(), source.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	f.Regs.Free(wa.I64, sourceReg)
+	return operand.Reg(resultType, resultReg)
 }

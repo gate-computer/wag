@@ -225,7 +225,9 @@ func TestMoveIntImm(t *testing.T) {
 				Buffer: buffer.NewStatic(exe[:0:len(exe)]),
 			}
 
-			moveIntImm(&text, r, val)
+			var o outbuf
+			o.moveIntImm(r, val)
+			o.copy(text.Extend(o.size))
 
 			buf := text.Bytes()
 			if len(buf) < 4 || len(buf) > 16 {
@@ -252,7 +254,7 @@ func TestMoveIntImm(t *testing.T) {
 				}
 			}
 
-			text.PutUint32(in.UBFM.RdRnI6sI6r(RegResult, r, 63, 0, wa.I64))
+			text.PutUint32(in.UBFM.RdRnI6sI6r(RegResult, r, 63, 0, wa.Size64))
 			text.PutUint32(in.RET.Rn(RegLink))
 
 			if err := syscall.Mprotect(exe, syscall.PROT_EXEC); err != nil {

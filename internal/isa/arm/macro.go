@@ -5,7 +5,6 @@
 package arm
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/tsavola/wag/internal/gen"
@@ -26,18 +25,29 @@ const (
 	PadWord = 0xd4200000 // BRK #0 instruction
 )
 
-var conditions = [10]in.Cond{
-	condition.Eq:  in.EQ,
-	condition.Ne:  in.NE,
-	condition.GeS: in.GE,
-	condition.GtS: in.GT,
-	condition.GeU: in.HS,
-	condition.GtU: in.HI,
-	condition.LeS: in.LE,
-	condition.LtS: in.LT,
-	condition.LeU: in.LS,
-	condition.LtU: in.LO,
-	// TODO: float conditions
+var conditions = [22]in.Cond{
+	condition.Eq:            in.EQ,
+	condition.Ne:            in.NE,
+	condition.GeS:           in.GE,
+	condition.GtS:           in.GT,
+	condition.GeU:           in.HS,
+	condition.GtU:           in.HI,
+	condition.LeS:           in.LE,
+	condition.LtS:           in.LT,
+	condition.LeU:           in.LS,
+	condition.LtU:           in.LO,
+	condition.OrderedAndEq:  in.EQ,
+	condition.OrderedAndNe:  in.NE, // Order must be checked separately.
+	condition.OrderedAndGe:  in.GE,
+	condition.OrderedAndGt:  in.GT,
+	condition.OrderedAndLe:  in.LS,
+	condition.OrderedAndLt:  in.LO,
+	condition.UnorderedOrEq: in.EQ, // Disorder must be checked separately.
+	condition.UnorderedOrNe: in.NE,
+	condition.UnorderedOrGe: in.HS,
+	condition.UnorderedOrGt: in.HI,
+	condition.UnorderedOrLe: in.LE,
+	condition.UnorderedOrLt: in.LT,
 }
 
 var asm MacroAssembler
@@ -48,17 +58,16 @@ func (MacroAssembler) AlignData(*gen.Prog, int) {}
 func (MacroAssembler) AlignFunc(*gen.Prog)      {}
 
 func (MacroAssembler) PadUntil(p *gen.Prog, addr int32) {
-	padUntil(p, PadWord, addr)
-}
+	var o outbuf
 
-func padUntil(p *gen.Prog, filler uint32, addr int32) {
-	for p.Text.Addr < addr {
-		p.Text.PutUint32(filler)
+	for i := p.Text.Addr; i < addr; i += 4 {
+		o.insn(PadWord)
 	}
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
-	f.Text.PutUint32(in.ADDs.RdRnI6RmS2(RegFakeSP, RegFakeSP, 32, r, in.ASR, wa.I64))
+	f.Text.PutUint32(in.ADDs.RdRnI6RmS2(RegFakeSP, RegFakeSP, 32, r, in.ASR, wa.Size64))
 	f.Regs.Free(wa.I64, r)
 }
 
@@ -67,7 +76,7 @@ func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
 	if offset > 4095 {
 		panic(n) // TODO
 	}
-	p.Text.PutUint32(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.I64))
+	p.Text.PutUint32(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.Size64))
 }
 
 func (MacroAssembler) Branch(p *gen.Prog, addr int32) {
@@ -80,11 +89,11 @@ func (MacroAssembler) BranchStub(p *gen.Prog) int32 {
 }
 
 func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
-	var o output
+	var o outbuf
 
-	o.uint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, addr, wa.I64))
-	o.uint32(in.BR.Rn(RegScratch))
-	o.copy(f.Text.Extend(o.size()))
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, addr, wa.Size64))
+	o.insn(in.BR.Rn(RegScratch))
+	o.copy(f.Text.Extend(o.size))
 
 	f.Regs.Free(wa.I64, addr)
 }
@@ -99,15 +108,14 @@ func (MacroAssembler) BranchIf(f *gen.Func, x operand.O, labelAddr int32) (sites
 }
 
 func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (sites []int32) {
-	var o output
-	var cond condition.C
+	var o outbuf
 
-	if x.Storage == storage.Flags {
-		cond = x.FlagsCond()
-	} else {
-		r, _ := getScratchReg(f, x)
+	cond := x.FlagsCond() // Default case (value unspecified until storage checked).
+
+	if x.Storage != storage.Flags {
+		r := o.getScratchReg(f, x)
 		// TODO: use test-and-branch instruction if possible
-		o.uint32(in.ANDSs.RdRnI6RmS2(RegDiscard, r, 0, r, 0, wa.I32))
+		o.insn(in.ANDSs.RdRnI6RmS2(RegDiscard, r, 0, r, 0, wa.Size32))
 		cond = condition.Ne
 		f.Regs.Free(wa.I32, r)
 	}
@@ -116,50 +124,54 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 		cond = condition.Inverted[cond]
 	}
 
-	switch {
-	case cond >= condition.MinUnorderedOrCondition:
-		TODO(cond)
+	switch cond {
+	case condition.OrderedAndEq:
+		o.insn(in.Bc.CondI19(in.VS, 2)) // Skip next branch if unordered.
 
-	case cond >= condition.MinOrderedAndCondition:
-		TODO(cond)
+	case condition.UnorderedOrEq:
+		o.insn(in.Bc.CondI19(in.VS, 0)) // Infinite loop as placeholder.
+		sites = append(sites, o.addr(&f.Text))
 	}
 
-	o.uint32(in.Bc.CondI19(conditions[cond], 0)) // Infinite loop as placeholder.
+	o.insn(in.Bc.CondI19(conditions[cond], 0)) // Infinite loop as placeholder.
 	sites = append(sites, o.addr(&f.Text))
 
-	o.copy(f.Text.Extend(o.size()))
+	o.copy(f.Text.Extend(o.size))
 	return
 }
 
 func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBound, addr int32) {
-	o := compareBounds(indexReg, upperBound)
-	o.uint32(in.B.I26(in.Int26((addr - o.addr(&p.Text)) / 4)))
-	o.copy(p.Text.Extend(o.size()))
+	var o outbuf
+
+	o.compareBounds(indexReg, upperBound)
+	o.insn(in.B.I26(in.Int26((addr - o.addr(&p.Text)) / 4)))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) BranchIfOutOfBoundsStub(p *gen.Prog, indexReg reg.R, upperBound int32) int32 {
-	o := compareBounds(indexReg, upperBound)
-	o.uint32(in.B.I26(0)) // Infinite loop as placeholder.
-	o.copy(p.Text.Extend(o.size()))
+	var o outbuf
+
+	o.compareBounds(indexReg, upperBound)
+	o.insn(in.B.I26(0)) // Infinite loop as placeholder.
+	o.copy(p.Text.Extend(o.size))
 
 	return p.Text.Addr
 }
 
 // compareBounds may use RegScratch.
-func compareBounds(indexReg reg.R, upperBound int32) (o output) {
-	o.uint32(in.TBNZ.RtI14Bit(indexReg, 3, 31)) // Jump to end if index is negative.
+func (o *outbuf) compareBounds(indexReg reg.R, upperBound int32) {
+	o.insn(in.TBNZ.RtI14Bit(indexReg, 3, 31)) // Jump to end if index is negative.
 
 	switch n := uint32(upperBound); {
 	case n <= 2047:
-		o.uint32(in.SUBSi.RdRnI12S2(RegDiscard, indexReg, n, 0, wa.I32))
+		o.insn(in.SUBSi.RdRnI12S2(RegDiscard, indexReg, n, 0, wa.Size32))
 
 	default:
-		moveUintImm32(&o, RegScratch, n)
-		o.uint32(in.SUBSe.RdRnI3ExtRm(RegDiscard, indexReg, 0, in.UXTW, RegScratch, wa.I32))
+		o.moveUintImm32(RegScratch, n)
+		o.insn(in.SUBSe.RdRnI3ExtRm(RegDiscard, indexReg, 0, in.UXTW, RegScratch, wa.Size32))
 	}
 
-	o.uint32(in.Bc.CondI19(in.LT, 2)) // Skip next instruction.
-	return
+	o.insn(in.Bc.CondI19(in.LT, 2)) // Skip next instruction.
 }
 
 func (MacroAssembler) Call(p *gen.Prog, addr int32) {
@@ -175,52 +187,45 @@ func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) {
 }
 
 func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, r reg.R) {
-	o := compareBounds(r, int32(len(f.Module.TableFuncs)))
-	putTrapInsn(&o, f, trap.IndirectCallIndexOutOfBounds)
+	var o outbuf
 
-	o.uint32(in.ADDi.RdRnI12S2(RegScratch, RegTextBase, rodata.TableAddr, 0, wa.I64))
-	o.uint32(in.LDRr.RtRnSOptionRm(r, RegScratch, in.Scaled, in.UXTW, r, wa.I64))
-	moveUintImm32(&o, RegScratch, uint32(sigIndex))
-	o.uint32(in.SUBSs.RdRnI6RmS2(RegDiscard, RegScratch, 32, r, in.LSR, wa.I64))
-	o.uint32(in.Bc.CondI19(in.EQ, 2)) // Skip trap instruction.
-	putTrapInsn(&o, f, trap.IndirectCallSignatureMismatch)
+	o.compareBounds(r, int32(len(f.Module.TableFuncs)))
+	o.trap(f, trap.IndirectCallIndexOutOfBounds)
 
-	o.uint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, r, wa.I64))
-	o.uint32(in.BLR.Rn(RegScratch))
-	o.copy(f.Text.Extend(o.size()))
+	o.insn(in.ADDi.RdRnI12S2(RegScratch, RegTextBase, rodata.TableAddr, 0, wa.Size64))
+	o.insn(in.LDRr.RtRnSOptionRm(r, RegScratch, in.Scaled, in.UXTW, r, wa.I64))
+	o.moveUintImm32(RegScratch, uint32(sigIndex))
+	o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegScratch, 32, r, in.LSR, wa.Size64))
+	o.insn(in.Bc.CondI19(in.EQ, 2)) // Skip trap instruction.
+	o.trap(f, trap.IndirectCallSignatureMismatch)
+
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, r, wa.Size64))
+	o.insn(in.BLR.Rn(RegScratch))
+	o.copy(f.Text.Extend(o.size))
 
 	f.Regs.Free(wa.I64, r)
 }
 
 func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
-	p.Text.PutUint32(in.MOVZ.RdI16Hw(RegResult, 0, 0, wa.I64))
+	p.Text.PutUint32(in.MOVZ.RdI16Hw(RegResult, 0, 0, wa.Size64))
 }
 
 func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExt bool) {
-	if offset < -256 {
-		panic(errors.New("arm: program has too many globals"))
-	}
-
-	if t.Category() == wa.Int {
-		p.Text.PutUint32(in.LDUR.RtRnI9(target, RegMemoryBase, in.Int9(offset), t))
-		return false // TODO: yes, no?
-	} else {
-		return TODO(t).(bool)
-	}
+	// compile.maxGlobals ensures that offset is never below -256.
+	p.Text.PutUint32(in.LDUR.RtRnI9(target, RegMemoryBase, in.Int9(offset), t))
+	return false // TODO: yes, no?
 }
 
 func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
-	if offset < -256 {
-		panic(errors.New("arm: program has too many globals"))
-	}
+	var o outbuf
 
-	if x.Type.Category() == wa.Int {
-		r, _ := getScratchReg(f, x)
-		f.Text.PutUint32(in.STUR.RtRnI9(r, RegMemoryBase, in.Int9(offset), x.Type))
-		f.Regs.Free(x.Type, r)
-	} else {
-		TODO(x.Type)
-	}
+	r := o.getScratchReg(f, x)
+
+	// compile.maxGlobals ensures that offset is never below -256.
+	o.insn(in.STUR.RtRnI9(r, RegMemoryBase, in.Int9(offset), x.Type))
+	o.copy(f.Text.Extend(o.size))
+
+	f.Regs.Free(x.Type, r)
 }
 
 func (MacroAssembler) Resume(p *gen.Prog) {
@@ -228,174 +233,194 @@ func (MacroAssembler) Resume(p *gen.Prog) {
 }
 
 func (MacroAssembler) Enter(p *gen.Prog) {
+	var o outbuf
+
 	// Start function
 
-	p.Text.PutUint32(in.PopIntReg(RegScratch))
-	p.Text.PutUint32(in.CBZ.RtI19(RegScratch, 3, wa.I32)) // Skip 2 next instructions.
-	p.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.I64))
-	p.Text.PutUint32(in.BLR.Rn(RegScratch))
-	p.Map.PutCallSite(uint32(p.Text.Addr), obj.Word) // Depth includes entry address.
+	o.insn(in.PopReg(RegScratch, wa.I32))
+	o.insn(in.CBZ.RtI19(RegScratch, 3, wa.Size32)) // Skip 2 next instructions.
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.Size64))
+	o.insn(in.BLR.Rn(RegScratch))
+	p.Map.PutCallSite(uint32(o.addr(&p.Text)), obj.Word) // Depth includes entry address.
 
 	// Entry function
 
-	p.Text.PutUint32(in.MOVZ.RdI16Hw(RegResult, 0, 0, wa.I64)) // Result if no entry func.
+	o.insn(in.MOVZ.RdI16Hw(RegResult, 0, 0, wa.Size64)) // Result if no entry func.
 
-	p.Text.PutUint32(in.PopIntReg(RegScratch))
-	p.Text.PutUint32(in.CBZ.RtI19(RegScratch, 3, wa.I32)) // Skip 2 next instructions.
-	p.Text.PutUint32(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.I64))
-	p.Text.PutUint32(in.BLR.Rn(RegScratch))
-	p.Map.PutCallSite(uint32(p.Text.Addr), 0) // No function addresses remain on stack.
+	o.insn(in.PopReg(RegScratch, wa.I32))
+	o.insn(in.CBZ.RtI19(RegScratch, 3, wa.Size32)) // Skip 2 next instructions.
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.Size64))
+	o.insn(in.BLR.Rn(RegScratch))
+	p.Map.PutCallSite(uint32(o.addr(&p.Text)), 0) // No function addresses remain on stack.
 
 	// Exit
 
-	p.Text.PutUint32(in.LogicalShiftLeft(RegResult, RegResult, 32, wa.I64))
-	p.Text.PutUint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
-	p.Text.PutUint32(in.BR.Rn(RegScratch))
+	o.insn(in.LogicalShiftLeft(RegResult, RegResult, 32, wa.Size64))
+	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
+	o.insn(in.BR.Rn(RegScratch))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) CallImportVector(p *gen.Prog, index int, variadic bool, argCount, sigIndex int) {
-	var o output
+	var o outbuf
 
 	if variadic {
-		o.uint32(in.MOVZ.RdI16Hw(RegImportVariadic, uint32(sigIndex), 0, wa.I64))
-		o.uint32(in.MOVK.RdI16Hw(RegImportVariadic, uint32(argCount), 2, wa.I64))
+		o.insn(in.MOVZ.RdI16Hw(RegImportVariadic, uint32(sigIndex), 0, wa.Size64))
+		o.insn(in.MOVK.RdI16Hw(RegImportVariadic, uint32(argCount), 2, wa.Size64))
 	}
 
 	switch {
 	case index >= -32:
-		o.uint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(int32(index*8)), wa.I64))
+		o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(int32(index*8)), wa.I64))
 
 	case index >= -4096:
-		o.uint32(in.SUBi.RdRnI12S2(RegScratch, RegTextBase, 8, 1, wa.I64))           // 8 << 12
-		o.uint32(in.LDR.RdRnI12(RegScratch, RegScratch, uint32(4096+index), wa.I64)) // Scaled by 8.
+		o.insn(in.SUBi.RdRnI12S2(RegScratch, RegTextBase, 8, 1, wa.Size64))        // 8 << 12
+		o.insn(in.LDR.RdRnI12(RegScratch, RegScratch, uint32(4096+index), wa.I64)) // Scaled by 8.
 
 	default:
 		panic(fmt.Errorf("arm: import function index is out of range: %d", index))
 	}
 
-	o.uint32(in.BLR.Rn(RegScratch))
-
-	o.copy(p.Text.Extend(o.size()))
+	o.insn(in.BLR.Rn(RegScratch))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) JumpToTrapHandler(p *gen.Prog, id trap.ID) {
-	jumpToTrapHandler(p, id)
+	var o outbuf
+
+	o.jumpToTrapHandler(p, id)
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) JumpToStackTrapHandler(p *gen.Prog) {
-	p.Text.PutUint32(in.SUBi.RdRnI12S2(RegLink, RegLink, 5*4, 0, wa.I64)) // See SetupStackFrame.
-	jumpToTrapHandler(p, trap.CallStackExhausted)
+	var o outbuf
+
+	o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, 5*4, 0, wa.Size64)) // See SetupStackFrame.
+	o.jumpToTrapHandler(p, trap.CallStackExhausted)
+	o.copy(p.Text.Extend(o.size))
 }
 
-func jumpToTrapHandler(p *gen.Prog, id trap.ID) {
-	var o output
-
-	o.uint32(in.MOVZ.RdI16Hw(RegResult, uint32(id), 0, wa.I64))
-	o.uint32(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
-	o.uint32(in.BR.Rn(RegScratch))
-	o.copy(p.Text.Extend(o.size()))
+func (o *outbuf) jumpToTrapHandler(p *gen.Prog, id trap.ID) {
+	o.insn(in.MOVZ.RdI16Hw(RegResult, uint32(id), 0, wa.Size64))
+	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
+	o.insn(in.BR.Rn(RegScratch))
 }
 
 func (MacroAssembler) LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (addr int32) {
-	var o output
+	var o outbuf
 
-	o.uint32(in.BRK.I16(0)) // Placeholder for start of table calculation (ADR into RegScratch).
+	o.insn(in.BRK.I16(0)) // Placeholder for start of table calculation (ADR into RegScratch).
 	addr = o.addr(&f.Text)
-	o.uint32(in.LDRr.RtRnSOptionRm(r, RegScratch, in.Scaled, in.SizeZeroExt(indexType), r, indexType))
-	o.copy(f.Text.Extend(o.size()))
+
+	o.insn(in.LDRr.RtRnSOptionRm(r, RegScratch, in.Scaled, in.SizeZeroExt(indexType.Size()), r, indexType))
+	o.copy(f.Text.Extend(o.size))
 	return
 }
 
 func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool) {
-	switch t := x.Type; t.Category() {
-	case wa.Int:
-		switch x.Storage {
-		case storage.Imm:
-			moveIntImm(&f.Text, target, x.ImmValue())
-			zeroExt = true
+	var o outbuf
 
-		case storage.Stack:
-			f.Text.PutUint32(in.PopIntReg(target))
-			f.StackValueConsumed()
+	zeroExt = o.move(f, target, x)
+	o.copy(f.Text.Extend(o.size))
+	return
+}
 
-		case storage.Reg:
-			if source := x.Reg(); target != source {
-				f.Text.PutUint32(in.ORRs.RdRnI6RmS2(target, RegZero, 0, source, 0, t))
-				f.Regs.Free(t, source)
-				zeroExt = true
-			} else {
-				if target != RegResult {
-					panic("register moved to itself")
-				}
-			}
-
-		case storage.Flags:
-			asm.SetBool(&f.Prog, target, x.FlagsCond())
-			zeroExt = true
-
-		default:
-			panic(x.Storage)
+func (o *outbuf) move(f *gen.Func, target reg.R, x operand.O) (zeroExt bool) {
+	switch x.Storage {
+	case storage.Imm:
+		if x.Type.Category() == wa.Int {
+			o.moveIntImm(target, x.ImmValue())
+		} else {
+			o.moveIntImm(RegScratch, x.ImmValue())
+			o.insn(in.FMOVfromg.RdRn(target, RegScratch, x.Size(), x.Size()))
 		}
 
-	default:
-		panic(t.Category()) // TODO
+	case storage.Stack:
+		o.insn(in.PopReg(target, x.Type))
+		f.StackValueConsumed()
+
+	case storage.Reg:
+		if source := x.Reg(); target != source {
+			var insn uint32
+
+			if x.Type.Category() == wa.Int {
+				insn = in.ORRs.RdRnI6RmS2(target, RegZero, 0, source, 0, x.Size())
+				zeroExt = true
+			} else {
+				insn = in.FMOV.RdRn(target, source, x.Size())
+			}
+			o.insn(insn)
+
+			f.Regs.Free(x.Type, source)
+		} else {
+			if target != RegResult {
+				panic("register moved to itself")
+			}
+		}
+
+	case storage.Flags:
+		o.setBool(target, x.FlagsCond())
+		zeroExt = true
 	}
 
 	return
 }
 
 func (MacroAssembler) MoveReg(p *gen.Prog, t wa.Type, target, source reg.R) {
-	switch t.Category() {
-	case wa.Int:
-		p.Text.PutUint32(in.ORRs.RdRnI6RmS2(target, RegZero, 0, source, 0, t))
+	var insn uint32
 
-	default:
-		TODO(t)
+	if t.Category() == wa.Int {
+		insn = in.ORRs.RdRnI6RmS2(target, RegZero, 0, source, 0, t.Size())
+	} else {
+		insn = in.FMOV.RdRn(target, source, t.Size())
 	}
+	p.Text.PutUint32(insn)
 }
 
 func (MacroAssembler) PushImm(p *gen.Prog, value int64) {
-	if value == 0 {
-		p.Text.PutUint32(in.PushIntReg(RegZero))
-	} else {
-		moveIntImm(&p.Text, RegScratch, value)
-		p.Text.PutUint32(in.PushIntReg(RegScratch))
+	var o outbuf
+
+	r := RegZero
+	if value != 0 {
+		r = RegScratch
+		o.moveIntImm(r, value)
 	}
+	o.insn(in.PushReg(r, wa.I64))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) PushReg(p *gen.Prog, t wa.Type, r reg.R) {
-	switch t.Category() {
-	case wa.Int:
-		p.Text.PutUint32(in.PushIntReg(r))
-
-	default:
-		TODO(t)
-	}
+	p.Text.PutUint32(in.PushReg(r, t))
 }
 
 func (MacroAssembler) PushCond(p *gen.Prog, cond condition.C) {
-	TODO(cond)
+	var o outbuf
+
+	o.setBool(RegScratch, cond)
+	o.insn(in.PushReg(RegScratch, wa.I32))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) PushZeros(p *gen.Prog, n int) {
+	// TODO: use outbuf if few entries; generate a loop if many entries
 	for i := 0; i < n; i++ {
-		p.Text.PutUint32(in.PushIntReg(RegZero))
+		p.Text.PutUint32(in.PushReg(RegZero, wa.I64))
 	}
 }
 
 func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
-	var o output
+	var o outbuf
 
 	if numStackValues != 0 {
 		offset := uint32(numStackValues * 8)
 		if offset > 4095 {
 			panic(numStackValues) // TODO
 		}
-		o.uint32(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.I64))
+		o.insn(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.Size64))
 	}
-	o.uint32(in.LDRpost.RtRnI9(RegLink, RegFakeSP, obj.Word, wa.I64))
-	o.uint32(in.RET.Rn(RegLink))
-	o.copy(p.Text.Extend(o.size()))
+	o.insn(in.LDRpost.RtRnI9(RegLink, RegFakeSP, obj.Word, wa.I64))
+	o.insn(in.RET.Rn(RegLink))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
@@ -404,161 +429,157 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	// If the following instructions are changed, JumpToStackTrapHandler must
 	// be changed to match the instruction sequence size.
 
-	var o output
+	var o outbuf
 
-	o.uint32(in.PushIntReg(RegLink))
+	o.insn(in.PushReg(RegLink, wa.I64))
 
-	o.uint32(in.BRK.I16(0)) // Placeholder for ADD (target is RegScratch).
+	o.insn(in.BRK.I16(0)) // Placeholder for ADD (target is RegScratch).
 	stackCheckAddr = o.addr(&f.Text)
 
 	// sp - scratch*16
 	// sp - (limit + alloc)
-	o.uint32(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.I64))
-	o.uint32(in.Bc.CondI19(in.GE, 2)) // Skip trap instruction.
-	putUnmappedTrapInsn(&o, f, trap.CallStackExhausted)
-
-	o.copy(f.Text.Extend(o.size()))
+	o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.Size64))
+	o.insn(in.Bc.CondI19(in.GE, 2)) // Skip trap instruction.
+	o.unmappedTrap(f, trap.CallStackExhausted)
+	o.copy(f.Text.Extend(o.size))
 	return
 }
 
 func (MacroAssembler) SetBool(p *gen.Prog, target reg.R, cond condition.C) {
-	switch {
-	case cond >= condition.MinUnorderedOrCondition:
-		panic(cond) // TODO
+	var o outbuf
 
-	case cond >= condition.MinOrderedAndCondition:
-		panic(cond) // TODO
+	o.setBool(target, cond)
+	o.copy(p.Text.Extend(o.size))
+}
+
+func (o *outbuf) setBool(target reg.R, cond condition.C) {
+	switch cond {
+	case condition.OrderedAndEq:
+		o.insn(in.MOVZ.RdI16Hw(target, 0, 0, wa.Size64)) // Default result is 0.
+		o.insn(in.Bc.CondI19(in.VS, 2))                  // Skip CSINC if unordered.
+
+	case condition.UnorderedOrEq:
+		o.insn(in.MOVZ.RdI16Hw(target, 1, 0, wa.Size64)) // Default result is 1.
+		o.insn(in.Bc.CondI19(in.VS, 2))                  // Skip CSINC if unordered.
 	}
 
-	inverse := condition.Inverted[cond]
-	p.Text.PutUint32(in.CSINC.RdRnCondRm(target, RegZero, conditions[inverse], RegZero, wa.I64))
+	cond = condition.Inverted[cond]
+	o.insn(in.CSINC.RdRnCondRm(target, RegZero, conditions[cond], RegZero, wa.Size64))
 }
 
 func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int32) {
 	index := uint32(offset) / uint32(t.Size())
-
-	switch t.Category() {
-	case wa.Int:
-		p.Text.PutUint32(in.LDR.RdRnI12(target, RegFakeSP, index, t))
-
-	case wa.Float:
-		TODO(t)
-	}
+	p.Text.PutUint32(in.LDR.RdRnI12(target, RegFakeSP, index, t))
 }
 
 func (MacroAssembler) StoreStack(f *gen.Func, offset int32, x operand.O) {
-	r, _ := getScratchReg(f, x)
-	asm.StoreStackReg(&f.Prog, x.Type, offset, r)
+	var o outbuf
+
+	r := o.getScratchReg(f, x)
+	o.insn(in.STR.RdRnI12(r, RegFakeSP, uint32(offset)/uint32(x.Size()), x.Type))
+	o.copy(f.Text.Extend(o.size))
+
 	f.Regs.Free(x.Type, r)
 }
 
 func (MacroAssembler) StoreStackImm(p *gen.Prog, t wa.Type, offset int32, value int64) {
-	index := uint32(offset) / uint32(t.Size())
-	r := RegZero
+	var o outbuf
 
+	r := RegZero
 	if value != 0 {
 		r = RegScratch
-		moveIntImm(&p.Text, r, value)
+		o.moveIntImm(r, value)
 	}
-
-	p.Text.PutUint32(in.STR.RdRnI12(r, RegFakeSP, index, t))
+	o.insn(in.STR.RdRnI12(r, RegFakeSP, uint32(offset)/8, wa.I64))
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.R) {
-	index := uint32(offset) / uint32(t.Size())
-
-	switch t.Category() {
-	case wa.Int:
-		p.Text.PutUint32(in.STR.RdRnI12(r, RegFakeSP, index, t))
-
-	case wa.Float:
-		TODO(t)
-	}
+	p.Text.PutUint32(in.STR.RdRnI12(r, RegFakeSP, uint32(offset)/uint32(t.Size()), t))
 }
 
 func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
-	var o output
+	var o outbuf
 
-	putTrapInsn(&o, f, id)
-	o.copy(f.Text.Extend(o.size()))
+	o.trap(f, id)
+	o.copy(f.Text.Extend(o.size))
 }
 
-// putTrapInsn must generate exactly one instruction.
-func putTrapInsn(o *output, f *gen.Func, id trap.ID) {
-	putUnmappedTrapInsn(o, f, id)
+// trap must generate exactly one instruction.
+func (o *outbuf) trap(f *gen.Func, id trap.ID) {
+	o.unmappedTrap(f, id)
 	f.MapTrapAddr(o.addr(&f.Text))
 }
 
-// putUnmappedTrapInsn must generate exactly one instruction.
-func putUnmappedTrapInsn(o *output, f *gen.Func, id trap.ID) {
-	o.uint32(in.BL.I26(in.Int26((f.TrapLinks[id].Addr - o.addr(&f.Text)) / 4)))
+// unmappedTrap must generate exactly one instruction.
+func (o *outbuf) unmappedTrap(f *gen.Func, id trap.ID) {
+	o.insn(in.BL.I26(in.Int26((f.TrapLinks[id].Addr - o.addr(&f.Text)) / 4)))
 }
 
 func (MacroAssembler) TrapIfLoopSuspended(f *gen.Func) {
-	var o output
+	var o outbuf
 
-	o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0)) // Skip trap instruction.
-	putUnmappedTrapInsn(&o, f, trap.Suspended)
-	o.copy(f.Text.Extend(o.size()))
+	o.insn(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0)) // Skip trap instruction.
+	o.unmappedTrap(f, trap.Suspended)
+	o.copy(f.Text.Extend(o.size))
 
 	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedSaveInt(f *gen.Func, saveReg reg.R) {
-	var o output
+	var o outbuf
 
-	o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, 4, 0)) // Skip until end.
-	o.uint32(in.PushIntReg(saveReg))
-	putUnmappedTrapInsn(&o, f, trap.Suspended)
+	o.insn(in.TBZ.RtI14Bit(RegSuspendBit, 4, 0)) // Skip until end.
+	o.insn(in.PushReg(saveReg, wa.I64))
+	o.unmappedTrap(f, trap.Suspended)
 	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
-	o.uint32(in.PopIntReg(saveReg))
-	o.copy(f.Text.Extend(o.size()))
+	o.insn(in.PopReg(saveReg, wa.I64))
+	o.copy(f.Text.Extend(o.size))
 }
 
 func (MacroAssembler) TrapIfLoopSuspendedElse(f *gen.Func, elseAddr int32) {
-	var o output
+	var o outbuf
 
 	switch offset := (elseAddr - f.Text.Addr) / 4; {
 	case offset >= -8192:
-		o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, in.Int14(offset), 0))
+		o.insn(in.TBZ.RtI14Bit(RegSuspendBit, in.Int14(offset), 0))
 
 	default:
 		// Instead of branching to else, assume that the same effect can be
 		// achieved by skipping the trap.
-		o.uint32(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0))
+		o.insn(in.TBZ.RtI14Bit(RegSuspendBit, 2, 0))
 	}
 
-	putUnmappedTrapInsn(&o, f, trap.Suspended)
-	o.copy(f.Text.Extend(o.size()))
+	o.unmappedTrap(f, trap.Suspended)
+	o.copy(f.Text.Extend(o.size))
 
 	f.MapCallAddr(f.Text.Addr) // Resume address.
 }
 
 func (MacroAssembler) ZeroExtendResultReg(p *gen.Prog) {
-	p.Text.PutUint32(in.UBFM.RdRnI6sI6r(RegResult, RegResult, 31, 0, wa.I64))
+	p.Text.PutUint32(in.UBFM.RdRnI6sI6r(RegResult, RegResult, 31, 0, wa.Size64))
 }
 
 // getScratchReg returns either the operand's existing register, or the
 // operand's value in RegScratch.
-func getScratchReg(f *gen.Func, x operand.O) (r reg.R, zeroExtended bool) {
+func (o *outbuf) getScratchReg(f *gen.Func, x operand.O) reg.R {
 	if x.Storage == storage.Reg {
-		r = x.Reg()
+		return x.Reg()
 	} else {
-		r = RegScratch
-		zeroExtended = asm.Move(f, r, x)
+		o.move(f, RegScratch, x)
+		return RegScratch
 	}
-	return
 }
 
 // allocResultReg may allocate registers.  It returns either the operand's
 // existing register, or the operand's value in allocated register or
 // RegResult.
-func allocResultReg(f *gen.Func, x operand.O) (r reg.R, zeroExtended bool) {
+func (o *outbuf) allocResultReg(f *gen.Func, x operand.O) reg.R {
 	if x.Storage == storage.Reg {
-		r = x.Reg()
+		return x.Reg()
 	} else {
-		r = f.Regs.AllocResult(x.Type)
-		zeroExtended = asm.Move(f, r, x)
+		r := f.Regs.AllocResult(x.Type)
+		o.move(f, r, x)
+		return r
 	}
-	return
 }

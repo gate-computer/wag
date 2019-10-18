@@ -64,7 +64,7 @@ func (Linker) UpdateStackCheck(text []byte, addr int32, depth int) {
 
 	// scratch    = limit/16 + alloc/16
 	// scratch*16 = limit    + alloc
-	insn := in.ADDi.RdRnI12S2(RegScratch, RegStackLimit4, alloc4, 0, wa.I64)
+	insn := in.ADDi.RdRnI12S2(RegScratch, RegStackLimit4, alloc4, 0, wa.Size64)
 
 	binary.LittleEndian.PutUint32(text[addr-4:addr], insn)
 }

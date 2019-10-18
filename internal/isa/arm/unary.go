@@ -14,58 +14,69 @@ import (
 )
 
 func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
-	switch props {
-	case prop.IntEqz:
-		r, _ := getScratchReg(f, x)
-		f.Text.PutUint32(in.SUBSi.RdRnI12S2(RegDiscard, r, 0, 0, x.Type))
-		f.Regs.Free(x.Type, r)
-		return operand.Flags(condition.Eq)
-
-	case prop.IntClz:
-		r, _ := allocResultReg(f, x)
-		f.Text.PutUint32(in.CLZ.RdRn(r, r, x.Type))
-		return operand.Reg(x.Type, r)
-
-	case prop.IntCtz:
-		return clz(f, x)
-
-	case prop.IntPopcnt:
-		return popcnt(f, x)
-
-	default:
-		return TODO(props, x).(operand.O)
-	}
+	return unaryOps[props&prop.MaskUnary](f, props, x)
 }
 
-func clz(f *gen.Func, x operand.O) operand.O {
-	var o output
+var unaryOps = [prop.MaskUnary + 1]func(*gen.Func, uint16, operand.O) operand.O{
+	prop.UnaryIntEqz:    unaryIntEqz,
+	prop.UnaryIntClz:    unaryIntClz,
+	prop.UnaryIntCtz:    unaryIntCtz,
+	prop.UnaryIntPopcnt: unaryIntPopcnt,
+	prop.UnaryFloat:     unaryFloat,
+}
 
-	r, _ := allocResultReg(f, x)
+func unaryIntEqz(f *gen.Func, _ uint16, x operand.O) operand.O {
+	var o outbuf
 
-	o.uint32(in.RBIT.RdRn(r, r, x.Type))
-	o.uint32(in.CLZ.RdRn(r, r, x.Type))
-	o.copy(f.Text.Extend(o.size()))
+	r := o.getScratchReg(f, x)
+	o.insn(in.SUBSi.RdRnI12S2(RegDiscard, r, 0, 0, x.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	f.Regs.Free(x.Type, r)
+	return operand.Flags(condition.Eq)
+}
+
+func unaryIntClz(f *gen.Func, _ uint16, x operand.O) operand.O {
+	var o outbuf
+
+	r := o.allocResultReg(f, x)
+	o.insn(in.CLZ.RdRn(r, r, x.Size()))
+	o.copy(f.Text.Extend(o.size))
 
 	return operand.Reg(x.Type, r)
 }
 
-func popcnt(f *gen.Func, x operand.O) operand.O {
-	var o output
+func unaryIntCtz(f *gen.Func, _ uint16, x operand.O) operand.O {
+	var o outbuf
+
+	r := o.allocResultReg(f, x)
+	o.insn(in.RBIT.RdRn(r, r, x.Size()))
+	o.insn(in.CLZ.RdRn(r, r, x.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	return operand.Reg(x.Type, r)
+}
+
+func unaryIntPopcnt(f *gen.Func, _ uint16, x operand.O) operand.O {
+	var o outbuf
 
 	count := f.Regs.AllocResult(x.Type)
-	pop, _ := getScratchReg(f, x)
+	pop := o.getScratchReg(f, x)
 
-	o.uint32(in.MOVZ.RdI16Hw(count, 0, 0, wa.I64))
-	o.uint32(in.CBZ.RtI19(pop, 5, x.Type)) // Skip to end.
+	o.insn(in.MOVZ.RdI16Hw(count, 0, 0, wa.Size64))
+	o.insn(in.CBZ.RtI19(pop, 5, x.Size())) // Skip to end.
 
 	// Loop:
-	o.uint32(in.ADDi.RdRnI12S2(count, count, 1, 0, wa.I64))
-	o.uint32(in.SUBi.RdRnI12S2(RegScratch2, pop, 1, 0, x.Type))
-	o.uint32(in.ANDSs.RdRnI6RmS2(pop, pop, 0, RegScratch2, 0, x.Type))
-	o.uint32(in.Bc.CondI19(in.NE, in.Int19(-3))) // Loop.
-
-	o.copy(f.Text.Extend(o.size()))
+	o.insn(in.ADDi.RdRnI12S2(count, count, 1, 0, wa.Size64))
+	o.insn(in.SUBi.RdRnI12S2(RegScratch2, pop, 1, 0, x.Size()))
+	o.insn(in.ANDSs.RdRnI6RmS2(pop, pop, 0, RegScratch2, 0, x.Size()))
+	o.insn(in.Bc.CondI19(in.NE, in.Int19(-3))) // Loop.
+	o.copy(f.Text.Extend(o.size))
 
 	f.Regs.Free(x.Type, pop)
 	return operand.Reg(x.Type, count)
+}
+
+func unaryFloat(f *gen.Func, props uint16, x operand.O) operand.O {
+	return convertFloat(f, props, x.Type, x)
 }
