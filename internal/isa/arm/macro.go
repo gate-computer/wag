@@ -228,12 +228,22 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 	f.Regs.Free(x.Type, r)
 }
 
+func (o *outbuf) initRoutinePrologue() {
+	o.insn(in.LDUR.RtRnI9(RegMemoryBase, RegTextBase, in.Int9(gen.VectorOffsetMemoryAddr), wa.I64))
+}
+
 func (MacroAssembler) Resume(p *gen.Prog) {
-	p.Text.PutUint32(in.RET.Rn(RegLink)) // Return from trap handler or import function call.
+	var o outbuf
+
+	o.initRoutinePrologue()
+	o.insn(in.RET.Rn(RegLink)) // Return from trap handler or import function call.
+	o.copy(p.Text.Extend(o.size))
 }
 
 func (MacroAssembler) Enter(p *gen.Prog) {
 	var o outbuf
+
+	o.initRoutinePrologue()
 
 	// Start function
 

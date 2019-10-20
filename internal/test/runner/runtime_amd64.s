@@ -6,24 +6,22 @@
 
 #define SYS_rt_sigreturn 15
 
-// func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+// func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
 TEXT ·run(SB),NOSPLIT,$0-128
 	MOVQ	text+0(FP), DI
-	MOVQ	memoryAddr+24(FP), SI
-	MOVQ	stack+32(FP), DX
-	MOVQ	stackOffset+56(FP), CX
-	MOVQ	initOffset+64(FP), R8
-	MOVQ	slaveFd+72(FP), R9
-	MOVQ	arg+80(FP), R10
-	MOVQ	resultFd+88(FP), R11
+	MOVQ	stack+32(FP), SI
+	MOVQ	stackOffset+56(FP), DX
+	MOVQ	initOffset+64(FP), CX
+	MOVQ	slaveFd+72(FP), R8
+	MOVQ	arg+80(FP), R9
+	MOVQ	resultFd+88(FP), R10
 	MOVQ	forkStack+96(FP), AX
 	ADDQ	$65536, AX
 	XCHGQ	AX, SP
 	SUBQ	$32, SP
 	MOVQ	AX, 24(SP)
 	LEAQ	state(SB), AX
-	MOVQ	AX, 16(SP)
-	MOVQ	R11, 8(SP)
+	MOVQ	AX, 8(SP)
 	MOVQ	R10, 0(SP)
 	CALL	run(SB)
 	MOVQ	24(SP), SP

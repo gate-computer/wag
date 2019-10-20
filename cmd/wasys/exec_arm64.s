@@ -4,19 +4,18 @@
 
 #include "textflag.h"
 
-// func exec(textBase, stackLimit, memoryBase, stackPtr uintptr)
-TEXT ·exec(SB),NOSPLIT,$0-32
+// func exec(textBase, stackLimit, stackPtr uintptr)
+TEXT ·exec(SB),NOSPLIT,$0-24
 	MOVD	textBase+0(FP), R27
 	MOVD	stackLimit+8(FP), R0
-	MOVD	memoryBase+16(FP), R26
-	MOVD	stackPtr+24(FP), R29	// RegFakeSP
+	MOVD	stackPtr+16(FP), R29	// RegFakeSP
 
 	MOVD	R0, RSP			// RegRealSP
 	LSR	$4, R0
 	MOVD	R0, g			// RegStackLimit4 (R28)
 
 	MOVD	R27, R1
-	ADD	$32, R1			// init routine
+	ADD	$32, R1			// enter routine
 	JMP	(R1)
 
 // func importTrapHandler() uint64
@@ -35,6 +34,16 @@ sysexit:
 	MOVD	$94, R8			// exit_group syscall
 	SVC
 	BRK
+
+after:	MOVD	LR, ret+0(FP)
+	RET
+
+// func importCurrentMemory() uint64
+TEXT ·importCurrentMemory(SB),$0-8
+	BL	after
+
+currentmemory:
+	BRK				// TODO: implementation
 
 after:	MOVD	LR, ret+0(FP)
 	RET

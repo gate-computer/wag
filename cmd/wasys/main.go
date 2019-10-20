@@ -135,7 +135,8 @@ func main() {
 	}
 
 	vecMem := vecTextMem[:vecSize]
-	copy(vecMem[vecSize-len(importVector):], importVector)
+	vec := vecMem[vecSize-len(importVector):]
+	copy(vec, importVector)
 
 	textMem := vecTextMem[vecSize:]
 	textAddr := memAddr(textMem)
@@ -163,8 +164,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	setImportVectorCurrentMemory(obj.InitialMemorySize)
-
 	globalsMemory, err := makeMem(obj.MemoryOffset+linearMemoryAddressSpace, syscall.PROT_NONE, 0)
 	if err != nil {
 		log.Fatal(err)
@@ -177,7 +176,7 @@ func main() {
 
 	copy(globalsMemory, obj.GlobalsMemory)
 
-	memoryAddr := memAddr(globalsMemory) + uintptr(obj.MemoryOffset)
+	setImportVectorMemoryAddr(vec, memAddr(globalsMemory)+uintptr(obj.MemoryOffset))
 
 	if err := syscall.Mprotect(vecMem, syscall.PROT_READ); err != nil {
 		log.Fatal(err)
@@ -202,5 +201,5 @@ func main() {
 		log.Fatal("stack is too small for starting program")
 	}
 
-	exec(textAddr, stackLimit, memoryAddr, stackPtr)
+	exec(textAddr, stackLimit, stackPtr)
 }

@@ -29,14 +29,15 @@ import (
 const linearMemoryAddressSpace = 6 * 1024 * 1024 * 1024
 
 const (
-	vectorIndexLastImportFunc  = -5
-	vectorIndexGrowMemoryLimit = -4
+	vectorIndexLastImportFunc  = -6
+	vectorIndexGrowMemoryLimit = -5
+	vectorIndexMemoryAddr      = -4
 	vectorIndexCurrentMemory   = -3
 	vectorIndexGrowMemory      = -2
 	vectorIndexTrapHandler     = -1
 )
 
-func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
 
 func importTrapHandler() uint64
 func importCurrentMemory() uint64
@@ -107,7 +108,7 @@ var importFuncs = map[string]map[string]imports.Func{
 }
 
 func populateImportVector(b []byte) {
-	// vectorIndexGrowMemoryLimit is initialized later.
+	// vectorIndexGrowMemoryLimit and vectorIndexMemoryAddr are initialized later.
 	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexCurrentMemory*8:], importCurrentMemory())
 	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexGrowMemory*8:], importGrowMemory())
 	binary.LittleEndian.PutUint64(b[len(b)+vectorIndexTrapHandler*8:], importTrapHandler())
@@ -277,7 +278,7 @@ func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *R
 	}
 	binary.LittleEndian.PutUint64(p.vec[len(p.vec)+vectorIndexGrowMemoryLimit*8:], uint64(growMemorySize)/wa.PageSize)
 
-	r, err = newRunner(p, initMemorySize, growMemorySize, stackSize)
+	r, err = newRunner(p, p, initMemorySize, growMemorySize, stackSize)
 	if err != nil {
 		return
 	}
@@ -286,7 +287,7 @@ func (p *Program) NewRunner(initMemorySize, growMemorySize, stackSize int) (r *R
 	return
 }
 
-func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
+func newRunner(progSnap runnable, realProg *Program, initMemorySize, growMemorySize, stackSize int) (r *Runner, err error) {
 	if (initMemorySize & (wa.PageSize - 1)) != 0 {
 		err = fmt.Errorf("initial memory size is not multiple of %d", wa.PageSize)
 		return
@@ -296,7 +297,7 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 		return
 	}
 
-	data, memoryOffset := prog.getData()
+	data, memoryOffset := progSnap.getData()
 
 	if int(initMemorySize) < len(data)-memoryOffset {
 		err = errors.New("data does not fit in initial memory")
@@ -317,7 +318,7 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 	}
 
 	r = &Runner{
-		prog:         prog,
+		prog:         progSnap,
 		memoryOffset: memoryOffset,
 		memorySize:   initMemorySize,
 	}
@@ -339,6 +340,10 @@ func newRunner(prog runnable, initMemorySize, growMemorySize, stackSize int) (r 
 	}
 
 	copy(r.globalsMemory, data)
+
+	memory := r.globalsMemory[memoryOffset:]
+	memoryAddr := uint64((*reflect.SliceHeader)(unsafe.Pointer(&memory)).Data)
+	binary.LittleEndian.PutUint64(realProg.vec[len(realProg.vec)+vectorIndexMemoryAddr*8:], memoryAddr)
 
 	r.stack, err = makeMemory(stackSize, syscall.PROT_READ|syscall.PROT_WRITE)
 	if err != nil {

@@ -139,7 +139,7 @@ func (s *Snapshot) exportStack(native []byte) (portable []byte, err error) {
 	return s.prog.exportStack(native)
 }
 
-func (s *Snapshot) NewRunner(growMemorySize, stackSize int) (r *Runner, err error) {
+func (s *Snapshot) NewRunner(p *Program, growMemorySize, stackSize int) (r *Runner, err error) {
 	memorySize := len(s.data) - s.memoryOffset
-	return newRunner(s, memorySize, growMemorySize, stackSize)
+	return newRunner(s, p, memorySize, growMemorySize, stackSize)
 }

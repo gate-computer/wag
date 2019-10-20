@@ -57,9 +57,10 @@ func importDup3() uint64
 func importPipe2() uint64
 
 func init() {
-	importVector = make([]byte, 432)
-	binary.LittleEndian.PutUint64(importVector[424:], importTrapHandler())
-	binary.LittleEndian.PutUint64(importVector[416:], importGrowMemory())
+	importVector = make([]byte, 440)
+	binary.LittleEndian.PutUint64(importVector[432:], importTrapHandler())
+	binary.LittleEndian.PutUint64(importVector[424:], importGrowMemory())
+	binary.LittleEndian.PutUint64(importVector[416:], importCurrentMemory())
 	binary.LittleEndian.PutUint64(importVector[400:], importRead())
 	binary.LittleEndian.PutUint64(importVector[392:], importWrite())
 	binary.LittleEndian.PutUint64(importVector[384:], importClose())
@@ -111,61 +112,61 @@ func init() {
 	binary.LittleEndian.PutUint64(importVector[16:], importEventfd())
 	binary.LittleEndian.PutUint64(importVector[8:], importDup3())
 	binary.LittleEndian.PutUint64(importVector[0:], importPipe2())
-	importFuncs["read"] = -4
-	importFuncs["write"] = -5
-	importFuncs["close"] = -6
-	importFuncs["lseek"] = -7
-	importFuncs["pread"] = -8
-	importFuncs["pwrite"] = -9
-	importFuncs["dup"] = -10
-	importFuncs["getpid"] = -11
-	importFuncs["sendfile"] = -12
-	importFuncs["shutdown"] = -13
-	importFuncs["socketpair"] = -14
-	importFuncs["flock"] = -15
-	importFuncs["fsync"] = -16
-	importFuncs["fdatasync"] = -17
-	importFuncs["truncate"] = -18
-	importFuncs["ftruncate"] = -19
-	importFuncs["getcwd"] = -20
-	importFuncs["chdir"] = -21
-	importFuncs["fchdir"] = -22
-	importFuncs["fchmod"] = -23
-	importFuncs["fchown"] = -24
-	importFuncs["lchown"] = -25
-	importFuncs["umask"] = -26
-	importFuncs["getuid"] = -27
-	importFuncs["getgid"] = -28
-	importFuncs["vhangup"] = -29
-	importFuncs["sync"] = -30
-	importFuncs["gettid"] = -31
-	importFuncs["time"] = -32
-	importFuncs["posix_fadvise"] = -33
-	importFuncs["_exit"] = -34
-	importFuncs["inotify_init1"] = -35
-	importFuncs["inotify_add_watch"] = -36
-	importFuncs["inotify_rm_watch"] = -37
-	importFuncs["openat"] = -38
-	importFuncs["mkdirat"] = -39
-	importFuncs["fchownat"] = -40
-	importFuncs["unlinkat"] = -41
-	importFuncs["renameat"] = -42
-	importFuncs["linkat"] = -43
-	importFuncs["symlinkat"] = -44
-	importFuncs["readlinkat"] = -45
-	importFuncs["fchmodat"] = -46
-	importFuncs["faccessat"] = -47
-	importFuncs["splice"] = -48
-	importFuncs["tee"] = -49
-	importFuncs["sync_file_range"] = -50
-	importFuncs["fallocate"] = -51
-	importFuncs["eventfd"] = -52
-	importFuncs["dup3"] = -53
-	importFuncs["pipe2"] = -54
+	importFuncs["read"] = -5
+	importFuncs["write"] = -6
+	importFuncs["close"] = -7
+	importFuncs["lseek"] = -8
+	importFuncs["pread"] = -9
+	importFuncs["pwrite"] = -10
+	importFuncs["dup"] = -11
+	importFuncs["getpid"] = -12
+	importFuncs["sendfile"] = -13
+	importFuncs["shutdown"] = -14
+	importFuncs["socketpair"] = -15
+	importFuncs["flock"] = -16
+	importFuncs["fsync"] = -17
+	importFuncs["fdatasync"] = -18
+	importFuncs["truncate"] = -19
+	importFuncs["ftruncate"] = -20
+	importFuncs["getcwd"] = -21
+	importFuncs["chdir"] = -22
+	importFuncs["fchdir"] = -23
+	importFuncs["fchmod"] = -24
+	importFuncs["fchown"] = -25
+	importFuncs["lchown"] = -26
+	importFuncs["umask"] = -27
+	importFuncs["getuid"] = -28
+	importFuncs["getgid"] = -29
+	importFuncs["vhangup"] = -30
+	importFuncs["sync"] = -31
+	importFuncs["gettid"] = -32
+	importFuncs["time"] = -33
+	importFuncs["posix_fadvise"] = -34
+	importFuncs["_exit"] = -35
+	importFuncs["inotify_init1"] = -36
+	importFuncs["inotify_add_watch"] = -37
+	importFuncs["inotify_rm_watch"] = -38
+	importFuncs["openat"] = -39
+	importFuncs["mkdirat"] = -40
+	importFuncs["fchownat"] = -41
+	importFuncs["unlinkat"] = -42
+	importFuncs["renameat"] = -43
+	importFuncs["linkat"] = -44
+	importFuncs["symlinkat"] = -45
+	importFuncs["readlinkat"] = -46
+	importFuncs["fchmodat"] = -47
+	importFuncs["faccessat"] = -48
+	importFuncs["splice"] = -49
+	importFuncs["tee"] = -50
+	importFuncs["sync_file_range"] = -51
+	importFuncs["fallocate"] = -52
+	importFuncs["eventfd"] = -53
+	importFuncs["dup3"] = -54
+	importFuncs["pipe2"] = -55
 }
 
-func setImportVectorCurrentMemory(size int) {
-	binary.LittleEndian.PutUint64(importVector[408:], uint64(size))
+func setImportVectorMemoryAddr(vec []byte, addr uintptr) {
+	binary.LittleEndian.PutUint64(vec[408:], uint64(addr))
 }
 
 /*

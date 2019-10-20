@@ -81,11 +81,10 @@ static void (*get_signal_restorer(void))(void)
 }
 
 NORETURN
-static void start(void *text, void *memory_addr, void *stack_limit, void *stack_ptr, void *init_routine)
+static void start(void *text, void *stack_limit, void *stack_ptr, void *init_routine)
 {
 	register uintptr_t x0 asm("x0") = (uintptr_t) stack_limit - STACK_FOR_RT_CALLS;
 	register void *x1 asm("x1") = init_routine;
-	register void *x26 asm("x26") = memory_addr;
 	register void *x27 asm("x27") = text;
 	register uintptr_t x28 asm("x28") = (uintptr_t) stack_limit >> 4;
 	register void *x29 asm("x29") = stack_ptr;
@@ -94,7 +93,7 @@ static void start(void *text, void *memory_addr, void *stack_limit, void *stack_
 		" mov sp, x0 \n" // real stack ptr
 		" br  x1     \n" // exits via trap handler
 		:
-		: "r"(x0), "r"(x1), "r"(x26), "r"(x27), "r"(x28), "r"(x29)
+		: "r"(x0), "r"(x1), "r"(x27), "r"(x28), "r"(x29)
 		:);
 
 	__builtin_unreachable();

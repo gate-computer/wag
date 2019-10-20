@@ -25,7 +25,7 @@ struct state {
 static intptr_t syscall6(int nr, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, uintptr_t a5, uintptr_t a6);
 static void (*get_sigsegv_handler(void))(int, siginfo_t *, void *);
 static void (*get_signal_restorer(void))(void);
-NORETURN static void start(void *text, void *memory_addr, void *stack_limit, void *stack_ptr, void *init_routine);
+NORETURN static void start(void *text, void *stack_limit, void *stack_ptr, void *init_routine);
 static uint64_t begin_time(void);
 static uint64_t end_time(void);
 
@@ -89,7 +89,7 @@ static intptr_t sys_write(int fd, const void *buf, size_t count)
 	return syscall3(SYS_write, fd, (uintptr_t) buf, count);
 }
 
-int run(void *text, void *memory_addr, void *stack, int stack_offset, int init_offset, int slave_fd, int64_t arg, int result_fd, struct state *state)
+int run(void *text, void *stack, int stack_offset, int init_offset, int slave_fd, int64_t arg, int result_fd, struct state *state)
 {
 	int child_pid = sys_fork();
 	if (child_pid == 0) {
@@ -112,7 +112,7 @@ int run(void *text, void *memory_addr, void *stack, int stack_offset, int init_o
 		if (sys_sigaction(SIGSEGV, get_sigsegv_handler(), SA_RESTART) != 0)
 			sys_exit_group(1);
 
-		start(text, memory_addr, stack + STACK_LIMIT_OFFSET, stack + stack_offset, text + init_offset);
+		start(text, stack + STACK_LIMIT_OFFSET, stack + stack_offset, text + init_offset);
 	} else if (child_pid > 0) {
 		int status;
 		struct rusage rusage;
@@ -175,7 +175,7 @@ unsigned int current_memory(void *stack_limit)
 unsigned int grow_memory(void *stack_limit, void *memory_addr, void *text, unsigned int grow_pages)
 {
 	void *stack = (void *) stack_limit - STACK_LIMIT_OFFSET;
-	unsigned int grow_limit = *(uint64_t *) (text - 32);
+	unsigned int grow_limit = *(uint64_t *) (text - 5*8);
 	unsigned int old_pages = *(uint32_t *) stack;
 	uint64_t new_pages = (uint64_t) old_pages + (uint64_t) grow_pages;
 

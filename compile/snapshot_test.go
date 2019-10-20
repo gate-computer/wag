@@ -89,7 +89,7 @@ func TestSnapshot(t *testing.T) {
 
 	printBuf.Reset()
 
-	r2, err := s.NewRunner(maxMemorySize, stackSize)
+	r2, err := s.NewRunner(p, maxMemorySize, stackSize)
 	if err != nil {
 		t.Fatal(err)
 	}

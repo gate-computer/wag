@@ -21,24 +21,23 @@ body:	MOVD.W	LR, -8(R29)
 	call_C(func)		\
 	B	resume<>(SB)
 
-// func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+// func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
 TEXT ·run(SB),NOSPLIT,$0-128
 	MOVD	text+0(FP), R0
-	MOVD	memoryAddr+24(FP), R1
-	MOVD	stack+32(FP), R2
-	MOVD	stackOffset+56(FP), R3
-	MOVD	initOffset+64(FP), R4
-	MOVD	slaveFd+72(FP), R5
-	MOVD	arg+80(FP), R6
-	MOVD	resultFd+88(FP), R7
-	MOVD	$state(SB), R8
+	MOVD	stack+32(FP), R1
+	MOVD	stackOffset+56(FP), R2
+	MOVD	initOffset+64(FP), R3
+	MOVD	slaveFd+72(FP), R4
+	MOVD	arg+80(FP), R5
+	MOVD	resultFd+88(FP), R6
+	MOVD	$state(SB), R7
 	MOVD	forkStack+96(FP), R9
-	MOVD	R8, 8(R2)		// store state ptr in unused half of vars
+	MOVD	R7, 8(R1)		// store state ptr in stack vars
 	ADD	$65536, R9
 	MOVD	RSP, R10
 	MOVD	R9, RSP
 	SUB	$16, RSP
-	MOVD	R8, 0(RSP)
+	MOVD	R7, 0(RSP)		// XXX: why is this needed?
 	MOVD	R10, 8(RSP)
 	CALL	run(SB)
 	MOVD	8(RSP), R10

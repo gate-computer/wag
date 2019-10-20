@@ -13,7 +13,8 @@ import (
 // Well-known indexes of the import vector.  Import function addresses precede
 // the current memory size.
 const (
-	VectorIndexLastImport    = -4
+	VectorIndexLastImport    = -5
+	VectorIndexMemoryAddr    = -4
 	VectorIndexCurrentMemory = -3
 	VectorIndexGrowMemory    = -2
 	VectorIndexTrapHandler   = -1

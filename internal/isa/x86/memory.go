@@ -11,8 +11,8 @@ import (
 	"github.com/tsavola/wag/internal/gen/reg"
 	"github.com/tsavola/wag/internal/gen/storage"
 	"github.com/tsavola/wag/internal/isa/prop"
-	"github.com/tsavola/wag/internal/isa/x86/abi"
 	"github.com/tsavola/wag/internal/isa/x86/in"
+	"github.com/tsavola/wag/internal/isa/x86/nonabi"
 	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
 )
@@ -137,12 +137,12 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 
 func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetCurrentMemory)
-	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
+	in.CALLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline)
 	return f.Text.Addr
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func) int32 {
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetGrowMemory)
-	in.CALLcd.Addr32(&f.Text, abi.TextAddrRetpoline)
+	in.CALLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline)
 	return f.Text.Addr
 }

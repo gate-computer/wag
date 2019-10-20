@@ -133,9 +133,10 @@ func main() {
 	fmt.Fprintln(lib)
 
 	fmt.Fprintf(decl, "\nfunc init() {\n")
-	fmt.Fprintf(decl, "\timportVector = make([]byte, %d)\n", (len(syscalls)+3)*8)
-	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importTrapHandler())\n", (len(syscalls)+2)*8)
-	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importGrowMemory())\n", (len(syscalls)+1)*8)
+	fmt.Fprintf(decl, "\timportVector = make([]byte, %d)\n", (len(syscalls)+4)*8)
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importTrapHandler())\n", (len(syscalls)+3)*8)
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importGrowMemory())\n", (len(syscalls)+2)*8)
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], importCurrentMemory())\n", (len(syscalls)+1)*8)
 
 	for i, sc := range syscalls {
 		for _, v := range sc.variants() {
@@ -149,7 +150,7 @@ func main() {
 	}
 
 	for i, sc := range syscalls {
-		index := -i - 4
+		index := -i - 5
 		fmt.Fprintf(decl, "\timportFuncs[\"%s\"] = %d\n", sc.name, index)
 	}
 
@@ -157,8 +158,8 @@ func main() {
 
 	fmt.Fprintf(decl, "}\n") // init()
 
-	fmt.Fprintf(decl, "\nfunc setImportVectorCurrentMemory(size int) {\n")
-	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(importVector[%d:], uint64(size))\n", (len(syscalls)+0)*8)
+	fmt.Fprintf(decl, "\nfunc setImportVectorMemoryAddr(vec []byte, addr uintptr) {\n")
+	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(vec[%d:], uint64(addr))\n", (len(syscalls)+0)*8)
 	fmt.Fprintf(decl, "}\n")
 
 	cmd := exec.Command("wat2wasm", "-o", "/dev/stdout", libFile.Name())

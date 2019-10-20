@@ -35,19 +35,18 @@ static void (*get_signal_restorer(void))(void)
 }
 
 NORETURN
-static void start(void *text, void *memory_addr, void *stack_limit, void *stack_ptr, void *init_routine)
+static void start(void *text, void *stack_limit, void *stack_ptr, void *init_routine)
 {
 	register void *rcx asm("rcx") = stack_ptr;
 	register void *rbx asm("rbx") = stack_limit;
 	register void *rdi asm("rdi") = init_routine;
-	register void *r14 asm("r14") = memory_addr;
 	register void *r15 asm("r15") = text;
 
 	asm volatile(
 		" mov %%rcx, %%rsp \n" // stack ptr
 		" jmp *%%rdi       \n" // exits via trap handler
 		:
-		: "r"(rcx), "r"(rbx), "r"(rdi), "r"(r14), "r"(r15)
+		: "r"(rcx), "r"(rbx), "r"(rdi), "r"(r15)
 		:);
 
 	__builtin_unreachable();
