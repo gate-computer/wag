@@ -83,17 +83,24 @@ static void (*get_signal_restorer(void))(void)
 NORETURN
 static void start(void *text, void *stack_limit, void *stack_ptr, void *init_routine)
 {
+	uintptr_t link_ptr = 0;
+	if (((uintptr_t) init_routine & 0x7f) == 16) { // resume routine
+		link_ptr = *(uintptr_t *) stack_ptr;
+		stack_ptr += sizeof(uintptr_t);
+	}
+
 	register uintptr_t x0 asm("x0") = (uintptr_t) stack_limit - STACK_FOR_RT_CALLS;
 	register void *x1 asm("x1") = init_routine;
 	register void *x27 asm("x27") = text;
 	register uintptr_t x28 asm("x28") = (uintptr_t) stack_limit >> 4;
 	register void *x29 asm("x29") = stack_ptr;
+	register uintptr_t x30 asm("x30") = link_ptr;
 
 	asm volatile(
 		" mov sp, x0 \n" // real stack ptr
 		" br  x1     \n" // exits via trap handler
 		:
-		: "r"(x0), "r"(x1), "r"(x27), "r"(x28), "r"(x29)
+		: "r"(x0), "r"(x1), "r"(x27), "r"(x28), "r"(x29), "r"(x30)
 		:);
 
 	__builtin_unreachable();
