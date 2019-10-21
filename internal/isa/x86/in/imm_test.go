@@ -148,12 +148,12 @@ func TestImm(t *testing.T) {
 		{0x7ffffffe, 4},
 		{0x7fffffff, 4},
 	} {
-		if size := immSize(int32(pair[0])); size != uint8(pair[1]) {
+		if size := immSize(int32(pair[0])); size != uint32(pair[1]) {
 			t.Errorf("immSize(%d) = %d", pair[0], size)
 		}
 
 		op, size := immOpcodeSize(0xed67, int32(pair[0]))
-		if size == uint8(pair[1]) {
+		if size == uint32(pair[1]) {
 			if size == 1 && op == 0x67 {
 				continue
 			}

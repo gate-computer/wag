@@ -31,7 +31,7 @@ func TestDispModSize(t *testing.T) {
 		{0x7ffffffe, int(ModMemDisp32), 4},
 		{0x7fffffff, int(ModMemDisp32), 4},
 	} {
-		if mod, size := dispModSize(int32(pair[0])); mod != Mod(pair[1]) || size != uint8(pair[2]) {
+		if mod, size := dispModSize(int32(pair[0])); mod != Mod(pair[1]) || size != uint32(pair[2]) {
 			t.Errorf("dispModSize(%d) = %d, %d", pair[0], mod, size)
 		}
 	}

@@ -4,7 +4,7 @@
 
 package in
 
-func immSize(val int32) uint8 {
+func immSize(val int32) uint32 {
 	var (
 		bit32 = bit(uint32(val+128) > 255)
 		scale = bit32 << 1
@@ -13,7 +13,7 @@ func immSize(val int32) uint8 {
 	return 1 << scale
 }
 
-func immOpcodeSize(ops uint16, val int32) (op byte, size uint8) {
+func immOpcodeSize(ops uint16, val int32) (op byte, size uint32) {
 	var (
 		bit32 = bit(uint32(val+128) > 255)
 		opPos = bit32 << 3

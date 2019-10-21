@@ -4,7 +4,7 @@
 
 package in
 
-func bit(b bool) (i uint8) {
+func bit(b bool) (i uint32) {
 	if b {
 		i = 1
 	}

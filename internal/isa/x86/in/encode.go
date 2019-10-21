@@ -32,12 +32,12 @@ func addrDisp(currentAddr, insnSize, targetAddr int32) int32 {
 
 type output struct {
 	buf    [16]byte
-	offset uint8
+	offset uint32
 }
 
-func (o *output) len() int           { return int(o.offset) }
-func (o *output) copy(target []byte) { copy(target, o.buf[:o.offset]) }
-func (o *output) debugPrint()        { debugPrintInsn(o.buf[:o.offset]) }
+func (o output) len() int           { return int(o.offset) }
+func (o output) copy(target []byte) { copy(target, o.buf[:]) }
+func (o output) debugPrint()        { debugPrintInsn(o.buf[:o.offset]) }
 
 func (o *output) byte(b byte) {
 	o.buf[o.offset] = b
@@ -95,7 +95,7 @@ func (o *output) int64(val int64) {
 	o.offset += 8
 }
 
-func (o *output) int(val int32, size uint8) {
+func (o *output) int(val int32, size uint32) {
 	// Little-endian byte order works for any size
 	binary.LittleEndian.PutUint32(o.buf[o.offset:], uint32(val))
 	o.offset += size
@@ -411,7 +411,7 @@ type Ipush byte // opcode of instruction variant with 8-bit immediate
 func (op Ipush) Imm(text *code.Buf, val int32) {
 	var valSize = immSize(val)
 	var o output
-	o.byte(byte(op) &^ (valSize >> 1)) // 0x6a => 0x68 if 32-bit
+	o.byte(byte(op) &^ byte(valSize>>1)) // 0x6a => 0x68 if 32-bit
 	o.int(val, valSize)
 	o.copy(text.Extend(o.len()))
 }
@@ -538,7 +538,7 @@ func (op RMI) RegRegImm(text *code.Buf, t wa.Type, r, r2 reg.R, val int32) {
 	var valSize = immSize(val)
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(r2))
-	o.byte(byte(op) &^ (valSize >> 1)) // 0x6b => 0x69 if 32-bit
+	o.byte(byte(op) &^ byte(valSize>>1)) // 0x6b => 0x69 if 32-bit
 	o.mod(ModReg, regRO(r), regRM(r2))
 	o.int(val, valSize)
 	o.copy(text.Extend(o.len()))
@@ -697,9 +697,9 @@ func (op Dd) MissingFunction(text *code.Buf, align bool) {
 	if align {
 		// Position of disp must be aligned.
 		if n := (text.Addr + insnSize - 4) & 3; n > 0 {
-			size := 4 - n
+			size := uint32(4 - n)
 			copy(o.buf[:size], nops[size][:size])
-			o.offset = uint8(size)
+			o.offset = size
 		}
 	}
 

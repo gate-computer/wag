@@ -23,7 +23,7 @@ const (
 	ModRMSIB = ModRM(4)
 )
 
-func dispModSize(disp int32) (mod Mod, size uint8) {
+func dispModSize(disp int32) (mod Mod, size uint32) {
 	var (
 		bit32 = bit(uint32(disp+128) > 255)
 		bit8  = bit(disp != 0) &^ bit32
