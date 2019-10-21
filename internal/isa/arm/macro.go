@@ -72,11 +72,19 @@ func (MacroAssembler) AddToStackPtrUpper32(f *gen.Func, r reg.R) {
 }
 
 func (MacroAssembler) DropStackValues(p *gen.Prog, n int) {
-	offset := uint32(n * 8)
-	if offset > 4095 {
-		panic(n) // TODO
+	var o outbuf
+
+	o.dropStackValues(n)
+	o.copy(p.Text.Extend(o.size))
+}
+
+func (o *outbuf) dropStackValues(n int) {
+	if n < 4096/obj.Word {
+		o.insn(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, uint32(n*obj.Word), 0, wa.Size64))
+	} else {
+		o.insn(in.MOVZ.RdI16Hw(RegScratch, 0, uint32(n), wa.Size64))
+		o.insn(in.ADDs.RdRnI6RmS2(RegFakeSP, RegFakeSP, 3, RegScratch, in.LSL, wa.Size64))
 	}
-	p.Text.PutUint32(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.Size64))
 }
 
 func (MacroAssembler) Branch(p *gen.Prog, addr int32) {
@@ -430,11 +438,7 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 	var o outbuf
 
 	if numStackValues != 0 {
-		offset := uint32(numStackValues * 8)
-		if offset > 4095 {
-			panic(numStackValues) // TODO
-		}
-		o.insn(in.ADDi.RdRnI12S2(RegFakeSP, RegFakeSP, offset, 0, wa.Size64))
+		o.dropStackValues(numStackValues)
 	}
 	o.insn(in.LDRpost.RtRnI9(RegLink, RegFakeSP, obj.Word, wa.I64))
 	o.insn(in.RET.Rn(RegLink))
