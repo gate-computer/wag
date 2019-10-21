@@ -257,6 +257,8 @@ func TestMoveIntImm(t *testing.T) {
 			text.PutUint32(in.UBFM.RdRnI6sI6r(RegResult, r, 63, 0, wa.Size64))
 			text.PutUint32(in.RET.Rn(RegLink))
 
+			clearCache(exe)
+
 			if err := syscall.Mprotect(exe, syscall.PROT_EXEC); err != nil {
 				panic(err)
 			}
@@ -268,4 +270,5 @@ func TestMoveIntImm(t *testing.T) {
 	}
 }
 
+func clearCache(exe []byte)
 func executeTestCode(exe []byte) uint64

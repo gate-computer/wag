@@ -6,6 +6,16 @@
 
 #include "textflag.h"
 
+// func clearCache(exe []byte)
+TEXT ·clearCache(SB),$0-24
+	MOVD	exe+0(FP), R0
+	WORD	$0xd50b7b20			// dc	cvau, x0
+	WORD	$0xd5033b9f			// dsb	ish
+	WORD	$0xd50b7520			// ic	ivau, x0
+	WORD	$0xd5033b9f			// dsb	ish
+	WORD	$0xd5033fdf			// isb
+	RET
+
 // func executeTestCode(exe []byte) uint64
 TEXT ·executeTestCode(SB),$0-32
 	MOVD	$0xbadc0debadb00613, R0
