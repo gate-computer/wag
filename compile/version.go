@@ -5,4 +5,4 @@
 package compile
 
 // ABI version of generated machine code.
-const ObjectVersion = 0
+const ObjectVersion = 1

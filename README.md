@@ -8,14 +8,13 @@
 Features
 --------
 
-- The input is a wasm32 binary module.
+- The input is a wasm binary module.
 
-- The output is executable x86-64 or ARM64 machine code.  (Support for 32-bit
-  or big-endian CPU architectures isn't planned.)
+- The output is machine code.
 
 - It is only a compiler.  A runtime environment for the compiled program,
   including all import functions, needs to be implemented separately.  (But see
-  [wasys](cmd/wasys) for a combined compiler and runtime.)
+  [wasys](cmd/wasys) for an example runtime.)
 
 - Single-pass, fast ahead-of-time compilation.  Early functions can be executed
   while the latter functions are still being compiled, even while the source is
@@ -23,27 +22,27 @@ Features
 
 - The generated code requires minimal runtime support; it's designed to be
   executed in an isolated environment.  Calling standard library ABIs is not
-  supported, but see [wasys](cmd/wasys) for an example program which exposes
+  directly supported, but see [wasys](cmd/wasys) for an example which exposes
   syscalls as WebAssembly import functions.
 
 - Supports snapshot-and-restore across compiler versions and CPU architectures.
-  (Could also support limited form of code swapping during snapshot and
-  restore.)
 
 - Cross-compilation is supported via Go build tags.  If `wagamd64` is
   specified, the x86-64 code generator is used regardless of host architecture,
   and CPU feature detection is disabled with pessimistic assumptions.  Likewise
-  for `wagarm64`, but feature detection is never used for ARM64.
+  for `wagarm64` (but feature detection is not used for ARM64).
 
 
 Status
 ------
 
-- Supports WebAssembly version 1.
+- Supports WebAssembly version 1 (wasm32).  No wasm extensions are supported.
+
+- Supports x86-64 and ARM64 code generation.
+
+- Go package API and object code ABI are stable.
 
 - Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
-
-- See [milestone/1](https://github.com/tsavola/wag/milestone/1).
 
 
 Security
