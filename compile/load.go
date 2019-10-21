@@ -92,12 +92,31 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-const (
-	DefaultMaxTextSize = 0x7fff0000 // below 2 GB to mitigate address calculation bugs
-	MaxMemorySize      = math.MaxInt32
+// Some limits have been chosen based on the backends' limitations:
+//
+// - MaxTextSize is the range supported by ARM64 branch instructions.
+//
+// - maxGlobals * -obj.Word is the smallest offset which can be encoded in an
+//   ARM64 load instruction.
+//
+// - All limits are small enough to keep values below 2^31, so that simple
+//   signed 32-bit comparisons can be used by the x86 backend.
+//
+// (More limits are defined in codegen package.)
 
-	defaultTextBufferSize   = wa.PageSize // arbitrary
-	defaultMemoryBufferSize = wa.PageSize // arbitrary
+const (
+	MaxTextSize   = 512 * 1024 * 1024
+	MaxMemorySize = maxMemoryPages * wa.PageSize
+
+	defaultTextBufferSize   = 32768
+	defaultMemoryBufferSize = 32768
+
+	maxStringSize  = 100000   // Industry standard.
+	maxTableLen    = 10000000 // Industry standard.
+	maxMemoryPages = 32767    // Industry standard.
+	maxGlobals     = 32
+	maxExports     = 64
+	maxElements    = 10000000 // Industry standard.
 )
 
 var emptyCodeSectionPayload = []byte{
@@ -109,15 +128,6 @@ type Reader = reader.R
 
 type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
-
-const (
-	maxStringLen   = 255   // TODO
-	maxTableSize   = 32768 // TODO
-	maxMemoryLimit = MaxMemorySize / wa.PageSize
-	maxGlobals     = 32 - 2 // max supported by arm backend - (trap handler + memory limit)
-	maxExports     = 64
-	maxElements    = 32768
-)
 
 func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string,
 ) (limits module.ResizableLimits) {
@@ -294,14 +304,14 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	for i := range load.Count(module.MaxImports, "import") {
 		moduleLen := load.Varuint32()
-		if moduleLen > maxStringLen {
+		if moduleLen > maxStringSize {
 			panic(module.Errorf("module string is too long in import #%d", i))
 		}
 
 		moduleStr := string(load.Bytes(moduleLen))
 
 		fieldLen := load.Varuint32()
-		if fieldLen > maxStringLen {
+		if fieldLen > maxStringSize {
 			panic(module.Errorf("field string is too long in import #%d", i))
 		}
 
@@ -372,9 +382,9 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 			panic(module.Errorf("unsupported table element type: %d", elementType))
 		}
 
-		m.m.TableLimit = readResizableLimits(load, maxTableSize, maxTableSize, 1, "table")
+		m.m.TableLimit = readResizableLimits(load, maxTableLen, maxTableLen, 1, "table")
 		if m.m.TableLimit.Max < 0 {
-			m.m.TableLimit.Max = maxTableSize
+			m.m.TableLimit.Max = maxTableLen
 		}
 
 	default:
@@ -387,7 +397,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	case 0:
 
 	case 1:
-		m.m.MemoryLimit = readResizableLimits(load, maxMemoryLimit, maxMemoryLimit, wa.PageSize, "memory")
+		m.m.MemoryLimit = readResizableLimits(load, maxMemoryPages, maxMemoryPages, wa.PageSize, "memory")
 
 	default:
 		panic(module.Error("multiple memories not supported"))
@@ -413,7 +423,7 @@ func loadExportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 
 	for i := range load.Count(maxExports, "export") {
 		fieldLen := load.Varuint32()
-		if fieldLen > maxStringLen {
+		if fieldLen > maxStringSize {
 			panic(module.Errorf("field string is too long in export #%d", i))
 		}
 
@@ -558,10 +568,13 @@ func (m Module) StartFunc() (funcIndex uint32, defined bool) {
 	return
 }
 
-// CodeConfig for a single compiler invocation.  Either MaxTextSize or Text
-// should be specified, but not both.
+// CodeConfig for a single compiler invocation.
+//
+// MaxTextSize field limits memory allocations only when Text field is not
+// specified.  To limit memory allocations when providing a custom CodeBuffer
+// implementation, the implementation must take care of it.
 type CodeConfig struct {
-	MaxTextSize  int        // Effective if Text is nil; defaults to DefaultMaxTextSize.
+	MaxTextSize  int        // Set to MaxTextSize if unspecified or too large.
 	Text         CodeBuffer // Initialized with default implementation if nil.
 	Mapper       ObjectMapper
 	EventHandler func(event.Event)
@@ -608,11 +621,11 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 		panic(module.Errorf("unexpected section id: 0x%x (looking for code section)", id))
 	}
 
-	if config.Text == nil {
-		if config.MaxTextSize == 0 {
-			config.MaxTextSize = DefaultMaxTextSize
-		}
+	if config.MaxTextSize == 0 || config.MaxTextSize > MaxTextSize {
+		config.MaxTextSize = MaxTextSize
+	}
 
+	if config.Text == nil {
 		alloc := defaultTextBufferSize
 		if alloc > config.MaxTextSize {
 			alloc = config.MaxTextSize
@@ -620,7 +633,6 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 		if guess := 512 + uint64(payloadLen)*8; guess < uint64(alloc) { // citation needed
 			alloc = int(guess)
 		}
-
 		config.Text = buffer.NewLimited(make([]byte, 0, alloc), config.MaxTextSize)
 	}
 
@@ -630,6 +642,10 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 	}
 
 	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1)
+
+	if len(config.Text.Bytes()) > config.MaxTextSize {
+		panic(module.Error("text size limit exceeded"))
+	}
 }
 
 // DataConfig for a single compiler invocation.

@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	MaxFuncLocals      = 8191  // index must fit in uint16; TODO
-	MaxBranchTableSize = 32768 // TODO (65535 is maximum value supported by arm backend)
+	MaxFuncLocals     = 8190  // Largest value supported by arm backend's stack check.
+	MaxBranchTableLen = 65520 // Industry standard.
 )
 
 var (

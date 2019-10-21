@@ -231,7 +231,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	targetCount := load.Varuint32()
-	if targetCount >= uint32(MaxBranchTableSize) {
+	if targetCount >= uint32(MaxBranchTableLen) {
 		panic(module.Errorf("branch table target count is too large: %d", targetCount))
 	}
 

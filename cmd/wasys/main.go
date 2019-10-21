@@ -102,7 +102,7 @@ func main() {
 	}
 
 	var (
-		textSize  = compile.DefaultMaxTextSize
+		textSize  = compile.MaxTextSize
 		stackSize = wa.PageSize
 		entry     = "main"
 		dumpText  = false

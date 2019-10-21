@@ -10,12 +10,12 @@ import (
 
 	"github.com/tsavola/wag/internal/gen/link"
 	"github.com/tsavola/wag/internal/isa/arm/in"
+	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/wa"
 )
 
 const (
-	MaxProgSize = 4 * 128 * 1024 * 1024 // Unconditional branch distance.
-	MaxFuncSize = 4 * 1 * 1024 * 1024   // Conditional branch distance.
+	MaxFuncSize = 4 * 1024 * 1024 // Conditional branch distance.
 )
 
 var linker Linker
@@ -49,18 +49,13 @@ func (Linker) UpdateFarBranches(text []byte, l *link.L) {
 }
 
 func (Linker) UpdateStackCheck(text []byte, addr int32, depth int) {
-	// UpdateStackCheck is called at end of each function
-	if len(text) > MaxProgSize {
-		panic(fmt.Errorf("arm: program is too large (exceeds %d bytes)", MaxProgSize))
-	}
-	if approxFuncSize := len(text) - int(addr); approxFuncSize > MaxFuncSize {
-		panic(fmt.Errorf("arm: function is too large (exceeds %d bytes)", MaxFuncSize))
+	if maxFuncOffset := len(text) - int(addr); maxFuncOffset > MaxFuncSize {
+		panic(module.Error("text size limit exceeded"))
 	}
 
-	alloc4 := uint32(depth+1) / 2 // round up
-	if alloc4 > 4095 {
-		panic(fmt.Errorf("arm: function has too many stack values: %d", depth))
-	}
+	// codegen.MaxFuncLocals ensures that alloc4 is not out of range.
+	alloc3 := depth
+	alloc4 := uint32(alloc3+1) >> 1 // Round up.
 
 	// scratch    = limit/16 + alloc/16
 	// scratch*16 = limit    + alloc
@@ -82,6 +77,7 @@ func updateBranchInsn(text []byte, addr, labelAddr int32) {
 
 	insn := binary.LittleEndian.Uint32(text[branchAddr:])
 
+	// MaxFuncSize ensures that offset is not out of range.
 	switch {
 	case insn>>25 == 0x2a: // Conditional branch.
 		insn = insn&^(0x7ffff<<5) | in.Int19(offset)<<5
@@ -100,6 +96,7 @@ func updateCallInsn(text []byte, addr, funcAddr int32) {
 	callAddr := addr - 4
 	offset := funcAddr - callAddr
 
+	// compile.MaxTextSize ensures that offset is not out of range.
 	insn := in.BL.I26(in.Int26(offset / 4))
 	binary.LittleEndian.PutUint32(text[callAddr:], insn)
 }
