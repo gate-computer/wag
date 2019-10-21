@@ -103,12 +103,12 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	// after the data section, but wag's custom section handling is decoupled
 	// from standard section handling; just accept it at any point.)
 
-	var customSections = section.CustomLoaders{
+	var customLoaders = map[string]section.CustomContentLoader{
 		section.CustomName: object.Names.Load,
 	}
 
 	var loadingConfig = compile.Config{
-		CustomSectionLoader: customSections.Load,
+		CustomSectionLoader: section.CustomLoader(customLoaders),
 	}
 
 	// Construct the Module object while reading the WebAssembly sections

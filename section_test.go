@@ -20,10 +20,10 @@ func TestSection(t *testing.T) {
 		imaginaryMapping   = new(section.CustomMapping)
 		loadConfig         = compile.Config{
 			SectionMapper: sectionMap.Mapper(),
-			CustomSectionLoader: section.CustomLoaders{
+			CustomSectionLoader: section.CustomLoader(map[string]section.CustomContentLoader{
 				section.CustomName: nameSectionMapping.Loader(sectionMap),
 				"imaginary":        imaginaryMapping.Loader(sectionMap),
-			}.Load,
+			}),
 		}
 	)
 

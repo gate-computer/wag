@@ -9,45 +9,53 @@ import (
 	"io/ioutil"
 
 	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
 	"github.com/tsavola/wag/internal/reader"
-)
-
-const (
-	maxSectionNameLen = 255 // TODO
 )
 
 type Reader = reader.R
 
-type CustomLoaders map[string]func(sectionName string, r Reader, length uint32) error
+type CustomContentLoader func(sectionName string, r Reader, payloadLen uint32) error
 
-func (uls CustomLoaders) Load(r Reader, length uint32) (err error) {
+type customLoaderMux struct {
+	loaders   map[string]CustomContentLoader
+	maxKeyLen uint32
+}
+
+func CustomLoader(loaders map[string]CustomContentLoader) func(Reader, uint32) error {
+	mux := customLoaderMux{loaders: loaders}
+	for k := range loaders {
+		if n := len(k); n > int(mux.maxKeyLen) {
+			mux.maxKeyLen = uint32(n)
+		}
+	}
+	return mux.load
+}
+
+func (mux customLoaderMux) load(r Reader, length uint32) (err error) {
 	nameLen, n, err := loader.Varuint32(r)
 	if err != nil {
 		return
 	}
 	length -= uint32(n)
 
-	if nameLen > maxSectionNameLen {
-		err = module.Error("custom section name is too long")
-		return
+	if nameLen <= mux.maxKeyLen {
+		name := string(loader.L{R: r}.Bytes(nameLen))
+		length -= nameLen
+
+		if f := mux.loaders[name]; f != nil {
+			err = f(name, r, length)
+			return
+		}
 	}
 
-	name := string(loader.L{R: r}.Bytes(nameLen))
-	length -= nameLen
-
-	if f := uls[name]; f != nil {
-		err = f(name, r, length)
-	} else {
-		_, err = io.CopyN(ioutil.Discard, r, int64(length))
-	}
+	_, err = io.CopyN(ioutil.Discard, r, int64(length))
 	return
 }
 
 type CustomMapping ByteRange
 
 // Loader of arbitrary custom section.  Remembers position, discards content.
-func (target *CustomMapping) Loader(sectionMap *Map) func(string, reader.R, uint32) error {
+func (target *CustomMapping) Loader(sectionMap *Map) CustomContentLoader {
 	return func(_ string, r reader.R, length uint32) (err error) {
 		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
 		_, err = io.CopyN(ioutil.Discard, r, int64(length))
