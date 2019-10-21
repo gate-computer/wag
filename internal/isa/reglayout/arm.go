@@ -11,7 +11,7 @@ const (
 	AllocIntLast  = 25
 
 	AllocFloatFirst = 2
-	AllocFloatLast  = 30 // TODO: is there a zero reg at 31?
+	AllocFloatLast  = 31
 
 	Radix = 32
 )
