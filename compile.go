@@ -54,10 +54,6 @@ func CompileLibrary(r compile.Reader, imports binding.LibraryImportResolver) (li
 	return
 }
 
-// EntryPolicy validates an entry function's signature while looking it up from
-// a module's exported functions.
-type EntryPolicy func(m compile.Module, symbol string) (globalIndex uint32, err error)
-
 // Config for a single compiler invocation.  Zero values are replaced with
 // effective defaults during compilation.
 type Config struct {
