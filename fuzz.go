@@ -9,6 +9,7 @@ package wag
 import (
 	"bytes"
 
+	"github.com/tsavola/wag/binding"
 	"github.com/tsavola/wag/compile"
 	"github.com/tsavola/wag/internal/reader"
 	"github.com/tsavola/wag/internal/test/fuzzutil"
@@ -30,9 +31,11 @@ var lib = *library.Load("testdata", runner.Resolver, func(r reader.R) library.Li
 	return &lib
 }).(*compile.Library)
 
+var fuzzResolver binding.ImportResolver = fuzzutil.Resolver{Lib: lib}
+
 func Fuzz(data []byte) int {
 	config := &Config{
-		ImportResolver: fuzzutil.Resolver,
+		ImportResolver: fuzzResolver,
 		Text:           fuzzutil.NewTextBuffer(),
 		GlobalsMemory:  fuzzutil.NewGlobalsMemoryBuffer(),
 	}

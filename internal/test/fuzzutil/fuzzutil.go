@@ -25,21 +25,23 @@ var errFuzzImport = module.Error("fuzzy import failure")
 func NewTextBuffer() *buffer.Limited          { return buffer.NewLimited(nil, maxTextSize) }
 func NewGlobalsMemoryBuffer() *buffer.Limited { return buffer.NewLimited(nil, maxDataSize) }
 
-var Resolver resolver
+type Resolver struct {
+	Lib interface {
+		ExportFunc(string) (uint32, wa.FuncType, bool)
+	}
+}
 
-type resolver struct{}
-
-func (resolver) ResolveFunc(module, field string, sig wa.FuncType) (index uint32, err error) {
-	if len(module) != 0 || len(field) != 4 {
+func (r Resolver) ResolveFunc(module, field string, sig wa.FuncType) (index uint32, err error) {
+	index, actualSig, fieldFound := r.Lib.ExportFunc(field)
+	if module != "env" || !fieldFound || !sig.Equal(actualSig) {
 		err = errFuzzImport
 		return
 	}
 
-	index = binary.LittleEndian.Uint32([]byte(field))
 	return
 }
 
-func (resolver) ResolveGlobal(module, field string, t wa.Type) (bits uint64, err error) {
+func (Resolver) ResolveGlobal(module, field string, t wa.Type) (bits uint64, err error) {
 	if len(module) != 0 || len(field) != int(t.Size()) {
 		err = errFuzzImport
 		return

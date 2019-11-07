@@ -56,7 +56,7 @@ func testFuzzFile(t *testing.T, filename string) {
 	}
 
 	config := &Config{
-		ImportResolver: fuzzutil.Resolver,
+		ImportResolver: fuzzutil.Resolver{Lib: lib},
 		Text:           fuzzutil.NewTextBuffer(),
 		GlobalsMemory:  fuzzutil.NewGlobalsMemoryBuffer(),
 	}
