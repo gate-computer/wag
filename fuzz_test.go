@@ -15,10 +15,10 @@ import (
 	"github.com/tsavola/wag/internal/test/fuzzutil"
 )
 
-func TestFuzzCorpus(t *testing.T)   { testFuzzDir(t, "testdata/fuzz/corpus") }
-func TestFuzzCrashers(t *testing.T) { testFuzzDir(t, "testdata/fuzz/crashers") }
+func TestFuzzCorpus(t *testing.T)   { testFuzzDir(t, "testdata/fuzz/corpus", true) }
+func TestFuzzCrashers(t *testing.T) { testFuzzDir(t, "testdata/fuzz/crashers", false) }
 
-func testFuzzDir(t *testing.T, dir string) {
+func testFuzzDir(t *testing.T, dir string, parallel bool) {
 	infos, err := ioutil.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -34,7 +34,12 @@ func testFuzzDir(t *testing.T, dir string) {
 			filename := path.Join(dir, info.Name())
 
 			t.Run(info.Name(), func(t *testing.T) {
-				t.Parallel()
+				if parallel {
+					t.Parallel()
+				} else if testing.Verbose() {
+					println(info.Name())
+				}
+
 				testFuzzFile(t, filename)
 			})
 
