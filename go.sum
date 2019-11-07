@@ -1,5 +1,7 @@
 github.com/bnagy/gapstone v0.0.0-20180903222833-a85919f1441b h1:O4CVbgOA/EptWddt/B0WPYP81BIxmftaXPWr9d/0EF8=
 github.com/bnagy/gapstone v0.0.0-20180903222833-a85919f1441b/go.mod h1:d1o1fFyYsZmHPaDFsSrWMD1fwRqU/KMZiY0//gtBIdc=
+github.com/dvyukov/go-fuzz v0.0.0-20191022152526-8cb203812681 h1:3WV5aRRj1ELP3RcLlBp/v0WJTuy47OQMkL9GIQq8QEE=
+github.com/dvyukov/go-fuzz v0.0.0-20191022152526-8cb203812681/go.mod h1:11Gm+ccJnvAhCNLlf5+cS9KjtbaD5I5zaZpFMsTHWTw=
 golang.org/x/sys v0.0.0-20190911201528-7ad0cfa0b7b5 h1:SW/0nsKCUaozCUtZTakri5laocGx/5bkDSSLrFUsa5s=
 golang.org/x/sys v0.0.0-20190911201528-7ad0cfa0b7b5/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7 h1:9zdDQZ7Thm29KFXgAX/+yaf3eVbP7djjWp/dXAppNCc=

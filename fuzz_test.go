@@ -12,17 +12,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tsavola/wag/internal/test/fuzz/fuzzutil"
+	"github.com/tsavola/wag/internal/test/fuzzutil"
 )
 
-func TestFuzz(t *testing.T) {
-	dir := os.Getenv("WAG_TEST_FUZZ")
-	if dir == "" {
-		t.Skip("WAG_TEST_FUZZ directory not set")
-	}
+func TestFuzzCorpus(t *testing.T)   { testFuzzDir(t, "testdata/fuzz/corpus") }
+func TestFuzzCrashers(t *testing.T) { testFuzzDir(t, "testdata/fuzz/crashers") }
 
+func testFuzzDir(t *testing.T, dir string) {
 	infos, err := ioutil.ReadDir(dir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
 		t.Fatal(err)
 	}
 
@@ -30,16 +31,9 @@ func TestFuzz(t *testing.T) {
 
 	for _, info := range infos {
 		if !strings.Contains(info.Name(), ".") {
-			filename := path.Join(dir, info.Name())
-
 			t.Run(info.Name(), func(t *testing.T) {
-				if testing.Verbose() {
-					println(filename)
-				} else {
-					t.Parallel()
-				}
-
-				fuzzCorpusTest(t, filename)
+				t.Parallel()
+				testFuzzFile(t, path.Join(dir, info.Name()))
 			})
 
 			tested = true
@@ -47,20 +41,12 @@ func TestFuzz(t *testing.T) {
 	}
 
 	if !tested {
-		t.Logf("%s does not contain any samples", dir)
+		t.Skipf("%s does not contain any samples", dir)
 	}
 }
 
-func fuzzCorpusTest(t *testing.T, filename string) {
+func testFuzzFile(t *testing.T, filename string) {
 	t.Helper()
-
-	var ok bool
-
-	defer func() {
-		if !ok {
-			t.Fail()
-		}
-	}()
 
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -68,18 +54,13 @@ func fuzzCorpusTest(t *testing.T, filename string) {
 	}
 
 	config := &Config{
-		Text:          fuzzutil.NewTextBuffer(),
-		GlobalsMemory: fuzzutil.NewGlobalsMemoryBuffer(),
+		ImportResolver: fuzzutil.Resolver,
+		Text:           fuzzutil.NewTextBuffer(),
+		GlobalsMemory:  fuzzutil.NewGlobalsMemoryBuffer(),
 	}
 
 	_, err = Compile(config, bytes.NewReader(data), lib)
-	if err != nil {
-		if fuzzutil.IsFine(err) {
-			t.Log(err)
-		} else {
-			t.Fatal(err)
-		}
+	if _, ok := fuzzutil.Result(err); !ok {
+		t.Error(err)
 	}
-
-	ok = true
 }
