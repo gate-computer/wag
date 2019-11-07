@@ -11,7 +11,7 @@ import (
 )
 
 type outbuf struct {
-	buf  [64]byte
+	buf  [128]byte
 	size int
 }
 
