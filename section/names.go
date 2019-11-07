@@ -15,6 +15,11 @@ import (
 	"github.com/tsavola/wag/internal/reader"
 )
 
+const (
+	maxFuncNames  = 1000000 // Industry standard.
+	maxLocalNames = 50000   // Industry standard.
+)
+
 const CustomName = "name"
 
 const (
@@ -68,11 +73,16 @@ func (ns *NameSection) readSubsection(r reader.R) (read bool) {
 	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
 		loadContent := loader.L{R: bytes.NewReader(content)}
 
-		for range loadContent.Count(module.MaxFunctions, "function name") {
-			funcIndex := loadContent.Varuint32()
+		count := loadContent.Varuint32()
+		if count > maxFuncNames {
+			panic(module.Errorf("function name count is too large: %d", count))
+		}
+		ns.FuncNames = make([]FuncName, count)
 
-			if uint32(len(ns.FuncNames)) <= funcIndex {
-				if funcIndex >= module.MaxFunctions {
+		for range make([]struct{}, count) {
+			funcIndex := loadContent.Varuint32()
+			if funcIndex >= uint32(len(ns.FuncNames)) {
+				if funcIndex >= maxFuncNames {
 					panic(module.Errorf("function name index is too large: %d", funcIndex))
 				}
 
@@ -89,10 +99,22 @@ func (ns *NameSection) readSubsection(r reader.R) (read bool) {
 				fn.FuncName = string(loadContent.Bytes(funcNameLen))
 
 			case nameSubsectionLocalNames:
-				for range loadContent.Count(module.MaxFuncParams, "function parameter name") {
+				count := loadContent.Varuint32()
+				if count > maxLocalNames {
+					panic(module.Errorf("local name count is too large: %d", count))
+				}
+				fn.LocalNames = make([]string, count)
+
+				for range make([]struct{}, count) {
 					localIndex := loadContent.Varuint32()
-					for uint32(len(fn.LocalNames)) <= localIndex {
-						fn.LocalNames = append(fn.LocalNames, "") // TODO: optimize
+					if localIndex >= uint32(len(fn.LocalNames)) {
+						if localIndex >= maxLocalNames {
+							panic(module.Errorf("local name index is too large: %d", localIndex))
+						}
+
+						buf := make([]string, localIndex+1)
+						copy(buf, fn.LocalNames)
+						fn.LocalNames = buf
 					}
 
 					localNameLen := loadContent.Varuint32()
