@@ -31,9 +31,11 @@ func testFuzzDir(t *testing.T, dir string) {
 
 	for _, info := range infos {
 		if !strings.Contains(info.Name(), ".") {
+			filename := path.Join(dir, info.Name())
+
 			t.Run(info.Name(), func(t *testing.T) {
 				t.Parallel()
-				testFuzzFile(t, path.Join(dir, info.Name()))
+				testFuzzFile(t, filename)
 			})
 
 			tested = true
