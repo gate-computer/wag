@@ -24,7 +24,7 @@ func genGetGlobal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (de
 	}
 
 	global := f.Module.Globals[globalIndex]
-	r := opAllocReg(f, global.Type)
+	r, _ := opAllocReg(f, global.Type)
 	asm.LoadGlobal(&f.Prog, global.Type, r, globalOffset(f, globalIndex))
 	pushOperand(f, operand.Reg(global.Type, r))
 	return

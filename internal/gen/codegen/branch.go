@@ -183,7 +183,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 		}
 
 		if cond.Storage == storage.Reg && cond.Reg() == reg.Result {
-			r := opAllocReg(f, wa.I32)
+			r, _ := opAllocReg(f, wa.I32)
 			asm.MoveReg(&f.Prog, wa.I32, r, reg.Result)
 			cond.SetReg(r)
 		}

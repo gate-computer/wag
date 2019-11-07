@@ -248,27 +248,54 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, ato
 }
 
 func opStabilizeOperands(f *gen.Func) {
+restart:
 	for i := f.NumStableOperands; i < len(f.Operands); i++ {
 		x := &f.Operands[i]
 
+		if debug.Enabled {
+			debug.Printf("stabilize operand #%d: %s", i, *x)
+			debug.Depth++
+		}
+
 		switch {
 		case x.Storage == storage.Reg && x.Reg() == reg.Result:
-			if debug.Enabled {
-				debug.Printf("stabilize operand #%d: %s", i, *x)
+			r, operandsChanged := opAllocReg(f, x.Type)
+			if operandsChanged {
+				if debug.Enabled {
+					debug.Depth--
+					debug.Printf("restart")
+				}
+				f.Regs.Free(x.Type, r)
+				goto restart
 			}
 
-			r := opAllocReg(f, x.Type)
 			asm.MoveReg(&f.Prog, x.Type, r, reg.Result)
 			x.SetReg(r)
 
 		case x.Storage == storage.Flags:
-			if debug.Enabled {
-				debug.Printf("stabilize operand #%d: %s", i, *x)
+			r, operandsChanged := opAllocReg(f, x.Type)
+			if operandsChanged {
+				if debug.Enabled {
+					debug.Depth--
+					debug.Printf("restart")
+				}
+				f.Regs.Free(x.Type, r)
+				goto restart
 			}
 
-			r := opAllocReg(f, x.Type)
 			asm.SetBool(&f.Prog, r, x.FlagsCond())
 			x.SetReg(r)
+
+		default:
+			if debug.Enabled {
+				debug.Depth--
+			}
+			continue
+		}
+
+		if debug.Enabled {
+			debug.Depth--
+			debug.Printf("operand #%d stabilized: %s", i, *x)
 		}
 	}
 
@@ -286,7 +313,8 @@ func opSaveSomeOperands(f *gen.Func, count int) {
 		x := &f.Operands[i]
 
 		if debug.Enabled {
-			debug.Printf("save operand #%d to stack: %s", i, *x)
+			debug.Printf("save operand #%d: %s", i, *x)
+			debug.Depth++
 		}
 
 		opReserveStackEntry(f)
@@ -304,6 +332,17 @@ func opSaveSomeOperands(f *gen.Func, count int) {
 		case storage.Flags:
 			asm.PushCond(&f.Prog, x.FlagsCond())
 			x.SetStack()
+
+		default:
+			if debug.Enabled {
+				debug.Depth--
+			}
+			continue
+		}
+
+		if debug.Enabled {
+			debug.Depth--
+			debug.Printf("operand #%d saved: %s", i, *x)
 		}
 	}
 
@@ -321,7 +360,7 @@ func opReserveStackEntry(f *gen.Func) {
 	}
 
 	if debug.Enabled {
-		debug.Printf("stack depth: %d (push 1)", f.StackDepth)
+		debug.Printf("stack depth: %d (after pushing 1)", f.StackDepth)
 	}
 }
 
@@ -330,7 +369,7 @@ func opReleaseStackEntry(f *gen.Func) {
 	f.StackDepth--
 
 	if debug.Enabled {
-		debug.Printf("stack depth: %d (drop 1)", f.StackDepth)
+		debug.Printf("stack depth: %d (after dropping 1)", f.StackDepth)
 	}
 }
 
@@ -357,7 +396,7 @@ func opDropOperand(f *gen.Func) {
 		f.StackDepth--
 
 		if debug.Enabled {
-			debug.Printf("stack depth: %d (drop 1)", f.StackDepth)
+			debug.Printf("stack depth: %d (after dropping 1)", f.StackDepth)
 		}
 
 	case storage.Reg:
@@ -386,7 +425,7 @@ func opDropCallOperands(f *gen.Func, n int) {
 	f.StackDepth -= n
 
 	if debug.Enabled {
-		debug.Printf("stack depth: %d (drop %d)", f.StackDepth, n)
+		debug.Printf("stack depth: %d (after dropping %d)", f.StackDepth, n)
 	}
 
 	f.Operands = f.Operands[:len(f.Operands)-n]
@@ -421,7 +460,7 @@ func opTruncateBlockOperands(f *gen.Func) {
 	}
 
 	if debug.Enabled {
-		debug.Printf("stack depth: %d (drop %d)", f.StackDepth, numStack)
+		debug.Printf("stack depth: %d (after dropping %d)", f.StackDepth, numStack)
 	}
 
 	f.Operands = f.Operands[:f.FrameBase]
@@ -431,25 +470,17 @@ func opTruncateBlockOperands(f *gen.Func) {
 	}
 }
 
-func opStealOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
-	r = opStealOperandRegBefore(f, t, len(f.Operands))
-	if r == reg.Result {
-		panic(errors.New("no registers found in operand stack during robbery"))
-	}
-	return
+func opStealOperandReg(f *gen.Func, t wa.Type) reg.R {
+	return opStealOperandRegBefore(f, t, len(f.Operands))
 }
 
-func opStealOperandRegBefore(f *gen.Func, t wa.Type, length int) (r reg.R) {
-	cat := t.Category()
-
-	var i int
-
-search:
-	for i = f.StackDepth; i < length; i++ {
+func opStealOperandRegBefore(f *gen.Func, t wa.Type, length int) reg.R {
+	for i := f.StackDepth; i < length; i++ {
 		x := &f.Operands[i]
 
 		if debug.Enabled {
-			debug.Printf("save operand #%d to stack: %s", i, *x)
+			debug.Printf("save operand #%d: %s", i, *x)
+			debug.Depth++
 		}
 
 		opReserveStackEntry(f)
@@ -460,18 +491,26 @@ search:
 			x.SetStack()
 
 		case storage.Reg:
-			r = x.Reg()
+			r := x.Reg()
 			asm.PushReg(&f.Prog, x.Type, r)
 			x.SetStack()
 
 			if r != reg.Result {
-				if x.Type.Category() == cat {
+				if x.Type.Category() == t.Category() {
 					if debug.Enabled {
-						debug.Printf("steal register: %s %s", cat, r)
+						debug.Depth--
+						debug.Printf("operand #%d saved: %s", i, *x)
 					}
 
-					i++ // this operand was stabilized too
-					break search
+					i++ // This operand was stabilized too.
+
+					// There may be unconsumed stack values that have already
+					// been popped from operand stack.
+					if f.NumStableOperands < i {
+						f.NumStableOperands = i
+					}
+
+					return r
 				}
 
 				f.Regs.Free(x.Type, r)
@@ -480,22 +519,28 @@ search:
 		case storage.Flags:
 			asm.PushCond(&f.Prog, x.FlagsCond())
 			x.SetStack()
+
+		default:
+			if debug.Enabled {
+				debug.Depth--
+			}
+			continue
+		}
+
+		if debug.Enabled {
+			debug.Depth--
+			debug.Printf("operand #%d saved: %s", i, *x)
 		}
 	}
 
-	// There may be unconsumed stack values that have already been popped from
-	// operand stack
-	if i <= length && f.NumStableOperands < i {
-		f.NumStableOperands = i
-	}
-
-	return
+	panic(errors.New("no allocated registers found in operand stack while under register pressure"))
 }
 
-func opAllocReg(f *gen.Func, t wa.Type) (r reg.R) {
+func opAllocReg(f *gen.Func, t wa.Type) (r reg.R, operandsChanged bool) {
 	r = f.Regs.AllocResult(t)
 	if r == reg.Result {
 		r = opStealOperandReg(f, t)
+		operandsChanged = true
 	}
 	return
 }
