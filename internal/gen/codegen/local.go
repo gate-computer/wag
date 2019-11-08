@@ -45,9 +45,6 @@ func genTeeLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dea
 	value := popOperand(f, t)
 
 	switch value.Storage {
-	case storage.Imm:
-		asm.StoreStackImm(&f.Prog, t, f.LocalOffset(index), value.ImmValue())
-
 	default:
 		r, _ := opAllocReg(f, t)
 		asm.Move(f, r, value)
@@ -56,6 +53,9 @@ func genTeeLocal(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dea
 
 	case storage.Reg:
 		asm.StoreStackReg(&f.Prog, t, f.LocalOffset(index), value.Reg())
+
+	case storage.Imm:
+		asm.StoreStackImm(&f.Prog, t, f.LocalOffset(index), value.ImmValue())
 	}
 
 	pushOperand(f, value)
