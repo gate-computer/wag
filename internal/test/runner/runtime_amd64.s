@@ -152,16 +152,6 @@ TEXT snapshot<>(SB),NOSPLIT,$0
 	CALL	snapshot(SB)
 	JMP	resume<>(SB)
 
-// func importSuspendNextCall() uint64
-TEXT ·importSuspendNextCall(SB),$0-8
-	LEAQ	suspendNextCall<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT suspendNextCall<>(SB),NOSPLIT,$0
-	MOVQ	$-8, BX			// even value doesn't suspend loops
-	JMP	resume<>(SB)
-
 TEXT sigsegv_handler(SB),NOSPLIT,$0
 	MOVQ	160(DX), AX		// rsp in ucontext
 	SUBQ	$8, AX

@@ -60,11 +60,6 @@ TEXT ·importSnapshot(SB),$0-8
 	MOVD	$0, ret+0(FP)
 	RET
 
-// func importSuspendNextCall() uint64
-TEXT ·importSuspendNextCall(SB),$0-8
-	MOVD	$0, ret+0(FP)
-	RET
-
 TEXT sigsegv_handler(SB),DUPOK|NOSPLIT,$0
 loop:	JMP	loop
 

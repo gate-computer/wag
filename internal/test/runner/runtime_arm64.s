@@ -121,9 +121,3 @@ TEXT ·importSnapshot(SB),NOSPLIT,$0-8
 	MOVD	R26, R2			// memory addr
 	MOVD	$state(SB), R3		// state
 	call_C_resume(snapshot)
-
-// func importSuspendNextCall() uint64
-TEXT ·importSuspendNextCall(SB),NOSPLIT,$0-8
-	import
-	MOVD.P	8(R29), LR		// TODO
-	B	resume<>(SB)		// TODO

@@ -67,25 +67,6 @@ func (sc call) variants() (vs []variant) {
 	return
 }
 
-func (sc call) wasmSig() (s string) {
-	if sc.params > 0 {
-		s += "(param"
-		for i := 0; i < sc.params; i++ {
-			s += " i32"
-		}
-		s += ") "
-	}
-	s += "(result i32)"
-	return
-}
-
-func (sc call) wasmGetArgs() (s string) {
-	for i := 0; i < sc.params; i++ {
-		s += fmt.Sprintf(" (get_local %d)", i)
-	}
-	return
-}
-
 func main() {
 	libFile, err := ioutil.TempFile("", "")
 	if err != nil {

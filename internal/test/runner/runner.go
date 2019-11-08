@@ -44,7 +44,6 @@ func importCurrentMemory() uint64
 func importGrowMemory() uint64
 func importGetArg() uint64
 func importSnapshot() uint64
-func importSuspendNextCall() uint64
 func importSpectestPrint() uint64
 func importPutns() uint64
 func importBenchmarkBegin() uint64
