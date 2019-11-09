@@ -60,14 +60,13 @@ able to inject arbitrary addresses into the branch target buffer).
 Testing
 -------
 
-Requires Linux, Go, make, clang and libcapstone.  About 75% of the WebAssembly
-spec testsuite is run, by first converting the tests to binary format:
+Requires Linux, Go, make, cmake, clang++ and libcapstone.  About 75% of the
+WebAssembly spec testsuite is run, by first converting the tests to binary
+format:
 
-1. `go get -t github.com/tsavola/wag`
-2. `make -C $GOPATH/src/github.com/tsavola/wag/testdata/wabt`
-3. `go test -ldflags="-linkmode=internal" -bench=. github.com/tsavola/wag/...`
-
-`-linkmode=internal` is required on x86-64, but must not be used on ARM64.
+- `git clone --recurse-submodules https://github.com/tsavola/wag.git`
+- `cd wag`
+- `make check`
 
 
 Screenshot #1
