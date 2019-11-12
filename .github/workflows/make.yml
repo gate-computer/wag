@@ -1,0 +1,16 @@
+name: make
+on: [push]
+
+jobs:
+  check:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+    - uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - run: sudo apt-get -y --no-install-recommends install libcapstone-dev
+    - run: make check
+    - run: git diff --exit-code
