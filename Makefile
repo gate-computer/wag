@@ -38,7 +38,7 @@ build: generate
 	$(GO) build $(BUILDFLAGS) -o bin/wasys ./cmd/wasys
 
 vet: build
-	$(GO) vet $(VETFLAGS) $(PACKAGES) $(X86_PACKAGES)
+	$(GO) vet $(VETFLAGS) $(PACKAGES) $(ARCH_PACKAGES)
 	$(GO) vet $(VETFLAGS) -tags=wagamd64 $(PACKAGES) $(X86_PACKAGES)
 	$(GO) vet $(VETFLAGS) -tags=wagarm64 $(PACKAGES) $(ARM_PACKAGES)
 
