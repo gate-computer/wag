@@ -14,3 +14,4 @@ jobs:
     - run: sudo apt-get -y --no-install-recommends install libcapstone-dev
     - run: make check
     - run: git diff --exit-code
+    - run: go run github.com/dvyukov/go-fuzz/go-fuzz-build
