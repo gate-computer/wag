@@ -1,2 +1,3 @@
+config.mk
 testdata/fuzz
 wag-fuzz.zip
