@@ -20,6 +20,7 @@ types of errors indicate either a read error or an internal compiler error.
 package wag
 
 import (
+	"debug/dwarf"
 	"fmt"
 
 	"github.com/tsavola/wag/binding"
@@ -79,6 +80,7 @@ type Object struct {
 	GlobalsMemory     []byte              // Global values and memory contents.
 	StackFrame        []byte              // Start and entry function addresses.
 	Names             section.NameSection // Symbols for debug output.
+	Debug             *dwarf.Data         // More detailed debug information.
 }
 
 // Compile a WebAssembly binary module into machine code.  The Object is
@@ -99,8 +101,16 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	// after the data section, but wag's custom section handling is decoupled
 	// from standard section handling; just accept it at any point.)
 
+	var debug section.CustomSections
+
 	var customLoaders = map[string]section.CustomContentLoader{
 		section.CustomName: object.Names.Load,
+		".debug_abbrev":    debug.Load,
+		".debug_info":      debug.Load,
+		".debug_line":      debug.Load,
+		".debug_pubnames":  debug.Load,
+		".debug_ranges":    debug.Load,
+		".debug_str":       debug.Load,
 	}
 
 	var loadingConfig = compile.Config{
@@ -202,11 +212,28 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	object.StackFrame = stack.InitFrame(startAddr, entryAddr)
 
-	// Read the whole binary module to get the name section.
+	// Read the whole binary module to get the name and DWARF sections.
 
 	err = compile.LoadCustomSections(&loadingConfig, r)
 	if err != nil {
 		return
+	}
+
+	// Parse DWARF data.
+
+	if info := debug.Sections[".debug_info"]; info != nil {
+		var (
+			abbrev   = debug.Sections[".debug_abbrev"]
+			line     = debug.Sections[".debug_line"]
+			pubnames = debug.Sections[".debug_pubnames"]
+			ranges   = debug.Sections[".debug_ranges"]
+			str      = debug.Sections[".debug_str"]
+		)
+
+		object.Debug, err = dwarf.New(abbrev, nil, nil, info, line, pubnames, ranges, str)
+		if err != nil {
+			return
+		}
 	}
 
 	return
