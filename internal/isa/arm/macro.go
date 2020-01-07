@@ -441,6 +441,9 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 		o.dropStackValues(numStackValues)
 	}
 	o.insn(in.LDRpost.RtRnI9(RegLink, RegFakeSP, obj.Word, wa.I64))
+	if XXX_RelLinkAddr {
+		o.insn(in.ADDs.RdRnI6RmS2(RegLink, RegLink, 0, RegTextBase, in.LSL, wa.Size64))
+	}
 	o.insn(in.RET.Rn(RegLink))
 	o.copy(p.Text.Extend(o.size))
 }
@@ -448,6 +451,9 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	var o outbuf
 
+	if XXX_RelLinkAddr {
+		o.insn(in.SUBs.RdRnI6RmS2(RegLink, RegLink, 0, RegTextBase, in.LSL, wa.Size64))
+	}
 	o.insn(in.PushReg(RegLink, wa.I64))
 
 	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
@@ -598,3 +604,5 @@ func (o *outbuf) allocResultReg(f *gen.Func, x operand.O) reg.R {
 		return r
 	}
 }
+
+var XXX_RelLinkAddr bool
