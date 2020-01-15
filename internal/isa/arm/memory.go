@@ -65,10 +65,18 @@ func (o *outbuf) access(f *gen.Func, op in.Memory, dataReg reg.R, index operand.
 	default:
 		r := o.getScratchReg(f, index)
 
-		var i uint32
-		for imm := uint64(offset); imm != 0; imm >>= 12 {
-			o.insn(in.ADDi.RdRnI12S2(r, r, in.Uint12(imm), i, wa.Size32))
-			i++
+		if offset < 1<<24 {
+			imm := uint64(offset)
+			if imm != 0 {
+				o.insn(in.ADDi.RdRnI12S2(r, r, in.Uint12(imm), 0, wa.Size32))
+			}
+			imm >>= 12
+			if imm != 0 {
+				o.insn(in.ADDi.RdRnI12S2(r, r, in.Uint12(imm), 1, wa.Size32))
+			}
+		} else {
+			o.moveUintImm32(RegScratch2, offset)
+			o.insn(in.ADDs.RdRnI6RmS2(r, r, 0, RegScratch2, 0, wa.Size32))
 		}
 
 		// UXTW masks index register unconditionally.
