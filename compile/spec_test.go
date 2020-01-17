@@ -23,6 +23,7 @@ import (
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/sexp"
 	"github.com/tsavola/wag/internal/test/wat"
+	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
 	"github.com/tsavola/wag/trap"
@@ -465,16 +466,18 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			}
 		}()
 
+		codeReader := debug.NewReadTeller(wasm)
+
 		var code = &CodeConfig{
 			Text:   buffer.NewStatic(p.Text[:0:len(p.Text)]),
-			Mapper: &p.DebugMap,
+			Mapper: p.DebugMap.Mapper(codeReader),
 			Config: common,
 		}
 		var data = &DataConfig{
 			Config: common,
 		}
 
-		loadCodeSection(code, wasm, mod, &lib.l)
+		loadCodeSection(code, codeReader, mod, &lib.l)
 		loadDataSection(data, wasm, mod)
 		loadCustomSections(&common, wasm)
 		p.Seal()

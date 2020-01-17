@@ -25,7 +25,11 @@ func genOps(f *gen.Func, load loader.L) (deadend bool) {
 
 	for {
 		op := opcode.Opcode(load.Byte())
-		f.Map.PutInsnAddr(uint32(f.Text.Addr))
+
+		if f.DebugMap != nil {
+			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr))
+			genBreakpoint(f)
+		}
 
 		if op == opcode.End {
 			break
@@ -54,7 +58,11 @@ func genThenOps(f *gen.Func, load loader.L) (deadend, haveElse bool) {
 loop:
 	for {
 		op := opcode.Opcode(load.Byte())
-		f.Map.PutInsnAddr(uint32(f.Text.Addr))
+
+		if f.DebugMap != nil {
+			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr))
+			genBreakpoint(f)
+		}
 
 		switch op {
 		case opcode.End:

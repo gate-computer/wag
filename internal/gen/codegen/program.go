@@ -32,6 +32,7 @@ func GenProgram(
 	lib *module.Library,
 	eventHandler func(event.Event),
 	initFuncCount int,
+	debugConfig *gen.DebuggerSupport,
 ) {
 	funcStorage := gen.Func{
 		Prog: gen.Prog{
@@ -42,6 +43,11 @@ func GenProgram(
 		},
 	}
 	p := &funcStorage.Prog
+
+	p.DebugMap, _ = objMap.(obj.DebugObjectMapper)
+	if p.DebugMap != nil {
+		p.Debugger = makeDebugger(debugConfig, load.R)
+	}
 
 	if debug.Enabled {
 		if debug.Depth != 0 {

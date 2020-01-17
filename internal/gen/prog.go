@@ -30,4 +30,7 @@ type Prog struct {
 	LastCallAddr            int32 // Needed only by arm backend.
 
 	ImportContext *module.Library // Set during import function generation.
+
+	DebugMap obj.DebugObjectMapper
+	Debugger Debugger
 }

@@ -22,6 +22,7 @@ const (
 	IndirectCallSignatureMismatch
 	IntegerDivideByZero
 	IntegerOverflow
+	Breakpoint // Recoverable (portable using trap maps).
 
 	NumTraps
 )
@@ -57,6 +58,9 @@ func (id ID) String() string {
 
 	case IntegerOverflow:
 		return "integer overflow"
+
+	case Breakpoint:
+		return "breakpoint"
 
 	default:
 		return fmt.Sprintf("unknown trap %d", id)

@@ -27,6 +27,8 @@ Features
 
 - Supports snapshot-and-restore across compiler versions and CPU architectures.
 
+- Supports breakpoint debugging via recompilation.
+
 - Cross-compilation is supported via Go build tags.  If `wagamd64` is
   specified, the x86-64 code generator is used regardless of host architecture,
   and CPU feature detection is disabled with pessimistic assumptions.  Likewise

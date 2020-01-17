@@ -15,6 +15,7 @@ import (
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/wat"
+	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/object/debug/dump"
 	"github.com/tsavola/wag/section"
 )
@@ -78,13 +79,14 @@ func TestExec(t *testing.T) {
 	loadDataSection(data, wasm, mod)
 	p.SetData(data.GlobalsMemory.Bytes(), mod.GlobalsSize())
 
+	codeReader := debug.NewReadTeller(&codeBuf)
 	var code = &CodeConfig{
 		Text:         buffer.NewStatic(p.Text[:0:len(p.Text)]),
-		Mapper:       &p.DebugMap,
+		Mapper:       p.DebugMap.Mapper(codeReader),
 		EventHandler: eventHandler,
 		LastInitFunc: entryFunc,
 	}
-	loadCodeSection(code, &codeBuf, mod, &lib.l)
+	loadCodeSection(code, codeReader, mod, &lib.l)
 	p.Seal()
 	if _, err := e.Wait(); err != nil {
 		t.Error(err)

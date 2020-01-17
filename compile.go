@@ -63,6 +63,7 @@ type Config struct {
 	GlobalsMemory   compile.DataBuffer     // Defaults to dynamically sized buffer.
 	MemoryAlignment int                    // Defaults to minimal valid alignment.
 	Entry           string                 // No entry function by default.
+	Debugger        *compile.DebuggerSupport
 }
 
 // Object code with debug information.  The fields are roughly in order of
@@ -101,20 +102,21 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	// after the data section, but wag's custom section handling is decoupled
 	// from standard section handling; just accept it at any point.)
 
-	var debug section.CustomSections
+	var debugData section.CustomSections
 
 	var customLoaders = map[string]section.CustomContentLoader{
 		section.CustomName: object.Names.Load,
-		".debug_abbrev":    debug.Load,
-		".debug_info":      debug.Load,
-		".debug_line":      debug.Load,
-		".debug_pubnames":  debug.Load,
-		".debug_ranges":    debug.Load,
-		".debug_str":       debug.Load,
+		".debug_abbrev":    debugData.Load,
+		".debug_info":      debugData.Load,
+		".debug_line":      debugData.Load,
+		".debug_pubnames":  debugData.Load,
+		".debug_ranges":    debugData.Load,
+		".debug_str":       debugData.Load,
 	}
 
 	var loadingConfig = compile.Config{
 		CustomSectionLoader: section.CustomLoader(customLoaders),
+		Debugger:            objectConfig.Debugger,
 	}
 
 	// Construct the Module object while reading the WebAssembly sections
@@ -145,6 +147,11 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		return
 	}
 
+	// Instruction mapping (for debugging) requires a special reader which
+	// tracks the input offset.
+
+	codeReader := debug.NewReadTeller(r)
+
 	// Generate executable code and debug information while reading the
 	// WebAssembly code section.  Text encodes the import function vector
 	// indexes, but not the function addresses (the vector can be mapped
@@ -153,11 +160,11 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	var codeConfig = &compile.CodeConfig{
 		Text:   objectConfig.Text,
-		Mapper: &object.CallMap,
+		Mapper: object.InsnMap.Mapper(codeReader),
 		Config: loadingConfig,
 	}
 
-	err = compile.LoadCodeSection(codeConfig, r, module, lib)
+	err = compile.LoadCodeSection(codeConfig, codeReader, module, lib)
 	objectConfig.Text = codeConfig.Text
 	object.Text = codeConfig.Text.Bytes()
 	if err != nil {
@@ -221,13 +228,13 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	// Parse DWARF data.
 
-	if info := debug.Sections[".debug_info"]; info != nil {
+	if info := debugData.Sections[".debug_info"]; info != nil {
 		var (
-			abbrev   = debug.Sections[".debug_abbrev"]
-			line     = debug.Sections[".debug_line"]
-			pubnames = debug.Sections[".debug_pubnames"]
-			ranges   = debug.Sections[".debug_ranges"]
-			str      = debug.Sections[".debug_str"]
+			abbrev   = debugData.Sections[".debug_abbrev"]
+			line     = debugData.Sections[".debug_line"]
+			pubnames = debugData.Sections[".debug_pubnames"]
+			ranges   = debugData.Sections[".debug_ranges"]
+			str      = debugData.Sections[".debug_str"]
 		)
 
 		object.Debug, err = dwarf.New(abbrev, nil, nil, info, line, pubnames, ranges, str)

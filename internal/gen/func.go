@@ -101,7 +101,9 @@ func (f *Func) MapCallAddr(retAddr int32) {
 }
 
 func (f *Func) MapTrapAddr(retAddr int32) {
-	f.Map.PutTrapSite(uint32(retAddr), f.mapStackUsage())
+	if f.DebugMap != nil {
+		f.DebugMap.PutTrapSite(uint32(retAddr), f.mapStackUsage())
+	}
 }
 
 func (f *Func) mapStackUsage() int32 {

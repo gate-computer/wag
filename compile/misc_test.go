@@ -15,6 +15,7 @@ import (
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/test/runner"
 	"github.com/tsavola/wag/internal/test/wat"
+	"github.com/tsavola/wag/object/debug"
 	"github.com/tsavola/wag/object/debug/dump"
 )
 
@@ -61,11 +62,12 @@ func misc(t *testing.T, filename, entry string) string {
 	}
 	defer p.Close()
 
+	codeReader := debug.NewReadTeller(wasm)
 	var code = &CodeConfig{
 		Text:   buffer.NewStatic(p.Text[:0:len(p.Text)]),
-		Mapper: &p.DebugMap,
+		Mapper: p.DebugMap.Mapper(codeReader),
 	}
-	loadCodeSection(code, wasm, mod, &lib.l)
+	loadCodeSection(code, codeReader, mod, &lib.l)
 
 	var data = &DataConfig{}
 	loadDataSection(data, wasm, mod)

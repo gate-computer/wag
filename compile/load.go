@@ -81,6 +81,7 @@ import (
 	"github.com/tsavola/wag/internal/data"
 	"github.com/tsavola/wag/internal/datalayout"
 	"github.com/tsavola/wag/internal/errorpanic"
+	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/gen/codegen"
 	"github.com/tsavola/wag/internal/initexpr"
 	"github.com/tsavola/wag/internal/loader"
@@ -129,6 +130,12 @@ type Reader = reader.R
 type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
 
+type ObjectMapper = obj.ObjectMapper
+type DebugObjectMapper = obj.DebugObjectMapper
+
+type Breakpoint = gen.Breakpoint
+type DebuggerSupport = gen.DebuggerSupport
+
 func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string,
 ) (limits module.ResizableLimits) {
 	maxFieldIsPresent := load.Varuint1()
@@ -166,6 +173,8 @@ type Config struct {
 	// exactly payloadLen bytes, or return an error.  SectionMapper (if
 	// configured) has been invoked just before it.
 	CustomSectionLoader func(r Reader, payloadLen uint32) error
+
+	Debugger *DebuggerSupport
 }
 
 // ModuleConfig for a single compiler invocation.
@@ -638,10 +647,10 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 
 	mapper := config.Mapper
 	if mapper == nil {
-		mapper = dummyMap{}
+		mapper = obj.DummyMapper{}
 	}
 
-	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1)
+	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Debugger)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
 		panic(module.Error("text size limit exceeded"))

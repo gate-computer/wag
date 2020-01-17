@@ -4,29 +4,33 @@
 
 package reader
 
-type PosReader struct {
-	R   R
-	Pos uint32
+type Counter struct {
+	R R
+	N uint32
 }
 
-func (pr *PosReader) Read(b []byte) (n int, err error) {
+func (pr *Counter) Read(b []byte) (n int, err error) {
 	n, err = pr.R.Read(b)
-	pr.Pos += uint32(n)
+	pr.N += uint32(n)
 	return
 }
 
-func (pr *PosReader) ReadByte() (b byte, err error) {
+func (pr *Counter) ReadByte() (b byte, err error) {
 	b, err = pr.R.ReadByte()
 	if err == nil {
-		pr.Pos++
+		pr.N++
 	}
 	return
 }
 
-func (pr *PosReader) UnreadByte() (err error) {
+func (pr *Counter) UnreadByte() (err error) {
 	err = pr.R.UnreadByte()
 	if err == nil {
-		pr.Pos--
+		pr.N--
 	}
 	return
+}
+
+func (pr *Counter) Tell() int64 {
+	return int64(pr.N)
 }

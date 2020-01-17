@@ -67,12 +67,17 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 				}
 			}
 
-			if insn.Mnemonic == "movz" && strings.HasPrefix(insn.OpStr, "xresult, #0x") {
+			switch {
+			case insn.Mnemonic == "movz":
 				var n uint
-				fmt.Sscanf(insn.OpStr, "xresult, #0x%x", &n)
-				if id := trap.ID(n); id < trap.NumTraps {
-					targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
+				if _, err := fmt.Sscanf(insn.OpStr, "xresult, #0x%x", &n); err == nil {
+					if id := trap.ID(n); id < trap.NumTraps {
+						targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
+					}
 				}
+
+			case insn.Mnemonic == "lsl" && insn.OpStr == "xresult, xresult, #0x20":
+				targets[insn.Address] = "trap.exit"
 			}
 		}
 	}

@@ -7,9 +7,10 @@ package debug
 import (
 	"sort"
 
-	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/object"
+	"github.com/tsavola/wag/internal/obj"
 )
+
+type antiMapper = obj.DummyDebugMapper
 
 // Instruction mapping from machine code to WebAssembly.  SourcePos is zero if
 // ObjectPos contains non-executable data interleaved with the code.
@@ -19,54 +20,14 @@ type InsnMapping struct {
 	BlockLen  int32  // Length of data block (when SourcePos is 0).
 }
 
-// InsnMap implements compile.ObjectMapper.  It stores all available function,
-// call, trap and instruction information.
-//
-// The WebAssembly module must be loaded using InsnMap's pass-through reader,
-// or the source positions will be zero.
+// InsnMap is an object map which stores all available function, call, trap and
+// instruction information.  The Mapper method must be used to obtain an actual
+// ObjectMapper implementation.
 type InsnMap struct {
 	TrapMap
 	Insns []InsnMapping
 
-	reader reader.PosReader
-}
-
-// Reader gets the pass-through reader.  It must not be wrapped in a buffered
-// reader (the input reader can be).
-func (m *InsnMap) Reader(input reader.R) reader.R {
-	m.reader = reader.PosReader{R: input}
-	return &m.reader
-}
-
-func (m *InsnMap) InitObjectMap(numImportFuncs, numOtherFuncs int) {
-	m.TrapMap.InitObjectMap(numImportFuncs, numOtherFuncs)
-	m.reader.Pos = 0
-}
-
-func (m *InsnMap) PutTrapSite(retAddr uint32, stackOffset int32) {
-	m.TrapSites = append(m.TrapSites, object.CallSite{
-		RetAddr:     retAddr,
-		StackOffset: stackOffset,
-	})
-}
-
-func (m *InsnMap) PutInsnAddr(objectPos uint32) {
-	m.putMapping(objectPos, m.reader.Pos, 0)
-}
-
-func (m *InsnMap) PutDataBlock(objectPos uint32, blockLen int32) {
-	m.putMapping(objectPos, 0, blockLen)
-}
-
-func (m *InsnMap) putMapping(objectPos, sourcePos uint32, blockLen int32) {
-	prev := len(m.Insns) - 1
-	if prev >= 0 && m.Insns[prev].ObjectPos == objectPos {
-		// Replace previous mapping because no machine code was generated.
-		m.Insns[prev].SourcePos = sourcePos
-		m.Insns[prev].BlockLen = blockLen
-	} else {
-		m.Insns = append(m.Insns, InsnMapping{objectPos, sourcePos, blockLen})
-	}
+	antiMapper // Conflict with TrapMap's ObjectMapper implementation.
 }
 
 func (m InsnMap) FindAddr(retAddr uint32,
@@ -80,4 +41,57 @@ func (m InsnMap) FindAddr(retAddr uint32,
 		retInsnPos = m.Insns[retIndex].SourcePos
 	}
 	return
+}
+
+// Mapper creates a compile.DebugObjectMapper for the InsnMap.
+//
+// The source position teller is a special reader which must be used when
+// loading (at least) the code section.  See NewReadTeller.
+func (m *InsnMap) Mapper(source Teller) obj.ObjectMapper {
+	return &insnMapper{
+		m:      m,
+		source: source,
+	}
+}
+
+type insnMapper struct {
+	m          *InsnMap
+	source     Teller
+	codeOffset int64
+}
+
+func (x *insnMapper) InitObjectMap(numImportFuncs, numOtherFuncs int) {
+	x.m.TrapMap.InitObjectMap(numImportFuncs, numOtherFuncs)
+	x.codeOffset = x.source.Tell()
+}
+
+func (x *insnMapper) PutFuncAddr(addr uint32) {
+	x.m.TrapMap.PutFuncAddr(addr)
+}
+
+func (x *insnMapper) PutCallSite(retAddr uint32, stackOffset int32) {
+	x.m.TrapMap.PutCallSite(retAddr, stackOffset)
+}
+
+func (x *insnMapper) PutTrapSite(addr uint32, stackOffset int32) {
+	x.m.TrapMap.PutTrapSite(addr, stackOffset)
+}
+
+func (x *insnMapper) PutInsnAddr(objectPos uint32) {
+	x.putMapping(objectPos, uint32(x.source.Tell()-x.codeOffset), 0)
+}
+
+func (x *insnMapper) PutDataBlock(objectPos uint32, blockLen int32) {
+	x.putMapping(objectPos, 0, blockLen)
+}
+
+func (x *insnMapper) putMapping(objectPos, sourcePos uint32, blockLen int32) {
+	prev := len(x.m.Insns) - 1
+	if prev >= 0 && x.m.Insns[prev].ObjectPos == objectPos {
+		// Replace previous mapping because no machine code was generated.
+		x.m.Insns[prev].SourcePos = sourcePos
+		x.m.Insns[prev].BlockLen = blockLen
+	} else {
+		x.m.Insns = append(x.m.Insns, InsnMapping{objectPos, sourcePos, blockLen})
+	}
 }

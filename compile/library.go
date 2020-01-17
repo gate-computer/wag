@@ -88,7 +88,7 @@ func (lib *Library) loadSections(r Reader) {
 	codeBuf := bytes.NewBuffer(nil)
 
 	mapper := &libraryMap{
-		reader: reader.PosReader{
+		reader: reader.Counter{
 			R: bufio.NewReader(io.TeeReader(r, codeBuf)),
 		},
 	}
@@ -161,7 +161,7 @@ func (l Library) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fo
 func (l *Library) XXX_Internal() interface{} { return &l.l }
 
 type libraryMap struct {
-	reader  reader.PosReader
+	reader  reader.Counter
 	imports int
 	offsets []uint32
 }
@@ -174,7 +174,7 @@ func (m *libraryMap) PutFuncAddr(addr uint32) {
 	if m.imports > 0 {
 		m.imports--
 	} else {
-		m.offsets = append(m.offsets, m.reader.Pos)
+		m.offsets = append(m.offsets, m.reader.N)
 	}
 }
 

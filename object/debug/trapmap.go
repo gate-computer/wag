@@ -8,8 +8,8 @@ import (
 	"github.com/tsavola/wag/object"
 )
 
-// TrapMap implements compile.ObjectMapper.  It stores function addresses, and
-// all call and trap sites.  Instruction information is not stored.
+// TrapMap implements compile.DebugObjectMapper.  It stores function addresses,
+// and all call and trap sites.  Instruction information is not stored.
 type TrapMap struct {
 	object.CallMap                   // Function calls and recoverable (portable) traps.
 	TrapSites      []object.CallSite // Unrecoverable (or nonportable) traps.
