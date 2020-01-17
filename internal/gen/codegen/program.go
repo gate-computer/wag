@@ -44,6 +44,9 @@ func GenProgram(
 	}
 	p := &funcStorage.Prog
 
+	userFuncCount := len(m.Funcs) - len(m.ImportFuncs)
+	p.Map.InitObjectMap(len(m.ImportFuncs), userFuncCount)
+
 	p.DebugMap, _ = objMap.(obj.DebugObjectMapper)
 	if p.DebugMap != nil {
 		p.Debugger = makeDebugger(debugConfig, load.R)
@@ -56,12 +59,9 @@ func GenProgram(
 		debug.Depth = 0
 	}
 
-	funcCodeCount := load.Varuint32()
-	if needed := len(m.Funcs) - len(m.ImportFuncs); funcCodeCount != uint32(needed) {
-		panic(module.Errorf("wrong number of function bodies: %d (should be: %d)", funcCodeCount, needed))
+	if n := load.Varuint32(); n != uint32(userFuncCount) {
+		panic(module.Errorf("wrong number of function bodies: %d (should be: %d)", n, userFuncCount))
 	}
-
-	p.Map.InitObjectMap(len(m.ImportFuncs), int(funcCodeCount))
 
 	if p.Text.Addr != abi.TextAddrNoFunction {
 		panic(errors.New("unexpected initial text address"))
