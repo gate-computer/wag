@@ -22,7 +22,7 @@ const (
 	IndirectCallSignatureMismatch
 	IntegerDivideByZero
 	IntegerOverflow
-	Breakpoint // Recoverable (portable using trap maps).
+	Breakpoint // Recoverable (portable).
 
 	NumTraps
 )

@@ -558,6 +558,11 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	f.MapTrapAddr(f.Text.Addr)
 }
 
+func (MacroAssembler) Breakpoint(f *gen.Func) {
+	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Breakpoint].Addr)
+	f.MapCallAddr(f.Text.Addr) // Resume address.
+}
+
 func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
 	in.TEST8.RegRegStackLimit(&f.Text)
 	in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).

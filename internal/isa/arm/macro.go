@@ -534,6 +534,14 @@ func (o *outbuf) trap(f *gen.Func, id trap.ID) {
 	f.MapTrapAddr(o.addr(&f.Text))
 }
 
+func (MacroAssembler) Breakpoint(f *gen.Func) {
+	var o outbuf
+
+	o.unmappedTrap(f, f.TrapLinks[trap.Breakpoint])
+	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
+	o.copy(f.Text.Extend(o.size))
+}
+
 // unmappedTrap must generate exactly one instruction.
 func (o *outbuf) unmappedTrap(f *gen.Func, handler link.L) {
 	o.insn(in.BL.I26(in.Int26((handler.Addr - o.addr(&f.Text)) / 4)))

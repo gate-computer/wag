@@ -9,7 +9,6 @@ import (
 
 	"github.com/tsavola/wag/internal/gen"
 	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/trap"
 )
 
 func makeDebugger(breakpoints map[uint32]gen.Breakpoint, r reader.R) gen.Debugger {
@@ -41,7 +40,7 @@ func genBreakpoint(f *gen.Func) {
 	}
 
 	opSaveOperands(f)
-	asm.Trap(f, trap.Breakpoint)
+	asm.Breakpoint(f)
 
 	bp.Set = true
 	f.Debugger.Breakpoints[offset] = bp
