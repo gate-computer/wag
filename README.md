@@ -42,8 +42,6 @@ Status
 
 - Supports x86-64 and ARM64 code generation.
 
-- Go package API and object code ABI are stable.
-
 - Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
 
 

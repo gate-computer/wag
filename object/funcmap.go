@@ -32,10 +32,7 @@ func (m *FuncMap) PutFuncAddr(addr uint32) {
 	m.FuncAddrs = append(m.FuncAddrs, addr)
 }
 
-func (*FuncMap) PutCallSite(uint32, int32)  {}
-func (*FuncMap) PutTrapSite(uint32, int32)  {}
-func (*FuncMap) PutInsnAddr(uint32)         {}
-func (*FuncMap) PutDataBlock(uint32, int32) {}
+func (*FuncMap) PutCallSite(uint32, int32) {}
 
 func (m FuncMap) FindAddr(retAddr uint32,
 ) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
