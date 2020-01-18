@@ -134,7 +134,6 @@ type ObjectMapper = obj.ObjectMapper
 type DebugObjectMapper = obj.DebugObjectMapper
 
 type Breakpoint = gen.Breakpoint
-type DebuggerSupport = gen.DebuggerSupport
 
 func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string,
 ) (limits module.ResizableLimits) {
@@ -173,8 +172,6 @@ type Config struct {
 	// exactly payloadLen bytes, or return an error.  SectionMapper (if
 	// configured) has been invoked just before it.
 	CustomSectionLoader func(r Reader, payloadLen uint32) error
-
-	Debugger *DebuggerSupport
 }
 
 // ModuleConfig for a single compiler invocation.
@@ -588,6 +585,7 @@ type CodeConfig struct {
 	Mapper       ObjectMapper
 	EventHandler func(event.Event)
 	LastInitFunc uint32
+	Breakpoints  map[uint32]Breakpoint
 	Config
 }
 
@@ -650,7 +648,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 		mapper = obj.DummyMapper{}
 	}
 
-	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Debugger)
+	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Breakpoints)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
 		panic(module.Error("text size limit exceeded"))

@@ -63,7 +63,6 @@ type Config struct {
 	GlobalsMemory   compile.DataBuffer     // Defaults to dynamically sized buffer.
 	MemoryAlignment int                    // Defaults to minimal valid alignment.
 	Entry           string                 // No entry function by default.
-	Debugger        *compile.DebuggerSupport
 }
 
 // Object code with debug information.  The fields are roughly in order of
@@ -116,7 +115,6 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	var loadingConfig = compile.Config{
 		CustomSectionLoader: section.CustomLoader(customLoaders),
-		Debugger:            objectConfig.Debugger,
 	}
 
 	// Construct the Module object while reading the WebAssembly sections

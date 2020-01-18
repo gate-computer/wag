@@ -32,7 +32,7 @@ func GenProgram(
 	lib *module.Library,
 	eventHandler func(event.Event),
 	initFuncCount int,
-	debugConfig *gen.DebuggerSupport,
+	breakpoints map[uint32]gen.Breakpoint,
 ) {
 	funcStorage := gen.Func{
 		Prog: gen.Prog{
@@ -49,7 +49,7 @@ func GenProgram(
 
 	p.DebugMap, _ = objMap.(obj.DebugObjectMapper)
 	if p.DebugMap != nil {
-		p.Debugger = makeDebugger(debugConfig, load.R)
+		p.Debugger = makeDebugger(breakpoints, load.R)
 	}
 
 	if debug.Enabled {

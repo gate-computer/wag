@@ -9,14 +9,10 @@ type Breakpoint struct {
 	Set bool // Set by the compiler if it implemented the breakpoint.
 }
 
-type DebuggerSupport struct {
+type Debugger struct {
 	// Breakpoints are WebAssembly code offsets.  They can be obtained from
 	// DWARF debug info.
 	Breakpoints map[uint32]Breakpoint
-}
-
-type Debugger struct {
-	DebuggerSupport
 
 	Source     Teller
 	CodeOffset int64

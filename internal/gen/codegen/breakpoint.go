@@ -12,14 +12,9 @@ import (
 	"github.com/tsavola/wag/trap"
 )
 
-func makeDebugger(config *gen.DebuggerSupport, r reader.R) (debugger gen.Debugger) {
-	if config == nil {
-		return
-	}
-
-	debugger.DebuggerSupport = *config
-	if len(debugger.Breakpoints) == 0 {
-		return
+func makeDebugger(breakpoints map[uint32]gen.Breakpoint, r reader.R) gen.Debugger {
+	if len(breakpoints) == 0 {
+		return gen.Debugger{}
 	}
 
 	source, ok := r.(gen.Teller)
@@ -27,9 +22,11 @@ func makeDebugger(config *gen.DebuggerSupport, r reader.R) (debugger gen.Debugge
 		panic(errors.New("setting breakpoints without position-aware reader"))
 	}
 
-	debugger.Source = source
-	debugger.CodeOffset = source.Tell()
-	return
+	return gen.Debugger{
+		Breakpoints: breakpoints,
+		Source:      source,
+		CodeOffset:  source.Tell(),
+	}
 }
 
 func genBreakpoint(f *gen.Func) {
