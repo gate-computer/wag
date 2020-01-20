@@ -48,9 +48,7 @@ func GenProgram(
 	p.Map.InitObjectMap(len(m.ImportFuncs), userFuncCount)
 
 	p.DebugMap, _ = objMap.(obj.DebugObjectMapper)
-	if p.DebugMap != nil {
-		p.Debugger = makeDebugger(breakpoints, load.R)
-	}
+	p.Debugger = makeDebugger(breakpoints, load.R)
 
 	if debug.Enabled {
 		if debug.Depth != 0 {

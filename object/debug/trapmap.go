@@ -22,6 +22,9 @@ func (m *TrapMap) PutTrapSite(retAddr uint32, stackOffset int32) {
 	})
 }
 
+func (TrapMap) PutInsnAddr(uint32)         {}
+func (TrapMap) PutDataBlock(uint32, int32) {}
+
 func (m TrapMap) FindAddr(retAddr uint32,
 ) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
 	init, funcIndex, callIndex, stackOffset, retInsnPos = m.CallMap.FindAddr(retAddr)
