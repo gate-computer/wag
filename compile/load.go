@@ -233,7 +233,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 			seenID = id
 		}
 
-		if id >= module.NumMetaSections {
+		if id > module.SectionElement {
 			load.R.UnreadByte()
 			if id >= module.NumSections {
 				panic(module.Errorf("custom section id: 0x%x", id))
@@ -252,11 +252,11 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 			payloadLen = load.Varuint32()
 		}
 
-		metaSectionLoaders[id](&m, config, payloadLen, load)
+		initialSectionLoaders[id](&m, config, payloadLen, load)
 	}
 }
 
-var metaSectionLoaders = [module.NumMetaSections]func(*Module, *ModuleConfig, uint32, loader.L){
+var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConfig, uint32, loader.L){
 	module.SectionCustom:   loadCustomSection,
 	module.SectionType:     loadTypeSection,
 	module.SectionImport:   loadImportSection,

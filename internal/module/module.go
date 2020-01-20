@@ -44,7 +44,6 @@ const (
 	SectionData
 
 	NumSections
-	NumMetaSections = SectionElement + 1
 )
 
 var sectionNames = []string{
