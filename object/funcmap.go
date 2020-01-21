@@ -34,7 +34,20 @@ func (m *FuncMap) PutFuncAddr(addr uint32) {
 
 func (*FuncMap) PutCallSite(uint32, int32) {}
 
-func (m FuncMap) FindAddr(retAddr uint32,
+func (m *FuncMap) FindFunc(addr uint32) (index int, found bool) {
+	index = -1
+
+	i := sort.Search(len(m.FuncAddrs), func(i int) bool {
+		return m.FuncAddrs[i] >= addr
+	})
+	if i < len(m.FuncAddrs) && m.FuncAddrs[i] == addr {
+		index = i
+		found = true
+	}
+	return
+}
+
+func (m *FuncMap) FindCall(retAddr uint32,
 ) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
 	funcIndex = -1
 	callIndex = -1
