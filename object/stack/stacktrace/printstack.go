@@ -25,29 +25,29 @@ func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names
 	}
 
 	var (
-		depthWidth int
-		posWidth   int
+		depthWidth  int
+		offsetWidth int
 	)
 
 	for depth, frame := range stacktrace {
 		if n := len(fmt.Sprintf("%d", depth)); n > depthWidth {
 			depthWidth = n
 		}
-		if n := len(fmt.Sprintf("%x", frame.RetInsnPos)); n > posWidth {
-			posWidth = n
+		if n := len(fmt.Sprintf("%x", frame.RetOffset)); n > offsetWidth {
+			offsetWidth = n
 		}
 	}
 
 	if depthWidth < 2 {
 		depthWidth = 2
 	}
-	if posWidth&1 == 1 {
-		posWidth++
+	if offsetWidth&1 == 1 {
+		offsetWidth++
 	}
 
 	var (
 		lineFmt   = fmt.Sprintf("#%%-%dd %%s%%s%%s\n", depthWidth)
-		prefixFmt = fmt.Sprintf("0x%%0%dx in ", posWidth)
+		prefixFmt = fmt.Sprintf("0x%%0%dx in ", offsetWidth)
 	)
 
 	for depth, frame := range stacktrace {
@@ -64,12 +64,12 @@ func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names
 			suffix string
 		)
 
-		if frame.RetInsnPos != 0 {
-			callInsnPos := frame.RetInsnPos - 1
-			prefix = fmt.Sprintf(prefixFmt, callInsnPos)
+		if frame.RetOffset != 0 {
+			callOffset := frame.RetOffset - 1
+			prefix = fmt.Sprintf(prefixFmt, callOffset)
 
 			if debugLines != nil {
-				if s := getLine(debugLines, frame.RetInsnPos); s != "" {
+				if s := getLine(debugLines, frame.RetOffset); s != "" {
 					suffix = fmt.Sprintf(" at %s", s)
 				}
 			}
@@ -153,9 +153,9 @@ func parseDWARF(data *dwarf.Data) (map[int]string, error) {
 	return lines, nil
 }
 
-func getLine(lines map[int]string, pos int) string {
-	for ; pos > 0; pos-- {
-		s, found := lines[pos]
+func getLine(lines map[int]string, offset int) string {
+	for ; offset > 0; offset-- {
+		s, found := lines[offset]
 		if found {
 			return s
 		}

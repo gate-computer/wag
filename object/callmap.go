@@ -8,8 +8,8 @@ import (
 	"sort"
 )
 
-// CallSite represents a position within the text section (machine code) where
-// a function call is made.
+// CallSite represents an offset within the text section (machine code) where a
+// function call is made.
 //
 // The struct size or layout will not change between minor versions.
 type CallSite struct {
@@ -54,8 +54,8 @@ func (m *CallMap) PutCallSite(retAddr uint32, stackOffset int32) {
 }
 
 func (m CallMap) FindAddr(retAddr uint32,
-) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
-	init, funcIndex, callIndex, stackOffset, retInsnPos = m.FuncMap.FindAddr(retAddr)
+) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
+	init, funcIndex, callIndex, stackOffset, retOffset = m.FuncMap.FindAddr(retAddr)
 
 	if i, found := FindCallSite(m.CallSites, retAddr); found {
 		callIndex = i

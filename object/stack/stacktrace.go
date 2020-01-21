@@ -14,13 +14,13 @@ import (
 )
 
 type TextMap interface {
-	FindAddr(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32)
+	FindAddr(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32)
 }
 
 type Frame struct {
-	FuncIndex  int
-	RetInsnPos int      // Zero if information is not available.
-	Locals     []uint64 // If function signatures are available.
+	FuncIndex int
+	RetOffset int      // Zero if information is not available.
+	Locals    []uint64 // If function signatures are available.
 }
 
 func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncType) (stacktrace []Frame, err error) {
@@ -38,7 +38,7 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncTyp
 			return
 		}
 
-		init, funcIndex, callIndex, stackOffset, retInsnPos := textMap.FindAddr(uint32(retAddr))
+		init, funcIndex, callIndex, stackOffset, retOffset := textMap.FindAddr(uint32(retAddr))
 		if init {
 			if callIndex < 0 {
 				err = fmt.Errorf("unknown initial call return address 0x%x", retAddr)
@@ -79,9 +79,9 @@ func Trace(stack []byte, textAddr uint64, textMap TextMap, funcSigs []wa.FuncTyp
 		}
 
 		stacktrace = append(stacktrace, Frame{
-			FuncIndex:  funcIndex,
-			RetInsnPos: int(retInsnPos),
-			Locals:     locals,
+			FuncIndex: funcIndex,
+			RetOffset: int(retOffset),
+			Locals:    locals,
 		})
 
 		stack = stack[stackOffset:]

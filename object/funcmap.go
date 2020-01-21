@@ -35,7 +35,7 @@ func (m *FuncMap) PutFuncAddr(addr uint32) {
 func (*FuncMap) PutCallSite(uint32, int32) {}
 
 func (m FuncMap) FindAddr(retAddr uint32,
-) (init bool, funcIndex, callIndex int, stackOffset int32, retInsnPos uint32) {
+) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
 	funcIndex = -1
 	callIndex = -1
 
