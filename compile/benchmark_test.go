@@ -26,13 +26,14 @@ func init() {
 
 var (
 	benchTextBuf = make([]byte, 16*1024*1024)
-	benchDataBuf = make([]byte, 16*1024*1024)
+	benchDataBuf = make([]byte, 32*1024*1024)
 )
 
 func BenchmarkLoad000(b *testing.B)  { bench(b, "000", "run") }
 func BenchmarkLoad000E(b *testing.B) { benchE(b, "000", "run", func(event.Event) {}) }
-func BenchmarkLoad001(b *testing.B)  { bench(b, "001", "main") } // Gain hello example, debug build
-func BenchmarkLoad002(b *testing.B)  { bench(b, "002", "main") } // Gain hello example, release build
+func BenchmarkLoad001(b *testing.B)  { bench(b, "001", "main") }   // Gain hello example, debug build
+func BenchmarkLoad002(b *testing.B)  { bench(b, "002", "main") }   // Gain hello example, release build
+func BenchmarkLoad003(b *testing.B)  { bench(b, "003", "_start") } // DOOM
 
 func bench(b *testing.B, filename, entrySymbol string) {
 	benchE(b, filename, entrySymbol, nil)
