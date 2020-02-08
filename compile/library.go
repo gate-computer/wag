@@ -179,6 +179,3 @@ func (m *libraryMap) PutFuncAddr(addr uint32) {
 }
 
 func (*libraryMap) PutCallSite(uint32, int32)  {}
-func (*libraryMap) PutTrapSite(uint32, int32)  {}
-func (*libraryMap) PutInsnAddr(uint32)         {}
-func (*libraryMap) PutDataBlock(uint32, int32) {}
