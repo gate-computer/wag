@@ -70,12 +70,12 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 	case prop.FloatRoundOp:
 		r, _ := allocResultReg(f, x)
 		roundMode := int8(props >> 8)
-		in.ROUNDSSD.RegRegImm8(&f.Text, x.Type, r, r, roundMode)
+		in.ROUNDSx.RegRegImm8(&f.Text, x.Type, r, r, roundMode)
 		return operand.Reg(x.Type, r)
 
 	default: // FloatSqrt
 		r, _ := allocResultReg(f, x)
-		in.SQRTSSD.RegReg(&f.Text, x.Type, r, r)
+		in.SQRTSx.RegReg(&f.Text, x.Type, r, r)
 		return operand.Reg(x.Type, r)
 	}
 }
@@ -83,13 +83,13 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 // absFloatReg in-place.
 func absFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
 	absMaskAddr := rodata.MaskAddr(rodata.Mask7fBase, t)
-	in.ANDPSD.RegMemDisp(&p.Text, t, r, in.BaseText, absMaskAddr)
+	in.ANDPx.RegMemDisp(&p.Text, t, r, in.BaseText, absMaskAddr)
 }
 
 // negFloatReg in-place.
 func negFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
 	signMaskAddr := rodata.MaskAddr(rodata.Mask80Base, t)
-	in.XORPSD.RegMemDisp(&p.Text, t, r, in.BaseText, signMaskAddr)
+	in.XORPx.RegMemDisp(&p.Text, t, r, in.BaseText, signMaskAddr)
 }
 
 // Population count algorithm:

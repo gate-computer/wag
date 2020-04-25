@@ -209,7 +209,7 @@ func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset in
 	if t.Category() == wa.Int {
 		in.MOV.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
 	} else {
-		in.MOVDQ.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
+		in.MOVx.RegMemDisp(&p.Text, t, target, in.BaseMemory, offset)
 	}
 	return true
 }
@@ -228,7 +228,7 @@ func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
 	if x.Type.Category() == wa.Int {
 		in.MOVmr.RegMemDisp(&f.Text, x.Type, r, in.BaseMemory, offset)
 	} else {
-		in.MOVDQmr.RegMemDisp(&f.Text, x.Type, r, in.BaseMemory, offset)
+		in.MOVxmr.RegMemDisp(&f.Text, x.Type, r, in.BaseMemory, offset)
 	}
 }
 
@@ -380,7 +380,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 	case wa.Float:
 		switch x.Storage {
 		case storage.Stack:
-			in.MOVDQ.RegStack(&f.Text, x.Type, target)
+			in.MOVx.RegStack(&f.Text, x.Type, target)
 			in.ADDi.RegImm8(&f.Text, wa.I64, RegStackPtr, obj.Word)
 			f.StackValueConsumed()
 
@@ -389,12 +389,12 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 				in.PXOR.RegReg(&f.Text, in.OneSize, target, target)
 			} else {
 				in.MOV64i.RegImm64(&f.Text, RegScratch, value) // integer scratch register
-				in.MOVDQ.RegReg(&f.Text, x.Type, target, RegScratch)
+				in.MOVx.RegReg(&f.Text, x.Type, target, RegScratch)
 			}
 
 		case storage.Reg:
 			if source := x.Reg(); source != target {
-				in.MOVAPSD.RegReg(&f.Text, x.Type, target, source)
+				in.MOVAPx.RegReg(&f.Text, x.Type, target, source)
 				f.Regs.Free(x.Type, source)
 			} else {
 				if target != RegResult {
@@ -413,7 +413,7 @@ func (MacroAssembler) MoveReg(p *gen.Prog, t wa.Type, target, source reg.R) {
 		in.MOV.RegReg(&p.Text, t, target, source)
 
 	case wa.Float:
-		in.MOVAPSD.RegReg(&p.Text, t, target, source)
+		in.MOVAPx.RegReg(&p.Text, t, target, source)
 	}
 }
 
@@ -438,7 +438,7 @@ func (MacroAssembler) PushReg(p *gen.Prog, t wa.Type, r reg.R) {
 
 	case wa.Float:
 		in.SUBi.RegImm8(&p.Text, wa.I64, RegStackPtr, obj.Word)
-		in.MOVDQmr.RegStack(&p.Text, t, r)
+		in.MOVxmr.RegStack(&p.Text, t, r)
 	}
 }
 
@@ -519,7 +519,7 @@ func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int
 		in.MOV.RegStackDisp(&p.Text, t, target, offset)
 
 	case wa.Float:
-		in.MOVDQ.RegStackDisp(&p.Text, t, target, offset)
+		in.MOVx.RegStackDisp(&p.Text, t, target, offset)
 	}
 }
 
@@ -549,7 +549,7 @@ func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.
 		in.MOVmr.RegStackDisp(&p.Text, t, r, offset)
 
 	case wa.Float:
-		in.MOVDQmr.RegStackDisp(&p.Text, t, r, offset)
+		in.MOVxmr.RegStackDisp(&p.Text, t, r, offset)
 	}
 }
 

@@ -58,7 +58,7 @@ var loadInsns = [8]regMemDispInsn{
 	prop.IndexIntLoad16U: in.MOVZX16,
 	prop.IndexIntLoad32S: opLoadInt32S{},
 	prop.IndexIntLoad32U: opLoadInt32U{},
-	prop.IndexFloatLoad:  in.MOVSSD,
+	prop.IndexFloatLoad:  in.MOVSx,
 }
 
 var storeRegInsns = [5]regMemDispInsn{
@@ -66,7 +66,7 @@ var storeRegInsns = [5]regMemDispInsn{
 	prop.IndexIntStore8:  in.MOV8mr,
 	prop.IndexIntStore16: in.MOV16mr,
 	prop.IndexIntStore32: opStoreRegInt32{},
-	prop.IndexFloatStore: in.MOVSSDmr,
+	prop.IndexFloatStore: in.MOVSxmr,
 }
 
 var storeImmInsns = [5]memDispImmInsn{

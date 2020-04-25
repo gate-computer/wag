@@ -275,8 +275,8 @@ var binaryFloatMinmaxOpcodes = [2]struct {
 	common in.RMscalar
 	zero   in.RMpacked
 }{
-	prop.IndexMinmaxMin: {in.MINSSD, in.ORPSD},
-	prop.IndexMinmaxMax: {in.MAXSSD, in.ANDPSD},
+	prop.IndexMinmaxMin: {in.MINSx, in.ORPx},
+	prop.IndexMinmaxMax: {in.MAXSx, in.ANDPx},
 }
 
 func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
@@ -284,7 +284,7 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
-	in.UCOMISSD.RegReg(&f.Text, a.Type, targetReg, sourceReg)
+	in.UCOMISx.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 	in.JNEcb.Stub8(&f.Text)
 	commonJump := f.Text.Addr
 
@@ -306,7 +306,7 @@ func binaryFloatCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
 	aReg, _ := allocResultReg(f, a)
 	bReg, _ := getScratchReg(f, b)
 
-	in.UCOMISSD.RegReg(&f.Text, a.Type, aReg, bReg)
+	in.UCOMISx.RegReg(&f.Text, a.Type, aReg, bReg)
 
 	f.Regs.Free2(a.Type, aReg, bReg)
 	return operand.Flags(condition.C(cond))
@@ -318,9 +318,9 @@ func binaryFloatCopysign(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 
 	signMaskAddr := rodata.MaskAddr(rodata.Mask80Base, a.Type)
 
-	in.MOVDQmr.RegReg(&f.Text, a.Type, sourceReg, RegScratch) // int <- float
+	in.MOVxmr.RegReg(&f.Text, a.Type, sourceReg, RegScratch) // int <- float
 	in.AND.RegMemDisp(&f.Text, a.Type, RegScratch, in.BaseText, signMaskAddr)
-	in.MOVDQmr.RegReg(&f.Text, a.Type, targetReg, RegResult) // int <- float
+	in.MOVxmr.RegReg(&f.Text, a.Type, targetReg, RegResult) // int <- float
 	in.AND.RegMemDisp(&f.Text, a.Type, RegResult, in.BaseText, signMaskAddr)
 	in.CMP.RegReg(&f.Text, a.Type, RegResult, RegScratch)
 	in.JEcb.Stub8(&f.Text)

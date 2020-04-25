@@ -30,13 +30,13 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 
 	case prop.Mote:
 		r, _ := allocResultReg(f, source)
-		in.CVTS2SSD.RegReg(&f.Text, source.Type, r, r)
+		in.CVTS2Sx.RegReg(&f.Text, source.Type, r, r)
 		result = operand.Reg(resultType, r)
 
 	case prop.TruncS:
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
-		in.CVTTSSD2SI.TypeRegReg(&f.Text, source.Type, resultType, resultReg, sourceReg)
+		in.CVTTSx2SI.TypeRegReg(&f.Text, source.Type, resultType, resultReg, sourceReg)
 		f.Regs.Free(source.Type, sourceReg)
 		result = operand.Reg(resultType, resultReg)
 
@@ -44,7 +44,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		if resultType == wa.I32 {
-			in.CVTTSSD2SI.TypeRegReg(&f.Text, source.Type, wa.I64, resultReg, sourceReg)
+			in.CVTTSx2SI.TypeRegReg(&f.Text, source.Type, wa.I64, resultReg, sourceReg)
 		} else {
 			truncFloatToUnsignedI64(f, resultReg, source.Type, sourceReg)
 		}
@@ -54,7 +54,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 	case prop.ConvertS:
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
-		in.CVTSI2SSD.TypeRegReg(&f.Text, resultType, source.Type, resultReg, sourceReg)
+		in.CVTSI2Sx.TypeRegReg(&f.Text, resultType, source.Type, resultReg, sourceReg)
 		f.Regs.Free(source.Type, sourceReg)
 		result = operand.Reg(resultType, resultReg)
 
@@ -65,7 +65,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			if !zeroExtended {
 				in.MOV.RegReg(&f.Text, wa.I32, sourceReg, sourceReg)
 			}
-			in.CVTSI2SSD.TypeRegReg(&f.Text, resultType, wa.I64, resultReg, sourceReg)
+			in.CVTSI2Sx.TypeRegReg(&f.Text, resultType, wa.I64, resultReg, sourceReg)
 		} else {
 			convertUnsignedI64ToFloat(f, resultType, resultReg, sourceReg)
 		}
@@ -76,9 +76,9 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		if source.Type.Category() == wa.Int {
-			in.MOVDQ.RegReg(&f.Text, source.Type, resultReg, sourceReg)
+			in.MOVx.RegReg(&f.Text, source.Type, resultReg, sourceReg)
 		} else {
-			in.MOVDQmr.RegReg(&f.Text, source.Type, sourceReg, resultReg)
+			in.MOVxmr.RegReg(&f.Text, source.Type, sourceReg, resultReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
 		result = operand.Reg(resultType, resultReg)
@@ -92,13 +92,13 @@ func truncFloatToUnsignedI64(f *gen.Func, target reg.R, sourceType wa.Type, sour
 
 	truncMaskAddr := rodata.MaskAddr(rodata.MaskTruncBase, sourceType)
 
-	in.MOVAPSD.RegReg(&f.Text, sourceType, RegScratch, source)
-	in.SUBSSD.RegMemDisp(&f.Text, sourceType, RegScratch, in.BaseText, truncMaskAddr)
-	in.CVTTSSD2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, RegScratch)
+	in.MOVAPx.RegReg(&f.Text, sourceType, RegScratch, source)
+	in.SUBSx.RegMemDisp(&f.Text, sourceType, RegScratch, in.BaseText, truncMaskAddr)
+	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, RegScratch)
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, rodata.Mask80Addr64)
 	in.XOR.RegReg(&f.Text, wa.I64, RegScratch, target)
-	in.CVTTSSD2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
-	in.UCOMISSD.RegMemDisp(&f.Text, sourceType, source, in.BaseText, truncMaskAddr)
+	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
+	in.UCOMISx.RegMemDisp(&f.Text, sourceType, source, in.BaseText, truncMaskAddr)
 	in.CMOVAE.RegReg(&f.Text, wa.I64, target, RegScratch)
 }
 
@@ -110,7 +110,7 @@ func convertUnsignedI64ToFloat(f *gen.Func, targetType wa.Type, target, source r
 	hugeJump := f.Text.Addr
 
 	// max. 63-bit value
-	in.CVTSI2SSD.TypeRegReg(&f.Text, targetType, wa.I64, target, source)
+	in.CVTSI2Sx.TypeRegReg(&f.Text, targetType, wa.I64, target, source)
 
 	in.JMPcb.Stub8(&f.Text)
 	doneJump := f.Text.Addr
@@ -122,8 +122,8 @@ func convertUnsignedI64ToFloat(f *gen.Func, targetType wa.Type, target, source r
 	in.ANDi.RegImm8(&f.Text, wa.I64, RegScratch, 1)
 	in.SHRi.RegImm8(&f.Text, wa.I64, source, 1)
 	in.OR.RegReg(&f.Text, wa.I64, source, RegScratch)
-	in.CVTSI2SSD.TypeRegReg(&f.Text, targetType, wa.I64, target, source)
-	in.ADDSSD.RegReg(&f.Text, targetType, target, target)
+	in.CVTSI2Sx.TypeRegReg(&f.Text, targetType, wa.I64, target, source)
+	in.ADDSx.RegReg(&f.Text, targetType, target, target)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), doneJump)
 }

@@ -87,10 +87,10 @@ const (
 	IntShrU       = BinaryIntShift | uint(in.InsnShrU)<<8
 	IntRotl       = BinaryIntShift | uint(in.InsnRotl)<<8
 	IntRotr       = BinaryIntShift | uint(in.InsnRotr)<<8
-	FloatAdd      = BinaryFloatCommon | uint(in.ADDSSD)<<8
-	FloatSub      = BinaryFloatCommon | uint(in.SUBSSD)<<8
-	FloatMul      = BinaryFloatCommon | uint(in.MULSSD)<<8
-	FloatDiv      = BinaryFloatCommon | uint(in.DIVSSD)<<8
+	FloatAdd      = BinaryFloatCommon | uint(in.ADDSx)<<8
+	FloatSub      = BinaryFloatCommon | uint(in.SUBSx)<<8
+	FloatMul      = BinaryFloatCommon | uint(in.MULSx)<<8
+	FloatDiv      = BinaryFloatCommon | uint(in.DIVSx)<<8
 	FloatMin      = BinaryFloatMinmax | IndexMinmaxMin<<8
 	FloatMax      = BinaryFloatMinmax | IndexMinmaxMax<<8
 	FloatCopysign = BinaryFloatCopysign

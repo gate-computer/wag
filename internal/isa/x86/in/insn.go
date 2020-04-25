@@ -130,29 +130,29 @@ const (
 	JLEc = D12(JLEcd)<<16 | D12(JLEcb)
 
 	// GP/SSE opcodes
-	CVTSI2SSD  = RMscalar(0x2a)           // CVTSI2SS or CVTSI2SD
-	CVTTSSD2SI = RMscalar(0x2c)           // CVTTSS2SI or CVTTSD2SI
-	MOVDQ      = RMprefix(0x66<<8 | 0x6e) // MOVD or MOVQ
-	MOVDQmr    = RMprefix(0x66<<8 | 0x7e) // register parameters reversed
+	CVTSI2Sx  = RMscalar(0x2a)           // CVTSI2SS or CVTSI2SD
+	CVTTSx2SI = RMscalar(0x2c)           // CVTTSS2SI or CVTTSD2SI
+	MOVx      = RMprefix(0x66<<8 | 0x6e) // MOVD or MOVQ
+	MOVxmr    = RMprefix(0x66<<8 | 0x7e) // register parameters reversed
 
 	// SSE opcodes
-	MOVSSD   = RMscalar(0x10)  // MOVSS or MOVSD
-	MOVSSDmr = RMscalar(0x11)  // RegReg is redundant
-	MOVAPSD  = RMpacked(0x28)  // MOVAPS or MOVAPD
-	UCOMISSD = RMpacked(0x2e)  // UCOMISS or UCOMISD
-	ROUNDSSD = RMIscalar(0x3a) // ROUNDSS or ROUNDSD
-	SQRTSSD  = RMscalar(0x51)  // SQRTSS or SQRTSD
-	ANDPSD   = RMpacked(0x54)  // ANDPS or ANDPD
-	ORPSD    = RMpacked(0x56)  // ORPS or ORPD
-	XORPSD   = RMpacked(0x57)  // XORPS or XORPD
-	ADDSSD   = RMscalar(0x58)  // ADDSS or ADDSD
-	MULSSD   = RMscalar(0x59)  // MULSS or MULSD
-	CVTS2SSD = RMscalar(0x5a)  // CVTS2SS or CVTS2SD
-	SUBSSD   = RMscalar(0x5c)  // SUBSS or SUBSD
-	MINSSD   = RMscalar(0x5d)  // MINSS or MINSD
-	DIVSSD   = RMscalar(0x5e)  // DIVSS or DIVSD
-	MAXSSD   = RMscalar(0x5f)  // MAXSS or MAXSD
-	PXOR     = RMprefix(0x66<<8 | 0xef)
+	MOVSx   = RMscalar(0x10)  // MOVSS or MOVSD
+	MOVSxmr = RMscalar(0x11)  // RegReg is redundant
+	MOVAPx  = RMpacked(0x28)  // MOVAPS or MOVAPD
+	UCOMISx = RMpacked(0x2e)  // UCOMISS or UCOMISD
+	ROUNDSx = RMIscalar(0x3a) // ROUNDSS or ROUNDSD
+	SQRTSx  = RMscalar(0x51)  // SQRTSS or SQRTSD
+	ANDPx   = RMpacked(0x54)  // ANDPS or ANDPD
+	ORPx    = RMpacked(0x56)  // ORPS or ORPD
+	XORPx   = RMpacked(0x57)  // XORPS or XORPD
+	ADDSx   = RMscalar(0x58)  // ADDSS or ADDSD
+	MULSx   = RMscalar(0x59)  // MULSS or MULSD
+	CVTS2Sx = RMscalar(0x5a)  // CVTS2SS or CVTS2SD
+	SUBSx   = RMscalar(0x5c)  // SUBSS or SUBSD
+	MINSx   = RMscalar(0x5d)  // MINSS or MINSD
+	DIVSx   = RMscalar(0x5e)  // DIVSS or DIVSD
+	MAXSx   = RMscalar(0x5f)  // MAXSS or MAXSD
+	PXOR    = RMprefix(0x66<<8 | 0xef)
 )
 
 // Arithmetic logic instructions
