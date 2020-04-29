@@ -27,6 +27,7 @@ type Prog struct {
 	FuncLinks               []link.FuncL
 	TrapLinks               [trap.NumTraps]link.L
 	TrapLinkRewindSuspended [program.NumTrapLinkRewindSuspended]link.L
+	TrapLinkTruncOverflow   [program.NumTrapLinkTruncOverflow]link.L
 	LastCallAddr            int32 // Needed only by arm backend.
 
 	ImportContext *module.Library // Set during import function generation.

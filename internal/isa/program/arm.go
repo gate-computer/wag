@@ -6,4 +6,7 @@
 
 package program
 
-const NumTrapLinkRewindSuspended = 1
+const (
+	NumTrapLinkRewindSuspended = 1
+	NumTrapLinkTruncOverflow   = 0
+)

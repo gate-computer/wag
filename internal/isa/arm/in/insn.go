@@ -110,6 +110,10 @@ const (
 
 	// Floating-point conditional select
 	FCSEL = RegRegCondRegType(0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 3<<10)
+
+	// System register
+	MSR_FPSR = SystemReg(0x354<<22 | 0<<21 | 1<<20 | 0xda21<<5)
+	MRS_FPSR = SystemReg(0x354<<22 | 1<<21 | 1<<20 | 0xda21<<5)
 )
 
 // Add/subtract instruction's "op" field

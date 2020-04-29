@@ -318,6 +318,57 @@ func (MacroAssembler) TrapHandlerRewindSuspended(p *gen.Prog, index int) {
 	trapHandler(p, trap.Suspended)
 }
 
+func (MacroAssembler) TrapHandlerTruncOverflow(p *gen.Prog, trapIndex int) {
+	var (
+		floatIntType wa.Type
+		fractionSize int8
+		exponentMask int32
+		goodBits     int32
+	)
+
+	switch trapIndex >> 1 {
+	case int(wa.Size32 >> 3):
+		floatIntType = wa.I32
+		fractionSize = 23
+		exponentMask = 0xff
+		if trapIndex&1 == int(wa.Size32>>3) {
+			goodBits = 0x19e // s=1 e=10011110
+		} else { // 64-bit
+			goodBits = 0x1be // s=1 e=10111110
+		}
+
+	case int(wa.Size64 >> 3):
+		floatIntType = wa.I64
+		fractionSize = 52
+		exponentMask = 0x7ff
+		if trapIndex&1 == int(wa.Size32>>3) {
+			goodBits = 0xc1e // s=1 e=10000011110
+		} else { // 64-bit
+			goodBits = 0xc3e // s=1 e=10000111110
+		}
+
+	default:
+		panic(trapIndex)
+	}
+
+	in.MOVxmr.RegReg(&p.Text, floatIntType, RegResult, RegScratch)   // int <- float
+	in.RORi.RegImm8(&p.Text, floatIntType, RegScratch, fractionSize) // Exponent at bottom.
+
+	in.CMPi.RegImm32(&p.Text, floatIntType, RegScratch, goodBits)
+	jumpIfOutOfRange := in.JNEcb.Stub8(&p.Text)
+
+	in.ANDi.RegImm32(&p.Text, wa.I32, RegScratch, exponentMask) // Exponent is all ones?
+	in.CMPi.RegImm32(&p.Text, wa.I32, RegScratch, exponentMask)
+	jumpIfInfNan := in.JEcb.Stub8(&p.Text)
+
+	in.RET.Simple(&p.Text)
+
+	linker.UpdateNearBranch(p.Text.Bytes(), jumpIfOutOfRange)
+	linker.UpdateNearBranch(p.Text.Bytes(), jumpIfInfNan)
+
+	trapHandler(p, trap.IntegerOverflow)
+}
+
 func trapHandler(p *gen.Prog, id trap.ID) {
 	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // automatic zero-extension
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)

@@ -35,6 +35,7 @@ const (
 	MOVSXD  = RM(0x63) // I64 only
 	PUSHi   = Ipush(0x6a)
 	IMULi   = RMI(0x6b)
+	JNOcb   = Db(0x71)
 	JBcb    = Db(0x72)
 	JAEcb   = Db(0x73)
 	JEcb    = Db(0x74)

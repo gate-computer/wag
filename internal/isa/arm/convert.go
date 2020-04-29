@@ -9,6 +9,7 @@ import (
 	"github.com/tsavola/wag/internal/gen/operand"
 	"github.com/tsavola/wag/internal/isa/arm/in"
 	"github.com/tsavola/wag/internal/isa/prop"
+	"github.com/tsavola/wag/trap"
 	"github.com/tsavola/wag/wa"
 )
 
@@ -54,7 +55,11 @@ func convertFloatToInt(f *gen.Func, props uint16, resultType wa.Type, source ope
 
 	resultReg := f.Regs.AllocResult(wa.I64)
 	sourceReg := o.getScratchReg(f, source)
+	o.insn(in.MSR_FPSR.Rt(RegZero))
 	o.insn(insn.RdRn(resultReg, sourceReg, source.Size(), resultType.Size()))
+	o.insn(in.MRS_FPSR.Rt(RegScratch))
+	o.insn(in.TBZ.RtI14Bit(RegScratch, 2, 0)) // Skip next instruction if valid operation.
+	o.unmappedTrap(f, f.TrapLinks[trap.IntegerOverflow])
 	o.copy(f.Text.Extend(o.size))
 
 	f.Regs.Free(wa.F64, sourceReg)

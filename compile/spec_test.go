@@ -358,19 +358,13 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			}
 
 		case "assert_trap":
-			if strings.Contains(sexp.Stringify(assert[1], false), ".trunc_") {
-				// Some truncations are undefined.  Our implementation doesn't
-				// trap like the testsuite expects.  Skip the tests.
-				testType = ""
-			} else {
-				test = []interface{}{
-					"block",
-					assert[1],
-					[]interface{}{
-						"return",
-						[]interface{}{"i32.const", "0xbadc0de"},
-					},
-				}
+			test = []interface{}{
+				"block",
+				assert[1],
+				[]interface{}{
+					"return",
+					[]interface{}{"i32.const", "0xbadc0de"},
+				},
 			}
 
 		case "invoke":

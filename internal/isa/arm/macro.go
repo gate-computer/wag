@@ -326,6 +326,10 @@ func (MacroAssembler) TrapHandlerRewindSuspended(p *gen.Prog, index int) {
 	o.copy(p.Text.Extend(o.size))
 }
 
+func (MacroAssembler) TrapHandlerTruncOverflow(p *gen.Prog, trapIndex int) {
+	panic(trapIndex)
+}
+
 func (o *outbuf) trapHandler(p *gen.Prog, id trap.ID) {
 	o.insn(in.MOVZ.RdI16Hw(RegResult, uint32(id), 0, wa.Size64))
 	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))

@@ -138,6 +138,9 @@ type MacroAssembler interface {
 	// TrapHandlerRewindSuspended may use RegResult and update condition flags.
 	TrapHandlerRewindSuspended(p *gen.Prog, index int)
 
+	// TrapHandlerTruncOverflow may use RegResult and update condition flags.
+	TrapHandlerTruncOverflow(p *gen.Prog, index int)
+
 	// TrapHandler may use RegResult and update condition flags.  It MUST NOT
 	// generate over 16 bytes of code.
 	TrapHandler(p *gen.Prog, id trap.ID)

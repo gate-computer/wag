@@ -102,8 +102,13 @@ func GenProgram(
 	for i := range p.TrapLinkRewindSuspended {
 		asm.AlignFunc(p)
 		p.TrapLinkRewindSuspended[i].Addr = p.Text.Addr
-
 		asm.TrapHandlerRewindSuspended(p, i)
+	}
+
+	for i := range p.TrapLinkTruncOverflow {
+		asm.AlignFunc(p)
+		p.TrapLinkTruncOverflow[i].Addr = p.Text.Addr
+		asm.TrapHandlerTruncOverflow(p, i)
 	}
 
 	p.ImportContext = lib // Generate import functions in library context.

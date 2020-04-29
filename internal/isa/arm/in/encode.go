@@ -131,6 +131,7 @@ type RegRegRegSf uint32
 type RegRegRegType uint32
 type RegRegRegRegSf uint32
 type DiscardRegRegType uint32
+type SystemReg uint32
 
 func (op CondImm19) CondI19(cond Cond, imm uint32) uint32 {
 	return uint32(op) | imm<<5 | uint32(cond)
@@ -234,4 +235,8 @@ func (op RegRegRegRegSf) RdRnRaRm(rd, rn, ra, rm reg.R, t wa.Size) uint32 {
 
 func (op DiscardRegRegType) RnRm(rn, rm reg.R, t wa.Size) uint32 {
 	return uint32(op) | scalarType(t) | uint32(rm)<<16 | uint32(rn)<<5
+}
+
+func (op SystemReg) Rt(rt reg.R) uint32 {
+	return uint32(op) | uint32(rt)
 }
