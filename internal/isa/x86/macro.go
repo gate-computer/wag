@@ -94,8 +94,7 @@ func (MacroAssembler) Branch(p *gen.Prog, addr int32) {
 }
 
 func (MacroAssembler) BranchStub(p *gen.Prog) int32 {
-	in.JMPcd.Stub32(&p.Text)
-	return p.Text.Addr
+	return in.JMPcd.Stub32(&p.Text)
 }
 
 func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
@@ -134,16 +133,13 @@ func (MacroAssembler) BranchIfStub(f *gen.Func, x operand.O, yes, near bool) (si
 
 	switch {
 	case cond >= condition.MinUnorderedOrCondition:
-		in.JPc.Stub(&f.Text, near)
-		sites = append(sites, f.Text.Addr)
+		sites = append(sites, in.JPc.Stub(&f.Text, near))
 
 	case cond >= condition.MinOrderedAndCondition:
-		in.JPcb.Stub8(&f.Text)
-		endJumps = append(endJumps, f.Text.Addr)
+		endJumps = append(endJumps, in.JPcb.Stub8(&f.Text))
 	}
 
-	conditionInsns[cond].JccOpcodeC().Stub(&f.Text, near)
-	sites = append(sites, f.Text.Addr)
+	sites = append(sites, conditionInsns[cond].JccOpcodeC().Stub(&f.Text, near))
 
 	linker.UpdateNearBranches(f.Text.Bytes(), endJumps)
 	return
@@ -156,8 +152,7 @@ func (MacroAssembler) BranchIfOutOfBounds(p *gen.Prog, indexReg reg.R, upperBoun
 
 func (MacroAssembler) BranchIfOutOfBoundsStub(p *gen.Prog, indexReg reg.R, upperBound int32) int32 {
 	compareBounds(p, indexReg, upperBound)
-	in.JLEc.AddrStub(&p.Text)
-	return p.Text.Addr
+	return in.JLEc.AddrStub(&p.Text)
 }
 
 // compareBounds zero-extends indexReg.
@@ -178,16 +173,14 @@ func (MacroAssembler) CallMissing(p *gen.Prog, atomic bool) {
 
 func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) {
 	compareBounds(&f.Prog, funcIndexReg, int32(len(f.Module.TableFuncs))) // zero-extension
-	in.JLEcb.Stub8(&f.Text)
-	outOfBoundsJump := f.Text.Addr
+	outOfBoundsJump := in.JLEcb.Stub8(&f.Text)
 
 	in.MOV.RegMemIndexDisp(&f.Text, wa.I64, RegResult, in.BaseText, funcIndexReg, in.Scale3, rodata.TableAddr)
 	f.Regs.Free(wa.I64, funcIndexReg)
 	in.MOV.RegReg(&f.Text, wa.I32, RegScratch, RegResult) // zero-extended function address
 	in.SHRi.RegImm8(&f.Text, wa.I64, RegResult, 32)       // signature index
 	in.CMPi.RegImm(&f.Text, wa.I32, RegResult, sigIndex)
-	in.JEcb.Stub8(&f.Text)
-	okJump := f.Text.Addr
+	okJump := in.JEcb.Stub8(&f.Text)
 
 	asm.Trap(f, trap.IndirectCallSignatureMismatch)
 
@@ -252,8 +245,7 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 
 	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // Start function address.
 	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
-	in.JEcb.Stub8(&p.Text)
-	skipStart := p.Text.Addr
+	skipStart := in.JEcb.Stub8(&p.Text)
 
 	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&p.Text, nonabi.TextAddrRetpoline)
@@ -267,8 +259,7 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 
 	in.POP.Reg(&p.Text, in.OneSize, RegScratch) // Entry function address.
 	in.TEST.RegReg(&p.Text, wa.I32, RegScratch, RegScratch)
-	in.JEcb.Stub8(&p.Text)
-	skipEntry := p.Text.Addr
+	skipEntry := in.JEcb.Stub8(&p.Text)
 
 	in.ADD.RegReg(&p.Text, wa.I64, RegScratch, RegTextBase)
 	in.CALLcd.Addr32(&p.Text, nonabi.TextAddrRetpoline)
@@ -474,8 +465,7 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	// TrapHandlerRewindCallStackExhausted must be changed to match the
 	// instruction sequence size.
 
-	in.LEA.RegStackStub32(&f.Text, wa.I64, RegScratch)
-	stackCheckAddr = f.Text.Addr
+	stackCheckAddr = in.LEA.RegStackStub32(&f.Text, wa.I64, RegScratch)
 
 	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
 	in.JGEcb.Rel8(&f.Text, in.CALLcd.Size())                             // Skip next instruction.
@@ -495,14 +485,12 @@ func setBool(p *gen.Prog, cond condition.C) {
 
 	switch {
 	case cond >= condition.MinUnorderedOrCondition:
-		in.MOVi.RegImm32(&p.Text, wa.I32, RegScratch, 1) // true
-		in.JPcb.Stub8(&p.Text)                           // if unordered, else
-		endJumps = append(endJumps, p.Text.Addr)
+		in.MOVi.RegImm32(&p.Text, wa.I32, RegScratch, 1)    // true
+		endJumps = append(endJumps, in.JPcb.Stub8(&p.Text)) // if unordered, else
 
 	case cond >= condition.MinOrderedAndCondition:
 		in.MOV.RegReg(&p.Text, wa.I32, RegScratch, RegZero) // false
-		in.JPcb.Stub8(&p.Text)                              // if unordered, else
-		endJumps = append(endJumps, p.Text.Addr)
+		endJumps = append(endJumps, in.JPcb.Stub8(&p.Text)) // if unordered, else
 
 	default:
 		in.MOV.RegReg(&p.Text, wa.I32, RegScratch, RegZero)
@@ -565,8 +553,7 @@ func (MacroAssembler) Breakpoint(f *gen.Func) {
 
 func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
 	in.TEST8.RegRegStackLimit(&f.Text)
-	in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).
-	skipJump := f.Text.Addr
+	skipJump := in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).
 
 	in.PUSH.Reg(&f.Text, in.OneSize, saveReg)
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)

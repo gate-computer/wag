@@ -109,8 +109,7 @@ func popcnt(f *gen.Func, x operand.O) (count reg.R) {
 	in.XOR.RegReg(&f.Text, wa.I32, count, count)
 
 	in.TEST.RegReg(&f.Text, x.Type, pop, pop)
-	in.JEcb.Stub8(&f.Text)
-	skipJump := f.Text.Addr
+	skipJump := in.JEcb.Stub8(&f.Text)
 
 	loopAddr := f.Text.Addr
 	in.INC.Reg(&f.Text, wa.I32, count)

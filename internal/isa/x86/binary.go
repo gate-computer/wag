@@ -180,12 +180,10 @@ func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	} else {
 		in.CMP.RegMemDisp(&f.Text, a.Type, RegDividendLow, in.BaseText, rodata.Mask80Addr64)
 	}
-	in.JNEcb.Stub8(&f.Text)
-	skip1 := f.Text.Addr
+	skip1 := in.JNEcb.Stub8(&f.Text)
 
 	in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
-	in.JNEcb.Stub8(&f.Text)
-	skip2 := f.Text.Addr
+	skip2 := in.JNEcb.Stub8(&f.Text)
 
 	asm.Trap(f, trap.IntegerOverflow)
 
@@ -207,8 +205,7 @@ func binaryIntRemS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	// RegDividendHigh (remainer) is RegZero, so correct result is already in
 	// place if the division is skipped.
 	in.CMPi.RegImm8(&f.Text, b.Type, divisorReg, -1)
-	in.JEcb.Stub8(&f.Text)
-	skip := f.Text.Addr
+	skip := in.JEcb.Stub8(&f.Text)
 
 	in.CDQ.Type(&f.Text, a.Type) // Sign-extend dividend low bits to high bits.
 	in.IDIV.Reg(&f.Text, b.Type, divisorReg)
@@ -285,12 +282,10 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	sourceReg, _ := getScratchReg(f, b)
 
 	in.UCOMISx.RegReg(&f.Text, a.Type, targetReg, sourceReg)
-	in.JNEcb.Stub8(&f.Text)
-	commonJump := f.Text.Addr
+	commonJump := in.JNEcb.Stub8(&f.Text)
 
 	opcodes.zero.RegReg(&f.Text, a.Type, targetReg, sourceReg)
-	in.JMPcb.Stub8(&f.Text)
-	endJump := f.Text.Addr
+	endJump := in.JMPcb.Stub8(&f.Text)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), commonJump)
 
@@ -323,8 +318,7 @@ func binaryFloatCopysign(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	in.MOVxmr.RegReg(&f.Text, a.Type, targetReg, RegResult) // int <- float
 	in.AND.RegMemDisp(&f.Text, a.Type, RegResult, in.BaseText, signMaskAddr)
 	in.CMP.RegReg(&f.Text, a.Type, RegResult, RegScratch)
-	in.JEcb.Stub8(&f.Text)
-	doneJump := f.Text.Addr
+	doneJump := in.JEcb.Stub8(&f.Text)
 
 	negFloatReg(&f.Prog, a.Type, targetReg)
 

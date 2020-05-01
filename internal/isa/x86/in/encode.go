@@ -252,7 +252,7 @@ func (op RM) RegStackDisp8(text *code.Buf, t wa.Type, r reg.R, disp int8) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op RM) RegStackStub32(text *code.Buf, t wa.Type, r reg.R) {
+func (op RM) RegStackStub32(text *code.Buf, t wa.Type, r reg.R) int32 {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r))
 	o.byte(byte(op))
@@ -260,6 +260,8 @@ func (op RM) RegStackStub32(text *code.Buf, t wa.Type, r reg.R) {
 	o.sib(Scale0, noIndex, baseStack)
 	o.int32(-0x80000000) // out-of-bounds as placeholder
 	o.copy(text.Extend(o.len()))
+
+	return text.Addr
 }
 
 // RM (MR) with prefix and two opcode bytes (first byte hardcoded)
@@ -592,13 +594,15 @@ func (ops D12) Addr(text *code.Buf, addr int32) (far bool) {
 	return
 }
 
-func (ops D12) AddrStub(text *code.Buf) {
+func (ops D12) AddrStub(text *code.Buf) int32 {
 	const insnSize = 6
 
 	var o output
 	o.word(uint16(ops >> 16))
 	o.int32(-insnSize) // infinite loop as placeholder
 	o.copy(text.Extend(o.len()))
+
+	return text.Addr
 }
 
 func (op Db) Rel8(text *code.Buf, disp int8) {
@@ -619,7 +623,7 @@ func (op Db) Addr8(text *code.Buf, addr int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (ops D12) Stub(text *code.Buf, near bool) {
+func (ops D12) Stub(text *code.Buf, near bool) int32 {
 	const (
 		insnSize8  = 2
 		insnSize32 = 6
@@ -636,9 +640,11 @@ func (ops D12) Stub(text *code.Buf, near bool) {
 		o.int32(-insnSize32) // infinite loop as placeholder
 		o.copy(text.Extend(o.len()))
 	}
+
+	return text.Addr
 }
 
-func (op Db) Stub8(text *code.Buf) {
+func (op Db) Stub8(text *code.Buf) int32 {
 	const insnSize = 2
 
 	disp := -insnSize // infinite loop as placeholder
@@ -647,6 +653,8 @@ func (op Db) Stub8(text *code.Buf) {
 	o.byte(byte(op))
 	o.int8(int8(disp))
 	o.copy(text.Extend(o.len()))
+
+	return text.Addr
 }
 
 func (op Dd) Addr32(text *code.Buf, addr int32) {
@@ -671,22 +679,26 @@ func (op D2d) Addr32(text *code.Buf, addr int32) {
 	o.copy(text.Extend(o.len()))
 }
 
-func (op Dd) Stub32(text *code.Buf) {
+func (op Dd) Stub32(text *code.Buf) int32 {
 	const insnSize = 5
 
 	var o output
 	o.byte(byte(op))
 	o.int32(-insnSize) // infinite loop as placeholder
 	o.copy(text.Extend(o.len()))
+
+	return text.Addr
 }
 
-func (op D2d) Stub32(text *code.Buf) {
+func (op D2d) Stub32(text *code.Buf) int32 {
 	const insnSize = 6
 
 	var o output
 	o.word(uint16(op))
 	o.int32(-insnSize) // infinite loop as placeholder
 	o.copy(text.Extend(o.len()))
+
+	return text.Addr
 }
 
 func (op Dd) MissingFunction(text *code.Buf, align bool) {

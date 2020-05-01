@@ -38,7 +38,7 @@ type rmRegStackDisp8 interface {
 	RegStackDisp8(text *code.Buf, t wa.Type, r reg.R, disp int8)
 }
 type rmRegStackStub32 interface {
-	RegStackStub32(text *code.Buf, t wa.Type, r reg.R)
+	RegStackStub32(text *code.Buf, t wa.Type, r reg.R) int32
 }
 
 func init() {
