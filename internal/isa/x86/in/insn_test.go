@@ -144,6 +144,7 @@ func TestInsnRMint(test *testing.T) {
 		types       []wa.Type
 		op2RegNames []string
 		memSize     string
+		commutative bool
 	}{
 		{mn: "add", op: ADD},
 		{mn: "or", op: OR},
@@ -167,7 +168,7 @@ func TestInsnRMint(test *testing.T) {
 			types:       []wa.Type{wa.I64},
 			op2RegNames: regNamesI32,
 			memSize:     "dword"},
-		{mn: "test", op: TEST, mr: true},
+		{mn: "test", op: TEST, mr: true, commutative: true},
 		{mn: "mov", op: MOVmr, mr: true, skipRegReg: true},
 		{mn: "mov", op: MOV},
 		{mn: "lea", op: LEA, skipRegReg: true},
@@ -204,7 +205,12 @@ func TestInsnRMint(test *testing.T) {
 					}
 
 					for _, r2 := range allRegs {
-						testEncode(test, i.mn, opStr(rn, rns2[r2]), func(text *code.Buf) {
+						opStrs := []string{opStr(rn, rns2[r2])}
+						if i.commutative {
+							opStrs = append(opStrs, opStr(rns2[r2], rn))
+						}
+
+						testEncodeAny(test, i.mn, opStrs, func(text *code.Buf) {
 							op.RegReg(text, t, r, r2)
 						})
 					}

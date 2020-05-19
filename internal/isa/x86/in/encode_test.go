@@ -85,10 +85,20 @@ func init() {
 func testEncode(t *testing.T, expectMnemonic, expectOpStr string, encodeInsn func(*code.Buf)) {
 	t.Helper()
 
-	testEncodeImm(t, expectMnemonic, expectOpStr, nil, encodeInsn)
+	testEncode_(t, expectMnemonic, []string{expectOpStr}, nil, encodeInsn)
+}
+
+func testEncodeAny(t *testing.T, expectMnemonic string, expectOpStrs []string, encodeInsn func(*code.Buf)) {
+	t.Helper()
+
+	testEncode_(t, expectMnemonic, expectOpStrs, nil, encodeInsn)
 }
 
 func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm interface{}, encodeInsn func(*code.Buf)) {
+	testEncode_(t, expectMnemonic, []string{expectOpStr}, expectImm, encodeInsn)
+}
+
+func testEncode_(t *testing.T, expectMnemonic string, expectOpStrs []string, expectImm interface{}, encodeInsn func(*code.Buf)) {
 	t.Helper()
 
 	text := code.Buf{
@@ -96,6 +106,8 @@ func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm i
 	}
 
 	encodeInsn(&text)
+
+	expectOpStr := expectOpStrs[0]
 
 	insns, err := testEngine.Disasm(text.Bytes(), 0, 0)
 	if err != nil {
@@ -107,8 +119,10 @@ func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm i
 
 	if insn.Mnemonic == expectMnemonic {
 		if expectImm == nil {
-			if insn.OpStr == expectOpStr {
-				return
+			for _, x := range expectOpStrs {
+				if insn.OpStr == x {
+					return
+				}
 			}
 		} else {
 			i := strings.Index(expectOpStr, "IMM")
