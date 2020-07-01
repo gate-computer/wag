@@ -168,14 +168,15 @@ func (MacroAssembler) BranchIfOutOfBoundsStub(p *gen.Prog, indexReg reg.R, upper
 
 // compareBounds may use RegScratch.
 func (o *outbuf) compareBounds(indexReg reg.R, upperBound int32) {
-	o.insn(in.TBNZ.RtI14Bit(indexReg, 3, 31)) // Jump to end if index is negative.
-
 	switch n := uint32(upperBound); {
 	case n <= 2047:
+		o.insn(in.TBNZ.RtI14Bit(indexReg, 3, 31)) // Jump to end if index is negative.
 		o.insn(in.SUBSi.RdRnI12S2(RegDiscard, indexReg, n, 0, wa.Size32))
 
 	default:
+		// TODO: optimize (make the move sequence conditional)
 		o.moveUintImm32(RegScratch, n)
+		o.insn(in.TBNZ.RtI14Bit(indexReg, 3, 31)) // Jump to end if index is negative.
 		o.insn(in.SUBSe.RdRnI3ExtRm(RegDiscard, indexReg, 0, in.UXTW, RegScratch, wa.Size32))
 	}
 
