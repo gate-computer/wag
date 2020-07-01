@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bnagy/gapstone"
+	"github.com/knightsc/gapstone"
 	"github.com/tsavola/wag/buffer"
 	"github.com/tsavola/wag/internal/code"
 	"github.com/tsavola/wag/internal/gen/reg"

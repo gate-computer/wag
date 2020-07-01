@@ -11,8 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bnagy/gapstone"
-
+	"github.com/knightsc/gapstone"
 	"github.com/tsavola/wag/internal/isa/x86/nonabi"
 	"github.com/tsavola/wag/trap"
 )

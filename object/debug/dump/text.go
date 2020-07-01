@@ -12,8 +12,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/bnagy/gapstone"
-
+	"github.com/knightsc/gapstone"
 	"github.com/tsavola/wag/object/abi"
 	"github.com/tsavola/wag/section"
 )

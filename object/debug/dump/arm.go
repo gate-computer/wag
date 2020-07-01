@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bnagy/gapstone"
+	"github.com/knightsc/gapstone"
 	"github.com/tsavola/wag/trap"
 )
 

@@ -9,7 +9,7 @@ package in
 import (
 	"fmt"
 
-	"github.com/bnagy/gapstone"
+	"github.com/knightsc/gapstone"
 )
 
 const (
