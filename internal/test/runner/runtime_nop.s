@@ -6,7 +6,7 @@
 
 #include "textflag.h"
 
-// func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+// func run(text []byte, memoryAddr uintptr, stack []byte, stackOffset, initOffset, minionFd int, arg int64, resultFd int, forkStack []byte) int
 TEXT ·run(SB),NOSPLIT,$0-128
 	BL	runtime·exit(SB)
 

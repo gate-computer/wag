@@ -13,7 +13,7 @@ import (
 	"github.com/tsavola/wag/wa"
 )
 
-func (e *Executor) slave(fd int, sigs []wa.FuncType, printer io.Writer, cont <-chan struct{}) {
+func (e *Executor) minion(fd int, sigs []wa.FuncType, printer io.Writer, cont <-chan struct{}) {
 	f := os.NewFile(uintptr(fd), "socket")
 	defer f.Close()
 

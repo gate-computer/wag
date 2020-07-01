@@ -21,13 +21,13 @@ body:	MOVD.W	LR, -8(R29)
 	call_C(func)		\
 	B	resume<>(SB)
 
-// func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+// func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, minionFd int, arg int64, resultFd int, forkStack []byte) int
 TEXT ·run(SB),NOSPLIT,$0-128
 	MOVD	text+0(FP), R0
 	MOVD	stack+32(FP), R1
 	MOVD	stackOffset+56(FP), R2
 	MOVD	initOffset+64(FP), R3
-	MOVD	slaveFd+72(FP), R4
+	MOVD	minionFd+72(FP), R4
 	MOVD	arg+80(FP), R5
 	MOVD	resultFd+88(FP), R6
 	MOVD	$state(SB), R7

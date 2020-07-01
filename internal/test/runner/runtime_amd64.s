@@ -6,13 +6,13 @@
 
 #define SYS_rt_sigreturn 15
 
-// func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+// func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, minionFd int, arg int64, resultFd int, forkStack []byte) int
 TEXT ·run(SB),NOSPLIT,$0-128
 	MOVQ	text+0(FP), DI
 	MOVQ	stack+32(FP), SI
 	MOVQ	stackOffset+56(FP), DX
 	MOVQ	initOffset+64(FP), CX
-	MOVQ	slaveFd+72(FP), R8
+	MOVQ	minionFd+72(FP), R8
 	MOVQ	arg+80(FP), R9
 	MOVQ	resultFd+88(FP), R10
 	MOVQ	forkStack+96(FP), AX

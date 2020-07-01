@@ -18,7 +18,7 @@
 
 struct state {
 	int64_t arg;
-	int slave_fd;
+	int minion_fd;
 	int result_fd;
 };
 
@@ -89,12 +89,12 @@ static intptr_t sys_write(int fd, const void *buf, size_t count)
 	return syscall3(SYS_write, fd, (uintptr_t) buf, count);
 }
 
-int run(void *text, void *stack, int stack_offset, int init_offset, int slave_fd, int64_t arg, int result_fd, struct state *state)
+int run(void *text, void *stack, int stack_offset, int init_offset, int minion_fd, int64_t arg, int result_fd, struct state *state)
 {
 	int child_pid = sys_fork();
 	if (child_pid == 0) {
 		state->arg = arg;
-		state->slave_fd = slave_fd;
+		state->minion_fd = minion_fd;
 		state->result_fd = result_fd;
 
 		for (int sig = 1; sig <= 64; sig++)
@@ -132,8 +132,8 @@ static void handle_trap(uintptr_t stack_limit, void *stack_ptr, uint64_t trap, s
 	if (trap == 1) { // NoFunction
 		uint64_t cmd = -2;
 		uint8_t res;
-		if (sys_write(state->slave_fd, &cmd, sizeof cmd) == sizeof cmd &&
-		    sys_read(state->slave_fd, &res, sizeof res) == sizeof res)
+		if (sys_write(state->minion_fd, &cmd, sizeof cmd) == sizeof cmd &&
+		    sys_read(state->minion_fd, &res, sizeof res) == sizeof res)
 			return; // resume program
 
 		trap = 3003; // failure
@@ -195,10 +195,10 @@ void spectest_print(uint64_t info, const uint64_t *args, struct state *state)
 	ssize_t argsize = argcount * sizeof(uint64_t);
 	uint64_t sigindex = info & 0xffffffff;
 
-	if (sys_write(state->slave_fd, &sigindex, sizeof sigindex) != sizeof sigindex)
+	if (sys_write(state->minion_fd, &sigindex, sizeof sigindex) != sizeof sigindex)
 		sys_exit_group(1);
 
-	if (sys_write(state->slave_fd, args, argsize) != argsize)
+	if (sys_write(state->minion_fd, args, argsize) != argsize)
 		sys_exit_group(1);
 }
 
@@ -235,12 +235,12 @@ uint64_t snapshot(void *stack_limit, void *stack_ptr, void *memory_addr, struct 
 		(uintptr_t) stack_ptr,
 	};
 
-	if (sys_write(state->slave_fd, buf, sizeof buf) != sizeof buf)
+	if (sys_write(state->minion_fd, buf, sizeof buf) != sizeof buf)
 		sys_exit_group(1);
 
 	uint64_t res;
 
-	if (sys_read(state->slave_fd, &res, sizeof res) != sizeof res)
+	if (sys_read(state->minion_fd, &res, sizeof res) != sizeof res)
 		sys_exit_group(1);
 
 	return res;

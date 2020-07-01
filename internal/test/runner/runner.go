@@ -37,7 +37,7 @@ const (
 	vectorIndexTrapHandler     = -1
 )
 
-func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, slaveFd int, arg int64, resultFd int, forkStack []byte) int
+func run(text []byte, _ uintptr, stack []byte, stackOffset, initOffset, minionFd int, arg int64, resultFd int, forkStack []byte) int
 
 func importTrapHandler() uint64
 func importCurrentMemory() uint64
@@ -450,7 +450,7 @@ func (e *Executor) run() {
 
 	initOffset := e.runner.prog.getResume()
 
-	slaveSockets, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	minionSockets, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -463,16 +463,16 @@ func (e *Executor) run() {
 	resultOutput := os.NewFile(uintptr(resultPipe[0]), "|0")
 	defer resultOutput.Close()
 
-	slaveDone := make(chan struct{})
+	minionDone := make(chan struct{})
 
 	defer func() {
-		syscall.Close(slaveSockets[1])
-		<-slaveDone
+		syscall.Close(minionSockets[1])
+		<-minionDone
 	}()
 
 	go func() {
-		defer close(slaveDone)
-		e.slave(slaveSockets[0], e.sigs, e.printer, e.cont)
+		defer close(minionDone)
+		e.minion(minionSockets[0], e.sigs, e.printer, e.cont)
 	}()
 
 	globalsMemoryAddr := (*reflect.SliceHeader)(unsafe.Pointer(&e.runner.globalsMemory)).Data
@@ -482,7 +482,7 @@ func (e *Executor) run() {
 
 	forkStack := make([]byte, 65536)
 
-	runResult := run(text, memoryAddr, stack, stackOffset, initOffset, slaveSockets[1], e.testArg, resultPipe[1], forkStack)
+	runResult := run(text, memoryAddr, stack, stackOffset, initOffset, minionSockets[1], e.testArg, resultPipe[1], forkStack)
 
 	runtime.KeepAlive(forkStack)
 
