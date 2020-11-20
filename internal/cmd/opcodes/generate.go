@@ -55,7 +55,12 @@ func generateFile(filename string, generator func(func(string, ...interface{}), 
 	}
 	defer output.Close()
 
-	cmd := exec.Command("gofmt")
+	gofmt := os.Getenv("GOFMT")
+	if gofmt == "" {
+		gofmt = "gofmt"
+	}
+
+	cmd := exec.Command(gofmt)
 	cmd.Stdout = output
 	cmd.Stderr = os.Stderr
 

@@ -1,4 +1,5 @@
 GO		?= go
+GOFMT		?= gofmt
 GOFUZZ		?= go-fuzz
 PERFLOCK	?= perflock
 BENCHCMP	?= benchstat
@@ -29,7 +30,7 @@ BENCHFLAGS	+= $(LINKFLAGS) -run=^TestBenchmark -bench=.
 export PATH	:= testdata/wabt/bin:$(PATH)
 
 generate: testdata/wabt/bin/wat2wasm
-	$(GO) generate
+	GOFMT=$(GOFMT) $(GO) generate
 
 build: generate
 	$(GO) build $(BUILDFLAGS) $(PACKAGES)
