@@ -5,8 +5,8 @@
 package in
 
 import (
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/wa"
 )
 
 type Scale byte

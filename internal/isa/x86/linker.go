@@ -7,9 +7,9 @@ package x86
 import (
 	"encoding/binary"
 
-	"github.com/tsavola/wag/internal/gen/atomic"
-	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/obj"
+	"gate.computer/wag/internal/gen/atomic"
+	"gate.computer/wag/internal/gen/link"
+	"gate.computer/wag/internal/obj"
 )
 
 var linker Linker

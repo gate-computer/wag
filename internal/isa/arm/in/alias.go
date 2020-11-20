@@ -5,9 +5,9 @@
 package in
 
 import (
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/wa"
 )
 
 func LogicalShiftLeft(rd, rn reg.R, uimm uint32, t wa.Size) uint32 {

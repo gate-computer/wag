@@ -7,7 +7,7 @@ package debug
 import (
 	"testing"
 
-	"github.com/tsavola/wag/internal/obj"
+	"gate.computer/wag/internal/obj"
 )
 
 func TestTrapMap(*testing.T) {

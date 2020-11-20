@@ -10,7 +10,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/tsavola/wag/section"
+	"gate.computer/wag/section"
 )
 
 func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *section.NameSection) error {

@@ -5,7 +5,7 @@
 package in
 
 import (
-	"github.com/tsavola/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/reg"
 )
 
 const (

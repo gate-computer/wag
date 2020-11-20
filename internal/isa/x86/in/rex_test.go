@@ -7,8 +7,8 @@ package in
 import (
 	"testing"
 
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/wa"
 )
 
 func TestTypeRexW(t *testing.T) {

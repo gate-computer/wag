@@ -7,17 +7,17 @@ package arm
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/rodata"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/isa/arm/in"
-	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/condition"
+	"gate.computer/wag/internal/gen/link"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/rodata"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/internal/isa/arm/in"
+	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/trap"
+	"gate.computer/wag/wa"
 )
 
 const (

@@ -5,7 +5,7 @@
 package module
 
 import (
-	internal "github.com/tsavola/wag/internal/errors"
+	internal "gate.computer/wag/internal/errors"
 )
 
 func Error(text string) error {

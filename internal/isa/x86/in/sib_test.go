@@ -7,7 +7,7 @@ package in
 import (
 	"testing"
 
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 func TestTypeScale(t *testing.T) {

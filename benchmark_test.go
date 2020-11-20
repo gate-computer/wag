@@ -13,9 +13,9 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/object/debug/dump"
+	"gate.computer/wag/buffer"
+	"gate.computer/wag/internal/test/runner"
+	"gate.computer/wag/object/debug/dump"
 )
 
 func TestBenchmarkRunNqueens(t *testing.T) {

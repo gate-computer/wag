@@ -5,10 +5,10 @@
 package initexpr
 
 import (
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/wa"
-	"github.com/tsavola/wag/wa/opcode"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/wa"
+	"gate.computer/wag/wa/opcode"
 )
 
 func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {

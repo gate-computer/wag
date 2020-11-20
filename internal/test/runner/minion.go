@@ -10,7 +10,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 func (e *Executor) minion(fd int, sigs []wa.FuncType, printer io.Writer, cont <-chan struct{}) {

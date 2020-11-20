@@ -11,10 +11,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/internal/test/library"
-	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/reader"
+	"gate.computer/wag/internal/test/library"
+	"gate.computer/wag/internal/test/runner"
+	"gate.computer/wag/wa"
 )
 
 var lib = *library.Load("../testdata", runner.Resolver, func(r reader.R) library.Library {

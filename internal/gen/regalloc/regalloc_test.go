@@ -7,9 +7,9 @@ package regalloc
 import (
 	"testing"
 
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/isa/reglayout"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/isa/reglayout"
+	"gate.computer/wag/wa"
 )
 
 func (a *Allocator) testAllocated(t wa.Type, r reg.R) bool {

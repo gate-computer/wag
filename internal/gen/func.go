@@ -5,14 +5,14 @@
 package gen
 
 import (
-	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/regalloc"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/debug"
+	"gate.computer/wag/internal/gen/link"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/regalloc"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/wa"
 	errors "golang.org/x/xerrors"
 )
 

@@ -5,13 +5,13 @@
 package arm
 
 import (
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/isa/arm/in"
-	"github.com/tsavola/wag/internal/isa/prop"
-	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/condition"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/isa/arm/in"
+	"gate.computer/wag/internal/isa/prop"
+	"gate.computer/wag/trap"
+	"gate.computer/wag/wa"
 )
 
 func (MacroAssembler) Binary(f *gen.Func, props uint16, a, b operand.O) (result operand.O) {

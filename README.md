@@ -64,7 +64,7 @@ Requires Linux, Go, make, cmake, clang++ and libcapstone.  About 75% of the
 WebAssembly spec testsuite is run, by first converting the tests to binary
 format:
 
-- `git clone --recurse-submodules https://github.com/tsavola/wag.git`
+- `git clone --recurse-submodules https://gate.computer/wag.git`
 - `cd wag`
 - `make check`
 
@@ -73,8 +73,8 @@ Screenshot #1
 -------------
 
 ```
-$ go get github.com/tsavola/wag/cmd/wasys
-$ wasys -v $GOPATH/src/github.com/tsavola/wag/testdata/hello.wasm
+$ go get gate.computer/wag/cmd/wasys
+$ wasys -v $GOPATH/src/gate.computer/wag/testdata/hello.wasm
 import write(i32, i32, i32) i32
 import openat(i32, i32, i32, i32) i32
 import read(i32, i32, i32) i32

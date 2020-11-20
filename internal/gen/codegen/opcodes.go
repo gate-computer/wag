@@ -3,11 +3,11 @@
 package codegen
 
 import (
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/isa/prop"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/wa"
-	"github.com/tsavola/wag/wa/opcode"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/isa/prop"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/wa"
+	"gate.computer/wag/wa/opcode"
 )
 
 var opcodeImpls = [256]opImpl{

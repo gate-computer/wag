@@ -9,8 +9,8 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/tsavola/wag/compile"
-	"github.com/tsavola/wag/section"
+	"gate.computer/wag/compile"
+	"gate.computer/wag/section"
 )
 
 func TestSection(t *testing.T) {

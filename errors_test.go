@@ -9,10 +9,10 @@ import (
 	"io"
 	"testing"
 
-	"github.com/tsavola/wag/buffer"
-	werrors "github.com/tsavola/wag/errors"
-	"github.com/tsavola/wag/internal/errorpanic"
-	"github.com/tsavola/wag/internal/module"
+	"gate.computer/wag/buffer"
+	werrors "gate.computer/wag/errors"
+	"gate.computer/wag/internal/errorpanic"
+	"gate.computer/wag/internal/module"
 	"golang.org/x/xerrors"
 )
 

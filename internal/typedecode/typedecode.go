@@ -5,8 +5,8 @@
 package typedecode
 
 import (
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/wa"
 )
 
 var valueTypes = [4]wa.Type{

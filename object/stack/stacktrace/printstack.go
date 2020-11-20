@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/tsavola/wag/object/stack"
-	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/object/stack"
+	"gate.computer/wag/section"
+	"gate.computer/wag/wa"
 )
 
 func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names *section.NameSection, debug *dwarf.Data) (err error) {

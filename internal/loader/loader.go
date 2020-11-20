@@ -8,8 +8,8 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/reader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/reader"
 )
 
 // L provides panicking alternatives for reader.R methods, and then some.

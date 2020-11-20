@@ -5,8 +5,8 @@
 package section
 
 import (
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
 )
 
 const (

@@ -5,12 +5,12 @@
 package gen
 
 import (
-	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/isa/program"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/trap"
+	"gate.computer/wag/internal/code"
+	"gate.computer/wag/internal/gen/link"
+	"gate.computer/wag/internal/isa/program"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/trap"
 )
 
 const (

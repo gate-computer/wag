@@ -7,7 +7,7 @@ package debug
 import (
 	"sort"
 
-	"github.com/tsavola/wag/internal/obj"
+	"gate.computer/wag/internal/obj"
 )
 
 type antiMapper = obj.DummyDebugMapper

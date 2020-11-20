@@ -5,7 +5,7 @@
 package rodata
 
 import (
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 const CommonsAddr = 128

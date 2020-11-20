@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tsavola/wag/internal/test/fuzzutil"
+	"gate.computer/wag/internal/test/fuzzutil"
 )
 
 func TestFuzzCorpus(t *testing.T)   { testFuzzDir(t, "testdata/fuzz/corpus", true) }

@@ -8,7 +8,7 @@ package stack
 import (
 	"encoding/binary"
 
-	"github.com/tsavola/wag/internal/obj"
+	"gate.computer/wag/internal/obj"
 )
 
 func InitFrame(startFuncAddr, entryFuncAddr uint32) (frame []byte) {

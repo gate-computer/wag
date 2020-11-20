@@ -8,10 +8,10 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/tsavola/wag/internal/errorpanic"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/internal/section"
+	"gate.computer/wag/internal/errorpanic"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/reader"
+	"gate.computer/wag/internal/section"
 )
 
 // CopyStandardSection with the given type if one is found.  The returned

@@ -7,9 +7,9 @@ package in
 import (
 	"encoding/binary"
 
-	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/code"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/wa"
 )
 
 var nops = [4][4]byte{

@@ -7,7 +7,7 @@ package module
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 const (

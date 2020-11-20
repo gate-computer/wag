@@ -5,8 +5,8 @@
 package arm
 
 import (
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/isa/arm/in"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/isa/arm/in"
 )
 
 const (

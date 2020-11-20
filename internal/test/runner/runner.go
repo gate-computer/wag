@@ -16,14 +16,14 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/tsavola/wag/compile/event"
-	"github.com/tsavola/wag/internal/test/runner/imports"
-	"github.com/tsavola/wag/object/abi"
-	"github.com/tsavola/wag/object/debug"
-	"github.com/tsavola/wag/object/stack"
-	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/compile/event"
+	"gate.computer/wag/internal/test/runner/imports"
+	"gate.computer/wag/object/abi"
+	"gate.computer/wag/object/debug"
+	"gate.computer/wag/object/stack"
+	"gate.computer/wag/section"
+	"gate.computer/wag/trap"
+	"gate.computer/wag/wa"
 )
 
 const linearMemoryAddressSpace = 6 * 1024 * 1024 * 1024

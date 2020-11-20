@@ -5,10 +5,10 @@
 package codegen
 
 import (
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/wa/opcode"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/debug"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/wa/opcode"
 )
 
 func skipOps(f *gen.Func, load loader.L) {

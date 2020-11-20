@@ -7,8 +7,8 @@ package codegen
 import (
 	"errors"
 
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/reader"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/reader"
 )
 
 func makeDebugger(breakpoints map[uint32]gen.Breakpoint, r reader.R) gen.Debugger {

@@ -8,10 +8,10 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/tsavola/wag/buffer"
-	werrors "github.com/tsavola/wag/errors"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/buffer"
+	werrors "gate.computer/wag/errors"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/wa"
 	errors "golang.org/x/xerrors"
 )
 

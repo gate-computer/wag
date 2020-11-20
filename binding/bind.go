@@ -6,8 +6,8 @@
 package binding
 
 import (
-	"github.com/tsavola/wag/compile"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/compile"
+	"gate.computer/wag/wa"
 )
 
 // Well-known indexes of the import vector.  Import function addresses precede

@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
+	"gate.computer/wag/internal/isa/x86/nonabi"
+	"gate.computer/wag/trap"
 	"github.com/knightsc/gapstone"
-	"github.com/tsavola/wag/internal/isa/x86/nonabi"
-	"github.com/tsavola/wag/trap"
 )
 
 const (

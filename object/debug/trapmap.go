@@ -5,7 +5,7 @@
 package debug
 
 import (
-	"github.com/tsavola/wag/object"
+	"gate.computer/wag/object"
 )
 
 // TrapMap implements compile.DebugObjectMapper.  It stores function addresses,

@@ -23,12 +23,12 @@ import (
 	"debug/dwarf"
 	"fmt"
 
-	"github.com/tsavola/wag/binding"
-	"github.com/tsavola/wag/compile"
-	"github.com/tsavola/wag/object/debug"
-	"github.com/tsavola/wag/object/stack"
-	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/binding"
+	"gate.computer/wag/compile"
+	"gate.computer/wag/object/debug"
+	"gate.computer/wag/object/stack"
+	"gate.computer/wag/section"
+	"gate.computer/wag/wa"
 )
 
 func CompileLibrary(r compile.Reader, imports binding.LibraryImportResolver) (lib compile.Library, err error) {

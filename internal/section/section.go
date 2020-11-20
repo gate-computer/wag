@@ -8,9 +8,9 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/reader"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/reader"
 )
 
 func Find(

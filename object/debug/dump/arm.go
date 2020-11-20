@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
+	"gate.computer/wag/trap"
 	"github.com/knightsc/gapstone"
-	"github.com/tsavola/wag/trap"
 )
 
 const (

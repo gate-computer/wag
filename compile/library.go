@@ -10,11 +10,11 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/internal/errorpanic"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/wa"
-	"github.com/tsavola/wag/wa/opcode"
+	"gate.computer/wag/internal/errorpanic"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/reader"
+	"gate.computer/wag/wa"
+	"gate.computer/wag/wa/opcode"
 )
 
 // rootLib has a dummy function.
@@ -178,4 +178,4 @@ func (m *libraryMap) PutFuncAddr(addr uint32) {
 	}
 }
 
-func (*libraryMap) PutCallSite(uint32, int32)  {}
+func (*libraryMap) PutCallSite(uint32, int32) {}

@@ -12,9 +12,9 @@ import (
 	"io"
 	"strings"
 
+	"gate.computer/wag/object/abi"
+	"gate.computer/wag/section"
 	"github.com/knightsc/gapstone"
-	"github.com/tsavola/wag/object/abi"
-	"github.com/tsavola/wag/section"
 )
 
 func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *section.NameSection) error {

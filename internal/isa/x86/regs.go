@@ -5,8 +5,8 @@
 package x86
 
 import (
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/isa/x86/in"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/isa/x86/in"
 )
 
 const (

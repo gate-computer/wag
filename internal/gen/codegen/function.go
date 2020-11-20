@@ -7,17 +7,17 @@ package codegen
 import (
 	"encoding/binary"
 
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/regalloc"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/internal/typedecode"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/debug"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/regalloc"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/internal/typedecode"
+	"gate.computer/wag/wa"
 	errors "golang.org/x/xerrors"
 )
 

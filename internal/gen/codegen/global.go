@@ -5,12 +5,12 @@
 package codegen
 
 import (
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/obj"
-	"github.com/tsavola/wag/wa/opcode"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/wa/opcode"
 )
 
 func globalOffset(f *gen.Func, index uint32) int32 {

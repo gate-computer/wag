@@ -7,7 +7,7 @@
 package codegen
 
 import (
-	"github.com/tsavola/wag/internal/isa/x86"
+	"gate.computer/wag/internal/isa/x86"
 )
 
 var (

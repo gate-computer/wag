@@ -7,8 +7,8 @@
 package prop
 
 import (
-	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/isa/x86/in"
+	"gate.computer/wag/internal/gen/condition"
+	"gate.computer/wag/internal/isa/x86/in"
 )
 
 // Unary

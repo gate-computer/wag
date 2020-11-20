@@ -134,11 +134,11 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 	out(`package codegen`)
 
 	out(`import (`)
-	out(`    "github.com/tsavola/wag/internal/gen"`)
-	out(`    "github.com/tsavola/wag/internal/isa/prop"`)
-	out(`    "github.com/tsavola/wag/internal/loader"`)
-	out(`    "github.com/tsavola/wag/wa"`)
-	out(`    "github.com/tsavola/wag/wa/opcode"`)
+	out(`    "gate.computer/wag/internal/gen"`)
+	out(`    "gate.computer/wag/internal/isa/prop"`)
+	out(`    "gate.computer/wag/internal/loader"`)
+	out(`    "gate.computer/wag/wa"`)
+	out(`    "gate.computer/wag/wa/opcode"`)
 	out(`)`)
 
 	out(`var opcodeImpls = [256]opImpl{`)

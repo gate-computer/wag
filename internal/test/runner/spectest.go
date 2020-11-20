@@ -10,7 +10,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 func spectestPrint(f io.Reader, sigs []wa.FuncType, sigIndex int64, printer io.Writer) {

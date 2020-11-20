@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 type TextMap interface {

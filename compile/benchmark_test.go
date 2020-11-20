@@ -11,9 +11,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/compile/event"
-	"github.com/tsavola/wag/section"
+	"gate.computer/wag/buffer"
+	"gate.computer/wag/compile/event"
+	"gate.computer/wag/section"
 )
 
 var benchDir = "../wag-bench" // Relative to project root directory.

@@ -1,4 +1,4 @@
-module github.com/tsavola/wag
+module gate.computer/wag
 
 go 1.11
 

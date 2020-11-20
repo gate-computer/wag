@@ -7,7 +7,7 @@ package imports
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/wa"
 )
 
 type Func struct {

@@ -7,10 +7,10 @@ package regalloc
 import (
 	"math/bits"
 
-	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/isa/reglayout"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/debug"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/isa/reglayout"
+	"gate.computer/wag/wa"
 )
 
 type bitmap uint32

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"gate.computer/wag/buffer"
+	"gate.computer/wag/internal/code"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/wa"
 	"github.com/knightsc/gapstone"
-	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/wa"
 )
 
 type rmRegReg interface {

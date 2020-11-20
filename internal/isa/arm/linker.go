@@ -8,10 +8,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/isa/arm/in"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/link"
+	"gate.computer/wag/internal/isa/arm/in"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/wa"
 )
 
 const (

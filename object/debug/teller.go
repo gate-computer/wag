@@ -5,7 +5,7 @@
 package debug
 
 import (
-	"github.com/tsavola/wag/internal/reader"
+	"gate.computer/wag/internal/reader"
 )
 
 // Teller knows the position.

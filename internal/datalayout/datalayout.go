@@ -10,11 +10,11 @@ import (
 	"io/ioutil"
 	"math"
 
-	"github.com/tsavola/wag/internal/data"
-	"github.com/tsavola/wag/internal/initexpr"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/obj"
+	"gate.computer/wag/internal/data"
+	"gate.computer/wag/internal/initexpr"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/obj"
 )
 
 const (

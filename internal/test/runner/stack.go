@@ -12,8 +12,8 @@ import (
 	"sort"
 	"unsafe"
 
-	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/section"
+	"gate.computer/wag/wa"
 )
 
 func (p *Program) findCaller(retAddr int32) (num int, initial, ok bool) {

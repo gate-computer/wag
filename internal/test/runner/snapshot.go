@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/tsavola/wag/object/abi"
-	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/object/abi"
+	"gate.computer/wag/section"
+	"gate.computer/wag/wa"
 )
 
 type Snapshot struct {

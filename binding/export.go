@@ -5,9 +5,9 @@
 package binding
 
 import (
-	"github.com/tsavola/wag/compile"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/compile"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/wa"
 )
 
 // EntryFunc looks up an export function which is suitable as an entry point.

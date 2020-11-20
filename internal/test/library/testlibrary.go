@@ -9,10 +9,10 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/reader"
-	"github.com/tsavola/wag/internal/test/wat"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/reader"
+	"gate.computer/wag/internal/test/wat"
+	"gate.computer/wag/wa"
 )
 
 type Library interface {

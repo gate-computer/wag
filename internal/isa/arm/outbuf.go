@@ -7,7 +7,7 @@ package arm
 import (
 	"encoding/binary"
 
-	"github.com/tsavola/wag/internal/code"
+	"gate.computer/wag/internal/code"
 )
 
 type outbuf struct {

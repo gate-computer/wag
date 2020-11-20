@@ -5,9 +5,9 @@
 package arm
 
 import (
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/isa/arm/in"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/isa/arm/in"
+	"gate.computer/wag/wa"
 )
 
 func (o *outbuf) moveIntImm(r reg.R, val int64) {

@@ -19,15 +19,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tsavola/wag/buffer"
-	"github.com/tsavola/wag/internal/test/runner"
-	"github.com/tsavola/wag/internal/test/sexp"
-	"github.com/tsavola/wag/internal/test/wat"
-	"github.com/tsavola/wag/object/debug"
-	"github.com/tsavola/wag/object/debug/dump"
-	"github.com/tsavola/wag/section"
-	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/buffer"
+	"gate.computer/wag/internal/test/runner"
+	"gate.computer/wag/internal/test/sexp"
+	"gate.computer/wag/internal/test/wat"
+	"gate.computer/wag/object/debug"
+	"gate.computer/wag/object/debug/dump"
+	"gate.computer/wag/section"
+	"gate.computer/wag/trap"
+	"gate.computer/wag/wa"
 )
 
 const (

@@ -5,13 +5,13 @@
 package arm
 
 import (
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/isa/arm/in"
-	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/internal/isa/arm/in"
+	"gate.computer/wag/trap"
+	"gate.computer/wag/wa"
 )
 
 func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {

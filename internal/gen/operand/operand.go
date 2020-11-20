@@ -7,11 +7,11 @@ package operand
 import (
 	"fmt"
 
-	"github.com/tsavola/wag/internal/gen/condition"
-	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/gen/condition"
+	"gate.computer/wag/internal/gen/debug"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/wa"
 )
 
 const (

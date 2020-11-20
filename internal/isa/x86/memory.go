@@ -5,16 +5,16 @@
 package x86
 
 import (
-	"github.com/tsavola/wag/internal/code"
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/isa/prop"
-	"github.com/tsavola/wag/internal/isa/x86/in"
-	"github.com/tsavola/wag/internal/isa/x86/nonabi"
-	"github.com/tsavola/wag/trap"
-	"github.com/tsavola/wag/wa"
+	"gate.computer/wag/internal/code"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/internal/isa/prop"
+	"gate.computer/wag/internal/isa/x86/in"
+	"gate.computer/wag/internal/isa/x86/nonabi"
+	"gate.computer/wag/trap"
+	"gate.computer/wag/wa"
 )
 
 type regMemDispInsn interface {

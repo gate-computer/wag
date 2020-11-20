@@ -7,7 +7,7 @@ package codegen
 import (
 	"testing"
 
-	interfaces "github.com/tsavola/wag/internal/isa"
+	interfaces "gate.computer/wag/internal/isa"
 )
 
 func TestISAInterfaces(*testing.T) {

@@ -6,7 +6,7 @@
 package section
 
 import (
-	"github.com/tsavola/wag/internal/module"
+	"gate.computer/wag/internal/module"
 )
 
 type ID = module.SectionID

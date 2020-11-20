@@ -5,17 +5,17 @@
 package codegen
 
 import (
-	"github.com/tsavola/wag/internal/gen"
-	"github.com/tsavola/wag/internal/gen/debug"
-	"github.com/tsavola/wag/internal/gen/link"
-	"github.com/tsavola/wag/internal/gen/operand"
-	"github.com/tsavola/wag/internal/gen/reg"
-	"github.com/tsavola/wag/internal/gen/storage"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/typedecode"
-	"github.com/tsavola/wag/wa"
-	"github.com/tsavola/wag/wa/opcode"
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/debug"
+	"gate.computer/wag/internal/gen/link"
+	"gate.computer/wag/internal/gen/operand"
+	"gate.computer/wag/internal/gen/reg"
+	"gate.computer/wag/internal/gen/storage"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/typedecode"
+	"gate.computer/wag/wa"
+	"gate.computer/wag/wa/opcode"
 	errors "golang.org/x/xerrors"
 )
 

@@ -9,10 +9,10 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/tsavola/wag/internal/errorpanic"
-	"github.com/tsavola/wag/internal/loader"
-	"github.com/tsavola/wag/internal/module"
-	"github.com/tsavola/wag/internal/reader"
+	"gate.computer/wag/internal/errorpanic"
+	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/reader"
 )
 
 const (
