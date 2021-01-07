@@ -5,7 +5,7 @@
 package section
 
 import (
-	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/module"
 )
 
@@ -50,7 +50,7 @@ func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
 	offset := int64(moduleHeaderSize)
 
 	return func(sectionID byte, r Reader) (payloadLen uint32, err error) {
-		payloadLen, payloadLenSize, err := loader.Varuint32(r)
+		payloadLen, payloadLenSize, err := binary.Varuint32(r)
 		if err != nil {
 			return
 		}

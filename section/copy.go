@@ -10,7 +10,6 @@ import (
 
 	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/loader"
-	"gate.computer/wag/internal/reader"
 	"gate.computer/wag/internal/section"
 )
 
@@ -23,7 +22,7 @@ import (
 // length is returned.  If no standard section is encountered, zero length and
 // io.EOF are returned.  io.EOF is returned only when it occurs between
 // sections.
-func CopyStandardSection(w io.Writer, r reader.R, id ID, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
+func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)
@@ -46,7 +45,7 @@ func CopyStandardSection(w io.Writer, r reader.R, id ID, customLoader func(r Rea
 // are processed by customLoader (or discarded if it's nil).  If no standard
 // section is encountered, io.EOF is returned.  io.EOF is returned only when it
 // occurs between sections.
-func SkipCustomSections(r reader.R, customLoader func(Reader, uint32) error) (err error) {
+func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = errorpanic.Handle(x)

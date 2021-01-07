@@ -9,15 +9,15 @@ package wag
 import (
 	"bytes"
 
+	"gate.computer/wag/binary"
 	"gate.computer/wag/binding"
 	"gate.computer/wag/compile"
-	"gate.computer/wag/internal/reader"
 	"gate.computer/wag/internal/test/fuzzutil"
 	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/internal/test/runner"
 )
 
-var lib = *library.Load("testdata", runner.Resolver, func(r reader.R) library.Library {
+var lib = *library.Load("testdata", runner.Resolver, func(r binary.Reader) library.Library {
 	mod, err := compile.LoadInitialSections(nil, r)
 	if err != nil {
 		panic(err)

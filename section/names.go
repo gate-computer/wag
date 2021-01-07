@@ -12,7 +12,6 @@ import (
 	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
-	"gate.computer/wag/internal/reader"
 )
 
 const (
@@ -39,7 +38,7 @@ type NameSection struct {
 }
 
 // Load "name" section.
-func (ns *NameSection) Load(_ string, r reader.R, length uint32) (err error) {
+func (ns *NameSection) Load(_ string, r Reader, length uint32) (err error) {
 	defer func() {
 		err = errorpanic.Handle(recover())
 	}()
@@ -52,7 +51,7 @@ func (ns *NameSection) Load(_ string, r reader.R, length uint32) (err error) {
 	return
 }
 
-func (ns *NameSection) readSubsection(r reader.R) (read bool) {
+func (ns *NameSection) readSubsection(r Reader) (read bool) {
 	id, err := r.ReadByte()
 	if err != nil {
 		if err == io.EOF {
@@ -134,8 +133,8 @@ type MappedNameSection struct {
 }
 
 // Loader of "name" section.  Remembers position.
-func (ns *MappedNameSection) Loader(sectionMap *Map) func(string, reader.R, uint32) error {
-	return func(sectionName string, r reader.R, length uint32) error {
+func (ns *MappedNameSection) Loader(sectionMap *Map) func(string, Reader, uint32) error {
+	return func(sectionName string, r Reader, length uint32) error {
 		ns.Mapping = sectionMap.Sections[Custom] // The latest one.
 		return ns.NameSection.Load(sectionName, r, length)
 	}

@@ -8,16 +8,16 @@ import (
 	"io"
 	"io/ioutil"
 
+	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
-	"gate.computer/wag/internal/reader"
 )
 
 func Find(
 	findID module.SectionID,
 	load loader.L,
-	sectionMapper func(sectionID byte, r reader.R) (payloadLen uint32, err error),
-	customLoader func(reader.R, uint32) error,
+	sectionMapper func(sectionID byte, r binary.Reader) (payloadLen uint32, err error),
+	customLoader func(binary.Reader, uint32) error,
 ) module.SectionID {
 	for {
 		sectionID, err := load.R.ReadByte()

@@ -10,9 +10,9 @@ import (
 	"io"
 	"math"
 
+	"gate.computer/wag/internal/count"
 	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/module"
-	"gate.computer/wag/internal/reader"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
 )
@@ -88,7 +88,7 @@ func (lib *Library) loadSections(r Reader) {
 	codeBuf := bytes.NewBuffer(nil)
 
 	mapper := &libraryMap{
-		reader: reader.Counter{
+		reader: count.Reader{
 			R: bufio.NewReader(io.TeeReader(r, codeBuf)),
 		},
 	}
@@ -161,7 +161,7 @@ func (l Library) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fo
 func (l *Library) XXX_Internal() interface{} { return &l.l }
 
 type libraryMap struct {
-	reader  reader.Counter
+	reader  count.Reader
 	imports int
 	offsets []uint32
 }

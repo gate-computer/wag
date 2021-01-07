@@ -11,13 +11,12 @@ import (
 	"path"
 	"testing"
 
-	"gate.computer/wag/internal/reader"
 	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/internal/test/runner"
 	"gate.computer/wag/wa"
 )
 
-var lib = *library.Load("../testdata", runner.Resolver, func(r reader.R) library.Library {
+var lib = *library.Load("../testdata", runner.Resolver, func(r Reader) library.Library {
 	mod := loadInitialSections(nil, r)
 	lib := mod.asLibrary()
 	return &lib

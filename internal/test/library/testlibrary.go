@@ -9,14 +9,14 @@ import (
 	"io/ioutil"
 	"path"
 
+	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/module"
-	"gate.computer/wag/internal/reader"
 	"gate.computer/wag/internal/test/wat"
 	"gate.computer/wag/wa"
 )
 
 type Library interface {
-	LoadSections(r reader.R) (err error)
+	LoadSections(r binary.Reader) (err error)
 	NumImportFuncs() int
 	ImportFunc(i int) (module, field string, sig wa.FuncType)
 	SetImportFunc(i int, vectorIndex int)
@@ -53,7 +53,7 @@ func bindVariadic(lib Library, reso VariadicResolver) {
 	}
 }
 
-func Load(testdatadir string, reso VectorResolver, loadInitialLibrary func(r reader.R) Library) Library {
+func Load(testdatadir string, reso VectorResolver, loadInitialLibrary func(r binary.Reader) Library) Library {
 	source, err := ioutil.ReadFile(path.Join(testdatadir, "library.wat"))
 	if err != nil {
 		panic(err)

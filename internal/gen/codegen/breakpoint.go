@@ -7,11 +7,11 @@ package codegen
 import (
 	"errors"
 
+	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/gen"
-	"gate.computer/wag/internal/reader"
 )
 
-func makeDebugger(breakpoints map[uint32]gen.Breakpoint, r reader.R) gen.Debugger {
+func makeDebugger(breakpoints map[uint32]gen.Breakpoint, r binary.Reader) gen.Debugger {
 	if len(breakpoints) == 0 {
 		return gen.Debugger{}
 	}

@@ -70,11 +70,12 @@ package compile
 
 import (
 	"bytes"
-	"encoding/binary"
+	encodingbinary "encoding/binary"
 	"io"
 	"io/ioutil"
 	"math"
 
+	"gate.computer/wag/binary"
 	"gate.computer/wag/buffer"
 	"gate.computer/wag/compile/event"
 	"gate.computer/wag/internal/code"
@@ -87,7 +88,6 @@ import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
-	"gate.computer/wag/internal/reader"
 	"gate.computer/wag/internal/section"
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
@@ -125,7 +125,7 @@ var emptyCodeSectionPayload = []byte{
 }
 
 // Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
-type Reader = reader.R
+type Reader = binary.Reader
 
 type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
@@ -203,7 +203,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	load := loader.L{R: r}
 
 	var header module.Header
-	if err := binary.Read(load.R, binary.LittleEndian, &header); err != nil {
+	if err := encodingbinary.Read(load.R, encodingbinary.LittleEndian, &header); err != nil {
 		panic(err)
 	}
 	if header.MagicNumber != module.MagicNumber {

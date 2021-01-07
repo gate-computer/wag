@@ -8,11 +8,11 @@ import (
 	"io"
 	"io/ioutil"
 
+	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
-	"gate.computer/wag/internal/reader"
 )
 
-type Reader = reader.R
+type Reader = binary.Reader
 
 type CustomContentLoader func(sectionName string, r Reader, payloadLen uint32) error
 
@@ -32,7 +32,7 @@ func CustomLoader(loaders map[string]CustomContentLoader) func(Reader, uint32) e
 }
 
 func (mux customLoaderMux) load(r Reader, length uint32) (err error) {
-	nameLen, n, err := loader.Varuint32(r)
+	nameLen, n, err := binary.Varuint32(r)
 	if err != nil {
 		return
 	}
@@ -56,7 +56,7 @@ type CustomMapping ByteRange
 
 // Loader of arbitrary custom section.  Remembers position, discards content.
 func (target *CustomMapping) Loader(sectionMap *Map) CustomContentLoader {
-	return func(_ string, r reader.R, length uint32) (err error) {
+	return func(_ string, r Reader, length uint32) (err error) {
 		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
 		_, err = io.CopyN(ioutil.Discard, r, int64(length))
 		return
@@ -67,7 +67,7 @@ type CustomSections struct {
 	Sections map[string][]byte
 }
 
-func (cs *CustomSections) Load(name string, r reader.R, length uint32) (err error) {
+func (cs *CustomSections) Load(name string, r Reader, length uint32) (err error) {
 	data := make([]byte, length)
 
 	_, err = io.ReadFull(r, data)

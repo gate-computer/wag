@@ -5,7 +5,8 @@
 package debug
 
 import (
-	"gate.computer/wag/internal/reader"
+	"gate.computer/wag/binary"
+	"gate.computer/wag/internal/count"
 )
 
 // Teller knows the position.
@@ -15,11 +16,11 @@ type Teller interface {
 
 // ReadTeller is a reader which knows how many bytes have been read.
 type ReadTeller interface {
-	reader.R
+	binary.Reader
 	Teller
 }
 
 // NewReadTeller wraps a reader into one which tracks the read position.
-func NewReadTeller(r reader.R) ReadTeller {
-	return &reader.Counter{R: r}
+func NewReadTeller(r binary.Reader) ReadTeller {
+	return &count.Reader{R: r}
 }

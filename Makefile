@@ -6,7 +6,7 @@ BENCHCMP	?= benchstat
 
 ARCH		:= $(shell $(GO) env GOARCH)
 
-PACKAGES	:= . $(patsubst %,./%/...,binding buffer compile errors object section trap wa)
+PACKAGES	:= . $(patsubst %,./%/...,binary binding buffer compile errors internal/gen object section trap wa)
 X86_PACKAGES	:= ./internal/isa/x86/...
 ARM_PACKAGES	:= ./internal/isa/arm/...
 
