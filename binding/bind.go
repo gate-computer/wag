@@ -11,7 +11,7 @@ import (
 )
 
 // Well-known indexes of the import vector.  Import function addresses precede
-// the current memory size.
+// VectorIndexMemoryAddr.
 const (
 	VectorIndexLastImport    = -5
 	VectorIndexMemoryAddr    = -4
