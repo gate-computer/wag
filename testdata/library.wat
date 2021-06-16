@@ -20,10 +20,6 @@
  (export "benchmark_barrier" (func $benchmark_barrier))
 
  (func $print_i32 (param i32)
-       (block $break
-         (br_if $break (i32.const 1)) ;; Optimized to an uncoditional branch.
-         (drop (call $wag_get_arg))   ;; Generates no code, but contributes a call site.
-         (drop (call $wag_get_arg)))  ;;
        (call $spectest_print_i32
              (get_local 0)))
 

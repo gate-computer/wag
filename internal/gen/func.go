@@ -18,7 +18,6 @@ import (
 
 type Block struct {
 	Suspension bool
-	WeakDead   bool // Like deadend state, but must not affect portable ABI.
 }
 
 type BranchTarget struct {
