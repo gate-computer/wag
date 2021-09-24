@@ -30,8 +30,7 @@ type InsnMap struct {
 	antiMapper // Conflict with TrapMap's ObjectMapper implementation.
 }
 
-func (m *InsnMap) FindCall(retAddr uint32,
-) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
+func (m *InsnMap) FindCall(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
 	init, funcIndex, callIndex, stackOffset, retOffset = m.TrapMap.FindCall(retAddr)
 
 	retIndex := sort.Search(len(m.Insns), func(i int) bool {

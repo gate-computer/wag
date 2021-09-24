@@ -47,8 +47,7 @@ func (m *FuncMap) FindFunc(addr uint32) (index int, found bool) {
 	return
 }
 
-func (m *FuncMap) FindCall(retAddr uint32,
-) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
+func (m *FuncMap) FindCall(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
 	funcIndex = -1
 	callIndex = -1
 

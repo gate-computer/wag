@@ -135,15 +135,18 @@ type DebugObjectMapper = obj.DebugObjectMapper
 
 type Breakpoint = gen.Breakpoint
 
-func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string,
-) (limits module.ResizableLimits) {
+func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string) module.ResizableLimits {
 	maxFieldIsPresent := load.Varuint1()
 
 	init := load.Varuint32()
 	if init > maxInit {
 		panic(module.Errorf("initial %s size is too large: %d", kind, init))
 	}
-	limits.Init = int(init) * scale
+
+	limits := module.ResizableLimits{
+		Init: int(init) * scale,
+		Max:  -1,
+	}
 
 	if maxFieldIsPresent {
 		max := load.Varuint32()
@@ -154,11 +157,9 @@ func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind 
 			panic(module.Errorf("maximum %s size %d is smaller than initial %s size %d", kind, max, kind, init))
 		}
 		limits.Max = int(max) * scale
-	} else {
-		limits.Max = -1
 	}
 
-	return
+	return limits
 }
 
 // Config for loading WebAssembly module sections.

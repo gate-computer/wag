@@ -53,8 +53,7 @@ func (m *CallMap) PutCallSite(retAddr uint32, stackOffset int32) {
 	m.CallSites = append(m.CallSites, CallSite{retAddr, stackOffset})
 }
 
-func (m *CallMap) FindCall(retAddr uint32,
-) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
+func (m *CallMap) FindCall(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
 	init, funcIndex, callIndex, stackOffset, retOffset = m.FuncMap.FindCall(retAddr)
 
 	if i, found := FindCallSite(m.CallSites, retAddr); found {
