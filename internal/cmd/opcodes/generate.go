@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -49,19 +50,12 @@ func main() {
 }
 
 func generateFile(filename string, generator func(func(string, ...interface{}), []opcode), opcodes []opcode) {
-	output, err := os.Create(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer output.Close()
-
 	gofmt := os.Getenv("GOFMT")
 	if gofmt == "" {
 		gofmt = "gofmt"
 	}
 
 	cmd := exec.Command(gofmt)
-	cmd.Stdout = output
 	cmd.Stderr = os.Stderr
 
 	w, err := cmd.StdinPipe()
@@ -69,19 +63,47 @@ func generateFile(filename string, generator func(func(string, ...interface{}), 
 		log.Fatal(err)
 	}
 
+	r, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
+	defer func() {
+		if cmd != nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
+	}()
 
-	if err := generateTo(w, generator, opcodes); err != nil {
-		log.Fatal(err)
-	}
+	genError := make(chan error, 1)
+	go func() {
+		err := errors.New("generation panic")
+		defer func() {
+			genError <- err
+		}()
 
-	if err := w.Close(); err != nil {
+		defer w.Close()
+		err = generateTo(w, generator, opcodes)
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if _, err := io.Copy(buf, r); err != nil {
 		log.Fatal(err)
 	}
 
 	if err := cmd.Wait(); err != nil {
+		log.Fatal(err)
+	}
+	cmd = nil
+
+	if err := <-genError; err != nil {
+		log.Fatal(err)
+	}
+
+	if err := ioutil.WriteFile(filename, buf.Bytes(), 0644); err != nil {
 		log.Fatal(err)
 	}
 }
