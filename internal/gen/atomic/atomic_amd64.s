@@ -6,7 +6,7 @@
 
 // func PutUint32(b []byte, val uint32)
 TEXT ·PutUint32(SB),NOSPLIT,$0-28
-	MOVQ	b+0(FP), BP
+	MOVQ	b+0(FP), BX
 	MOVL	val+24(FP), AX
-	XCHGL	AX, (BP)
+	XCHGL	AX, (BX)
 	RET
