@@ -158,8 +158,6 @@ func (l Library) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fo
 	return
 }
 
-func (l *Library) XXX_Internal() interface{} { return &l.l }
-
 type libraryMap struct {
 	reader  count.Reader
 	imports int

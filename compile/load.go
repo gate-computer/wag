@@ -304,8 +304,12 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 			sig.Params[j] = typedecode.Value(load.Varint7())
 		}
 
-		if returnCount1 := load.Varuint1(); returnCount1 {
+		switch load.Byte() {
+		case 0:
+		case 1:
 			sig.Result = typedecode.Value(load.Varint7())
+		default:
+			panic(module.Error("multiple return values not supported"))
 		}
 
 		m.m.Types = append(m.m.Types, sig)

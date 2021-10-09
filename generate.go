@@ -6,4 +6,3 @@ package wag
 
 //go:generate go run internal/cmd/opcodes/generate.go
 //go:generate go run internal/cmd/syscalls/generate.go
-//go:generate make -C internal/test/runner

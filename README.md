@@ -1,4 +1,4 @@
-**wag** is a [WebAssembly](https://webassembly.org) compiler implemented as a
+Wag is a [WebAssembly](https://webassembly.org) compiler implemented as a
 [Go](https://golang.org) package.
 
 - License: [3-clause BSD](LICENSE)
@@ -13,8 +13,9 @@ Features
 - The output is machine code.
 
 - It is only a compiler.  A runtime environment for the compiled program,
-  including all import functions, needs to be implemented separately.  (But see
-  [wasys](cmd/wasys) for an example runtime.)
+  including all import functions, needs to be implemented separately.  Wag has
+  been developed for the [Gate](https://gate.computer/gate) runtime.  See
+  [wasys](cmd/wasys) for a simple example runtime.
 
 - Single-pass, fast ahead-of-time compilation.  Early functions can be executed
   while the latter functions are still being compiled, even while the source is
@@ -42,7 +43,7 @@ Status
 
 - Supports x86-64 and ARM64 code generation.
 
-- Generated x86-64 code requires SSE4.1 ROUNDSS/ROUNDSD instructions.
+- Generated x86-64 code requires SSE4.1 floating-point instructions.
 
 
 Security
@@ -60,56 +61,25 @@ able to inject arbitrary addresses into the branch target buffer).
 Testing
 -------
 
-Requires Linux, Go, make, cmake, clang++ and libcapstone.  About 75% of the
-WebAssembly spec testsuite is run, by first converting the tests to binary
-format:
+Requires Linux, Make, Go, Python, [Capstone](https://www.capstone-engine.org),
+and a recent version of [WABT](https://github.com/WebAssembly/wabt).
+The applicable parts of the WebAssembly spec testsuite are
+run[<sup>*</sup>](https://github.com/gate-computer/wag/issues/21).
+Code execution tests are implemented in a separate Go module in the testsuite
+subdirectory (to work around circular dependencies).  All tests can be run by
+checking out Git submodules and running `make check`.
 
-- `git clone --recurse-submodules https://github.com/gate-computer/wag.git`
-- `cd wag`
-- `make check`
 
+Screenshot
+----------
 
-Screenshot #1
--------------
+	$ make
+	$ bin/wasys -v testdata/hello.wasm
+	import write(i32, i32, i32) i32
+	import openat(i32, i32, i32, i32) i32
+	import read(i32, i32, i32) i32
+	import close(i32) i32
+	import pipe2(i32, i32) i32
+	import _exit(i32)
+	hello, world
 
-```
-$ go get gate.computer/wag/cmd/wasys
-$ wasys -v $GOPATH/src/gate.computer/wag/testdata/hello.wasm
-import write(i32, i32, i32) i32
-import openat(i32, i32, i32, i32) i32
-import read(i32, i32, i32) i32
-import close(i32) i32
-import pipe2(i32, i32) i32
-import _exit(i32)
-hello, world
-```
-
-Screenshot #2
--------------
-
-```
-=== RUN   TestSnapshot
---- PASS: TestSnapshot (0.00s)
-    snapshot_test.go:80: print output:
-        10
-        --- snapshotting ---
-        current memory limit: 0x6a96051ca000
-        current stack ptr:    0x6a960533ffc0
-        globals+memory addr:  0x6a96051ba000
-        stack addr:           0x6a960533f000
-        globals+memory size:  65536
-        memory size:          65536
-        stack offset:         4032
-        stacktrace:
-        #1  func-3
-        #2  func-2
-        --- shot snapped ---
-        20
-    snapshot_test.go:88: resuming
-    snapshot_test.go:100: print output:
-        20
-        30
-        330
-        40
-        440
-```

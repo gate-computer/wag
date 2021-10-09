@@ -132,7 +132,6 @@ type M struct {
 type ImportIndex struct {
 	Import
 	VectorIndex int
-	Variadic    bool
 }
 
 type Library struct {

@@ -13,8 +13,15 @@ import (
 
 	"gate.computer/wag/buffer"
 	"gate.computer/wag/compile/event"
+	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/section"
 )
+
+var lib = *library.Load("../testsuite/testdata/library.wasm", true, func(r Reader) library.L {
+	mod := loadInitialSections(nil, r)
+	lib := mod.asLibrary()
+	return &lib
+}).(*Library)
 
 var benchDir = "../wag-bench" // Relative to project root directory.
 

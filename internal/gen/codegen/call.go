@@ -53,11 +53,10 @@ func opCallInNormalFunc(f *gen.Func, op opcode.Opcode, funcIndex uint32) {
 
 func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 	imp := f.ImportContext.ImportFuncs[funcIndex]
-	sigIndex := f.ImportContext.Funcs[funcIndex]
-	sig := f.ImportContext.Types[sigIndex]
+	sig := f.ImportContext.Types[f.ImportContext.Funcs[funcIndex]]
 	checkCallOperandCount(f, sig)
-	asm.CallImportVector(f, imp.VectorIndex, imp.Variadic, len(sig.Params), int(sigIndex))
-	f.MapTrapAddr(f.Text.Addr)
+	asm.CallImportVector(f, imp.VectorIndex)
+	f.MapCallAddr(f.Text.Addr)
 	opFinalizeCall(f, sig)
 }
 

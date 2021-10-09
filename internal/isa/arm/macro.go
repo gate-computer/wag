@@ -282,20 +282,15 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 	o.copy(p.Text.Extend(o.size))
 }
 
-func (MacroAssembler) CallImportVector(f *gen.Func, index int, variadic bool, argCount, sigIndex int) {
+func (MacroAssembler) CallImportVector(f *gen.Func, index int) {
 	var o outbuf
 
-	if variadic {
-		o.insn(in.MOVZ.RdI16Hw(RegImportVariadic, uint32(sigIndex), 0, wa.Size64))
-		o.insn(in.MOVK.RdI16Hw(RegImportVariadic, uint32(argCount), 2, wa.Size64))
-	} else {
-		numParams := f.NumExtra - 2
-		offset := numParams + 1 + f.NumLocals + f.StackDepth // 1 for link address.
-		if offset >= 4096/obj.Word {
-			panic(offset)
-		}
-		o.insn(in.ADDi.RdRnI12S2(RegRestartSP, RegFakeSP, uint32(offset*obj.Word), 0, wa.Size64))
+	numParams := f.NumExtra - 2
+	offset := numParams + 1 + f.NumLocals + f.StackDepth // 1 for link address.
+	if offset >= 4096/obj.Word {
+		panic(offset)
 	}
+	o.insn(in.ADDi.RdRnI12S2(RegRestartSP, RegFakeSP, uint32(offset*obj.Word), 0, wa.Size64))
 
 	switch {
 	case index >= -32:

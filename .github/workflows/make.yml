@@ -12,5 +12,5 @@ jobs:
       with:
         submodules: recursive
     - run: sudo apt-get -y --no-install-recommends install libcapstone-dev wabt
-    - run: make check
+    - run: make generate check
     - run: git diff --exit-code

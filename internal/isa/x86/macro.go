@@ -301,14 +301,10 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 	in.RET.Simple(&p.Text)
 }
 
-func (MacroAssembler) CallImportVector(f *gen.Func, vecIndex int, variadic bool, argCount, sigIndex int) {
-	if variadic {
-		in.MOV64i.RegImm64(&f.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
-	} else {
-		numParams := f.NumExtra - 2
-		offset := numParams + 1 + f.NumLocals + f.StackDepth // 1 for link address.
-		in.LEA.RegStackDisp(&f.Text, wa.I64, RegRestartSP, int32(offset*obj.Word))
-	}
+func (MacroAssembler) CallImportVector(f *gen.Func, vecIndex int) {
+	numParams := f.NumExtra - 2
+	offset := numParams + 1 + f.NumLocals + f.StackDepth // 1 for link address.
+	in.LEA.RegStackDisp(&f.Text, wa.I64, RegRestartSP, int32(offset*obj.Word))
 	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, int32(vecIndex*8))
 	in.CALLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline)
 }

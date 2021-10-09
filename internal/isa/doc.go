@@ -98,7 +98,7 @@ type MacroAssembler interface {
 	//
 	// Void functions must make sure that they don't return any sensitive
 	// information in result register.
-	CallImportVector(f *gen.Func, vectorIndex int, variadic bool, argc, sigIndex int)
+	CallImportVector(f *gen.Func, vectorIndex int)
 
 	// CallIndirect may use RegResult and update condition flags.  It takes
 	// ownership of funcIndexReg.

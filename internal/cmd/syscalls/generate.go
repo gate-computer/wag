@@ -143,7 +143,12 @@ func main() {
 	fmt.Fprintf(decl, "\tbinary.LittleEndian.PutUint64(vec[%d:], uint64(addr))\n", (len(syscalls)+0)*8)
 	fmt.Fprintf(decl, "}\n")
 
-	cmd := exec.Command("wat2wasm", "-o", "/dev/stdout", libFile.Name())
+	watToWasm := os.Getenv("WAT2WASM")
+	if watToWasm == "" {
+		watToWasm = "wat2wasm"
+	}
+
+	cmd := exec.Command(watToWasm, "-o", "/dev/stdout", libFile.Name())
 	cmd.Stderr = os.Stderr
 	libWASM, err := cmd.Output()
 	if err != nil {

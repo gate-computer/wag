@@ -1,3 +1,6 @@
+bench-new.txt
+bench-old.txt
+bin/wasys
 config.mk
-testdata/fuzz
-wag-fuzz.zip
+testsuite/testdata/include
+testsuite/testdata/specdata

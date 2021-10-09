@@ -1,6 +1,6 @@
 [submodule "internal/design"]
 	path = internal/design
 	url = https://github.com/WebAssembly/design.git
-[submodule "testdata/spec"]
-	path = testdata/spec
+[submodule "testsuite/testdata/spec"]
+	path = testsuite/testdata/spec
 	url = https://github.com/WebAssembly/spec.git
