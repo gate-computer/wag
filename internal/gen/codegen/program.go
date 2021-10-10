@@ -63,7 +63,7 @@ func GenProgram(
 	if p.Text.Addr != abi.TextAddrNoFunction {
 		panic(errors.New("unexpected initial text address"))
 	}
-	asm.TrapHandler(p, trap.NoFunction)
+	asm.TrapHandlerRewindNoFunction(p)
 
 	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
 		panic("bad text address after NoFunction trap handler")

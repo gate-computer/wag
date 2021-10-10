@@ -57,7 +57,6 @@ TEXT ·importTrapHandler(SB),NOSPLIT,$0-8
 	MOVD	R29, R1			// fake stack ptr
 	MOVD	$state(SB), R3		// state
 	call_C(trap_handler)
-	SUB	$4, LR			// move return address before the call that got us here
 	B	resume<>(SB)
 
 // func importCurrentMemory() uint64

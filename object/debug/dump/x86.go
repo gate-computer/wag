@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"gate.computer/wag/internal/isa/x86/nonabi"
+	"gate.computer/wag/object/abi"
 	"gate.computer/wag/trap"
 	"github.com/knightsc/gapstone"
 )
@@ -24,6 +25,7 @@ const (
 )
 
 func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr uintptr, firstFuncAddr uint) {
+	targets[uint(textAddr)+abi.TextAddrNoFunction] = "trap.no_function"
 	targets[uint(textAddr)+nonabi.TextAddrRetpoline] = "retpoline"
 	targets[uint(textAddr)+nonabi.TextAddrRetpolineSetup] = "retpoline.setup"
 

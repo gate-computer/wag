@@ -44,7 +44,6 @@ TEXT trapHandler<>(SB),NOSPLIT,$0
 	MOVQ	AX, DX			// (result << 32) | trap_id
 	LEAQ	state(SB), CX		// state
 	CALL	trap_handler(SB)
-	SUBQ	$5, (SP)		// move return address before the call that got us here
 	JMP	resume<>(SB)
 
 // func importCurrentMemory() uint64

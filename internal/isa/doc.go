@@ -135,6 +135,9 @@ type MacroAssembler interface {
 	// condition flags.
 	TrapHandlerRewindCallStackExhausted(p *gen.Prog)
 
+	// TrapHandlerRewindNoFunction may use RegResult and update condition flags.
+	TrapHandlerRewindNoFunction(p *gen.Prog)
+
 	// TrapHandlerRewindSuspended may use RegResult and update condition flags.
 	TrapHandlerRewindSuspended(p *gen.Prog, index int)
 

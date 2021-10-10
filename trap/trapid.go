@@ -13,7 +13,7 @@ type ID int
 
 const (
 	Exit       = ID(iota)
-	NoFunction // Recoverable (nonportable).  Return address must be adjusted.
+	NoFunction // Recoverable (nonportable).
 	Suspended  // Recoverable (portable).
 	Unreachable
 	CallStackExhausted // Recoverable (portable).

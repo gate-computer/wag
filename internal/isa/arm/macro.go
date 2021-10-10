@@ -311,6 +311,14 @@ func (MacroAssembler) TrapHandler(p *gen.Prog, id trap.ID) {
 	o.copy(p.Text.Extend(o.size))
 }
 
+func (MacroAssembler) TrapHandlerRewindNoFunction(p *gen.Prog) {
+	var o outbuf
+
+	o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, 4, 0, wa.Size64))
+	o.trapHandler(p, trap.NoFunction)
+	o.copy(p.Text.Extend(o.size))
+}
+
 func (MacroAssembler) TrapHandlerRewindCallStackExhausted(p *gen.Prog) {
 	var o outbuf
 
@@ -332,9 +340,14 @@ func (MacroAssembler) TrapHandlerTruncOverflow(p *gen.Prog, trapIndex int) {
 }
 
 func (o *outbuf) trapHandler(p *gen.Prog, id trap.ID) {
+	o.trapHandlerPrologue(p, id)
+	o.insn(in.BR.Rn(RegScratch))
+}
+
+// trapHandlerPrologue doesn't update condition flags.
+func (o *outbuf) trapHandlerPrologue(p *gen.Prog, id trap.ID) {
 	o.insn(in.MOVZ.RdI16Hw(RegResult, uint32(id), 0, wa.Size64))
 	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
-	o.insn(in.BR.Rn(RegScratch))
 }
 
 func (MacroAssembler) LoadIntStubNear(f *gen.Func, indexType wa.Type, r reg.R) (addr int32) {
