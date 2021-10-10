@@ -12,7 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"reflect"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -84,10 +84,6 @@ func makeMem(size int, prot, extraFlags int) (mem []byte, err error) {
 	return
 }
 
-func memAddr(mem []byte) uintptr {
-	return (*reflect.SliceHeader)(unsafe.Pointer(&mem)).Data
-}
-
 func alignSize(size, alignment int) int {
 	return (size + (alignment - 1)) &^ (alignment - 1)
 }
@@ -133,13 +129,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer runtime.KeepAlive(vecTextMem)
 
 	vecMem := vecTextMem[:vecSize]
 	vec := vecMem[vecSize-len(importVector):]
 	copy(vec, importVector)
 
 	textMem := vecTextMem[vecSize:]
-	textAddr := memAddr(textMem)
+	textAddr := uintptr(unsafe.Pointer(&textMem[0]))
 	textBuf := buffer.NewStatic(textMem[:0:len(textMem)])
 
 	lib, err := wag.CompileLibrary(bytes.NewReader(libWASM), sysResolver{})
@@ -168,6 +165,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer runtime.KeepAlive(globalsMemory)
 
 	err = syscall.Mprotect(globalsMemory[:obj.MemoryOffset+obj.InitialMemorySize], syscall.PROT_READ|syscall.PROT_WRITE)
 	if err != nil {
@@ -176,7 +174,7 @@ func main() {
 
 	copy(globalsMemory, obj.GlobalsMemory)
 
-	setImportVectorMemoryAddr(vec, memAddr(globalsMemory)+uintptr(obj.MemoryOffset))
+	setImportVectorMemoryAddr(vec, uintptr(unsafe.Pointer(&globalsMemory[obj.MemoryOffset])))
 
 	if err := syscall.Mprotect(vecMem, syscall.PROT_READ); err != nil {
 		log.Fatal(err)
@@ -190,15 +188,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer runtime.KeepAlive(stackMem)
+
 	stackOffset := stackSize - len(obj.StackFrame)
 	copy(stackMem[stackOffset:], obj.StackFrame)
 
-	stackAddr := memAddr(stackMem)
-	stackLimit := stackAddr + 256 + 8192 + 240 + 8 + 8
-	stackPtr := stackAddr + uintptr(stackOffset)
+	stackLimit := uintptr(unsafe.Pointer(&stackMem[256+8192+240+8+8]))
+	stackPtr := uintptr(unsafe.Pointer(&stackMem[stackOffset]))
 
 	if stackLimit >= stackPtr {
-		log.Fatal("stack is too small for starting program")
+		log.Fatal("stack is too small to start program")
 	}
 
 	exec(textAddr, stackLimit, stackPtr)
