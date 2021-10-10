@@ -3,15 +3,14 @@ on: [push]
 
 jobs:
   check:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.17
     - uses: actions/checkout@v1
       with:
         submodules: recursive
-    - run: sudo apt-get -y --no-install-recommends install libcapstone-dev
+    - run: sudo apt-get -y --no-install-recommends install libcapstone-dev wabt
     - run: make check
     - run: git diff --exit-code
-    - run: go run github.com/dvyukov/go-fuzz/go-fuzz-build
