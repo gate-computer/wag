@@ -280,12 +280,19 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 	o.copy(p.Text.Extend(o.size))
 }
 
-func (MacroAssembler) CallImportVector(p *gen.Prog, index int, variadic bool, argCount, sigIndex int) {
+func (MacroAssembler) CallImportVector(f *gen.Func, index int, variadic bool, argCount, sigIndex int) {
 	var o outbuf
 
 	if variadic {
 		o.insn(in.MOVZ.RdI16Hw(RegImportVariadic, uint32(sigIndex), 0, wa.Size64))
 		o.insn(in.MOVK.RdI16Hw(RegImportVariadic, uint32(argCount), 2, wa.Size64))
+	} else {
+		numParams := f.NumExtra - 2
+		offset := numParams + 1 + f.NumLocals + f.StackDepth // 1 for link address.
+		if offset >= 4096/obj.Word {
+			panic(offset)
+		}
+		o.insn(in.ADDi.RdRnI12S2(RegRestartSP, RegFakeSP, uint32(offset*obj.Word), 0, wa.Size64))
 	}
 
 	switch {
@@ -301,7 +308,7 @@ func (MacroAssembler) CallImportVector(p *gen.Prog, index int, variadic bool, ar
 	}
 
 	o.insn(in.BLR.Rn(RegScratch))
-	o.copy(p.Text.Extend(o.size))
+	o.copy(f.Text.Extend(o.size))
 }
 
 func (MacroAssembler) TrapHandler(p *gen.Prog, id trap.ID) {
@@ -469,19 +476,60 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	o.insn(in.PushReg(RegLink, wa.I64))
 
 	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
+	restartAddr := f.Text.Addr
 
-	// If the following instructions are changed,
+	// If the following (NumExtra == 0) instructions are changed,
 	// TrapHandlerRewindCallStackExhausted must be changed to match the
 	// instruction sequence size.
 
 	o.insn(in.BRK.I16(0)) // Placeholder for ADD (target is RegScratch).
 	stackCheckAddr = o.addr(&f.Text)
 
-	// sp - scratch*16
-	// sp - (limit + alloc)
-	o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.Size64))
-	o.insn(in.Bc.CondI19(in.GE, 2)) // Skip trap instruction.
-	o.unmappedTrap(f, f.TrapLinks[trap.CallStackExhausted])
+	if f.NumExtra == 0 {
+		// sp - scratch*16
+		// sp - (limit + alloc)
+		o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.Size64))
+		o.insn(in.Bc.CondI19(in.GE, 2)) // Skip next instruction.
+		o.unmappedTrap(f, f.TrapLinks[trap.CallStackExhausted])
+	} else {
+		// Get resume address by setting link register and rewinding it until
+		// start of function.
+
+		o.insn(in.BL.I26(1)) // Next instruction.
+		o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, in.Uint12(uint64(f.Text.Addr-restartAddr)), 0, wa.Size64))
+
+		// The return address is in link register.  Inline the trap trampoline;
+		// the branch will be matched with a return sequence which pops the
+		// restart address.
+
+		// sp - scratch*16
+		// sp - (limit + alloc)
+		o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegFakeSP, 4, RegScratch, in.LSL, wa.Size64))
+		o.trapHandlerPrologue(&f.Prog, trap.CallStackExhausted)
+		o.insn(in.Bc.CondI19(in.GE, 2)) // Skip next instruction.
+		o.insn(in.BR.Rn(RegScratch))
+
+		// Push the return address on stack to facilitate resume in rt calls.
+		// Duplicate arguments for mutation, and push (dummy) link address.
+
+		o.insn(in.PushReg(RegLink, wa.I64)) // Restart address.
+
+		numParams := f.NumExtra - 2
+
+		if numParams > 0 {
+			copyOffset := (1 + 1 + numParams) - 1 // Restart address, link address, and params.
+
+			o.moveIntImm(RegScratch, int64(numParams))
+
+			o.insn(in.LDR.RdRnI12(RegResult, RegFakeSP, uint32(copyOffset), wa.I64))
+			o.insn(in.PushReg(RegResult, wa.I64))
+			o.insn(in.SUBSi.RdRnI12S2(RegScratch, RegScratch, 1, 0, wa.Size64))
+			o.insn(in.Bc.CondI19(in.NE, in.Int19(-3))) // Loop.
+		}
+
+		o.insn(in.PushReg(RegZero, wa.I64)) // Dummy link address.
+	}
+
 	o.copy(f.Text.Extend(o.size))
 	return
 }

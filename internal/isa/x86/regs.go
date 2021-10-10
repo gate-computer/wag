@@ -19,7 +19,8 @@ const (
 	_                 = reg.R(2)         //     xmm2  <- AllocFloatFirst
 	RegStackLimit     = in.RegStackLimit // rbx
 	RegStackPtr       = reg.R(4)         // rsp
-	RegImportVariadic = reg.R(5)         // rbp       <- AllocIntFirst
+	RegRestartSP      = reg.R(5)         // rbp       <- AllocIntFirst
+	RegImportVariadic = RegRestartSP
 	_                 = reg.R(6)         // rsi
 	_                 = reg.R(7)         // rdi
 	_                 = reg.R(8)         // r8

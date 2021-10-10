@@ -151,13 +151,13 @@ func genBr(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend b
 	}
 
 	if target.FuncEnd {
-		asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
+		asm.Return(&f.Prog, f.NumExtra+f.NumLocals+f.StackDepth)
 	} else {
 		if drop := f.StackDepth - target.StackDepth; drop != 0 {
 			asm.DropStackValues(&f.Prog, drop)
 		}
 
-		if b := getCurrentBlock(f); target.Label.Addr != 0 && !b.Suspension {
+		if b := getCurrentBlock(f); target.Label.Addr != 0 && !b.Suspension && f.ImportContext == nil {
 			asm.BranchSuspend(f, target.Label.Addr)
 			b.Suspension = true
 		} else {
@@ -192,7 +192,7 @@ func genBrIf(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 
 	drop := f.StackDepth - target.StackDepth
 
-	if forward := target.Label.Addr == 0; forward || getCurrentBlock(f).Suspension {
+	if forward := target.Label.Addr == 0; forward || getCurrentBlock(f).Suspension || f.ImportContext != nil {
 		if drop == 0 {
 			opBranchIf(f, cond, &target.Label)
 		} else {
@@ -323,7 +323,7 @@ func genBrTable(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (dead
 		asm.DropStackValues(&f.Prog, defaultDrop)
 	}
 
-	if b := getCurrentBlock(f); loop && !b.Suspension {
+	if b := getCurrentBlock(f); loop && !b.Suspension && f.ImportContext == nil {
 		if value.Type != wa.Void {
 			panic(errBranchLoopValue)
 		}

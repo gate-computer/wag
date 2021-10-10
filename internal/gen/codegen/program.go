@@ -115,7 +115,13 @@ func GenProgram(
 
 	for i, imp := range m.ImportFuncs {
 		code := bytes.NewReader(lib.CodeFuncs[imp.LibraryFunc-uint32(len(lib.ImportFuncs))])
-		genFunction(&funcStorage, loader.L{R: code}, i, lib.Types[lib.Funcs[imp.LibraryFunc]], false)
+		sig := lib.Types[lib.Funcs[imp.LibraryFunc]]
+
+		// Reserve stack space for function restart address, duplicate function
+		// arguments, and duplicate (dummy) link address.
+		numExtra := 1 + len(sig.Params) + 1
+
+		genFunction(&funcStorage, loader.L{R: code}, i, sig, numExtra, false)
 	}
 
 	p.ImportContext = nil
@@ -125,7 +131,7 @@ func GenProgram(
 	}
 
 	for i := len(m.ImportFuncs); i < initFuncCount; i++ {
-		genFunction(&funcStorage, load, i, m.Types[m.Funcs[i]], false)
+		genFunction(&funcStorage, load, i, m.Types[m.Funcs[i]], 0, false)
 		linker.UpdateCalls(p.Text.Bytes(), &p.FuncLinks[i].L)
 	}
 
@@ -160,7 +166,7 @@ func GenProgram(
 		eventHandler(event.Init)
 
 		for i := initFuncCount; i < len(m.Funcs); i++ {
-			genFunction(&funcStorage, load, i, m.Types[m.Funcs[i]], true)
+			genFunction(&funcStorage, load, i, m.Types[m.Funcs[i]], 0, true)
 		}
 
 		eventHandler(event.FunctionBarrier)

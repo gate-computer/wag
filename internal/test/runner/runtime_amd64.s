@@ -145,10 +145,15 @@ TEXT ·importSnapshot(SB),$0-8
 
 TEXT snapshot<>(SB),NOSPLIT,$0
 	MOVQ	BX, DI			// stack limit
-	MOVQ	SP, SI			// stack ptr
+	MOVQ	BP, SI			// stack ptr for restarting caller
 	MOVQ	R14, DX			// memory addr
 	LEAQ	state(SB), CX		// state
+	MOVL	8(SP), R13		// wasm out addr
+	ADDQ	R14, R13		// real out addr
+	MOVL	$-1, (R13)
 	CALL	snapshot(SB)
+	MOVL	AX, (R13)
+	MOVQ	BP, SP
 	JMP	resume<>(SB)
 
 TEXT sigsegv_handler(SB),NOSPLIT,$0

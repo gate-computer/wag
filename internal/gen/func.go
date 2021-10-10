@@ -44,6 +44,7 @@ type Func struct {
 	LocalTypes []wa.Type
 	NumParams  int
 	NumLocals  int // The non-param ones
+	NumExtra   int // Library function's duplicated arguments etc.
 
 	Operands          []operand.O
 	FrameBase         int // Number of (stack) operands belonging to parent blocks

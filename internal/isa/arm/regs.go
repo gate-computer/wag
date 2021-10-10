@@ -12,7 +12,8 @@ import (
 const (
 	RegResult         = reg.Result
 	RegScratch        = reg.ScratchISA
-	RegImportVariadic = reg.R(2)  // <- AllocIntFirst
+	RegRestartSP      = reg.R(2) // <- AllocIntFirst
+	RegImportVariadic = RegRestartSP
 	_                 = reg.R(25) // <- AllocIntLast
 	RegMemoryBase     = reg.R(26)
 	RegTextBase       = reg.R(27)

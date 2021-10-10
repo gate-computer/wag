@@ -111,11 +111,12 @@ func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	}
 }
 
-func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, atomicCallStubs bool) {
+func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, numExtra int, atomicCallStubs bool) {
 	*f = gen.Func{
 		Prog: f.Prog,
 
 		Regs:            regalloc.Make(),
+		NumExtra:        numExtra,
 		Operands:        f.Operands[:0],
 		BranchTargets:   f.BranchTargets[:0],
 		BranchTables:    f.BranchTables[:0],
@@ -195,7 +196,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, ato
 	label(f, end)
 	linker.UpdateFarBranches(f.Text.Bytes(), end)
 
-	asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
+	asm.Return(&f.Prog, f.NumExtra+f.NumLocals+f.StackDepth)
 
 	if len(f.BranchTargets) != 0 {
 		panic(errBranchTargetStackNotEmpty)
@@ -203,7 +204,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, ato
 
 	fullText := f.Text.Bytes()
 
-	linker.UpdateStackCheck(fullText, stackCheckAddr, f.NumLocals+f.MaxStackDepth)
+	linker.UpdateStackCheck(fullText, stackCheckAddr, f.NumExtra+f.NumLocals+f.MaxStackDepth)
 
 	for i, table := range f.BranchTables {
 		buf := fullText[table.Addr:]

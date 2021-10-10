@@ -3,7 +3,7 @@
  (import "spectest" "print" (func $spectest_print_i32_i32_i32 (param i32 i32 i32)))
  (import "spectest" "print" (func $spectest_print_f32_f64 (param f32 f64)))
  (import "wag" "get_arg" (func $wag_get_arg (result i64)))
- (import "wag" "snapshot" (func $wag_snapshot (result i32)))
+ (import "wag" "snapshot" (func $wag_snapshot (param i32)))
  (import "wag" "putns" (func $wag_putns (param i32 i32)))
  (import "wag" "benchmark_begin" (func $wag_benchmark_begin (result i64)))
  (import "wag" "benchmark_end" (func $wag_benchmark_end (param i64) (result i32)))
@@ -37,8 +37,17 @@
  (func $get_arg (result i64)
        (call $wag_get_arg))
 
- (func $snapshot (result i32)
-       (call $wag_snapshot))
+ (func $snapshot (param $buf i32) (result i32)
+       (local $ret i32)
+       (set_local $ret (i32.load (get_local $buf)))
+       (if (i32.eq (get_local $ret)
+                   (i32.const 0))
+           (then (call $wag_snapshot (get_local $buf))
+                 (unreachable)))
+       (if (i32.gt_s (get_local $ret)
+                     (i32.const 0))
+           (return (get_local $ret)))
+       (i32.const 0))
 
  (func $putns (param i32 i32)
        (call $wag_putns

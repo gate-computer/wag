@@ -70,7 +70,7 @@ var importFuncs = map[string]map[string]imports.Func{
 			VecIndex: vectorIndexLastImportFunc - 2,
 			Addr:     importSnapshot(),
 			FuncType: wa.FuncType{
-				Result: wa.I32,
+				Params: []wa.Type{wa.I32},
 			},
 		},
 		"putns": imports.Func{

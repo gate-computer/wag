@@ -254,7 +254,7 @@ func genReturn(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deade
 		asm.Move(f, reg.Result, result)
 	}
 
-	asm.Return(&f.Prog, f.NumLocals+f.StackDepth)
+	asm.Return(&f.Prog, f.NumExtra+f.NumLocals+f.StackDepth)
 	deadend = true
 	return
 }

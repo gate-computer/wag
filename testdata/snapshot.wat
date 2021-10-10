@@ -1,6 +1,6 @@
 (module
   (import "" "print_i32" (func $print_i32 (param i32)))
-  (import "" "snapshot" (func $snapshot (result i32)))
+  (import "" "snapshot" (func $snapshot (param i32) (result i32)))
 
   (export "main" (func $main))
 
@@ -14,7 +14,7 @@
     (if (i32.eq (grow_memory (i32.add (current_memory)
                                       (i32.const 1)))
                 (i32.const -1))
-      (return (i32.const 0)))
+      (unreachable))
     (i32.store (i32.const 500) (i32.add (get_local $x)
                                         (i32.const 300)))
     (i32.store (i32.const 504) (i32.add (get_local $y)
@@ -25,13 +25,13 @@
 
   (func $work (param $x i32) (param $y i32) (result i32)
     (local $ret i32)
-    (set_local $ret (call $snapshot))
+    (set_local $ret (call $snapshot (i32.const 64)))
     (call $print_i32 (i32.const 20))
     (if (i32.eq (get_local $ret)
-                (i32.const -1))
-      (block (call $print_i32 (get_local $x))
-             (call $print_i32 (i32.load (i32.const 500)))
-             (call $print_i32 (get_local $y))
-             (call $print_i32 (i32.load (i32.const 504)))))
+                (i32.const 0))
+        (then (call $print_i32 (get_local $x))
+              (call $print_i32 (i32.load (i32.const 500)))
+              (call $print_i32 (get_local $y))
+              (call $print_i32 (i32.load (i32.const 504)))))
     (get_local $ret))
 )

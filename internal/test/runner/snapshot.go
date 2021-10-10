@@ -103,8 +103,8 @@ func (r *Runner) snapshot(f io.ReadWriter, printer io.Writer) {
 
 	copy(s.data, data)
 
-	snapshotID := uint64(len(r.Snapshots))
 	r.Snapshots = append(r.Snapshots, s)
+	snapshotID := uint64(len(r.Snapshots))
 
 	fmt.Fprintln(printer, "--- shot snapped ---")
 

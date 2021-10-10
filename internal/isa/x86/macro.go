@@ -296,12 +296,16 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 	in.RET.Simple(&p.Text)
 }
 
-func (MacroAssembler) CallImportVector(p *gen.Prog, vecIndex int, variadic bool, argCount, sigIndex int) {
+func (MacroAssembler) CallImportVector(f *gen.Func, vecIndex int, variadic bool, argCount, sigIndex int) {
 	if variadic {
-		in.MOV64i.RegImm64(&p.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
+		in.MOV64i.RegImm64(&f.Text, RegImportVariadic, (int64(argCount)<<32)|int64(sigIndex))
+	} else {
+		numParams := f.NumExtra - 2
+		offset := numParams + 1 + f.NumLocals + f.StackDepth // 1 for link address.
+		in.LEA.RegStackDisp(&f.Text, wa.I64, RegRestartSP, int32(offset*obj.Word))
 	}
-	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, int32(vecIndex*8))
-	in.CALLcd.Addr32(&p.Text, nonabi.TextAddrRetpoline)
+	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, int32(vecIndex*8))
+	in.CALLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) TrapHandler(p *gen.Prog, id trap.ID) {
@@ -525,16 +529,51 @@ func (MacroAssembler) Return(p *gen.Prog, numStackValues int) {
 
 func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	f.MapCallAddr(f.Text.Addr) // Resume address.
+	restartAddr := f.Text.Addr
 
-	// If the following instructions are changed,
+	// If the following (NumExtra == 0) instructions are changed,
 	// TrapHandlerRewindCallStackExhausted must be changed to match the
 	// instruction sequence size.
 
 	stackCheckAddr = in.LEA.RegStackStub32(&f.Text, wa.I64, RegScratch)
 
-	in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
-	in.JGEcb.Rel8(&f.Text, in.CALLcd.Size())                             // Skip next instruction.
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.CallStackExhausted].Addr) // Handler checks suspension.
+	if f.NumExtra == 0 {
+		in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
+		in.JGEcb.Rel8(&f.Text, in.CALLcd.Size())                             // Skip next instruction.
+		in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.CallStackExhausted].Addr) // Handler checks suspension.
+	} else {
+		// Get resume address by pushing instruction pointer on stack and
+		// rewinding it until start of function.
+
+		in.CALLcd.Addr32(&f.Text, f.Text.Addr+int32(in.CALLcd.Size())) // Next instruction.
+		in.SUBi.StackImm8(&f.Text, wa.I64, int8(f.Text.Addr-restartAddr))
+
+		// The restart address is on stack.  Inline the trap trampoline: the
+		// jump will be matched with a RET which pops the restart address.
+
+		in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
+		trapHandlerPrologue(&f.Prog, trap.CallStackExhausted)
+		in.JLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline) // Handler checks suspension.
+
+		// Keep the restart address on stack to facilitate resume in rt calls.
+		// Duplicate arguments for mutation, and push (dummy) link address.
+
+		numParams := f.NumExtra - 2
+
+		if numParams > 0 {
+			copyOffset := (1 + 1 + numParams) - 1 // Restart address, link address, and params.
+
+			in.MOVi.RegImm32(&f.Text, wa.I32, RegCount, int32(numParams))
+
+			loopAddr := f.Text.Addr
+			in.MOV.RegStackDisp(&f.Text, wa.I64, RegResult, int32(copyOffset*obj.Word))
+			in.PUSHo.RegResult(&f.Text)
+			in.LOOPcb.Addr8(&f.Text, loopAddr)
+		}
+
+		in.PUSHo.RegZero(&f.Text) // Dummy link address.
+	}
+
 	return
 }
 
