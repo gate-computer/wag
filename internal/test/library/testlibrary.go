@@ -59,7 +59,7 @@ func Load(testdatadir string, reso VectorResolver, loadInitialLibrary func(r bin
 		panic(err)
 	}
 
-	rc := wat.ToWasm(testdatadir, source, false)
+	rc := wat.ToWasm(source, false)
 	defer rc.Close()
 
 	r := bufio.NewReader(rc)

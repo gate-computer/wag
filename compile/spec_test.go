@@ -426,7 +426,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 	}
 
 	{
-		wasmReadCloser := wat.ToWasm("../testdata", sexp.Unparse(module), quiet)
+		wasmReadCloser := wat.ToWasm(sexp.Unparse(module), quiet)
 		defer wasmReadCloser.Close()
 
 		initFuzzCorpus(t, "spec."+filename, wasmReadCloser)

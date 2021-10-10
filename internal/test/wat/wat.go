@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 )
 
 const (
@@ -17,8 +16,15 @@ const (
 	dumpWASM = false
 )
 
-func ToWasm(testdatadir string, expString []byte, quiet bool) io.ReadCloser {
-	binDir := path.Join(testdatadir, "wabt/bin")
+func ToWasm(expString []byte, quiet bool) io.ReadCloser {
+	wasm2wat := os.Getenv("WASM2WAT")
+	if wasm2wat == "" {
+		wasm2wat = "wasm2wat"
+	}
+	wat2wasm := os.Getenv("WAT2WASM")
+	if wat2wasm == "" {
+		wat2wasm = "wat2wasm"
+	}
 
 	f, err := ioutil.TempFile("", "")
 	if err != nil {
@@ -38,7 +44,7 @@ func ToWasm(testdatadir string, expString []byte, quiet bool) io.ReadCloser {
 		}
 		defer f3.Close()
 
-		cmd3 := exec.Command(path.Join(binDir, "wat2wasm"), "--no-check", "-o", f3.Name(), f.Name())
+		cmd3 := exec.Command(wat2wasm, "--no-check", "-o", f3.Name(), f.Name())
 		cmd3.Stdout = os.Stdout
 		cmd3.Stderr = os.Stderr
 		if err := cmd3.Run(); err != nil {
@@ -47,7 +53,7 @@ func ToWasm(testdatadir string, expString []byte, quiet bool) io.ReadCloser {
 			panic(err)
 		}
 
-		cmd2 := exec.Command(path.Join(binDir, "wasm2wat"), "--no-check", "-o", "/dev/stdout", f3.Name())
+		cmd2 := exec.Command(wasm2wat, "--no-check", "-o", "/dev/stdout", f3.Name())
 		cmd2.Stdout = os.Stdout
 		cmd2.Stderr = os.Stderr
 		if err := cmd2.Run(); err != nil {
@@ -57,7 +63,7 @@ func ToWasm(testdatadir string, expString []byte, quiet bool) io.ReadCloser {
 	}
 
 	if dumpWASM {
-		cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--no-check", "-v", f.Name())
+		cmd := exec.Command(wat2wasm, "--no-check", "-v", f.Name())
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -73,7 +79,7 @@ func ToWasm(testdatadir string, expString []byte, quiet bool) io.ReadCloser {
 	}
 	os.Remove(f2.Name())
 
-	cmd := exec.Command(path.Join(binDir, "wat2wasm"), "--debug-names", "--no-check", "-o", "/dev/stdout", f.Name())
+	cmd := exec.Command(wat2wasm, "--debug-names", "--no-check", "-o", "/dev/stdout", f.Name())
 	cmd.Stdout = f2
 	if !quiet {
 		cmd.Stderr = os.Stderr

@@ -1,6 +1,8 @@
 GO		?= go
 GOFMT		?= gofmt
 GOFUZZ		?= go-fuzz
+WASM2WAT	?= wasm2wat
+WAT2WASM	?= wat2wasm
 PERFLOCK	?= perflock
 BENCHCMP	?= benchstat
 
@@ -27,10 +29,10 @@ BENCHFLAGS	+= $(LINKFLAGS) -run=^TestBenchmark -bench=.
 
 -include config.mk
 
-export PATH	:= testdata/wabt/bin:$(PATH)
+export GOFMT WASM2WAT WAT2WASM
 
-generate: testdata/wabt/bin/wat2wasm
-	GOFMT=$(GOFMT) $(GO) generate
+generate:
+	$(GO) generate
 
 build: generate
 	$(GO) build $(BUILDFLAGS) $(PACKAGES)
@@ -56,9 +58,6 @@ benchmark:
 	$(PERFLOCK) $(GO) test $(BENCHFLAGS) $(PACKAGES) $(ARCH_PACKAGES) | tee bench-new.txt
 	[ ! -e bench-old.txt ] || $(BENCHCMP) bench-old.txt bench-new.txt
 
-testdata/wabt/bin/wat2wasm:
-	$(MAKE) -C testdata/wabt
-
 fuzz-build:
 	$(GOFUZZ)-build
 
@@ -67,8 +66,6 @@ fuzz:
 	$(GOFUZZ) -bin=wag-fuzz.zip -workdir=testdata/fuzz
 
 clean:
-	$(MAKE) -C testdata/wabt clean
-	rm -rf bin testdata/wabt/bin
 	rm -f wag-fuzz.zip
 
 .PHONY: generate build vet check benchmark fuzz-build fuzz clean

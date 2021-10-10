@@ -34,7 +34,7 @@ func TestSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wasmReadCloser := wat.ToWasm("../testdata", wasmData, false)
+	wasmReadCloser := wat.ToWasm(wasmData, false)
 	defer wasmReadCloser.Close()
 	wasm := bufio.NewReader(wasmReadCloser)
 
