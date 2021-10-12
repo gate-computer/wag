@@ -440,7 +440,7 @@ func testModule(t *testing.T, wast []byte, filename string, quiet bool) []byte {
 			}),
 		}
 
-		mod := loadInitialSections(&ModuleConfig{common}, wasm)
+		mod := loadInitialSections(&ModuleConfig{Config: common}, wasm)
 		bind(&mod, lib, globals{})
 
 		startFunc, defined := mod.StartFunc()

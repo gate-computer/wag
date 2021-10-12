@@ -112,12 +112,12 @@ const (
 	defaultTextBufferSize   = 32768
 	defaultMemoryBufferSize = 32768
 
-	maxStringSize  = 100000   // Industry standard.
-	maxTableLen    = 10000000 // Industry standard.
-	maxMemoryPages = 32767    // Industry standard.
-	maxGlobals     = 32
-	maxExports     = 64
-	maxElements    = 10000000 // Industry standard.
+	maxStringSize     = 100000   // Industry standard.
+	maxTableLen       = 10000000 // Industry standard.
+	maxMemoryPages    = 32767    // Industry standard.
+	maxGlobals        = 32
+	defaultMaxExports = 64
+	maxElements       = 10000000 // Industry standard.
 )
 
 var emptyCodeSectionPayload = []byte{
@@ -178,6 +178,7 @@ type Config struct {
 // ModuleConfig for a single compiler invocation.
 type ModuleConfig struct {
 	Config
+	MaxExports uint32
 }
 
 // Module contains a WebAssembly module specification without code or data.
@@ -199,6 +200,9 @@ func LoadInitialSections(config *ModuleConfig, r Reader) (m Module, err error) {
 func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	if config == nil {
 		config = new(ModuleConfig)
+	}
+	if config.MaxExports == 0 {
+		config.MaxExports = defaultMaxExports
 	}
 
 	load := loader.L{R: r}
@@ -425,10 +429,10 @@ func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadExportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L) {
 	m.m.ExportFuncs = make(map[string]uint32)
 
-	for i := range load.Count(maxExports, "export") {
+	for i := range load.Count(config.MaxExports, "export") {
 		fieldLen := load.Varuint32()
 		if fieldLen > maxStringSize {
 			panic(module.Errorf("field string is too long in export #%d", i))
