@@ -233,6 +233,13 @@ func initRoutinePrologue(p *gen.Prog) {
 	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
 }
 
+func (MacroAssembler) Exit(p *gen.Prog) {
+	initRoutinePrologue(p)
+	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // Result at top, trap id (0) at bottom.
+	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
+	in.JMPcb.Addr8(&p.Text, nonabi.TextAddrRetpoline)
+}
+
 func (MacroAssembler) Resume(p *gen.Prog) {
 	initRoutinePrologue(p)
 	in.RET.Simple(&p.Text) // Return from trap handler or import function call.
@@ -269,9 +276,7 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 
 	// Exit
 
-	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // Result at top, trap id (0) at bottom.
-	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
-	in.JMPcd.Addr32(&p.Text, nonabi.TextAddrRetpoline)
+	in.JMPcb.Addr8(&p.Text, p.TrapLinks[trap.Exit].Addr)
 
 	// Retpoline (https://support.google.com/faqs/answer/7625886)
 

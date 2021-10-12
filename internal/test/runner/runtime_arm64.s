@@ -46,7 +46,7 @@ TEXT ·run(SB),NOSPLIT,$0-128
 	RET
 
 TEXT resume<>(SB),NOSPLIT,$0
-	ADD	$16, R27, R1		// resume routine
+	ADD	$0x20, R27, R1		// resume routine
 	B	(R1)
 
 // func importTrapHandler() uint64

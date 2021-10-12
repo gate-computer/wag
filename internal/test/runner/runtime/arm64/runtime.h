@@ -84,7 +84,7 @@ NORETURN
 static void start(void *text, void *stack_limit, void *stack_ptr, void *init_routine)
 {
 	uintptr_t link_ptr = 0;
-	if (((uintptr_t) init_routine & 0x7f) == 16) { // resume routine
+	if (((uintptr_t) init_routine & 0x7f) == 0x20) { // resume routine
 		link_ptr = *(uintptr_t *) stack_ptr;
 		stack_ptr += sizeof(uintptr_t);
 	}

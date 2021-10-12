@@ -26,7 +26,7 @@ TEXT ·exec(SB),NOSPLIT,$0-24
 	XORL	R14, R14
 
 	MOVQ	R15, DX
-	ADDQ	$32, DX			// enter routine
+	ADDQ	$0x30, DX		// enter routine
 	JMP	DX
 
 // func importTrapHandler() uint64

@@ -65,8 +65,15 @@ func GenProgram(
 	}
 	asm.TrapHandlerRewindNoFunction(p)
 
-	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrResume {
+	if p.Text.Addr == abi.TextAddrNoFunction || p.Text.Addr > abi.TextAddrExit {
 		panic("bad text address after NoFunction trap handler")
+	}
+	asm.PadUntil(p, abi.TextAddrExit)
+	p.TrapLinks[trap.Exit].Addr = p.Text.Addr
+	asm.Exit(p)
+
+	if p.Text.Addr == abi.TextAddrExit || p.Text.Addr > abi.TextAddrResume {
+		panic("bad text address after Exit trap handler")
 	}
 	asm.PadUntil(p, abi.TextAddrResume)
 	asm.Resume(p)

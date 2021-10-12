@@ -241,6 +241,15 @@ func (o *outbuf) initRoutinePrologue() {
 	o.insn(in.LDUR.RtRnI9(RegMemoryBase, RegTextBase, in.Int9(gen.VectorOffsetMemoryAddr), wa.I64))
 }
 
+func (MacroAssembler) Exit(p *gen.Prog) {
+	var o outbuf
+
+	o.insn(in.LogicalShiftLeft(RegResult, RegResult, 32, wa.Size64))
+	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
+	o.insn(in.BR.Rn(RegScratch))
+	o.copy(p.Text.Extend(o.size))
+}
+
 func (MacroAssembler) Resume(p *gen.Prog) {
 	var o outbuf
 
@@ -274,9 +283,7 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 
 	// Exit
 
-	o.insn(in.LogicalShiftLeft(RegResult, RegResult, 32, wa.Size64))
-	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetTrapHandler), wa.I64))
-	o.insn(in.BR.Rn(RegScratch))
+	o.insn(in.BL.I26(in.Int26((p.TrapLinks[trap.Exit].Addr - o.addr(&p.Text)) / 4)))
 	o.copy(p.Text.Extend(o.size))
 }
 

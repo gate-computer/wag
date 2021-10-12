@@ -15,7 +15,7 @@ TEXT ·exec(SB),NOSPLIT,$0-24
 	MOVD	R0, g			// RegStackLimit4 (R28)
 
 	MOVD	R27, R1
-	ADD	$32, R1			// enter routine
+	ADD	$0x30, R1		// enter routine
 	JMP	(R1)
 
 // func importTrapHandler() uint64

@@ -196,7 +196,7 @@ var generators = map[string]func(io.Writer, call){
 		fmt.Fprintf(w, "\tMOVL\t$%d, AX\n", sc.number)
 		fmt.Fprintf(w, "\tSYSCALL\n")
 		fmt.Fprintf(w, "\tMOVQ\tR15, DX\n")
-		fmt.Fprintf(w, "\tADDQ\t$16, DX\n") // resume routine
+		fmt.Fprintf(w, "\tADDQ\t$0x20, DX\n") // resume routine
 		fmt.Fprintf(w, "\tJMP\tDX\n")
 	},
 	"arm64": func(w io.Writer, sc call) {
@@ -220,7 +220,7 @@ var generators = map[string]func(io.Writer, call){
 		fmt.Fprintf(w, "\tMOVD\t$%d, R8\n", sc.number)
 		fmt.Fprintf(w, "\tSVC\n")
 		fmt.Fprintf(w, "\tMOVD\tR27, R1\n")
-		fmt.Fprintf(w, "\tADD\t$16, R1\n") // resume routine
+		fmt.Fprintf(w, "\tADD\t$0x20, R1\n") // resume routine
 		fmt.Fprintf(w, "\tB\t(R1)\n\n")
 
 		fmt.Fprintf(w, "after:\tMOVD\tLR, ret+0(FP)\n")

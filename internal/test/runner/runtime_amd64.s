@@ -29,7 +29,7 @@ TEXT ·run(SB),NOSPLIT,$0-128
 	RET
 
 TEXT resume<>(SB),NOSPLIT,$0
-	LEAQ	16(R15), DI		// resume routine
+	LEAQ	0x20(R15), DI		// resume routine
 	JMP	DI
 
 // func importTrapHandler() uint64
