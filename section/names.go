@@ -72,13 +72,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
 		loadContent := loader.L{R: bytes.NewReader(content)}
 
-		count := loadContent.Varuint32()
-		if count > maxFuncNames {
-			panic(module.Errorf("function name count is too large: %d", count))
-		}
-		ns.FuncNames = make([]FuncName, count)
-
-		for range make([]struct{}, count) {
+		for range loadContent.Count(maxFuncNames, "function name count") {
 			funcIndex := loadContent.Varuint32()
 			if funcIndex >= uint32(len(ns.FuncNames)) {
 				if funcIndex >= maxFuncNames {
