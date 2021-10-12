@@ -94,7 +94,8 @@ func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *se
 		var name string
 		if i < len(names) {
 			name = names[i].FuncName
-		} else {
+		}
+		if name == "" {
 			name = fmt.Sprintf("func.%d", i)
 		}
 
