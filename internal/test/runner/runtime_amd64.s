@@ -41,7 +41,8 @@ TEXT ·importTrapHandler(SB),$0-8
 TEXT trapHandler<>(SB),NOSPLIT,$0
 	MOVQ	BX, DI			// stack limit
 	MOVQ	SP, SI			// stack ptr
-	MOVQ	AX, DX			// (result << 32) | trap_id
+	SHLQ	$32, AX			// (result << 32)
+	ORQ	AX, DX			// (result << 32) | trap_id
 	LEAQ	state(SB), CX		// state
 	CALL	trap_handler(SB)
 	JMP	resume<>(SB)
@@ -169,7 +170,7 @@ TEXT sigsegv_handler(SB),NOSPLIT,$0
 	RET
 
 TEXT sigsegvExit<>(SB),NOSPLIT,$0
-	MOVD	$5, AX			// MemoryAccessOutOfBounds
+	MOVD	$5, DX			// MemoryAccessOutOfBounds
 	JMP	trapHandler<>(SB)
 
 TEXT signal_restorer(SB),NOSPLIT,$0

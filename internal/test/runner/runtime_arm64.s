@@ -52,7 +52,8 @@ TEXT resume<>(SB),NOSPLIT,$0
 // func importTrapHandler() uint64
 TEXT ·importTrapHandler(SB),NOSPLIT,$0-8
 	import
-	MOVD	R0, R2			// (result << 32) | trap_id
+	LSL	$32, R0			// (result << 32)
+	OR	R0, R2			// (result << 32) | trap_id
 	LSL	$4, g, R0		// stack limit (g = R28)
 	MOVD	R29, R1			// fake stack ptr
 	MOVD	$state(SB), R3		// state
@@ -116,14 +117,14 @@ TEXT ·importGetArg(SB),NOSPLIT,$0-8
 TEXT ·importSnapshot(SB),NOSPLIT,$0-8
 	import
 	LSL	$4, g, R0		// stack limit (g = R28)
-	MOVD	R2, R1			// stack ptr for restarting caller
+	MOVD	R3, R1			// stack ptr for restarting caller
 	MOVD	R26, R2			// memory addr
 	MOVD	$state(SB), R3		// state
 	MOVD	8(R29), R10		// wasm out addr
 	ADD	R26, R10		// real out addr
 	MOVW	$-1, R11
 	MOVW	R11, (R10)
-	MOVD	R2, R29			// -> fake stack ptr
+	MOVD	R3, R29			// -> fake stack ptr
 	call_C(snapshot)
 	MOVW	R0, (R10)
 	B	resume<>(SB)

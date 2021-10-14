@@ -235,7 +235,7 @@ func initRoutinePrologue(p *gen.Prog) {
 
 func (MacroAssembler) Exit(p *gen.Prog) {
 	initRoutinePrologue(p)
-	in.SHLi.RegImm8(&p.Text, wa.I64, RegResult, 32) // Result at top, trap id (0) at bottom.
+	// RegTrap is RegZero; Exit trap id is 0.
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcb.Addr8(&p.Text, nonabi.TextAddrRetpoline)
 }
@@ -320,8 +320,8 @@ func (MacroAssembler) TrapHandler(p *gen.Prog, id trap.ID) {
 func (MacroAssembler) TrapHandlerRewindNoFunction(p *gen.Prog) {
 	// Squeeze the routine into 16 bytes.
 	in.SUBi.StackImm8(&p.Text, wa.I64, in.CALLcd.Size())
-	in.XOR.RegReg(&p.Text, wa.I32, RegResult, RegResult)
-	in.INC.Reg(&p.Text, wa.I32, RegResult) // 1 is NoFunction.
+	in.XOR.RegReg(&p.Text, wa.I32, RegTrap, RegTrap) //
+	in.INC.Reg(&p.Text, wa.I32, RegTrap)             // 1 is NoFunction.
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 	in.JMPcb.Addr8(&p.Text, nonabi.TextAddrRetpoline)
 }
@@ -394,7 +394,7 @@ func trapHandler(p *gen.Prog, id trap.ID) {
 
 // trapHandlerPrologue doesn't update condition flags.
 func trapHandlerPrologue(p *gen.Prog, id trap.ID) {
-	in.MOVi.RegImm32(&p.Text, wa.I32, RegResult, int32(id)) // Automatic zero-extension.
+	in.MOVi.RegImm32(&p.Text, wa.I32, RegTrap, int32(id))
 	in.MOV.RegMemDisp(&p.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetTrapHandler)
 }
 

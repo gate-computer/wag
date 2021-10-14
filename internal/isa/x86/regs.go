@@ -15,6 +15,7 @@ const (
 	RegScratch        = in.RegScratch    // rcx xmm1
 	RegCount          = reg.R(1)         // rcx
 	RegZero           = in.RegZero       // rdx
+	RegTrap           = in.RegZero       // rdx
 	RegDividendHigh   = reg.R(2)         // rdx
 	_                 = reg.R(2)         //     xmm2  <- AllocFloatFirst
 	RegStackLimit     = in.RegStackLimit // rbx

@@ -36,15 +36,14 @@ TEXT ·importTrapHandler(SB),$0-8
 	RET
 
 TEXT trapHandler<>(SB),NOSPLIT,$0
-	CMPL	AX, $0			// exit trap (lower 32 bits)
-	JE	exittrap
-	ADDL	$100, AX		// 100 + trap id
-	JMP	sysexit
+	MOVL	AX, DI			// exit code
+	CMPL	DX, $0			// exit trap
+	JE	exit
 
-exittrap:
-	SHRQ	$32, AX			// exit code (higher 32 bits)
-sysexit:
-	MOVL	AX, DI
+	ADDL	$100, DX		// 100 + trap id
+	MOVL	DX, DI			// exit code
+
+exit:
 	MOVL	$231, AX		// exit_group syscall
 	SYSCALL
 

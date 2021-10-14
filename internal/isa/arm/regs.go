@@ -12,8 +12,9 @@ import (
 const (
 	RegResult         = reg.Result
 	RegScratch        = reg.ScratchISA
-	RegRestartSP      = reg.R(2) // <- AllocIntFirst
-	RegImportVariadic = RegRestartSP
+	RegTrap           = reg.R(2) // <- AllocIntFirst, AllocFloatFirst
+	RegImportVariadic = RegTrap
+	RegRestartSP      = reg.R(3)
 	_                 = reg.R(25) // <- AllocIntLast
 	RegMemoryBase     = reg.R(26)
 	RegTextBase       = reg.R(27)
@@ -23,5 +24,5 @@ const (
 	RegScratch2       = reg.R(30)
 	RegRealSP         = reg.R(31)
 	RegZero           = reg.R(31)
-	RegDiscard        = reg.R(31)
+	RegDiscard        = reg.R(31) // <- AllocFloatLast
 )

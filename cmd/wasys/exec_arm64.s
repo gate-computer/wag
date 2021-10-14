@@ -23,14 +23,12 @@ TEXT ·importTrapHandler(SB),$0-8
 	BL	after
 
 traphandler:
-	CMPW	$0, R0
-	BEQ	exittrap
-	ADDW	$100, R0
-	JMP	sysexit
+	CMPW	$0, R2
+	BEQ	exit
 
-exittrap:
-	LSR	$32, R0			// exit code (higher 32 bits)
-sysexit:
+	ADDW	$100, R2, R0		// 100 + trap id
+
+exit:
 	MOVD	$94, R8			// exit_group syscall
 	SVC
 	BRK
