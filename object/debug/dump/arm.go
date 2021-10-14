@@ -58,7 +58,7 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 			if insn.Mnemonic == "sub" && strings.HasPrefix(insn.OpStr, "xlink, xlink, #") {
 				switch insn.OpStr {
 				case "xlink, xlink, #0x10":
-					targets[insn.Address] = "trap.call_stack_exhausted.rewind"
+					targets[insn.Address] = "trap.call_stack_exhausted"
 					skipTrapInsn = true
 
 				case "xlink, xlink, #8":
@@ -67,17 +67,13 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 				}
 			}
 
-			switch {
-			case insn.Mnemonic == "movz":
+			if insn.Mnemonic == "movz" {
 				var n uint
-				if _, err := fmt.Sscanf(insn.OpStr, "xresult, #0x%x", &n); err == nil {
+				if _, err := fmt.Sscanf(insn.OpStr, "x2, #0x%x", &n); err == nil {
 					if id := trap.ID(n); id < trap.NumTraps {
 						targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
 					}
 				}
-
-			case insn.Mnemonic == "lsl" && insn.OpStr == "xresult, xresult, #0x20":
-				targets[insn.Address] = "trap.exit"
 			}
 		}
 	}

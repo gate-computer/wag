@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"gate.computer/wag/internal/isa/x86/nonabi"
-	"gate.computer/wag/object/abi"
 	"gate.computer/wag/trap"
 	"github.com/knightsc/gapstone"
 )
@@ -24,13 +23,21 @@ const (
 	padInsn  = gapstone.X86_INS_INT3
 )
 
+var truncOverflowTargets = [4]string{
+	"trap.trunc_overflow.i32.f32",
+	"trap.trunc_overflow.i64.f32",
+	"trap.trunc_overflow.i32.f64",
+	"trap.trunc_overflow.i64.f64",
+}
+
 func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr uintptr, firstFuncAddr uint) {
-	targets[uint(textAddr)+abi.TextAddrNoFunction] = "trap.no_function"
 	targets[uint(textAddr)+nonabi.TextAddrRetpoline] = "retpoline"
 	targets[uint(textAddr)+nonabi.TextAddrRetpolineSetup] = "retpoline.setup"
 
 	sequence := 0
 	skipTrapInsn := false
+	skipUntilAlign := false
+	numTrunc := 0
 
 	for i := range insns {
 		insn := &insns[i]
@@ -111,33 +118,47 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 				continue
 			}
 
-			if insn.Mnemonic == "subq" && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", (sp)") {
+			if skipUntilAlign {
+				if insn.Address&15 == 0 {
+					skipUntilAlign = false
+				} else {
+					continue
+				}
+			}
+			if strings.HasPrefix(insn.Mnemonic, "jmp") || strings.HasPrefix(insn.Mnemonic, "ret") {
+				skipUntilAlign = true
+				continue
+			}
+
+			if insn.Mnemonic == "movd" && insn.OpStr == "%xmm0, scratch" {
+				targets[insn.Address&^15] = truncOverflowTargets[numTrunc]
+				numTrunc++
+				skipTrapInsn = true
+			}
+
+			if insn.Mnemonic == "subq" && strings.HasPrefix(insn.OpStr, "$") && strings.HasSuffix(insn.OpStr, ", 0(sp)") {
 				switch insn.OpStr {
-				case "$0x12, (sp)":
-					targets[insn.Address] = "trap.call_stack_exhausted.rewind"
+				case "$0x12, 0(sp)":
+					targets[insn.Address&^15] = "trap.call_stack_exhausted"
 					skipTrapInsn = true
 
-				case "$8, (sp)":
-					targets[insn.Address] = "trap.suspended.rewind.near"
+				case "$8, 0(sp)":
+					targets[insn.Address&^15] = "trap.suspended.rewind.near"
 					skipTrapInsn = true
 
-				case "$0xc, (sp)":
-					targets[insn.Address] = "trap.suspended.rewind.far"
+				case "$0xc, 0(sp)":
+					targets[insn.Address&^15] = "trap.suspended.rewind.far"
 					skipTrapInsn = true
 				}
 			}
 
-			switch {
-			case insn.Mnemonic == "movl":
+			if insn.Mnemonic == "movl" {
 				var n uint
-				if _, err := fmt.Sscanf(insn.OpStr, "$%v, result", &n); err == nil {
+				if _, err := fmt.Sscanf(insn.OpStr, "$%v, zero", &n); err == nil {
 					if id := trap.ID(n); id < trap.NumTraps {
-						targets[insn.Address] = "trap." + strings.Replace(id.String(), " ", "_", -1)
+						targets[insn.Address&^15] = "trap." + strings.Replace(id.String(), " ", "_", -1)
 					}
 				}
-
-			case insn.Mnemonic == "shlq" && insn.OpStr == "$0x20, result":
-				targets[insn.Address] = "trap.exit"
 			}
 		}
 	}
