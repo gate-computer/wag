@@ -100,7 +100,7 @@ func (s *specInstance) close(t *testing.T) {
 func (s *specInstance) invoke(t *testing.T, field string, args []arg, restype *wa.Type) (uint64, trap.ID) {
 	index, sig, found := s.prog.mod.ExportFunc(field)
 	if !found {
-		t.Fatalf("%q", field)
+		t.Fatal("field not found")
 	}
 	if restype != nil && *restype != sig.Result {
 		t.Fatal(*restype, sig.Result)
@@ -234,11 +234,11 @@ func (x *specTestInstance) prologue(t *testing.T, field string) {
 		t.Skipf("referenced module %s uses unsupported extensions", x.name)
 	}
 	t.Log("module:", x.name)
-	t.Log("field:", field)
+	t.Logf("field: %q", field)
 }
 
 func (x *specTestInstance) register(t *testing.T) {
-	t.Log("register", x.name)
+	t.Log("register:", x.name)
 	x.link = true
 }
 
@@ -381,6 +381,8 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 			case "unknown data segment", "unknown data segment 1":
 				switch {
 				case strings.HasPrefix(msg, "custom section id"):
+					return true
+				case strings.Contains(msg, "initializer expression has wrong type"):
 					return true
 				}
 

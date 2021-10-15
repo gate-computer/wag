@@ -39,8 +39,9 @@ func CopyGlobalsAlign(buffer data.Buffer, m *module.M, memoryOffset int) {
 	b := buffer.ResizeBytes(memoryOffset)
 	b = b[globalsOffset:]
 
-	for _, global := range m.Globals {
-		binary.LittleEndian.PutUint64(b, global.Init)
+	for _, g := range m.Globals {
+		value := m.EvaluateGlobalInitializer(int(g.InitImport), g.InitConst)
+		binary.LittleEndian.PutUint64(b, value)
 		b = b[obj.Word:]
 	}
 }

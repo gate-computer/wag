@@ -180,10 +180,20 @@ def quote(s):
         elif c == '"':
             q += r'\"'
         elif c < ' ' or c > '~':
-            q += r'\x{:>02x}'.format(ord(c))
+            return quote_as_bytes(s)
         else:
             q += c
     q += '"'
+    return q
+
+
+def quote_as_bytes(s):
+    q = 'string([]byte{'
+    for i, c in enumerate(s.encode()):
+        if i > 0:
+            q += ', '
+        q += str(c)
+    q += '})'
     return q
 
 

@@ -110,9 +110,10 @@ type ResizableLimits struct {
 }
 
 type Global struct {
-	Type    wa.Type
-	Mutable bool
-	Init    uint64
+	Type       wa.Type
+	Mutable    bool
+	InitImport int8 // -1 if InitConst is defined.
+	InitConst  uint64
 }
 
 type M struct {
@@ -127,6 +128,16 @@ type M struct {
 	StartIndex    uint32
 	StartDefined  bool
 	TableFuncs    []uint32
+}
+
+func (m *M) EvaluateGlobalInitializer(index int, value uint64) uint64 {
+	if index == -1 {
+		return value
+	}
+
+	// If the global value has not been initialized, index will be invalid, and
+	// this will panic (on purpose).
+	return m.Globals[index].InitConst
 }
 
 type ImportIndex struct {

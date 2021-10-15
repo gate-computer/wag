@@ -363,7 +363,8 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 			}
 
 			m.m.Globals = append(m.m.Globals, module.Global{
-				Type: t,
+				Type:       t,
+				InitImport: -128, // Invalid value as placeholder.
 			})
 
 			m.m.ImportGlobals = append(m.m.ImportGlobals, module.Import{
@@ -420,15 +421,20 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 }
 
 func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-	for range load.Count(maxGlobals, "global") {
-		t := typedecode.Value(load.Varint7())
+	for range load.Count(uint32(maxGlobals-len(m.m.Globals)), "global") {
+		globalType := typedecode.Value(load.Varint7())
 		mutable := load.Varuint1()
-		init, _ := initexpr.Read(&m.m, load)
+		index, value, exprType := initexpr.Read(&m.m, load)
+
+		if exprType != globalType {
+			panic(module.Errorf("%s global #%d initializer expression has wrong type: %s", globalType, len(m.m.Globals), exprType))
+		}
 
 		m.m.Globals = append(m.m.Globals, module.Global{
-			Type:    t,
-			Mutable: mutable,
-			Init:    init,
+			Type:       globalType,
+			Mutable:    mutable,
+			InitImport: int8(index), // Assumes that maxGlobals is small.
+			InitConst:  value,
 		})
 	}
 }
@@ -557,8 +563,14 @@ func (m Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	return
 }
 
-func (m *Module) SetImportFunc(i int, libFunc uint32) { m.m.ImportFuncs[i].LibraryFunc = libFunc }
-func (m *Module) SetImportGlobal(i int, init uint64)  { m.m.Globals[i].Init = init }
+func (m *Module) SetImportFunc(i int, libFunc uint32) {
+	m.m.ImportFuncs[i].LibraryFunc = libFunc
+}
+
+func (m *Module) SetImportGlobal(i int, value uint64) {
+	m.m.Globals[i].InitImport = -1
+	m.m.Globals[i].InitConst = value
+}
 
 func (m Module) GlobalsSize() int {
 	size := len(m.m.Globals) * obj.Word

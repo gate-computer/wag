@@ -11,10 +11,10 @@ import (
 	"gate.computer/wag/wa/opcode"
 )
 
-func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
-	op := opcode.Opcode(load.Byte())
+func Read(m *module.M, load loader.L) (importIndex int, valueBits uint64, t wa.Type) {
+	importIndex = -1
 
-	switch op {
+	switch op := opcode.Opcode(load.Byte()); op {
 	case opcode.I32Const:
 		valueBits = uint64(int64(load.Varint32()))
 		t = wa.I32
@@ -36,9 +36,8 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
 		if i >= uint32(len(m.ImportGlobals)) {
 			panic(module.Errorf("import global index out of bounds in initializer expression: %d", i))
 		}
-		g := m.Globals[i]
-		valueBits = g.Init
-		t = g.Type
+		importIndex = int(i)
+		t = m.Globals[i].Type
 
 	default:
 		panic(module.Errorf("unsupported operation in initializer expression: %s", op))
@@ -52,9 +51,11 @@ func Read(m *module.M, load loader.L) (valueBits uint64, t wa.Type) {
 }
 
 func ReadOffset(m *module.M, load loader.L) uint32 {
-	offset, t := Read(m, load)
+	index, value, t := Read(m, load)
 	if t != wa.I32 {
 		panic(module.Errorf("offset initializer expression has invalid type: %s", t))
 	}
-	return uint32(int32(int64(offset)))
+
+	value = m.EvaluateGlobalInitializer(index, value)
+	return uint32(int32(int64(value)))
 }
