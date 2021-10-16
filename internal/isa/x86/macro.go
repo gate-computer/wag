@@ -586,24 +586,23 @@ func (MacroAssembler) SetBool(p *gen.Prog, target reg.R, cond condition.C) {
 // setBool sets the scratch register.  (SETcc instruction's register encoding
 // is tricky.)
 func setBool(p *gen.Prog, cond condition.C) {
-	var endJumps []int32
+	var endJump int32
 
-	switch {
-	case cond >= condition.MinUnorderedOrCondition:
-		in.MOVi.RegImm32(&p.Text, wa.I32, RegScratch, 1)    // true
-		endJumps = append(endJumps, in.JPcb.Stub8(&p.Text)) // if unordered, else
-
-	case cond >= condition.MinOrderedAndCondition:
-		in.MOV.RegReg(&p.Text, wa.I32, RegScratch, RegZero) // false
-		endJumps = append(endJumps, in.JPcb.Stub8(&p.Text)) // if unordered, else
-
-	default:
+	if cond >= condition.MinUnorderedOrCondition {
+		in.MOVi.RegImm32(&p.Text, wa.I32, RegScratch, 1)
+		endJump = in.JPcb.Stub8(&p.Text) // 1 if unordered, else
+	} else {
 		in.MOV.RegReg(&p.Text, wa.I32, RegScratch, RegZero)
+		if cond >= condition.MinOrderedAndCondition {
+			endJump = in.JPcb.Stub8(&p.Text) // 0 if unordered, else
+		}
 	}
 
-	conditionInsns[cond].SetccOpcode().OneSizeReg(&p.Text, RegScratch)
+	conditionInsns[cond].SetccOpcode().OneSizeReg(&p.Text, RegScratch) // set cond.
 
-	linker.UpdateNearBranches(p.Text.Bytes(), endJumps)
+	if endJump > 0 {
+		linker.UpdateNearBranch(p.Text.Bytes(), endJump)
+	}
 }
 
 func (MacroAssembler) LoadStack(p *gen.Prog, t wa.Type, target reg.R, offset int32) {

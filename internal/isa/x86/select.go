@@ -42,45 +42,35 @@ func (MacroAssembler) Select(f *gen.Func, a, b, condOperand operand.O) operand.O
 
 	switch a.Type.Category() {
 	case wa.Int:
-		insns := conditionInsns[cond]
+		move := conditionInsns[cond].CmovccOpcode()
 
-		switch a.Storage {
-		default: // stack, immediate, or register
-			aReg, _ := getScratchReg(f, a)
-			insns.CmovccOpcode().RegReg(&f.Text, a.Type, targetReg, aReg)
-			f.Regs.Free(a.Type, aReg)
-		}
+		aReg, _ := getScratchReg(f, a)
+		move.RegReg(&f.Text, a.Type, targetReg, aReg)
+		f.Regs.Free(a.Type, aReg)
 
 	case wa.Float:
-		var moveItJumps []int32
-		var endJumps []int32
+		movJumps := make([]int32, 0, 1)
+		endJumps := make([]int32, 0, 2)
 
-		cond = condition.Inverted[cond]
-		notCondJump := conditionInsns[cond].JccOpcodeCb()
+		condInv := condition.Inverted[cond]
+		jumpInv := conditionInsns[condInv].JccOpcodeCb()
 
 		switch {
 		case cond >= condition.MinUnorderedOrCondition:
-			in.JPcb.Stub8(&f.Text) // move it if unordered
-			moveItJumps = append(moveItJumps, f.Text.Addr)
-
-			notCondJump.Stub8(&f.Text) // break if not cond
-			endJumps = append(endJumps, f.Text.Addr)
+			movJumps = append(movJumps, in.JPcb.Stub8(&f.Text)) // Take a if unordered, else
+			endJumps = append(endJumps, jumpInv.Stub8(&f.Text)) // keep b if not cond, else
 
 		case cond >= condition.MinOrderedAndCondition:
-			in.JPcb.Stub8(&f.Text) // break if unordered
-			endJumps = append(endJumps, f.Text.Addr)
-
-			notCondJump.Stub8(&f.Text) // break if not cond
-			endJumps = append(endJumps, f.Text.Addr)
+			endJumps = append(endJumps, in.JPcb.Stub8(&f.Text)) // Keep b if unordered, else
+			endJumps = append(endJumps, jumpInv.Stub8(&f.Text)) // keep b if cond, else
 
 		default:
-			notCondJump.Stub8(&f.Text) // break if not cond
-			endJumps = append(endJumps, f.Text.Addr)
+			endJumps = append(endJumps, jumpInv.Stub8(&f.Text)) // Keep b if not cond, else
 		}
 
-		linker.UpdateNearBranches(f.Text.Bytes(), moveItJumps)
+		linker.UpdateNearBranches(f.Text.Bytes(), movJumps)
 
-		asm.Move(f, targetReg, a)
+		asm.Move(f, targetReg, a) // take a.
 
 		linker.UpdateNearBranches(f.Text.Bytes(), endJumps)
 	}
