@@ -348,25 +348,6 @@ TEXT sysFchown<>(SB),NOSPLIT,$0
 	ADDQ	$0x20, DX
 	JMP	DX
 
-// func importLchown() uint64
-TEXT ·importLchown(SB),$0-8
-	LEAQ	sysLchown<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysLchown<>(SB),NOSPLIT,$0
-	MOVQ	24(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVQ	16(SP), SI
-	MOVQ	8(SP), DX
-	MOVL	$94, AX
-	SYSCALL
-	MOVQ	R15, DX
-	ADDQ	$0x20, DX
-	JMP	DX
-
 // func importUmask() uint64
 TEXT ·importUmask(SB),$0-8
 	LEAQ	sysUmask<>(SB), AX
@@ -441,23 +422,6 @@ TEXT ·importGettid(SB),$0-8
 
 TEXT sysGettid<>(SB),NOSPLIT,$0
 	MOVL	$186, AX
-	SYSCALL
-	MOVQ	R15, DX
-	ADDQ	$0x20, DX
-	JMP	DX
-
-// func importTime() uint64
-TEXT ·importTime(SB),$0-8
-	LEAQ	sysTime<>(SB), AX
-	MOVQ	AX, ret+0(FP)
-	RET
-
-TEXT sysTime<>(SB),NOSPLIT,$0
-	MOVQ	8(SP), DI
-	ANDL	DI, DI
-	JZ	null1
-	ADDQ	R14, DI
-null1:	MOVL	$201, AX
 	SYSCALL
 	MOVQ	R15, DX
 	ADDQ	$0x20, DX

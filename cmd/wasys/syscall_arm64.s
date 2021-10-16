@@ -16,7 +16,7 @@ null2:	MOVD	0(R29), R2
 	MOVD	$63, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -36,7 +36,7 @@ null2:	MOVD	0(R29), R2
 	MOVD	$64, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -50,7 +50,7 @@ TEXT ·importClose(SB),$0-8
 	MOVD	$57, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -66,7 +66,7 @@ TEXT ·importLseek(SB),$0-8
 	MOVD	$62, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -87,7 +87,7 @@ null2:	MOVD	8(R29), R2
 	MOVD	$67, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -108,7 +108,7 @@ null2:	MOVD	8(R29), R2
 	MOVD	$68, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -122,7 +122,7 @@ TEXT ·importDup(SB),$0-8
 	MOVD	$23, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -135,7 +135,7 @@ TEXT ·importGetpid(SB),$0-8
 	MOVD	$172, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -156,7 +156,7 @@ null3:	MOVD	0(R29), R3
 	MOVD	$71, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -171,7 +171,7 @@ TEXT ·importShutdown(SB),$0-8
 	MOVD	$210, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -192,7 +192,7 @@ TEXT ·importSocketpair(SB),$0-8
 null4:	MOVD	$199, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -207,7 +207,7 @@ TEXT ·importFlock(SB),$0-8
 	MOVD	$32, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -221,7 +221,7 @@ TEXT ·importFsync(SB),$0-8
 	MOVD	$82, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -235,7 +235,7 @@ TEXT ·importFdatasync(SB),$0-8
 	MOVD	$83, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -254,7 +254,7 @@ null1:	MOVD	0(R29), R1
 	MOVD	$45, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -269,7 +269,7 @@ TEXT ·importFtruncate(SB),$0-8
 	MOVD	$46, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -288,7 +288,7 @@ null1:	MOVD	0(R29), R1
 	MOVD	$17, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -306,7 +306,7 @@ TEXT ·importChdir(SB),$0-8
 null1:	MOVD	$49, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -320,7 +320,7 @@ TEXT ·importFchdir(SB),$0-8
 	MOVD	$50, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -335,7 +335,7 @@ TEXT ·importFchmod(SB),$0-8
 	MOVD	$52, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -351,27 +351,7 @@ TEXT ·importFchown(SB),$0-8
 	MOVD	$55, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
-	B	(R1)
-
-after:	MOVD	LR, ret+0(FP)
-	RET
-
-// func importLchown() uint64
-TEXT ·importLchown(SB),$0-8
-	BL	after
-
-	MOVD	$0, R0
-	MOVW	16(R29), R0
-	CMPW	$0, R0
-	BEQ	null1
-	ADD	R26, R0
-null1:	MOVD	8(R29), R1
-	MOVD	0(R29), R2
-	MOVD	$1032, R8
-	SVC
-	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -385,7 +365,7 @@ TEXT ·importUmask(SB),$0-8
 	MOVD	$166, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -398,7 +378,7 @@ TEXT ·importGetuid(SB),$0-8
 	MOVD	$174, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -411,7 +391,7 @@ TEXT ·importGetgid(SB),$0-8
 	MOVD	$176, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -424,7 +404,7 @@ TEXT ·importVhangup(SB),$0-8
 	MOVD	$58, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -437,7 +417,7 @@ TEXT ·importSync(SB),$0-8
 	MOVD	$81, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -450,25 +430,7 @@ TEXT ·importGettid(SB),$0-8
 	MOVD	$178, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
-	B	(R1)
-
-after:	MOVD	LR, ret+0(FP)
-	RET
-
-// func importTime() uint64
-TEXT ·importTime(SB),$0-8
-	BL	after
-
-	MOVD	$0, R0
-	MOVW	0(R29), R0
-	CMPW	$0, R0
-	BEQ	null1
-	ADD	R26, R0
-null1:	MOVD	$1062, R8
-	SVC
-	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -485,7 +447,7 @@ TEXT ·importPosixFadvise(SB),$0-8
 	MOVD	$223, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -499,7 +461,7 @@ TEXT ·importExit(SB),$0-8
 	MOVD	$94, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -512,7 +474,7 @@ TEXT ·importInotifyInit1(SB),$0-8
 	MOVD	$26, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -532,7 +494,7 @@ null2:	MOVD	0(R29), R2
 	MOVD	$27, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -547,7 +509,7 @@ TEXT ·importInotifyRmWatch(SB),$0-8
 	MOVD	$28, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -568,7 +530,7 @@ null2:	MOVD	8(R29), R2
 	MOVD	$56, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -588,7 +550,7 @@ null2:	MOVD	0(R29), R2
 	MOVD	$34, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -610,7 +572,7 @@ null2:	MOVD	16(R29), R2
 	MOVD	$54, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -630,7 +592,7 @@ null2:	MOVD	0(R29), R2
 	MOVD	$35, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -655,7 +617,7 @@ null2:	MOVD	8(R29), R2
 null4:	MOVD	$38, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -681,7 +643,7 @@ null4:	MOVD	0(R29), R4
 	MOVD	$37, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -705,7 +667,7 @@ null1:	MOVD	8(R29), R1
 null3:	MOVD	$36, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -730,7 +692,7 @@ null3:	MOVD	0(R29), R3
 	MOVD	$78, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -751,7 +713,7 @@ null2:	MOVD	8(R29), R2
 	MOVD	$53, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -772,7 +734,7 @@ null2:	MOVD	8(R29), R2
 	MOVD	$48, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -799,7 +761,7 @@ null4:	MOVD	8(R29), R4
 	MOVD	$76, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -816,7 +778,7 @@ TEXT ·importTee(SB),$0-8
 	MOVD	$77, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -833,7 +795,7 @@ TEXT ·importSyncFileRange(SB),$0-8
 	MOVD	$84, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -850,7 +812,7 @@ TEXT ·importFallocate(SB),$0-8
 	MOVD	$47, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -865,7 +827,7 @@ TEXT ·importEventfd(SB),$0-8
 	MOVD	$19, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -881,7 +843,7 @@ TEXT ·importDup3(SB),$0-8
 	MOVD	$24, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
@@ -900,7 +862,7 @@ null1:	MOVD	0(R29), R1
 	MOVD	$59, R8
 	SVC
 	MOVD	R27, R1
-	ADD	$16, R1
+	ADD	$0x20, R1
 	B	(R1)
 
 after:	MOVD	LR, ret+0(FP)
