@@ -268,30 +268,32 @@ func binaryFloatCommon(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, targetReg)
 }
 
-var binaryFloatMinmaxOpcodes = [2]struct {
-	common in.RMscalar
-	zero   in.RMpacked
-}{
-	prop.IndexMinmaxMin: {in.MINSx, in.ORPx},
-	prop.IndexMinmaxMax: {in.MAXSx, in.ANDPx},
+// TODO: Intel says that this behavior can be accomplished "using a sequence of
+//       instructions, such as, a comparison followed by AND, ANDN and OR."
+
+var binaryFloatMinmaxInsns = [2]in.RMscalar{
+	prop.IndexMinmaxMin: in.MINSx,
+	prop.IndexMinmaxMax: in.MAXSx,
 }
 
 func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
-	opcodes := binaryFloatMinmaxOpcodes[index]
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
-	in.UCOMISx.RegReg(&f.Text, a.Type, targetReg, sourceReg)
-	commonJump := in.JNEcb.Stub8(&f.Text)
+	var endJumps [2]int32
 
-	opcodes.zero.RegReg(&f.Text, a.Type, targetReg, sourceReg)
-	endJump := in.JMPcb.Stub8(&f.Text)
+	in.UCOMISx.RegReg(&f.Text, a.Type, targetReg, targetReg)
+	endJumps[0] = in.JPcb.Stub8(&f.Text)
+	in.UCOMISx.RegReg(&f.Text, a.Type, sourceReg, sourceReg)
+	takeSourceJump := in.JPcb.Stub8(&f.Text)
+	binaryFloatMinmaxInsns[index].RegReg(&f.Text, a.Type, targetReg, sourceReg)
+	endJumps[1] = in.JMPcb.Stub8(&f.Text)
 
-	linker.UpdateNearBranch(f.Text.Bytes(), commonJump)
+	linker.UpdateNearBranch(f.Text.Bytes(), takeSourceJump)
 
-	opcodes.common.RegReg(&f.Text, a.Type, targetReg, sourceReg)
+	in.MOVAPx.RegReg(&f.Text, a.Type, targetReg, sourceReg)
 
-	linker.UpdateNearBranch(f.Text.Bytes(), endJump)
+	linker.UpdateNearBranches(f.Text.Bytes(), endJumps[:])
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)
