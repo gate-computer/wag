@@ -67,7 +67,9 @@ func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) 
 	}
 	sigIndex = getCanonicalIndirectCallSig(&f.Prog, sigIndex)
 
-	load.Byte() // reserved
+	if load.Byte() != 0 {
+		panic(module.Errorf("%s: reserved byte is not zero", op))
+	}
 
 	funcIndex := popOperand(f, wa.I32)
 

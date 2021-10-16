@@ -698,8 +698,7 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 
 			case "zero byte expected":
 				switch {
-				case msg == "block has no operand to pop":
-					t.Log("actual:", err) // TODO: see what is going on
+				case strings.HasSuffix(msg, "reserved byte is not zero"):
 					return true
 				}
 			}

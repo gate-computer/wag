@@ -214,7 +214,9 @@ func genUnary(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deaden
 func genCurrentMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opSaveOperands(f)
 
-	load.Byte() // reserved
+	if load.Byte() != 0 {
+		panic(module.Errorf("%s: reserved byte is not zero", op))
+	}
 
 	f.MapCallAddr(asm.CurrentMemory(f))
 	pushResultRegOperand(f, wa.I32)
@@ -229,7 +231,9 @@ func genDrop(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend
 func genGrowMemory(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opSaveOperands(f)
 
-	load.Byte() // reserved
+	if load.Byte() != 0 {
+		panic(module.Errorf("%s: reserved byte is not zero", op))
+	}
 
 	// This is a possible suspension point.  Operands must be on stack, and the
 	// size of the following instruction sequence is part of ISA-specific ABI.
