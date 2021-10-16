@@ -17,17 +17,11 @@ type Reader = binary.Reader
 type CustomContentLoader func(sectionName string, r Reader, payloadLen uint32) error
 
 type customLoaderMux struct {
-	loaders   map[string]CustomContentLoader
-	maxKeyLen uint32
+	loaders map[string]CustomContentLoader
 }
 
 func CustomLoader(loaders map[string]CustomContentLoader) func(Reader, uint32) error {
 	mux := customLoaderMux{loaders: loaders}
-	for k := range loaders {
-		if n := len(k); n > int(mux.maxKeyLen) {
-			mux.maxKeyLen = uint32(n)
-		}
-	}
 	return mux.load
 }
 
@@ -38,14 +32,12 @@ func (mux customLoaderMux) load(r Reader, length uint32) (err error) {
 	}
 	length -= uint32(n)
 
-	if nameLen <= mux.maxKeyLen {
-		name := string(loader.L{R: r}.Bytes(nameLen))
-		length -= nameLen
+	name := loader.L{R: r}.String(nameLen, "custom section name")
+	length -= nameLen
 
-		if f := mux.loaders[name]; f != nil {
-			err = f(name, r, length)
-			return
-		}
+	if f := mux.loaders[name]; f != nil {
+		err = f(name, r, length)
+		return
 	}
 
 	_, err = io.CopyN(ioutil.Discard, r, int64(length))

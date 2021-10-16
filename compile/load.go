@@ -323,14 +323,14 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 			panic(module.Errorf("module string is too long in import #%d", i))
 		}
 
-		moduleStr := string(load.Bytes(moduleLen))
+		moduleStr := load.String(moduleLen, "imported module name")
 
 		fieldLen := load.Varuint32()
 		if fieldLen > maxStringSize {
 			panic(module.Errorf("field string is too long in import #%d", i))
 		}
 
-		fieldStr := string(load.Bytes(fieldLen))
+		fieldStr := load.String(fieldLen, "imported field name")
 
 		kind := module.ExternalKind(load.Byte())
 
@@ -448,7 +448,7 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L)
 			panic(module.Errorf("field string is too long in export #%d", i))
 		}
 
-		fieldStr := load.Bytes(fieldLen)
+		fieldStr := load.String(fieldLen, "exported field name")
 		kind := module.ExternalKind(load.Byte())
 		index := load.Varuint32()
 
@@ -457,7 +457,7 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L)
 			if index >= uint32(len(m.m.Funcs)) {
 				panic(module.Errorf("export function index out of bounds: %d", index))
 			}
-			m.m.ExportFuncs[string(fieldStr)] = index
+			m.m.ExportFuncs[fieldStr] = index
 
 		case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
 

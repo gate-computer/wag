@@ -6,6 +6,7 @@ package loader
 
 import (
 	"io"
+	"unicode/utf8"
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/module"
@@ -20,6 +21,10 @@ func (load L) Into(buf []byte) {
 	if _, err := io.ReadFull(load.R, buf); err != nil {
 		panic(err)
 	}
+}
+
+func (load L) String(n uint32, name string) string {
+	return String(load.Bytes(n), name)
 }
 
 func (load L) Bytes(n uint32) (data []byte) {
@@ -110,4 +115,11 @@ func (load L) Count(maxCount uint32, name string) []struct{} {
 		panic(module.Errorf("%s count is too large: 0x%x", name, count))
 	}
 	return make([]struct{}, int(count))
+}
+
+func String(b []byte, name string) string {
+	if !utf8.Valid(b) {
+		panic(module.Errorf("%s is not a valid UTF-8 string", name))
+	}
+	return string(b)
 }

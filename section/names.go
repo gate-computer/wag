@@ -67,7 +67,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 
 	switch id {
 	case nameSubsectionModuleName:
-		ns.ModuleName = string(content)
+		ns.ModuleName = loader.String(content, "name section: module name")
 
 	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
 		loadContent := loader.L{R: bytes.NewReader(content)}
@@ -89,7 +89,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 			switch id {
 			case nameSubsectionFunctionNames:
 				funcNameLen := loadContent.Varuint32()
-				fn.FuncName = string(loadContent.Bytes(funcNameLen))
+				fn.FuncName = loadContent.String(funcNameLen, "name section: function name")
 
 			case nameSubsectionLocalNames:
 				count := loadContent.Varuint32()
@@ -111,7 +111,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 					}
 
 					localNameLen := loadContent.Varuint32()
-					fn.LocalNames[localIndex] = string(loadContent.Bytes(localNameLen))
+					fn.LocalNames[localIndex] = loadContent.String(localNameLen, "name section: local name")
 				}
 			}
 		}

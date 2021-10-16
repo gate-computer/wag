@@ -614,6 +614,12 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 					return true
 				}
 
+			case "malformed UTF-8 encoding":
+				switch {
+				case strings.HasSuffix(msg, "name is not a valid UTF-8 string"):
+					return true
+				}
+
 			case "section size mismatch":
 				switch {
 				case msg == "unexpected EOF":
