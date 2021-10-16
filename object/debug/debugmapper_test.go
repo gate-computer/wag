@@ -15,5 +15,5 @@ func TestTrapMap(*testing.T) {
 }
 
 func TestInsnMap(*testing.T) {
-	_ = new(InsnMap).Mapper(nil).(obj.DebugObjectMapper)
+	var _ obj.DebugObjectMapper = new(InsnMap)
 }

@@ -145,11 +145,6 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		return
 	}
 
-	// Instruction mapping (for debugging) requires a special reader which
-	// tracks the input offset.
-
-	codeReader := debug.NewReadTeller(r)
-
 	// Generate executable code and debug information while reading the
 	// WebAssembly code section.  Text encodes the import function vector
 	// indexes, but not the function addresses (the vector can be mapped
@@ -158,11 +153,11 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	var codeConfig = &compile.CodeConfig{
 		Text:   objectConfig.Text,
-		Mapper: object.InsnMap.Mapper(codeReader),
+		Mapper: &object.InsnMap,
 		Config: loadingConfig,
 	}
 
-	err = compile.LoadCodeSection(codeConfig, codeReader, module, lib)
+	err = compile.LoadCodeSection(codeConfig, r, module, lib)
 	objectConfig.Text = codeConfig.Text
 	object.Text = codeConfig.Text.Bytes()
 	if err != nil {

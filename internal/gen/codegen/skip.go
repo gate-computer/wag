@@ -16,7 +16,7 @@ func skipOps(f *gen.Func, load *loader.L) {
 		op := opcode.Opcode(load.Byte())
 
 		if f.DebugMap != nil {
-			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr))
+			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr), f.Debugger.SourceAddr(load))
 		}
 
 		if op == opcode.End {
@@ -32,7 +32,7 @@ func skipThenOps(f *gen.Func, load *loader.L) (haveElse bool) {
 		op := opcode.Opcode(load.Byte())
 
 		if f.DebugMap != nil {
-			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr))
+			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr), f.Debugger.SourceAddr(load))
 		}
 
 		switch op {

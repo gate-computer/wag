@@ -4,6 +4,10 @@
 
 package gen
 
+import (
+	"gate.computer/wag/internal/loader"
+)
+
 // Breakpoint information, for debugger support.
 type Breakpoint struct {
 	Set bool // Set by the compiler if it implemented the breakpoint.
@@ -14,10 +18,9 @@ type Debugger struct {
 	// DWARF debug info.
 	Breakpoints map[uint32]Breakpoint
 
-	Source     Teller
 	CodeOffset int64
 }
 
-type Teller interface {
-	Tell() int64
+func (d *Debugger) SourceAddr(load *loader.L) uint32 {
+	return uint32(load.Tell() - d.CodeOffset)
 }

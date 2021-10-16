@@ -5,36 +5,24 @@
 package codegen
 
 import (
-	"errors"
-
-	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/loader"
 )
 
-func makeDebugger(breakpoints map[uint32]gen.Breakpoint, r binary.Reader) gen.Debugger {
+func makeDebugger(breakpoints map[uint32]gen.Breakpoint, load *loader.L) gen.Debugger {
 	if len(breakpoints) == 0 {
 		return gen.Debugger{}
 	}
 
-	source, ok := r.(gen.Teller)
-	if !ok {
-		panic(errors.New("setting breakpoints without position-aware reader"))
-	}
-
 	return gen.Debugger{
 		Breakpoints: breakpoints,
-		Source:      source,
-		CodeOffset:  source.Tell(),
+		CodeOffset:  load.Tell(),
 	}
 }
 
-func genBreakpoint(f *gen.Func) {
-	if f.Debugger.Source == nil {
-		return
-	}
-
-	offset := uint32(f.Debugger.Source.Tell() - f.Debugger.CodeOffset)
-	bp, found := f.Debugger.Breakpoints[offset]
+func genBreakpoint(f *gen.Func, load *loader.L) {
+	addr := f.Debugger.SourceAddr(load)
+	bp, found := f.Debugger.Breakpoints[addr]
 	if !found {
 		return
 	}
@@ -43,5 +31,5 @@ func genBreakpoint(f *gen.Func) {
 	asm.Breakpoint(f)
 
 	bp.Set = true
-	f.Debugger.Breakpoints[offset] = bp
+	f.Debugger.Breakpoints[addr] = bp
 }

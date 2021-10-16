@@ -22,7 +22,7 @@ type ObjectMapper interface {
 type DebugObjectMapper interface {
 	ObjectMapper
 	PutTrapSite(addr uint32, stackOffset int32)
-	PutInsnAddr(addr uint32)
+	PutInsnAddr(addr, sourceAddr uint32)
 	PutDataBlock(addr uint32, length int32)
 }
 

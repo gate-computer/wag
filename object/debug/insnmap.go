@@ -6,11 +6,7 @@ package debug
 
 import (
 	"sort"
-
-	"gate.computer/wag/internal/obj"
 )
-
-type antiMapper = obj.DummyDebugMapper
 
 // Instruction mapping from machine code to WebAssembly.  SourceOffset is zero
 // if ObjectOffset contains non-executable data interleaved with the code.
@@ -26,8 +22,25 @@ type InsnMapping struct {
 type InsnMap struct {
 	TrapMap
 	Insns []InsnMapping
+}
 
-	antiMapper // Conflict with TrapMap's ObjectMapper implementation.
+func (m *InsnMap) PutInsnAddr(objectOffset, sourceOffset uint32) {
+	m.putMapping(objectOffset, sourceOffset, 0)
+}
+
+func (m *InsnMap) PutDataBlock(objectOffset uint32, length int32) {
+	m.putMapping(objectOffset, 0, length)
+}
+
+func (m *InsnMap) putMapping(objectOffset, sourceOffset uint32, blockLen int32) {
+	prev := len(m.Insns) - 1
+	if prev >= 0 && m.Insns[prev].ObjectOffset == objectOffset {
+		// Replace previous mapping because no machine code was generated.
+		m.Insns[prev].SourceOffset = sourceOffset
+		m.Insns[prev].BlockLen = blockLen
+	} else {
+		m.Insns = append(m.Insns, InsnMapping{objectOffset, sourceOffset, blockLen})
+	}
 }
 
 func (m *InsnMap) FindCall(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
@@ -40,57 +53,4 @@ func (m *InsnMap) FindCall(retAddr uint32) (init bool, funcIndex, callIndex int,
 		retOffset = m.Insns[retIndex].SourceOffset
 	}
 	return
-}
-
-// Mapper creates a compile.DebugObjectMapper for the InsnMap.
-//
-// The source position teller is a special reader which must be used when
-// loading (at least) the code section.  See NewReadTeller.
-func (m *InsnMap) Mapper(source Teller) obj.ObjectMapper {
-	return &insnMapper{
-		m:      m,
-		source: source,
-	}
-}
-
-type insnMapper struct {
-	m          *InsnMap
-	source     Teller
-	codeOffset int64
-}
-
-func (x *insnMapper) InitObjectMap(numImportFuncs, numOtherFuncs int) {
-	x.m.TrapMap.InitObjectMap(numImportFuncs, numOtherFuncs)
-	x.codeOffset = x.source.Tell()
-}
-
-func (x *insnMapper) PutFuncAddr(addr uint32) {
-	x.m.TrapMap.PutFuncAddr(addr)
-}
-
-func (x *insnMapper) PutCallSite(retAddr uint32, stackOffset int32) {
-	x.m.TrapMap.PutCallSite(retAddr, stackOffset)
-}
-
-func (x *insnMapper) PutTrapSite(addr uint32, stackOffset int32) {
-	x.m.TrapMap.PutTrapSite(addr, stackOffset)
-}
-
-func (x *insnMapper) PutInsnAddr(off uint32) {
-	x.putMapping(off, uint32(x.source.Tell()-x.codeOffset), 0)
-}
-
-func (x *insnMapper) PutDataBlock(off uint32, length int32) {
-	x.putMapping(off, 0, length)
-}
-
-func (x *insnMapper) putMapping(objectOffset, sourceOffset uint32, blockLen int32) {
-	prev := len(x.m.Insns) - 1
-	if prev >= 0 && x.m.Insns[prev].ObjectOffset == objectOffset {
-		// Replace previous mapping because no machine code was generated.
-		x.m.Insns[prev].SourceOffset = sourceOffset
-		x.m.Insns[prev].BlockLen = blockLen
-	} else {
-		x.m.Insns = append(x.m.Insns, InsnMapping{objectOffset, sourceOffset, blockLen})
-	}
 }

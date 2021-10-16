@@ -27,9 +27,9 @@ func genOps(f *gen.Func, load *loader.L) (deadend bool) {
 		op := opcode.Opcode(load.Byte())
 
 		if f.DebugMap != nil {
-			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr))
+			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr), f.Debugger.SourceAddr(load))
 		}
-		genBreakpoint(f)
+		genBreakpoint(f, load)
 
 		if op == opcode.End {
 			break
@@ -60,9 +60,9 @@ loop:
 		op := opcode.Opcode(load.Byte())
 
 		if f.DebugMap != nil {
-			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr))
+			f.DebugMap.PutInsnAddr(uint32(f.Text.Addr), f.Debugger.SourceAddr(load))
 		}
-		genBreakpoint(f)
+		genBreakpoint(f, load)
 
 		switch op {
 		case opcode.End:
