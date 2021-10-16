@@ -128,32 +128,32 @@ func (lib *Library) loadSections(r Reader) {
 
 // TODO: these methods are copied from Module - combine implementations?
 
-func (l Library) NumImportFuncs() int {
-	return len(l.l.ImportFuncs)
+func (lib *Library) NumImportFuncs() int {
+	return len(lib.l.ImportFuncs)
 }
 
-func (l Library) ImportFunc(i int) (module, field string, sig wa.FuncType) {
-	imp := l.l.ImportFuncs[i]
+func (lib *Library) ImportFunc(i int) (module, field string, sig wa.FuncType) {
+	imp := lib.l.ImportFuncs[i]
 	module = imp.Module
 	field = imp.Field
 
-	sigIndex := l.l.Funcs[i]
-	sig = l.l.Types[sigIndex]
+	sigIndex := lib.l.Funcs[i]
+	sig = lib.l.Types[sigIndex]
 	return
 }
 
-func (l *Library) SetImportFunc(i int, vectorIndex int) {
+func (lib *Library) SetImportFunc(i int, vectorIndex int) {
 	if vectorIndex >= 0 {
 		panic(vectorIndex)
 	}
-	l.l.ImportFuncs[i].VectorIndex = vectorIndex
+	lib.l.ImportFuncs[i].VectorIndex = vectorIndex
 }
 
-func (l Library) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
-	funcIndex, found = l.l.ExportFuncs[field]
+func (lib *Library) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
+	funcIndex, found = lib.l.ExportFuncs[field]
 	if found {
-		sigIndex := l.l.Funcs[funcIndex]
-		sig = l.l.Types[sigIndex]
+		sigIndex := lib.l.Funcs[funcIndex]
+		sig = lib.l.Types[sigIndex]
 	}
 	return
 }
