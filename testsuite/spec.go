@@ -334,6 +334,12 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 					return true
 				}
 
+			case "duplicate export name":
+				switch {
+				case strings.HasPrefix(msg, "duplicate export name"):
+					return true
+				}
+
 			case "memory size must be at most 65536 pages (4GiB)":
 				switch {
 				case strings.HasPrefix(msg, "invalid initial memory size"):

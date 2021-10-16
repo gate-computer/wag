@@ -462,9 +462,12 @@ func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 }
 
 func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L) {
+	count := load.Count(config.MaxExports, "export")
+	names := make(map[string]struct{}, count)
+
 	m.m.ExportFuncs = make(map[string]uint32)
 
-	for i := range load.Span(config.MaxExports, "export") {
+	for i := 0; i < count; i++ {
 		fieldLen := load.Varuint32()
 		if fieldLen > maxStringSize {
 			panic(module.Errorf("field string is too long in export #%d", i))
@@ -473,6 +476,11 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L)
 		fieldStr := load.String(fieldLen, "exported field name")
 		kind := module.ExternalKind(load.Byte())
 		index := load.Varuint32()
+
+		if _, exist := names[fieldStr]; exist {
+			panic(module.Errorf("duplicate export name: %q", fieldStr))
+		}
+		names[fieldStr] = struct{}{}
 
 		switch kind {
 		case module.ExternalKindFunction:
