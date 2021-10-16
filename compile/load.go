@@ -265,7 +265,9 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 			payloadLen = load.Varuint32()
 		}
 
+		payloadOffset := load.Tell()
 		initialSectionLoaders[id](&m, config, payloadLen, load)
+		section.CheckConsumption(load, payloadOffset, payloadLen)
 	}
 }
 
@@ -699,7 +701,9 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 		mapper = obj.DummyMapper{}
 	}
 
+	payloadOffset := load.Tell()
 	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Breakpoints)
+	section.CheckConsumption(load, payloadOffset, payloadLen)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
 		panic(module.Error("text size limit exceeded"))
@@ -764,7 +768,10 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 		}
 
 		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)
+
+		payloadOffset := load.Tell()
 		datalayout.ReadMemory(config.GlobalsMemory, load, &mod.m)
+		section.CheckConsumption(load, payloadOffset, payloadLen)
 
 	case 0:
 		// no data section
@@ -799,16 +806,21 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 
 	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
+		var payloadLen uint32
+		var err error
+
 		if config.SectionMapper != nil {
-			_, err := config.SectionMapper(byte(id), load)
+			payloadLen, err = config.SectionMapper(byte(id), load)
 			if err != nil {
 				panic(err)
 			}
 		} else {
-			load.Varuint32()
+			payloadLen = load.Varuint32()
 		}
 
+		payloadOffset := load.Tell()
 		datalayout.ValidateMemory(load, &mod.m)
+		section.CheckConsumption(load, payloadOffset, payloadLen)
 
 	case 0:
 		// no data section

@@ -632,11 +632,7 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 				switch {
 				case msg == "unexpected EOF":
 					return true
-				case strings.HasPrefix(msg, "custom section id"):
-					return true
-				case strings.HasPrefix(msg, "start function index out of bounds"):
-					return true
-				case strings.Contains(msg, "follows section"):
+				case strings.HasPrefix(msg, "section size is"):
 					return true
 				}
 
@@ -719,6 +715,12 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 			case "integer too large":
 				switch {
 				case strings.Contains(msg, "value is too"):
+					return true
+				}
+
+			case "section size mismatch":
+				switch {
+				case strings.HasPrefix(msg, "section size is"):
 					return true
 				}
 

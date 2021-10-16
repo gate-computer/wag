@@ -43,6 +43,8 @@ func Find(
 				payloadLen = load.Varuint32()
 			}
 
+			payloadOffset := load.Tell()
+
 			if customLoader != nil {
 				err = customLoader(load, payloadLen)
 			} else {
@@ -52,6 +54,8 @@ func Find(
 				panic(err)
 			}
 
+			CheckConsumption(load, payloadOffset, payloadLen)
+
 		case id == findID:
 			return id
 
@@ -59,5 +63,12 @@ func Find(
 			load.UnreadByte()
 			return id
 		}
+	}
+}
+
+func CheckConsumption(load *loader.L, payloadOffset int64, payloadLen uint32) {
+	consumed := load.Tell() - payloadOffset
+	if consumed != int64(payloadLen) {
+		panic(module.Errorf("section size is %d but %d bytes was read", payloadLen, consumed))
 	}
 }
