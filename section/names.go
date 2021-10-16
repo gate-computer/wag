@@ -60,7 +60,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 		panic(err)
 	}
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	contentSize := load.Varuint32()
 	content := load.Bytes(contentSize)
@@ -70,7 +70,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 		ns.ModuleName = loader.String(content, "name section: module name")
 
 	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
-		loadContent := loader.L{R: bytes.NewReader(content)}
+		loadContent := loader.New(bytes.NewReader(content))
 
 		for range loadContent.Span(maxFuncNames, "function name count") {
 			funcIndex := loadContent.Varuint32()

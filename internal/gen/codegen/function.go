@@ -111,7 +111,7 @@ func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
 	}
 }
 
-func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, numExtra int, atomicCallStubs bool) {
+func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, numExtra int, atomicCallStubs bool) {
 	*f = gen.Func{
 		Prog: f.Prog,
 

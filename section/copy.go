@@ -29,7 +29,7 @@ func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reade
 		}
 	}()
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	switch section.Find(id, load, nil, customLoader) {
 	case id:
@@ -52,7 +52,7 @@ func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err 
 		}
 	}()
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	if section.Find(0, load, nil, customLoader) == 0 {
 		err = io.EOF
@@ -60,7 +60,7 @@ func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err 
 	return
 }
 
-func copySection(w io.Writer, id ID, load loader.L) (length int64, err error) {
+func copySection(w io.Writer, id ID, load *loader.L) (length int64, err error) {
 	payloadLen := load.Varuint32()
 
 	head := make([]byte, 1+binary.MaxVarintLen32)
@@ -73,7 +73,7 @@ func copySection(w io.Writer, id ID, load loader.L) (length int64, err error) {
 		return
 	}
 
-	m, err := io.CopyN(w, load.R, int64(payloadLen))
+	m, err := io.CopyN(w, load, int64(payloadLen))
 	length += m
 	return
 }

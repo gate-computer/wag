@@ -46,7 +46,7 @@ func CopyGlobalsAlign(buffer data.Buffer, m *module.M, memoryOffset int) {
 	}
 }
 
-func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
+func ReadMemory(buffer data.Buffer, load *loader.L, m *module.M) {
 	b := buffer.Bytes()
 	memoryOffset := len(b)
 
@@ -66,17 +66,17 @@ func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
 	}
 }
 
-func ValidateMemory(load loader.L, m *module.M) {
+func ValidateMemory(load *loader.L, m *module.M) {
 	for i := range load.Span(maxSegments, "segment") {
 		_, size := readSegmentHeader(load, m, i)
 
-		if _, err := io.CopyN(ioutil.Discard, load.R, int64(size)); err != nil {
+		if _, err := io.CopyN(ioutil.Discard, load, int64(size)); err != nil {
 			panic(err)
 		}
 	}
 }
 
-func readSegmentHeader(load loader.L, m *module.M, segmentIndex int) (offset, size uint32) {
+func readSegmentHeader(load *loader.L, m *module.M, segmentIndex int) (offset, size uint32) {
 	if memoryIndex := load.Varuint32(); memoryIndex != 0 {
 		panic(module.Errorf("unsupported memory index: %d", memoryIndex))
 	}

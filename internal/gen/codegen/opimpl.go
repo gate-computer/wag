@@ -26,7 +26,7 @@ func (info opInfo) props() uint16 {
 }
 
 type opImpl struct {
-	gen  func(*gen.Func, loader.L, opcode.Opcode, opInfo) bool
+	gen  func(*gen.Func, *loader.L, opcode.Opcode, opInfo) bool
 	info opInfo
 }
 

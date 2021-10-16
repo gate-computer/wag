@@ -27,7 +27,7 @@ import (
 func GenProgram(
 	text code.Buffer,
 	objMap obj.ObjectMapper,
-	load loader.L,
+	load *loader.L,
 	m *module.M,
 	lib *module.Library,
 	eventHandler func(event.Event),
@@ -58,7 +58,7 @@ func GenProgram(
 	p.Map.InitObjectMap(len(m.ImportFuncs), userFuncCount)
 
 	p.DebugMap, _ = objMap.(obj.DebugObjectMapper)
-	p.Debugger = makeDebugger(breakpoints, load.R)
+	p.Debugger = makeDebugger(breakpoints, load)
 
 	if p.Text.Addr != abi.TextAddrNoFunction {
 		panic(errors.New("unexpected initial text address"))
@@ -128,7 +128,7 @@ func GenProgram(
 		// arguments, and duplicate (dummy) link address.
 		numExtra := 1 + len(sig.Params) + 1
 
-		genFunction(&funcStorage, loader.L{R: code}, i, sig, numExtra, false)
+		genFunction(&funcStorage, loader.New(code), i, sig, numExtra, false)
 	}
 
 	p.ImportContext = nil

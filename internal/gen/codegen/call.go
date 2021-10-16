@@ -21,7 +21,7 @@ var (
 	errCallParamTypeMismatch = module.Error("function call argument has wrong type")
 )
 
-func genCall(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
@@ -60,7 +60,7 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 	opFinalizeCall(f, sig)
 }
 
-func genCallIndirect(f *gen.Func, load loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(f.Module.Types)) {
 		panic(module.Errorf("%s: signature index out of bounds: %d", op, sigIndex))

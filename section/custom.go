@@ -32,7 +32,7 @@ func (mux customLoaderMux) load(r Reader, length uint32) (err error) {
 	}
 	length -= uint32(n)
 
-	name := loader.L{R: r}.String(nameLen, "custom section name")
+	name := loader.New(r).String(nameLen, "custom section name")
 	length -= nameLen
 
 	if f := mux.loaders[name]; f != nil {

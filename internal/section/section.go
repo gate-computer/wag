@@ -15,12 +15,12 @@ import (
 
 func Find(
 	findID module.SectionID,
-	load loader.L,
+	load *loader.L,
 	sectionMapper func(sectionID byte, r binary.Reader) (payloadLen uint32, err error),
 	customLoader func(binary.Reader, uint32) error,
 ) module.SectionID {
 	for {
-		sectionID, err := load.R.ReadByte()
+		sectionID, err := load.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return 0
@@ -35,7 +35,7 @@ func Find(
 			var payloadLen uint32
 
 			if sectionMapper != nil {
-				payloadLen, err = sectionMapper(sectionID, load.R)
+				payloadLen, err = sectionMapper(sectionID, load)
 				if err != nil {
 					panic(err)
 				}
@@ -44,9 +44,9 @@ func Find(
 			}
 
 			if customLoader != nil {
-				err = customLoader(load.R, payloadLen)
+				err = customLoader(load, payloadLen)
 			} else {
-				_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
+				_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
 			}
 			if err != nil {
 				panic(err)
@@ -56,7 +56,7 @@ func Find(
 			return id
 
 		default:
-			load.R.UnreadByte()
+			load.UnreadByte()
 			return id
 		}
 	}

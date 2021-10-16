@@ -231,7 +231,7 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 	}
 	out(`}`)
 
-	out(`var opcodeSkips = [256]func(*gen.Func, loader.L, opcode.Opcode){`)
+	out(`var opcodeSkips = [256]func(*gen.Func, *loader.L, opcode.Opcode){`)
 	for code, op := range opcodes {
 		switch op.name {
 		case "":

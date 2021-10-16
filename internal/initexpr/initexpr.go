@@ -11,7 +11,7 @@ import (
 	"gate.computer/wag/wa/opcode"
 )
 
-func Read(m *module.M, load loader.L) (importIndex int, valueBits uint64, t wa.Type) {
+func Read(m *module.M, load *loader.L) (importIndex int, valueBits uint64, t wa.Type) {
 	importIndex = -1
 
 	switch op := opcode.Opcode(load.Byte()); op {
@@ -50,7 +50,7 @@ func Read(m *module.M, load loader.L) (importIndex int, valueBits uint64, t wa.T
 	return
 }
 
-func ReadOffset(m *module.M, load loader.L) uint32 {
+func ReadOffset(m *module.M, load *loader.L) uint32 {
 	index, value, t := Read(m, load)
 	if t != wa.I32 {
 		panic(module.Errorf("offset initializer expression has invalid type: %s", t))

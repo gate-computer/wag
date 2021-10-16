@@ -135,7 +135,7 @@ type DebugObjectMapper = obj.DebugObjectMapper
 
 type Breakpoint = gen.Breakpoint
 
-func readResizableLimits(load loader.L, maxInit, maxMax, maxValid uint32, scale int, kind string) module.ResizableLimits {
+func readResizableLimits(load *loader.L, maxInit, maxMax, maxValid uint32, scale int, kind string) module.ResizableLimits {
 	maxFieldIsPresent := load.Varuint1()
 
 	init := load.Varuint32()
@@ -213,10 +213,10 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		config.MaxExports = defaultMaxExports
 	}
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	var header module.Header
-	if err := encodingbinary.Read(load.R, encodingbinary.LittleEndian, &header); err != nil {
+	if err := encodingbinary.Read(load, encodingbinary.LittleEndian, &header); err != nil {
 		panic(err)
 	}
 	if header.MagicNumber != module.MagicNumber {
@@ -229,7 +229,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	var seenID module.SectionID
 
 	for {
-		sectionID, err := load.R.ReadByte()
+		sectionID, err := load.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -247,7 +247,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		}
 
 		if id > module.SectionElement {
-			load.R.UnreadByte()
+			load.UnreadByte()
 			if id >= module.NumSections {
 				panic(module.Errorf("custom section id: 0x%x", id))
 			}
@@ -257,7 +257,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		var payloadLen uint32
 
 		if config.SectionMapper != nil {
-			payloadLen, err = config.SectionMapper(sectionID, r)
+			payloadLen, err = config.SectionMapper(sectionID, load)
 			if err != nil {
 				panic(err)
 			}
@@ -269,7 +269,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	}
 }
 
-var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConfig, uint32, loader.L){
+var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConfig, uint32, *loader.L){
 	module.SectionCustom:   loadCustomSection,
 	module.SectionType:     loadTypeSection,
 	module.SectionImport:   loadImportSection,
@@ -282,19 +282,19 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 	module.SectionElement:  loadElementSection,
 }
 
-func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load loader.L) {
+func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load *loader.L) {
 	var err error
 	if config.CustomSectionLoader != nil {
-		err = config.CustomSectionLoader(load.R, payloadLen)
+		err = config.CustomSectionLoader(load, payloadLen)
 	} else {
-		_, err = io.CopyN(ioutil.Discard, load.R, int64(payloadLen))
+		_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
 	}
 	if err != nil {
 		panic(err)
 	}
 }
 
-func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	count := load.Count(module.MaxTypes, "type")
 	m.m.Types = make([]wa.FuncType, 0, count)
 
@@ -327,7 +327,7 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	for i := range load.Span(module.MaxImports, "import") {
 		moduleLen := load.Varuint32()
 		if moduleLen > maxStringSize {
@@ -389,7 +389,7 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	count := load.Count(module.MaxFunctions-len(m.m.Funcs), "function")
 	total := len(m.m.Funcs) + count
 	if cap(m.m.Funcs) < total {
@@ -406,7 +406,7 @@ func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	switch load.Varuint32() {
 	case 0:
 
@@ -425,7 +425,7 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	switch load.Varuint32() {
 	case 0:
 
@@ -437,7 +437,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	total := len(m.m.Globals) + load.Count(maxGlobals-len(m.m.Globals), "global")
 	if cap(m.m.Globals) < total {
 		m.m.Globals = append(make([]module.Global, 0, total), m.m.Globals...)
@@ -461,7 +461,7 @@ func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	}
 }
 
-func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L) {
+func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L) {
 	count := load.Count(config.MaxExports, "export")
 	names := make(map[string]struct{}, count)
 
@@ -497,7 +497,7 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L)
 	}
 }
 
-func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	index := load.Varuint32()
 	if index >= uint32(len(m.m.Funcs)) {
 		panic(module.Errorf("start function index out of bounds: %d", index))
@@ -513,7 +513,7 @@ func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	m.m.StartDefined = true
 }
 
-func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
+func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	for i := range load.Span(maxElements, "element") {
 		if index := load.Varuint32(); index != 0 {
 			panic(module.Errorf("unsupported table index: %d", index))
@@ -656,18 +656,18 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod Module, lib Library) (err
 func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Library) {
 	var payloadLen uint32
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	switch id := section.Find(module.SectionCode, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData, 0:
 		// No code section, but compiler needs to generate init routines.
-		load = loader.L{R: bytes.NewReader(emptyCodeSectionPayload)}
+		load = loader.New(bytes.NewReader(emptyCodeSectionPayload))
 		payloadLen = uint32(len(emptyCodeSectionPayload))
 
 	case module.SectionCode:
 		if config.SectionMapper != nil {
 			var err error
-			payloadLen, err = config.SectionMapper(byte(id), load.R)
+			payloadLen, err = config.SectionMapper(byte(id), load)
 			if err != nil {
 				panic(err)
 			}
@@ -732,7 +732,7 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 	}
 	memoryOffset := datalayout.MemoryOffset(&mod.m, config.MemoryAlignment)
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
@@ -740,7 +740,7 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 		var err error
 
 		if config.SectionMapper != nil {
-			payloadLen, err = config.SectionMapper(byte(id), load.R)
+			payloadLen, err = config.SectionMapper(byte(id), load)
 			if err != nil {
 				panic(err)
 			}
@@ -795,12 +795,12 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 		config = new(Config)
 	}
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
 		if config.SectionMapper != nil {
-			_, err := config.SectionMapper(byte(id), load.R)
+			_, err := config.SectionMapper(byte(id), load)
 			if err != nil {
 				panic(err)
 			}
@@ -833,7 +833,7 @@ func loadCustomSections(config *Config, r Reader) {
 		config = new(Config)
 	}
 
-	load := loader.L{R: r}
+	load := loader.New(r)
 
 	section.Find(0, load, config.SectionMapper, config.CustomSectionLoader)
 }
