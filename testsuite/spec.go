@@ -372,7 +372,7 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 
 			case "type mismatch":
 				switch {
-				case strings.HasPrefix(msg, "custom section id"):
+				case strings.HasPrefix(msg, "invalid section id"):
 					return true
 				case strings.HasPrefix(msg, "offset initializer expression has invalid type"):
 					return true
@@ -388,7 +388,7 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 
 			case "unknown data segment", "unknown data segment 1":
 				switch {
-				case strings.HasPrefix(msg, "custom section id"):
+				case strings.HasPrefix(msg, "invalid section id"):
 					return true
 				case strings.Contains(msg, "initializer expression has wrong type"):
 					return true
@@ -572,7 +572,7 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 			switch text {
 			case "data count and data section have inconsistent lengths":
 				switch {
-				case strings.HasPrefix(msg, "custom section id"):
+				case strings.HasPrefix(msg, "invalid section id"):
 					return true
 				}
 
@@ -618,7 +618,7 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 
 			case "malformed section id":
 				switch {
-				case strings.HasPrefix(msg, "custom section id"):
+				case strings.HasPrefix(msg, "invalid section id"):
 					return true
 				}
 
@@ -638,7 +638,7 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 
 			case "unexpected content after last section":
 				switch {
-				case strings.Contains(msg, "follows section"):
+				case strings.Contains(msg, "section follows"):
 					return true
 				}
 
@@ -861,7 +861,7 @@ func isUnsupported(err error) bool {
 		return true
 	case msg == "unsupported table element type: -17":
 		return true
-	case strings.HasPrefix(msg, "custom section id"):
+	case strings.HasPrefix(msg, "invalid section id"):
 		return true
 	case strings.HasPrefix(msg, "unsupported memory index"):
 		return true

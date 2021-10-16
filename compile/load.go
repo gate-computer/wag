@@ -241,7 +241,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 
 		if id != module.SectionCustom {
 			if id <= seenID {
-				panic(module.Errorf("section 0x%x follows section 0x%x", id, seenID))
+				panic(module.Errorf("%s section follows %s section", id, seenID))
 			}
 			seenID = id
 		}
@@ -249,7 +249,7 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		if id > module.SectionElement {
 			load.UnreadByte()
 			if id >= module.NumSections {
-				panic(module.Errorf("custom section id: 0x%x", id))
+				panic(module.Errorf("invalid section id: %d", byte(id)))
 			}
 			return
 		}

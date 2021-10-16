@@ -65,7 +65,7 @@ func (id SectionID) String() string {
 	if int(id) < len(sectionNames) {
 		return sectionNames[id]
 	} else {
-		return fmt.Sprintf("<id 0x%x>", byte(id))
+		return fmt.Sprintf("<id %d>", byte(id))
 	}
 }
 
