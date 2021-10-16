@@ -135,10 +135,13 @@ type DebugObjectMapper = obj.DebugObjectMapper
 
 type Breakpoint = gen.Breakpoint
 
-func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind string) module.ResizableLimits {
+func readResizableLimits(load loader.L, maxInit, maxMax, maxValid uint32, scale int, kind string) module.ResizableLimits {
 	maxFieldIsPresent := load.Varuint1()
 
 	init := load.Varuint32()
+	if maxValid > 0 && init > maxValid {
+		panic(module.Errorf("invalid initial %s size: %d pages", kind, init))
+	}
 	if init > maxInit {
 		panic(module.Errorf("initial %s size is too large: %d", kind, init))
 	}
@@ -150,6 +153,9 @@ func readResizableLimits(load loader.L, maxInit, maxMax uint32, scale int, kind 
 
 	if maxFieldIsPresent {
 		max := load.Varuint32()
+		if maxValid > 0 && max > maxValid {
+			panic(module.Errorf("invalid maximum %s size: %d pages", kind, max))
+		}
 		if max > maxMax {
 			max = maxMax
 		}
@@ -398,7 +404,7 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 			panic(module.Errorf("unsupported table element type: %d", elementType))
 		}
 
-		m.m.TableLimit = readResizableLimits(load, maxTableLen, maxTableLen, 1, "table")
+		m.m.TableLimit = readResizableLimits(load, maxTableLen, maxTableLen, 0, 1, "table")
 		if m.m.TableLimit.Max < 0 {
 			m.m.TableLimit.Max = maxTableLen
 		}
@@ -413,7 +419,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 	case 0:
 
 	case 1:
-		m.m.MemoryLimit = readResizableLimits(load, maxMemoryPages, maxMemoryPages, wa.PageSize, "memory")
+		m.m.MemoryLimit = readResizableLimits(load, maxMemoryPages, maxMemoryPages, 65536, wa.PageSize, "memory")
 
 	default:
 		panic(module.Error("multiple memories not supported"))

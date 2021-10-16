@@ -336,7 +336,9 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 
 			case "memory size must be at most 65536 pages (4GiB)":
 				switch {
-				case strings.HasPrefix(msg, "initial memory size is too large"):
+				case strings.HasPrefix(msg, "invalid initial memory size"):
+					return true
+				case strings.HasPrefix(msg, "invalid maximum memory size"):
 					return true
 				}
 
