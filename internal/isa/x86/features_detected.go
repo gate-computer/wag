@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !wagamd64
+//go:build amd64
+// +build amd64
 
 package x86
 

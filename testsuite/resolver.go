@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package resolver
+package main
 
 import (
 	"fmt"
@@ -14,9 +14,9 @@ import (
 	"gate.computer/wag/wa"
 )
 
-type L struct{}
+type libResolver struct{}
 
-func (L) ResolveFunc(module, field string, sig wa.FuncType) (int, error) {
+func (libResolver) ResolveFunc(module, field string, sig wa.FuncType) (int, error) {
 	m, found := rt.ImportFuncs()[module]
 	if !found {
 		panic(module)
@@ -30,11 +30,11 @@ func (L) ResolveFunc(module, field string, sig wa.FuncType) (int, error) {
 	return index, nil
 }
 
-type M struct {
+type modResolver struct {
 	L compile.Library
 }
 
-func (reso M) ResolveFunc(module, field string, expectSig wa.FuncType) (uint32, error) {
+func (reso modResolver) ResolveFunc(module, field string, expectSig wa.FuncType) (uint32, error) {
 	symbol := module + "_" + strings.Replace(strings.Replace(field, "->", "_to_", -1), "-", "_", -1)
 
 	index, actualSig, found := reso.L.ExportFunc(symbol)
@@ -49,7 +49,7 @@ func (reso M) ResolveFunc(module, field string, expectSig wa.FuncType) (uint32, 
 	return index, nil
 }
 
-func (reso M) ResolveGlobal(module, field string, t wa.Type) (uint64, error) {
+func (reso modResolver) ResolveGlobal(module, field string, t wa.Type) (uint64, error) {
 	switch module {
 	case "spectest":
 		switch field {

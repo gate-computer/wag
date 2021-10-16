@@ -16,7 +16,6 @@ import (
 	"gate.computer/wag/binding"
 	"gate.computer/wag/compile"
 	"gate.computer/wag/internal/test/library"
-	"gate.computer/wag/internal/test/resolver"
 	"gate.computer/wag/object"
 	"gate.computer/wag/object/debug/dump"
 	"gate.computer/wag/section"
@@ -40,7 +39,7 @@ var lib = *library.Load("testdata/library.wasm", false, func(r binary.Reader) li
 		panic(err)
 	}
 
-	if err := binding.BindLibraryImports(&lib, resolver.L{}); err != nil {
+	if err := binding.BindLibraryImports(&lib, libResolver{}); err != nil {
 		panic(err)
 	}
 
@@ -90,7 +89,7 @@ func buildProgram(t *testing.T, filename string, wasm []byte, expect *expected) 
 		return nil
 	}
 
-	if err := binding.BindImports(&m, resolver.M{L: lib}); err != nil {
+	if err := binding.BindImports(&m, modResolver{L: lib}); err != nil {
 		t.Error(err)
 		return nil
 	}

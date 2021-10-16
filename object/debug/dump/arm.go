@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build cgo,arm64,!wagamd64 cgo,wagarm64
+//go:build (arm64 || wagarm64) && !wagamd64 && cgo
+// +build arm64 wagarm64
+// +build !wagamd64
+// +build cgo
 
 package dump
 

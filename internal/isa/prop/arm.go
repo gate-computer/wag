@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build wagarm64 arm64,!wagamd64
+//go:build (arm64 || wagarm64) && !wagamd64
+// +build arm64 wagarm64
+// +build !wagamd64
 
 package prop
 

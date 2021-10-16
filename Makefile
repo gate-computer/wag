@@ -6,19 +6,7 @@ PYTHON		?= python3
 PERFLOCK	?= perflock
 BENCHSTAT	?= benchstat
 
-ARCH		:= $(shell $(GO) env GOARCH)
-
-COMMON_PACKAGES	:= . $(patsubst %,./%/...,binary binding buffer compile errors internal/gen object section trap wa)
-X86_PACKAGES	:= $(COMMON_PACKAGES) ./internal/isa/x86/...
-ARM_PACKAGES	:= $(COMMON_PACKAGES) ./internal/isa/arm/...
-
-ifeq ($(ARCH),amd64)
-PACKAGES	:= $(X86_PACKAGES)
-endif
-
-ifeq ($(ARCH),arm64)
-PACKAGES	:= $(ARM_PACKAGES)
-endif
+PACKAGES	:= . $(patsubst %,./%/...,binary binding buffer compile errors internal object section trap wa)
 
 TEST		:=
 ifneq ($(TEST),)
@@ -34,13 +22,16 @@ export GOFMT WAST2JSON WAT2WASM
 .PHONY: build
 build:
 	$(GO) build $(BUILDFLAGS) -o bin/wasys ./cmd/wasys
-	$(GO) build $(BUILDFLAGS) $(PACKAGES)
-	$(GO) build $(BUILDFLAGS) -tags=wagamd64 $(X86_PACKAGES)
-	$(GO) build $(BUILDFLAGS) -tags=wagarm64 $(ARM_PACKAGES)
 
-	$(GO) vet $(BUILDFLAGS) $(PACKAGES)
-	$(GO) vet $(BUILDFLAGS) -tags=wagamd64 $(X86_PACKAGES)
-	$(GO) vet $(BUILDFLAGS) -tags=wagarm64 $(ARM_PACKAGES)
+	GOARCH=amd64 $(GO) build $(BUILDFLAGS) $(PACKAGES)
+	GOARCH=arm64 $(GO) build $(BUILDFLAGS) $(PACKAGES)
+	$(GO) build $(BUILDFLAGS) -tags=wagamd64 $(PACKAGES)
+	$(GO) build $(BUILDFLAGS) -tags=wagarm64 $(PACKAGES)
+
+	GOARCH=amd64 $(GO) vet $(BUILDFLAGS) $(PACKAGES)
+	GOARCH=arm64 $(GO) vet $(BUILDFLAGS) $(PACKAGES)
+	$(GO) vet $(BUILDFLAGS) -tags=wagamd64 $(PACKAGES)
+	$(GO) vet $(BUILDFLAGS) -tags=wagarm64 $(PACKAGES)
 
 .PHONY: check
 check: build
