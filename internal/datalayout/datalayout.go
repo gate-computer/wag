@@ -50,7 +50,7 @@ func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
 	b := buffer.Bytes()
 	memoryOffset := len(b)
 
-	for i := range load.Count(maxSegments, "segment") {
+	for i := range load.Span(maxSegments, "segment") {
 		offset, size := readSegmentHeader(load, m, i)
 
 		var (
@@ -67,7 +67,7 @@ func ReadMemory(buffer data.Buffer, load loader.L, m *module.M) {
 }
 
 func ValidateMemory(load loader.L, m *module.M) {
-	for i := range load.Count(maxSegments, "segment") {
+	for i := range load.Span(maxSegments, "segment") {
 		_, size := readSegmentHeader(load, m, i)
 
 		if _, err := io.CopyN(ioutil.Discard, load.R, int64(size)); err != nil {

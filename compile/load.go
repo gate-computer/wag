@@ -183,8 +183,8 @@ type Config struct {
 
 // ModuleConfig for a single compiler invocation.
 type ModuleConfig struct {
+	MaxExports int
 	Config
-	MaxExports uint32
 }
 
 // Module contains a WebAssembly module specification without code or data.
@@ -207,7 +207,9 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	if config == nil {
 		config = new(ModuleConfig)
 	}
-	if config.MaxExports == 0 {
+	if config.MaxExports > math.MaxInt32 {
+		panic("ModuleConfig.MaxExports is too large")
+	} else if config.MaxExports == 0 {
 		config.MaxExports = defaultMaxExports
 	}
 
@@ -293,7 +295,10 @@ func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load 
 }
 
 func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-	for i := range load.Count(module.MaxTypes, "type") {
+	count := load.Count(module.MaxTypes, "type")
+	m.m.Types = make([]wa.FuncType, 0, count)
+
+	for i := 0; i < count; i++ {
 		if form := load.Varint7(); form != -0x20 {
 			panic(module.Errorf("unsupported function type form: %d", form))
 		}
@@ -323,7 +328,7 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 }
 
 func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-	for i := range load.Count(module.MaxImports, "import") {
+	for i := range load.Span(module.MaxImports, "import") {
 		moduleLen := load.Varuint32()
 		if moduleLen > maxStringSize {
 			panic(module.Errorf("module string is too long in import #%d", i))
@@ -385,7 +390,13 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 }
 
 func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-	for range load.Count(module.MaxFunctions, "function") {
+	count := load.Count(module.MaxFunctions-len(m.m.Funcs), "function")
+	total := len(m.m.Funcs) + count
+	if cap(m.m.Funcs) < total {
+		m.m.Funcs = append(make([]uint32, 0, total), m.m.Funcs...)
+	}
+
+	for i := 0; i < count; i++ {
 		sigIndex := load.Varuint32()
 		if sigIndex >= uint32(len(m.m.Types)) {
 			panic(module.Errorf("function type index out of bounds: %d", sigIndex))
@@ -427,13 +438,18 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 }
 
 func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-	for range load.Count(uint32(maxGlobals-len(m.m.Globals)), "global") {
+	total := len(m.m.Globals) + load.Count(maxGlobals-len(m.m.Globals), "global")
+	if cap(m.m.Globals) < total {
+		m.m.Globals = append(make([]module.Global, 0, total), m.m.Globals...)
+	}
+
+	for i := len(m.m.Globals); i < total; i++ {
 		globalType := typedecode.Value(load.Varint7())
 		mutable := load.Varuint1()
 		index, value, exprType := initexpr.Read(&m.m, load)
 
 		if exprType != globalType {
-			panic(module.Errorf("%s global #%d initializer expression has wrong type: %s", globalType, len(m.m.Globals), exprType))
+			panic(module.Errorf("%s global #%d initializer expression has wrong type: %s", globalType, i, exprType))
 		}
 
 		m.m.Globals = append(m.m.Globals, module.Global{
@@ -448,7 +464,7 @@ func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load loader.L) {
 	m.m.ExportFuncs = make(map[string]uint32)
 
-	for i := range load.Count(config.MaxExports, "export") {
+	for i := range load.Span(config.MaxExports, "export") {
 		fieldLen := load.Varuint32()
 		if fieldLen > maxStringSize {
 			panic(module.Errorf("field string is too long in export #%d", i))
@@ -490,7 +506,7 @@ func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
 }
 
 func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load loader.L) {
-	for i := range load.Count(maxElements, "element") {
+	for i := range load.Span(maxElements, "element") {
 		if index := load.Varuint32(); index != 0 {
 			panic(module.Errorf("unsupported table index: %d", index))
 		}

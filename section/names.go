@@ -72,7 +72,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
 		loadContent := loader.L{R: bytes.NewReader(content)}
 
-		for range loadContent.Count(maxFuncNames, "function name count") {
+		for range loadContent.Span(maxFuncNames, "function name count") {
 			funcIndex := loadContent.Varuint32()
 			if funcIndex >= uint32(len(ns.FuncNames)) {
 				if funcIndex >= maxFuncNames {

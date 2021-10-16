@@ -105,16 +105,21 @@ func (load L) Varuint64() uint64 {
 	return x
 }
 
-// Count reads a varuint32 for iteration.
-func (load L) Count(maxCount uint32, name string) []struct{} {
+// Count reads a varuint32.
+func (load L) Count(max int, name string) int {
 	count, _, err := binary.Varuint32(load.R)
 	if err != nil {
 		panic(err)
 	}
-	if count > maxCount {
+	if uint64(count) > uint64(max) {
 		panic(module.Errorf("%s count is too large: 0x%x", name, count))
 	}
-	return make([]struct{}, int(count))
+	return int(count)
+}
+
+// Span reads a varuint32 for iteration.
+func (load L) Span(max int, name string) []struct{} {
+	return make([]struct{}, load.Count(max, name))
 }
 
 func String(b []byte, name string) string {

@@ -62,7 +62,7 @@ func skipBlock(f *gen.Func, load loader.L, op opcode.Opcode) {
 }
 
 func skipBrTable(f *gen.Func, load loader.L, op opcode.Opcode) {
-	for range load.Count(MaxBranchTableLen, "branch table target") {
+	for range load.Span(MaxBranchTableLen, "branch table target") {
 		load.Varuint32() // target
 	}
 	load.Varuint32() // default target

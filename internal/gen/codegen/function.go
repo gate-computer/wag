@@ -142,7 +142,7 @@ func genFunction(f *gen.Func, load loader.L, funcIndex int, sig wa.FuncType, num
 	f.ResultType = sig.Result
 	f.LocalTypes = sig.Params
 
-	for range load.Count(MaxFuncLocals, "function local group") {
+	for range load.Span(MaxFuncLocals, "function local group") {
 		count := load.Varuint32()
 		if uint64(len(f.LocalTypes))+uint64(count) >= MaxFuncLocals {
 			panic(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
