@@ -10,7 +10,11 @@ import (
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/section"
 )
+
+// Unwrapped may be returned by custom section content loaders.
+var Unwrapped error = section.Unwrapped
 
 type Reader = binary.Reader
 

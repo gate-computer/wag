@@ -5,6 +5,7 @@
 package section
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 
@@ -12,6 +13,8 @@ import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 )
+
+var Unwrapped = errors.New("section unwrapped")
 
 func Find(
 	findID module.SectionID,
@@ -44,17 +47,23 @@ func Find(
 			}
 
 			payloadOffset := load.Tell()
+			partial := false
 
 			if customLoader != nil {
-				err = customLoader(load, payloadLen)
+				if err := customLoader(load, payloadLen); err != nil {
+					if err == Unwrapped {
+						partial = true
+					} else {
+						panic(err)
+					}
+				}
 			} else {
-				_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
-			}
-			if err != nil {
-				panic(err)
+				if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
+					panic(err)
+				}
 			}
 
-			CheckConsumption(load, payloadOffset, payloadLen)
+			CheckConsumption(load, payloadOffset, payloadLen, partial)
 
 		case id == findID:
 			return id
@@ -66,9 +75,13 @@ func Find(
 	}
 }
 
-func CheckConsumption(load *loader.L, payloadOffset int64, payloadLen uint32) {
+func CheckConsumption(load *loader.L, payloadOffset int64, payloadLen uint32, partial bool) {
 	consumed := load.Tell() - payloadOffset
-	if consumed != int64(payloadLen) {
-		panic(module.Errorf("section size is %d but %d bytes was read", payloadLen, consumed))
+	if consumed == int64(payloadLen) {
+		return
 	}
+	if partial && consumed < int64(payloadLen) {
+		return
+	}
+	panic(module.Errorf("section size is %d but %d bytes was read", payloadLen, consumed))
 }

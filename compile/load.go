@@ -179,6 +179,11 @@ type Config struct {
 	// CustomSectionLoader is invoked for every custom section.  It must read
 	// exactly payloadLen bytes, or return an error.  SectionMapper (if
 	// configured) has been invoked just before it.
+	//
+	// If the section.Unwrapped error is returned, the consumed length may be
+	// less than payloadLen.  The rest of the payload will be treated as
+	// another section.  (The Unwrapped value itself must be returned, not an
+	// error wrapping it.)
 	CustomSectionLoader func(r Reader, payloadLen uint32) error
 }
 
@@ -267,12 +272,12 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 		}
 
 		payloadOffset := load.Tell()
-		initialSectionLoaders[id](&m, config, payloadLen, load)
-		section.CheckConsumption(load, payloadOffset, payloadLen)
+		partial := initialSectionLoaders[id](&m, config, payloadLen, load)
+		section.CheckConsumption(load, payloadOffset, payloadLen, partial)
 	}
 }
 
-var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConfig, uint32, *loader.L){
+var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConfig, uint32, *loader.L) bool{
 	module.SectionCustom:   loadCustomSection,
 	module.SectionType:     loadTypeSection,
 	module.SectionImport:   loadImportSection,
@@ -285,19 +290,24 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 	module.SectionElement:  loadElementSection,
 }
 
-func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load *loader.L) {
-	var err error
-	if config.CustomSectionLoader != nil {
-		err = config.CustomSectionLoader(load, payloadLen)
-	} else {
-		_, err = io.CopyN(ioutil.Discard, load, int64(payloadLen))
+func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load *loader.L) bool {
+	if config.CustomSectionLoader == nil {
+		if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
+			panic(err)
+		}
+		return false
 	}
-	if err != nil {
+
+	if err := config.CustomSectionLoader(load, payloadLen); err != nil {
+		if err == section.Unwrapped {
+			return true
+		}
 		panic(err)
 	}
+	return false
 }
 
-func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	count := load.Count(module.MaxTypes, "type")
 	m.m.Types = make([]wa.FuncType, 0, count)
 
@@ -328,9 +338,11 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 
 		m.m.Types = append(m.m.Types, sig)
 	}
+
+	return false
 }
 
-func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	for i := range load.Span(module.MaxImports, "import") {
 		moduleLen := load.Varuint32()
 		if moduleLen > maxStringSize {
@@ -390,9 +402,11 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 			panic(module.Errorf("import kind not supported: %s", kind))
 		}
 	}
+
+	return false
 }
 
-func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	count := load.Count(module.MaxFunctions-len(m.m.Funcs), "function")
 	total := len(m.m.Funcs) + count
 	if cap(m.m.Funcs) < total {
@@ -407,9 +421,11 @@ func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 
 		m.m.Funcs = append(m.m.Funcs, sigIndex)
 	}
+
+	return false
 }
 
-func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	switch load.Varuint32() {
 	case 0:
 
@@ -426,9 +442,11 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	default:
 		panic(module.Error("multiple tables not supported"))
 	}
+
+	return false
 }
 
-func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	switch load.Varuint32() {
 	case 0:
 
@@ -438,9 +456,11 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 	default:
 		panic(module.Error("multiple memories not supported"))
 	}
+
+	return false
 }
 
-func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	total := len(m.m.Globals) + load.Count(maxGlobals-len(m.m.Globals), "global")
 	if cap(m.m.Globals) < total {
 		m.m.Globals = append(make([]module.Global, 0, total), m.m.Globals...)
@@ -462,9 +482,11 @@ func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 			InitConst:  value,
 		})
 	}
+
+	return false
 }
 
-func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L) {
+func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L) bool {
 	count := load.Count(config.MaxExports, "export")
 	names := make(map[string]struct{}, count)
 
@@ -498,9 +520,11 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L
 			panic(module.Errorf("custom export kind: %s", kind))
 		}
 	}
+
+	return false
 }
 
-func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	index := load.Varuint32()
 	if index >= uint32(len(m.m.Funcs)) {
 		panic(module.Errorf("start function index out of bounds: %d", index))
@@ -514,9 +538,10 @@ func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 
 	m.m.StartIndex = index
 	m.m.StartDefined = true
+	return false
 }
 
-func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
+func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	for i := range load.Span(maxElements, "element") {
 		if index := load.Varuint32(); index != 0 {
 			panic(module.Errorf("unsupported table index: %d", index))
@@ -550,6 +575,8 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) {
 			m.m.TableFuncs[j] = elem
 		}
 	}
+
+	return false
 }
 
 func (m Module) Types() []wa.FuncType      { return m.m.Types }
@@ -704,7 +731,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 
 	payloadOffset := load.Tell()
 	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Breakpoints)
-	section.CheckConsumption(load, payloadOffset, payloadLen)
+	section.CheckConsumption(load, payloadOffset, payloadLen, false)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
 		panic(module.Error("text size limit exceeded"))
@@ -772,7 +799,7 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 
 		payloadOffset := load.Tell()
 		datalayout.ReadMemory(config.GlobalsMemory, load, &mod.m)
-		section.CheckConsumption(load, payloadOffset, payloadLen)
+		section.CheckConsumption(load, payloadOffset, payloadLen, false)
 
 	case 0:
 		// no data section
@@ -821,7 +848,7 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 
 		payloadOffset := load.Tell()
 		datalayout.ValidateMemory(load, &mod.m)
-		section.CheckConsumption(load, payloadOffset, payloadLen)
+		section.CheckConsumption(load, payloadOffset, payloadLen, false)
 
 	case 0:
 		// no data section
