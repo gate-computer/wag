@@ -35,7 +35,7 @@ func TestSection(t *testing.T) {
 		nameSectionMapping = new(section.MappedNameSection)
 		imaginaryMapping   = new(section.CustomMapping)
 		loadConfig         = compile.Config{
-			SectionMapper: sectionMap.Mapper(),
+			SectionMapper: sectionMap.MapSection,
 			CustomSectionLoader: section.CustomLoader(map[string]section.CustomContentLoader{
 				section.CustomName: nameSectionMapping.Loader(sectionMap),
 				"imaginary":        imaginaryMapping.Loader(sectionMap),

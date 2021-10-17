@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"math"
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
@@ -19,14 +20,16 @@ var Unwrapped = errors.New("section unwrapped")
 func Find(
 	findID module.SectionID,
 	load *loader.L,
-	sectionMapper func(sectionID byte, r binary.Reader) (payloadLen uint32, err error),
+	sectionMapper func(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error,
 	customLoader func(binary.Reader, uint32) error,
-) module.SectionID {
+) (int64, module.SectionID) {
 	for {
+		sectionOffset := load.Tell()
+
 		sectionID, err := load.ReadByte()
 		if err != nil {
 			if err == io.EOF {
-				return 0
+				return sectionOffset, 0
 			}
 			panic(err)
 		}
@@ -35,22 +38,12 @@ func Find(
 
 		switch {
 		case id == module.SectionCustom:
-			var payloadLen uint32
-
-			if sectionMapper != nil {
-				payloadLen, err = sectionMapper(sectionID, load)
-				if err != nil {
-					panic(err)
-				}
-			} else {
-				payloadLen = load.Varuint32()
-			}
-
+			payloadSize := LoadPayloadSize(sectionOffset, id, load, sectionMapper)
 			payloadOffset := load.Tell()
 			partial := false
 
 			if customLoader != nil {
-				if err := customLoader(load, payloadLen); err != nil {
+				if err := customLoader(load, payloadSize); err != nil {
 					if err == Unwrapped {
 						partial = true
 					} else {
@@ -58,30 +51,51 @@ func Find(
 					}
 				}
 			} else {
-				if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
+				if _, err := io.CopyN(ioutil.Discard, load, int64(payloadSize)); err != nil {
 					panic(err)
 				}
 			}
 
-			CheckConsumption(load, payloadOffset, payloadLen, partial)
+			CheckConsumption(load, payloadOffset, payloadSize, partial)
 
 		case id == findID:
-			return id
+			return sectionOffset, id
 
 		default:
 			load.UnreadByte()
-			return id
+			return sectionOffset, id
 		}
 	}
 }
 
-func CheckConsumption(load *loader.L, payloadOffset int64, payloadLen uint32, partial bool) {
+func LoadPayloadSize(
+	sectionOffset int64,
+	id module.SectionID,
+	load *loader.L,
+	sectionMapper func(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error,
+) uint32 {
+	payloadSize := load.Varuint32()
+	sectionSize := load.Tell() - sectionOffset + int64(payloadSize)
+	if sectionSize > math.MaxInt32 {
+		panic(module.Error("section end offset out of bounds"))
+	}
+
+	if sectionMapper != nil {
+		if err := sectionMapper(byte(id), sectionOffset, uint32(sectionSize), payloadSize); err != nil {
+			panic(err)
+		}
+	}
+
+	return payloadSize
+}
+
+func CheckConsumption(load *loader.L, payloadOffset int64, payloadSize uint32, partial bool) {
 	consumed := load.Tell() - payloadOffset
-	if consumed == int64(payloadLen) {
+	if consumed == int64(payloadSize) {
 		return
 	}
-	if partial && consumed < int64(payloadLen) {
+	if partial && consumed < int64(payloadSize) {
 		return
 	}
-	panic(module.Errorf("section size is %d but %d bytes was read", payloadLen, consumed))
+	panic(module.Errorf("section size is %d but %d bytes was read", payloadSize, consumed))
 }

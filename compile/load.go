@@ -172,19 +172,20 @@ func readResizableLimits(load *loader.L, maxInit, maxMax, maxValid uint32, scale
 // Config for loading WebAssembly module sections.
 type Config struct {
 	// SectionMapper is invoked for every section (standard or custom), just
-	// after the section id byte.  It must read and return the payload length
-	// (varuint32), but not the payload itself.
-	SectionMapper func(sectionID byte, r Reader) (payloadLen uint32, err error)
+	// after the payload length has been read.  Section offset is the position
+	// of the section id.  Section size covers section id byte, encoded payload
+	// length, and payload content.
+	SectionMapper func(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error
 
 	// CustomSectionLoader is invoked for every custom section.  It must read
-	// exactly payloadLen bytes, or return an error.  SectionMapper (if
+	// exactly payloadSize bytes, or return an error.  SectionMapper (if
 	// configured) has been invoked just before it.
 	//
 	// If the section.Unwrapped error is returned, the consumed length may be
-	// less than payloadLen.  The rest of the payload will be treated as
+	// less than payloadSize.  The rest of the payload will be treated as
 	// another section.  (The Unwrapped value itself must be returned, not an
 	// error wrapping it.)
-	CustomSectionLoader func(r Reader, payloadLen uint32) error
+	CustomSectionLoader func(r Reader, payloadSize uint32) error
 }
 
 // ModuleConfig for a single compiler invocation.
@@ -235,6 +236,8 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	var seenID module.SectionID
 
 	for {
+		sectionOffset := load.Tell()
+
 		sectionID, err := load.ReadByte()
 		if err != nil {
 			if err == io.EOF {
@@ -260,20 +263,10 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 			return
 		}
 
-		var payloadLen uint32
-
-		if config.SectionMapper != nil {
-			payloadLen, err = config.SectionMapper(sectionID, load)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			payloadLen = load.Varuint32()
-		}
-
+		payloadSize := section.LoadPayloadSize(sectionOffset, id, load, config.SectionMapper)
 		payloadOffset := load.Tell()
-		partial := initialSectionLoaders[id](&m, config, payloadLen, load)
-		section.CheckConsumption(load, payloadOffset, payloadLen, partial)
+		partial := initialSectionLoaders[id](&m, config, payloadSize, load)
+		section.CheckConsumption(load, payloadOffset, payloadSize, partial)
 	}
 }
 
@@ -290,15 +283,15 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 	module.SectionElement:  loadElementSection,
 }
 
-func loadCustomSection(m *Module, config *ModuleConfig, payloadLen uint32, load *loader.L) bool {
+func loadCustomSection(m *Module, config *ModuleConfig, payloadSize uint32, load *loader.L) bool {
 	if config.CustomSectionLoader == nil {
-		if _, err := io.CopyN(ioutil.Discard, load, int64(payloadLen)); err != nil {
+		if _, err := io.CopyN(ioutil.Discard, load, int64(payloadSize)); err != nil {
 			panic(err)
 		}
 		return false
 	}
 
-	if err := config.CustomSectionLoader(load, payloadLen); err != nil {
+	if err := config.CustomSectionLoader(load, payloadSize); err != nil {
 		if err == section.Unwrapped {
 			return true
 		}
@@ -684,26 +677,18 @@ func LoadCodeSection(config *CodeConfig, r Reader, mod Module, lib Library) (err
 }
 
 func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Library) {
-	var payloadLen uint32
+	var payloadSize uint32
 
 	load := loader.New(r)
 
-	switch id := section.Find(module.SectionCode, load, config.SectionMapper, config.CustomSectionLoader); id {
+	switch sectionOffset, id := section.Find(module.SectionCode, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData, 0:
 		// No code section, but compiler needs to generate init routines.
 		load = loader.New(bytes.NewReader(emptyCodeSectionPayload))
-		payloadLen = uint32(len(emptyCodeSectionPayload))
+		payloadSize = uint32(len(emptyCodeSectionPayload))
 
 	case module.SectionCode:
-		if config.SectionMapper != nil {
-			var err error
-			payloadLen, err = config.SectionMapper(byte(id), load)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			payloadLen = load.Varuint32()
-		}
+		payloadSize = section.LoadPayloadSize(sectionOffset, id, load, config.SectionMapper)
 
 	default:
 		panic(module.Errorf("unexpected section id: 0x%x (looking for code section)", id))
@@ -718,7 +703,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 		if alloc > config.MaxTextSize {
 			alloc = config.MaxTextSize
 		}
-		if guess := 512 + uint64(payloadLen)*8; guess < uint64(alloc) { // citation needed
+		if guess := 512 + uint64(payloadSize)*8; guess < uint64(alloc) { // citation needed
 			alloc = int(guess)
 		}
 		config.Text = buffer.NewLimited(make([]byte, 0, alloc), config.MaxTextSize)
@@ -731,7 +716,7 @@ func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Libra
 
 	payloadOffset := load.Tell()
 	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Breakpoints)
-	section.CheckConsumption(load, payloadOffset, payloadLen, false)
+	section.CheckConsumption(load, payloadOffset, payloadSize, false)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
 		panic(module.Error("text size limit exceeded"))
@@ -766,24 +751,14 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 
 	load := loader.New(r)
 
-	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
+	switch sectionOffset, id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
-		var payloadLen uint32
-		var err error
-
-		if config.SectionMapper != nil {
-			payloadLen, err = config.SectionMapper(byte(id), load)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			payloadLen = load.Varuint32()
-		}
+		payloadSize := section.LoadPayloadSize(sectionOffset, id, load, config.SectionMapper)
 
 		if config.GlobalsMemory == nil {
 			memAlloc := defaultMemoryBufferSize
-			if payloadLen < uint32(memAlloc) {
-				memAlloc = int(payloadLen) // hope for dense packing
+			if payloadSize < uint32(memAlloc) {
+				memAlloc = int(payloadSize) // hope for dense packing
 			}
 
 			limit := memoryOffset + mod.InitialMemorySize()
@@ -799,7 +774,7 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 
 		payloadOffset := load.Tell()
 		datalayout.ReadMemory(config.GlobalsMemory, load, &mod.m)
-		section.CheckConsumption(load, payloadOffset, payloadLen, false)
+		section.CheckConsumption(load, payloadOffset, payloadSize, false)
 
 	case 0:
 		// no data section
@@ -832,23 +807,12 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 
 	load := loader.New(r)
 
-	switch id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
+	switch sectionOffset, id := section.Find(module.SectionData, load, config.SectionMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
-		var payloadLen uint32
-		var err error
-
-		if config.SectionMapper != nil {
-			payloadLen, err = config.SectionMapper(byte(id), load)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			payloadLen = load.Varuint32()
-		}
-
+		payloadSize := section.LoadPayloadSize(sectionOffset, id, load, config.SectionMapper)
 		payloadOffset := load.Tell()
 		datalayout.ValidateMemory(load, &mod.m)
-		section.CheckConsumption(load, payloadOffset, payloadLen, false)
+		section.CheckConsumption(load, payloadOffset, payloadSize, false)
 
 	case 0:
 		// no data section

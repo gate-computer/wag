@@ -23,7 +23,7 @@ import (
 // length is returned.  If no standard section is encountered, zero length and
 // io.EOF are returned.  io.EOF is returned only when it occurs between
 // sections.
-func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
+func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reader, payloadSize uint32) error) (length int64, err error) {
 	if internal.DontPanic() {
 		defer func() {
 			if x := recover(); x != nil {
@@ -34,7 +34,7 @@ func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reade
 
 	load := loader.New(r)
 
-	switch section.Find(id, load, nil, customLoader) {
+	switch _, id := section.Find(id, load, nil, customLoader); id {
 	case id:
 		length, err = copySection(w, id, load)
 
@@ -59,18 +59,18 @@ func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err 
 
 	load := loader.New(r)
 
-	if section.Find(0, load, nil, customLoader) == 0 {
+	if _, id := section.Find(0, load, nil, customLoader); id == 0 {
 		err = io.EOF
 	}
 	return
 }
 
 func copySection(w io.Writer, id ID, load *loader.L) (length int64, err error) {
-	payloadLen := load.Varuint32()
+	payloadSize := load.Varuint32()
 
 	head := make([]byte, 1+binary.MaxVarintLen32)
 	head[0] = byte(id)
-	n := binary.PutUvarint(head[1:], uint64(payloadLen))
+	n := binary.PutUvarint(head[1:], uint64(payloadSize))
 
 	n, err = w.Write(head[:1+n])
 	length += int64(n)
@@ -78,7 +78,7 @@ func copySection(w io.Writer, id ID, load *loader.L) (length int64, err error) {
 		return
 	}
 
-	m, err := io.CopyN(w, load, int64(payloadLen))
+	m, err := io.CopyN(w, load, int64(payloadSize))
 	length += m
 	return
 }

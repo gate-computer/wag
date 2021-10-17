@@ -5,13 +5,11 @@
 package section
 
 import (
-	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/module"
 )
 
 const (
 	moduleHeaderSize = 8
-	sectionIDSize    = 1
 )
 
 type ByteRange struct {
@@ -46,25 +44,16 @@ func NewMap() *Map {
 	return &m
 }
 
-func (m *Map) Mapper() func(byte, Reader) (uint32, error) {
-	offset := int64(moduleHeaderSize)
+// MapSection method is a section mapper function.
+func (m *Map) MapSection(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error {
+	m.Sections[sectionID] = ByteRange{sectionOffset, int64(sectionSize)}
 
-	return func(sectionID byte, r Reader) (payloadLen uint32, err error) {
-		payloadLen, payloadLenSize, err := binary.Varuint32(r)
-		if err != nil {
-			return
+	if ID(sectionID) != Custom {
+		// Default positions of remaining standard sections.
+		for i := int(sectionID) + 1; i < int(module.NumSections); i++ {
+			m.Sections[i].Offset = sectionOffset
 		}
-
-		length := sectionIDSize + int64(payloadLenSize) + int64(payloadLen)
-		m.Sections[sectionID] = ByteRange{offset, length}
-		offset += length
-
-		if ID(sectionID) != Custom {
-			// Default positions of remaining standard sections.
-			for i := int(sectionID) + 1; i < int(module.NumSections); i++ {
-				m.Sections[i].Offset = offset
-			}
-		}
-		return
 	}
+
+	return nil
 }

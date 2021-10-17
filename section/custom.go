@@ -18,7 +18,7 @@ var Unwrapped error = section.Unwrapped
 
 type Reader = binary.Reader
 
-type CustomContentLoader func(sectionName string, r Reader, payloadLen uint32) error
+type CustomContentLoader func(sectionName string, r Reader, payloadSize uint32) error
 
 type customLoaderMux struct {
 	loaders map[string]CustomContentLoader

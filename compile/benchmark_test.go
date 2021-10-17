@@ -96,7 +96,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 	})
 
 	b.Run("Code", func(b *testing.B) {
-		b.SetBytes(int64(codePayloadLen))
+		b.SetBytes(codePayloadLen)
 
 		for i := 0; i < b.N; i++ {
 			code := CodeConfig{
