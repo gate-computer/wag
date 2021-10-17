@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"io"
 
+	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
@@ -39,9 +40,9 @@ type NameSection struct {
 
 // Load "name" section.
 func (ns *NameSection) Load(_ string, r Reader, length uint32) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	r = bufio.NewReader(&io.LimitedReader{R: r, N: int64(length)})
 

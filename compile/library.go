@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 
+	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/count"
 	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/module"
@@ -39,9 +40,9 @@ type Library struct {
 }
 
 func (mod Module) AsLibrary() (lib Library, err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	lib = mod.asLibrary()
 	return
@@ -76,9 +77,9 @@ func (mod Module) asLibrary() Library {
 }
 
 func (lib *Library) LoadSections(r Reader) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	lib.loadSections(r)
 	return

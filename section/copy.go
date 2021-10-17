@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"io"
 
+	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/section"
@@ -23,11 +24,13 @@ import (
 // io.EOF are returned.  io.EOF is returned only when it occurs between
 // sections.
 func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reader, payloadLen uint32) error) (length int64, err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = errorpanic.Handle(x)
-		}
-	}()
+	if internal.DontPanic() {
+		defer func() {
+			if x := recover(); x != nil {
+				err = errorpanic.Handle(x)
+			}
+		}()
+	}
 
 	load := loader.New(r)
 
@@ -46,11 +49,13 @@ func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reade
 // section is encountered, io.EOF is returned.  io.EOF is returned only when it
 // occurs between sections.
 func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = errorpanic.Handle(x)
-		}
-	}()
+	if internal.DontPanic() {
+		defer func() {
+			if x := recover(); x != nil {
+				err = errorpanic.Handle(x)
+			}
+		}()
+	}
 
 	load := loader.New(r)
 

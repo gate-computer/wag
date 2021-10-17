@@ -78,6 +78,7 @@ import (
 	"gate.computer/wag/binary"
 	"gate.computer/wag/buffer"
 	"gate.computer/wag/compile/event"
+	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/code"
 	"gate.computer/wag/internal/data"
 	"gate.computer/wag/internal/datalayout"
@@ -195,9 +196,9 @@ type Module struct {
 // LoadInitialSections reads module header and all sections preceding code and
 // data.
 func LoadInitialSections(config *ModuleConfig, r Reader) (m Module, err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	m = loadInitialSections(config, r)
 	return
@@ -647,9 +648,9 @@ type CodeConfig struct {
 //
 // If CodeBuffer panicks with an error, it will be returned by this function.
 func LoadCodeSection(config *CodeConfig, r Reader, mod Module, lib Library) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	loadCodeSection(config, r, mod, &lib.l)
 	return
@@ -722,9 +723,9 @@ type DataConfig struct {
 //
 // If DataBuffer panicks with an error, it will be returned by this function.
 func LoadDataSection(config *DataConfig, r Reader, mod Module) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	loadDataSection(config, r, mod)
 	return
@@ -789,9 +790,9 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 
 // ValidateDataSection reads a WebAssembly module's data section.
 func ValidateDataSection(config *Config, r Reader, mod Module) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	validateDataSection(config, r, mod)
 	return
@@ -832,9 +833,9 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 
 // LoadCustomSections reads WebAssembly module's extension sections.
 func LoadCustomSections(config *Config, r Reader) (err error) {
-	defer func() {
-		err = errorpanic.Handle(recover())
-	}()
+	if internal.DontPanic() {
+		defer func() { err = errorpanic.Handle(recover()) }()
+	}
 
 	loadCustomSections(config, r)
 	return
