@@ -14,7 +14,7 @@ const (
 
 type ByteRange struct {
 	Offset int64
-	Length int64
+	Size   uint32
 }
 
 // Map of section positions within the WebAssebly binary module.  Map must me
@@ -46,7 +46,7 @@ func NewMap() *Map {
 
 // MapSection method is a section mapper function.
 func (m *Map) MapSection(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error {
-	m.Sections[sectionID] = ByteRange{sectionOffset, int64(sectionSize)}
+	m.Sections[sectionID] = ByteRange{sectionOffset, sectionSize}
 
 	if ID(sectionID) != Custom {
 		// Default positions of remaining standard sections.
