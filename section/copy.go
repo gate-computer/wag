@@ -34,7 +34,7 @@ func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reade
 
 	load := loader.New(r)
 
-	switch _, id := section.Find(id, load, nil, customLoader); id {
+	switch _, foundID := section.Find(id, load, nil, customLoader); foundID {
 	case id:
 		length, err = copySection(w, id, load)
 
