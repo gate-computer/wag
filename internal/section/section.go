@@ -17,10 +17,18 @@ import (
 
 var Unwrapped = errors.New("section unwrapped")
 
+// ModuleMapper gathers information about positions of WebAssembly sections.
+type ModuleMapper interface {
+	// PutSection is invoked just after the payload length has been read.
+	// Section offset is the position of the section id.  Section size covers
+	// section id byte, encoded payload length, and payload content.
+	PutSection(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error
+}
+
 func Find(
 	findID module.SectionID,
 	load *loader.L,
-	sectionMapper func(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error,
+	mapper ModuleMapper,
 	customLoader func(binary.Reader, uint32) error,
 ) (int64, module.SectionID) {
 	for {
@@ -38,7 +46,7 @@ func Find(
 
 		switch {
 		case id == module.SectionCustom:
-			payloadSize := LoadPayloadSize(sectionOffset, id, load, sectionMapper)
+			payloadSize := LoadPayloadSize(sectionOffset, id, load, mapper)
 			payloadOffset := load.Tell()
 			partial := false
 
@@ -72,7 +80,7 @@ func LoadPayloadSize(
 	sectionOffset int64,
 	id module.SectionID,
 	load *loader.L,
-	sectionMapper func(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error,
+	mapper ModuleMapper,
 ) uint32 {
 	payloadSize := load.Varuint32()
 	sectionSize := load.Tell() - sectionOffset + int64(payloadSize)
@@ -80,8 +88,8 @@ func LoadPayloadSize(
 		panic(module.Error("section end offset out of bounds"))
 	}
 
-	if sectionMapper != nil {
-		if err := sectionMapper(byte(id), sectionOffset, uint32(sectionSize), payloadSize); err != nil {
+	if mapper != nil {
+		if err := mapper.PutSection(byte(id), sectionOffset, uint32(sectionSize), payloadSize); err != nil {
 			panic(err)
 		}
 	}

@@ -44,8 +44,8 @@ func NewMap() *Map {
 	return &m
 }
 
-// MapSection method is a section mapper function.
-func (m *Map) MapSection(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error {
+// PutSection location on the map.
+func (m *Map) PutSection(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error {
 	m.Sections[sectionID] = ByteRange{sectionOffset, sectionSize}
 
 	if ID(sectionID) != Custom {
