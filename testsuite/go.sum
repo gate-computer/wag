@@ -1,6 +1,6 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
-gate.computer/gate v0.0.0-20211015150958-1a9574b6f71f h1:JTAOTssKhE/rVOAJKm6PsdQvJfORVIE3+da+umf/4J4=
-gate.computer/gate v0.0.0-20211015150958-1a9574b6f71f/go.mod h1:gqfeMYISO5pZJa2lyDM2nYOlkBPGaoc456ZUHVxNihA=
+gate.computer/gate v0.0.0-20211018065040-53d94d9f239e h1:Pz57wVsug0h/NcJThAP8S2qWzSZOM2mvioMAQRnErxo=
+gate.computer/gate v0.0.0-20211018065040-53d94d9f239e/go.mod h1:xo/gEvTGyA4TwvgAokeRTp+ADIpT+YW9XAo69QARn68=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
