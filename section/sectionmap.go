@@ -8,10 +8,6 @@ import (
 	"gate.computer/wag/internal/module"
 )
 
-const (
-	moduleHeaderSize = 8
-)
-
 // ByteRange expresses a location and a length within a byte stream.  The
 // length is at most MaxUint32, and the inclusive start and exclusive end
 // offsets are in range [0,MaxInt64].
@@ -38,25 +34,20 @@ type Map struct {
 	Sections [module.NumSections]ByteRange
 }
 
-// MakeMap which represents an empty module.
-func MakeMap() (m Map) {
-	for i := 1; i < int(module.NumSections); i++ {
-		m.Sections[i].Start = moduleHeaderSize
-	}
-	return
-}
-
-// NewMap which represents an empty module.
-func NewMap() *Map {
-	m := MakeMap()
-	return &m
-}
-
 // PutSection location on the map.
 func (m *Map) PutSection(sectionID byte, sectionOffset int64, sectionSize, payloadSize uint32) error {
 	m.Sections[sectionID] = ByteRange{sectionOffset, sectionSize}
 
+	// Initialize other sections' offsets during the first invocation.  The
+	// assumption is that a valid WebAssembly module contains at least one
+	// standard section, so PutSection will be invoked at least once; the empty
+	// module might as well have its non-existent sections at offset 0.
 	if ID(sectionID) != Custom {
+		// Imaginary positions of missing standard sections.
+		for i := int(sectionID) - 1; i > 0 && m.Sections[i].Start == 0; i-- {
+			m.Sections[i].Start = sectionOffset
+		}
+
 		// Default positions of remaining standard sections.
 		for i := int(sectionID) + 1; i < int(module.NumSections); i++ {
 			m.Sections[i].Start = sectionOffset

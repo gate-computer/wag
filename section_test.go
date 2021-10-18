@@ -31,7 +31,7 @@ var lib = *library.Load("testsuite/testdata/library.wasm", true, func(r binary.R
 
 func TestSection(t *testing.T) {
 	var (
-		sectionMap         = section.NewMap()
+		sectionMap         = new(section.Map)
 		nameSectionMapping = new(section.MappedNameSection)
 		imaginaryMapping   = new(section.CustomMapping)
 		loadConfig         = compile.Config{
