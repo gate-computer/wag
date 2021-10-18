@@ -12,9 +12,17 @@ const (
 	moduleHeaderSize = 8
 )
 
+// ByteRange expresses a location and a length within a byte stream.  The
+// length is at most MaxUint32, and the inclusive start and exclusive end
+// offsets are in range [0,MaxInt64].
 type ByteRange struct {
-	Offset int64
-	Size   uint32
+	Start int64
+	Size  uint32
+}
+
+// End of the range (exclusive).
+func (r ByteRange) End() int64 {
+	return r.Start + int64(r.Size)
 }
 
 // Map of section positions within the WebAssebly binary module.  Map must me
@@ -33,7 +41,7 @@ type Map struct {
 // MakeMap which represents an empty module.
 func MakeMap() (m Map) {
 	for i := 1; i < int(module.NumSections); i++ {
-		m.Sections[i].Offset = moduleHeaderSize
+		m.Sections[i].Start = moduleHeaderSize
 	}
 	return
 }
@@ -51,7 +59,7 @@ func (m *Map) PutSection(sectionID byte, sectionOffset int64, sectionSize, paylo
 	if ID(sectionID) != Custom {
 		// Default positions of remaining standard sections.
 		for i := int(sectionID) + 1; i < int(module.NumSections); i++ {
-			m.Sections[i].Offset = sectionOffset
+			m.Sections[i].Start = sectionOffset
 		}
 	}
 
