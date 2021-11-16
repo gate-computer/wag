@@ -8,7 +8,13 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"gate.computer/wag/internal/gen/codegen"
 )
+
+func init() {
+	codegen.UnsupportedOpBreakpoint = true
+}
 
 func TestMain(m *testing.M) {
 	if err := generateSpecData(); err != nil {

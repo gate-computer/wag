@@ -105,7 +105,7 @@ func run(t *testing.T, code *image.Program, state *image.Instance, serviceHandle
 	case trap.Exit:
 		return result.Value(), wagtrap.Exit
 
-	case trap.Unreachable, trap.CallStackExhausted, trap.MemoryAccessOutOfBounds, trap.IndirectCallIndexOutOfBounds, trap.IndirectCallSignatureMismatch, trap.IntegerDivideByZero, trap.IntegerOverflow:
+	case trap.Unreachable, trap.CallStackExhausted, trap.MemoryAccessOutOfBounds, trap.IndirectCallIndexOutOfBounds, trap.IndirectCallSignatureMismatch, trap.IntegerDivideByZero, trap.IntegerOverflow, trap.Breakpoint:
 
 	default:
 		t.Fatal(trapID)

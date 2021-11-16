@@ -247,6 +247,9 @@ func (x *specTestInstance) invoke(t *testing.T, field string, args []arg) {
 	t.Log("args:", args)
 
 	if _, trapID := x.spec.invoke(t, field, args, nil); trapID != trap.Exit {
+		if trapID == trap.Breakpoint {
+			t.Skip("instruction not supported")
+		}
 		t.Fatal(trapID)
 	}
 }
@@ -271,6 +274,9 @@ func (x *specTestInstance) assertReturnInvoke(t *testing.T, field string, args [
 
 	value, trapID := x.spec.invoke(t, field, args, &expect.Type)
 	if trapID != trap.Exit {
+		if trapID == trap.Breakpoint {
+			t.Skip("instruction not supported")
+		}
 		t.Fatal(trapID)
 	}
 
@@ -313,6 +319,8 @@ func (x *specTestInstance) assertTrap(t *testing.T, field string, args []arg, ex
 	case text == "undefined element" && trapID == trap.IndirectCallIndexOutOfBounds:
 	case text == "unreachable" && trapID == trap.Unreachable:
 
+	case trapID == trap.Breakpoint:
+		t.Skip("instruction not supported")
 	default:
 		t.Fatal(trapID)
 	}
@@ -841,20 +849,6 @@ func isUnsupported(err error) bool {
 	case msg == "import kind not supported: memory":
 		return true
 	case msg == "import kind not supported: table":
-		return true
-	case msg == "invalid opcode: 0xc0":
-		return true
-	case msg == "invalid opcode: 0xc1":
-		return true
-	case msg == "invalid opcode: 0xc2":
-		return true
-	case msg == "invalid opcode: 0xc3":
-		return true
-	case msg == "invalid opcode: 0xc4":
-		return true
-	case msg == "invalid opcode: 0xd1":
-		return true
-	case msg == "invalid opcode: 0xfc":
 		return true
 	case msg == "multiple return values not supported":
 		return true
