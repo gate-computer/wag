@@ -97,4 +97,4 @@ func skipVarint64(f *gen.Func, load *loader.L, op opcode.Opcode)  { load.Varint6
 func skipVaruint1(f *gen.Func, load *loader.L, op opcode.Opcode)  { load.Varuint1() }
 func skipVaruint32(f *gen.Func, load *loader.L, op opcode.Opcode) { load.Varuint32() }
 func skipNothing(f *gen.Func, load *loader.L, op opcode.Opcode)   {}
-func badSkip(f *gen.Func, load *loader.L, op opcode.Opcode)       { badOp(op) }
+func badSkip(f *gen.Func, load *loader.L, op opcode.Opcode)       { badOp(load, op) }

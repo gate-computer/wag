@@ -17,6 +17,9 @@ import (
 	"gate.computer/wag/wa/opcode"
 )
 
+// If true, known but unsupported ops will be replaced with breakpoints.
+var UnsupportedOpBreakpoint bool
+
 func genOps(f *gen.Func, load *loader.L) (deadend bool) {
 	if debug.Enabled {
 		debug.Printf("{")
@@ -301,14 +304,55 @@ func genWrap(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 }
 
 func badGen(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	badOp(op)
+	badOp(load, op)
+
+	if debug.Enabled {
+		debug.Printf("unsupported opcode: 0x%02x", byte(op))
+	}
+
+	asm.Trap(f, trap.Breakpoint)
+	deadend = true
 	return
 }
 
-func badOp(op opcode.Opcode) {
+func badOp(load *loader.L, op opcode.Opcode) {
 	if opcode.Exists(byte(op)) {
 		panic(module.Errorf("unexpected opcode: %s", op))
-	} else {
-		panic(module.Errorf("invalid opcode: 0x%02x", byte(op)))
 	}
+
+	if UnsupportedOpBreakpoint {
+		switch op {
+		case 0xc0, 0xc1, 0xc2, 0xc3, 0xc4: // Sign-extension.
+			return
+
+		case 0xd0, 0xd1, 0xd2: // Reference types.
+			return
+
+		case 0xfc: // Miscellaneous operations.
+			switch op := load.Varuint32(); op {
+			case 0, 1, 2, 3, 4, 5, 6, 7: // Non-trapping float-to-int conversion.
+				return
+
+			case 0x0b: // Bulk memory operations: memory.fill
+				load.Byte()
+				return
+			case 0x0a, 0x0e: // Bulk memory operations: memory.copy, table.copy
+				load.Byte()
+				load.Byte()
+				return
+			case 0x09, 0x0d: // Bulk memory operations: data.drop, elem.drop
+				load.Varuint32()
+				return
+			case 0x08, 0x0c: // Bulk memory operations: memory.init, table.init
+				load.Varuint32()
+				load.Byte()
+				return
+
+			default:
+				panic(module.Errorf("unknown opcode: 0xfc 0x%02x", op))
+			}
+		}
+	}
+
+	panic(module.Errorf("unknown opcode: 0x%02x", byte(op)))
 }
