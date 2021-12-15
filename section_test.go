@@ -9,25 +9,9 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"gate.computer/wag/binary"
 	"gate.computer/wag/compile"
-	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/section"
 )
-
-var lib = *library.Load("testsuite/testdata/library.wasm", true, func(r binary.Reader) library.L {
-	mod, err := compile.LoadInitialSections(nil, r)
-	if err != nil {
-		panic(err)
-	}
-
-	lib, err := mod.AsLibrary()
-	if err != nil {
-		panic(err)
-	}
-
-	return &lib
-}).(*compile.Library)
 
 func TestSection(t *testing.T) {
 	var (
@@ -57,10 +41,10 @@ func TestSection(t *testing.T) {
 
 	for i := 0; i < mod.NumImportFuncs(); i++ {
 		// Arbitrary (but existing) implementation.
-		mod.SetImportFunc(i, uint32(lib.NumImportFuncs()))
+		mod.SetImportFunc(i, uint32(testlib.NumImportFuncs()))
 	}
 
-	err = compile.LoadCodeSection(&compile.CodeConfig{Config: loadConfig}, r, mod, lib)
+	err = compile.LoadCodeSection(&compile.CodeConfig{Config: loadConfig}, r, mod, testlib)
 	if err != nil {
 		t.Fatal(err)
 	}
