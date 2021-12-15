@@ -253,12 +253,12 @@ type resolver struct {
 func (r resolver) ResolveFunc(module, field string, sig wa.FuncType) (funcIndex uint32, err error) {
 	funcIndex, actualSig, fieldFound := r.lib.ExportFunc(field)
 	if module != "env" || !fieldFound {
-		err = fmt.Errorf("unknown function imported: %q.%q", module, field)
+		err = importErrorf("unknown function imported: %q.%q", module, field)
 		return
 	}
 
 	if !sig.Equal(actualSig) {
-		err = fmt.Errorf("function %s.%s%s imported with wrong type: %s", module, field, actualSig, sig)
+		err = importErrorf("function %s.%s%s imported with wrong type: %s", module, field, actualSig, sig)
 		return
 	}
 
@@ -267,6 +267,16 @@ func (r resolver) ResolveFunc(module, field string, sig wa.FuncType) (funcIndex 
 
 func (r resolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, err error) {
 	// Globals are not supported by library.
-	err = fmt.Errorf("unknown global imported: %q.%q", module, field)
+	err = importErrorf("unknown global imported: %q.%q", module, field)
 	return
 }
+
+type importError string
+
+func importErrorf(format string, args ...interface{}) error {
+	return importError(fmt.Sprintf(format, args...))
+}
+
+func (e importError) Error() string       { return string(e) }
+func (e importError) PublicError() string { return string(e) }
+func (e importError) ModuleError()        {}
