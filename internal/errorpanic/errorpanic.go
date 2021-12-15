@@ -7,8 +7,6 @@ package errorpanic
 import (
 	"io"
 	"runtime"
-
-	errors "golang.org/x/xerrors"
 )
 
 func Handle(x interface{}) (err error) {
@@ -22,7 +20,7 @@ func Handle(x interface{}) (err error) {
 			panic(x)
 		}
 
-		if errors.Is(err, io.EOF) {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			err = unexpectedEOF{}
 		}
 	}
