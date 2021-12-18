@@ -43,7 +43,8 @@ Status
 
 - Supports x86-64 and ARM64 code generation.
 
-- Generated x86-64 code requires SSE4.1 floating-point instructions.
+- Generated x86-64 code requires SSE4.1 floating-point instructions (available
+  since 2007).
 
 
 Security
