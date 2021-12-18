@@ -63,4 +63,8 @@ TEXT ·importGrowMemory(SB),$0-8
 	RET
 
 TEXT growMemory<>(SB),NOSPLIT,$0
-	HLT				// TODO: implementation
+	TESTL	AX, AX
+	JE	nop
+	MOVL	$-1, AX
+nop:
+	RET

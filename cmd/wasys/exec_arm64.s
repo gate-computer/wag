@@ -51,7 +51,10 @@ TEXT ·importGrowMemory(SB),$0-8
 	BL	after
 
 growmemory:
-	BRK				// TODO: implementation
+	CBZ	R0, nop
+	MOVD	$-1, R0
+nop:
+	RET
 
 after:	MOVD	LR, ret+0(FP)
 	RET
