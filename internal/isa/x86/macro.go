@@ -372,16 +372,35 @@ func (MacroAssembler) TrapHandlerTruncOverflow(p *gen.Prog, trapIndex int) {
 	in.MOVxmr.RegReg(&p.Text, floatIntType, RegResult, RegScratch)   // int <- float
 	in.RORi.RegImm8(&p.Text, floatIntType, RegScratch, fractionSize) // Exponent at bottom.
 
+	in.MOV.RegReg(&p.Text, wa.I32, RegZero, RegScratch)      // Use RegZero as 2nd scratch.
+	in.ANDi.RegImm32(&p.Text, wa.I32, RegZero, exponentMask) // Exponent is all ones?
+	in.SUBi.RegImm32(&p.Text, wa.I32, RegZero, exponentMask) //
+	jumpIfInfNan := in.JEcb.Stub8(&p.Text)
+	in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
+
 	in.CMPi.RegImm32(&p.Text, floatIntType, RegScratch, goodBits)
 	jumpIfOutOfRange := in.JNEcb.Stub8(&p.Text)
 
-	in.ANDi.RegImm32(&p.Text, wa.I32, RegScratch, exponentMask) // Exponent is all ones?
-	in.CMPi.RegImm32(&p.Text, wa.I32, RegScratch, exponentMask)
-	jumpIfInfNan := in.JEcb.Stub8(&p.Text)
-
+	retAddr := p.Text.Addr
 	in.RET.Simple(&p.Text)
 
 	linker.UpdateNearBranch(p.Text.Bytes(), jumpIfOutOfRange)
+
+	if floatIntType == wa.I64 { // f64
+		if trapIndex&1 == int(wa.Size32>>3) { // i32
+			in.MOV.RegReg(&p.Text, wa.I32, RegZero, RegScratch) // Use RegZero as 2nd scratch.
+			in.ANDi.RegImm32(&p.Text, wa.I32, RegZero, 0x800)   // Sign?
+			jumpIfPositive := in.JEcb.Stub8(&p.Text)
+			in.XOR.RegReg(&p.Text, wa.I32, RegZero, RegZero)
+
+			in.ROLi.RegImm8(&p.Text, floatIntType, RegScratch, fractionSize-21)
+			in.ANDi.RegImm32(&p.Text, wa.I32, RegScratch, 0x3fffffff)
+			in.JEcb.Addr8(&p.Text, retAddr)
+
+			linker.UpdateNearBranch(p.Text.Bytes(), jumpIfPositive)
+		}
+	}
+
 	linker.UpdateNearBranch(p.Text.Bytes(), jumpIfInfNan)
 
 	trapHandler(p, trap.IntegerOverflow)
