@@ -578,6 +578,7 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 		in.CMP.RegReg(&f.Text, wa.I64, RegScratch, RegStackLimit)
 		trapHandlerPrologue(&f.Prog, trap.CallStackExhausted)
 		in.JLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline) // Handler checks suspension.
+		initRoutinePrologue(&f.Prog)                      // Clean up if not jumped.
 
 		// Keep the restart address on stack to facilitate resume in rt calls.
 		// Duplicate arguments for mutation, and push (dummy) link address.
