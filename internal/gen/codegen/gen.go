@@ -244,7 +244,10 @@ func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (
 	// to this point.
 
 	x := popOperand(f, wa.I32)
-	asm.Move(f, reg.Result, x)
+
+	if zeroExt := asm.Move(f, reg.Result, x); !zeroExt {
+		asm.ZeroExtendResultReg(&f.Prog)
+	}
 
 	f.MapCallAddr(asm.GrowMemory(f))
 	pushResultRegOperand(f, wa.I32)

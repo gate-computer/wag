@@ -131,7 +131,8 @@ type MacroAssembler interface {
 	// GrowMemory may allocate registers, use RegResult and update condition
 	// flags.  The generated instruction sequence is part of ISA-specific ABI:
 	// the instruction sequence size up to and including the function call
-	// instruction must be predictable.
+	// instruction must be predictable.  RegResult has been zero-extended by
+	// the caller.
 	GrowMemory(f *gen.Func) (site int32)
 
 	// TrapHandlerRewindCallStackExhausted may use RegResult and update
