@@ -3,8 +3,8 @@ module gate.computer/wag/testsuite
 go 1.17
 
 require (
-	gate.computer/gate v0.0.0-20211218165223-7367374f9e97
-	gate.computer/wag v0.33.1-0.20211218164237-6e9c77cac22f
+	gate.computer/gate v0.0.0-20211222060558-95c50d159a8f
+	gate.computer/wag v0.33.1-0.20211221154506-5a8a3a0740ab
 )
 
 require (
