@@ -137,7 +137,7 @@ func genBinaryCommute(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo
 
 func opBinary(f *gen.Func, op opcode.Opcode, left, right operand.O, info opInfo) {
 	if t := info.primaryType(); left.Type != t || right.Type != t {
-		panic(module.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
+		check(module.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}
 
 	result := asm.Binary(f, info.props(), left, right)
@@ -218,7 +218,7 @@ func genCurrentMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo
 	opSaveOperands(f)
 
 	if load.Byte() != 0 {
-		panic(module.Errorf("%s: reserved byte is not zero", op))
+		check(module.Errorf("%s: reserved byte is not zero", op))
 	}
 
 	f.MapCallAddr(asm.CurrentMemory(f))
@@ -235,7 +235,7 @@ func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (
 	opSaveOperands(f)
 
 	if load.Byte() != 0 {
-		panic(module.Errorf("%s: reserved byte is not zero", op))
+		check(module.Errorf("%s: reserved byte is not zero", op))
 	}
 
 	// This is a possible suspension point.  Operands must be on stack, and the
@@ -277,7 +277,7 @@ func genSelect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dead
 	right := popAnyOperand(f)
 	left := popAnyOperand(f)
 	if left.Type != right.Type {
-		panic(module.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
+		check(module.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
 	}
 
 	result := asm.Select(f, left, right, cond)
@@ -320,7 +320,7 @@ func badGen(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend
 
 func badOp(load *loader.L, op opcode.Opcode) {
 	if opcode.Exists(byte(op)) {
-		panic(module.Errorf("unexpected opcode: %s", op))
+		check(module.Errorf("unexpected opcode: %s", op))
 	}
 
 	if UnsupportedOpBreakpoint {
@@ -352,10 +352,10 @@ func badOp(load *loader.L, op opcode.Opcode) {
 				return
 
 			default:
-				panic(module.Errorf("unknown opcode: 0xfc 0x%02x", op))
+				check(module.Errorf("unknown opcode: 0xfc 0x%02x", op))
 			}
 		}
 	}
 
-	panic(module.Errorf("unknown opcode: 0x%02x", byte(op)))
+	check(module.Errorf("unknown opcode: 0x%02x", byte(op)))
 }

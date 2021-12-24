@@ -34,17 +34,17 @@ func Read(m *module.M, load *loader.L) (importIndex int, valueBits uint64, t wa.
 	case opcode.GetGlobal:
 		i := load.Varuint32()
 		if i >= uint32(len(m.ImportGlobals)) {
-			panic(module.Errorf("import global index out of bounds in initializer expression: %d", i))
+			check(module.Errorf("import global index out of bounds in initializer expression: %d", i))
 		}
 		importIndex = int(i)
 		t = m.Globals[i].Type
 
 	default:
-		panic(module.Errorf("unsupported operation in initializer expression: %s", op))
+		check(module.Errorf("unsupported operation in initializer expression: %s", op))
 	}
 
 	if op := opcode.Opcode(load.Byte()); op != opcode.End {
-		panic(module.Errorf("unexpected operation in initializer expression when expecting end: %s", op))
+		check(module.Errorf("unexpected operation in initializer expression when expecting end: %s", op))
 	}
 
 	return
@@ -53,7 +53,7 @@ func Read(m *module.M, load *loader.L) (importIndex int, valueBits uint64, t wa.
 func ReadOffset(m *module.M, load *loader.L) uint32 {
 	index, value, t := Read(m, load)
 	if t != wa.I32 {
-		panic(module.Errorf("offset initializer expression has invalid type: %s", t))
+		check(module.Errorf("offset initializer expression has invalid type: %s", t))
 	}
 
 	value = m.EvaluateGlobalInitializer(index, value)

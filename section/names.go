@@ -10,7 +10,6 @@ import (
 	"io"
 
 	"gate.computer/wag/internal"
-	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 )
@@ -41,7 +40,7 @@ type NameSection struct {
 // Load "name" section.
 func (ns *NameSection) Load(_ string, r Reader, length uint32) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = errorpanic.Handle(recover()) }()
+		defer func() { err = internal.Error(recover()) }()
 	}
 
 	r = bufio.NewReader(&io.LimitedReader{R: r, N: int64(length)})
@@ -58,7 +57,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 		if err == io.EOF {
 			return
 		}
-		panic(err)
+		check(err)
 	}
 
 	load := loader.New(r)
@@ -77,7 +76,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 			funcIndex := loadContent.Varuint32()
 			if funcIndex >= uint32(len(ns.FuncNames)) {
 				if funcIndex >= maxFuncNames {
-					panic(module.Errorf("function name index is too large: %d", funcIndex))
+					check(module.Errorf("function name index is too large: %d", funcIndex))
 				}
 
 				buf := make([]FuncName, funcIndex+1)
@@ -95,7 +94,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 			case nameSubsectionLocalNames:
 				count := loadContent.Varuint32()
 				if count > maxLocalNames {
-					panic(module.Errorf("local name count is too large: %d", count))
+					check(module.Errorf("local name count is too large: %d", count))
 				}
 				fn.LocalNames = make([]string, count)
 
@@ -103,7 +102,7 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 					localIndex := loadContent.Varuint32()
 					if localIndex >= uint32(len(fn.LocalNames)) {
 						if localIndex >= maxLocalNames {
-							panic(module.Errorf("local name index is too large: %d", localIndex))
+							check(module.Errorf("local name index is too large: %d", localIndex))
 						}
 
 						buf := make([]string, localIndex+1)

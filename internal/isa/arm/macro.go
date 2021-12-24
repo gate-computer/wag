@@ -9,8 +9,6 @@
 package arm
 
 import (
-	"fmt"
-
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/gen/condition"
 	"gate.computer/wag/internal/gen/link"
@@ -19,6 +17,7 @@ import (
 	"gate.computer/wag/internal/gen/rodata"
 	"gate.computer/wag/internal/gen/storage"
 	"gate.computer/wag/internal/isa/arm/in"
+	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/trap"
 	"gate.computer/wag/wa"
@@ -305,7 +304,7 @@ func (MacroAssembler) CallImportVector(f *gen.Func, index int) {
 		o.insn(in.LDR.RdRnI12(RegScratch, RegScratch, uint32(4096+index), wa.I64)) // Scaled by 8.
 
 	default:
-		panic(fmt.Errorf("arm: import function index is out of range: %d", index))
+		check(module.Errorf("import function index is out of range: %d", index))
 	}
 
 	o.insn(in.BLR.Rn(RegScratch))

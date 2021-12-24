@@ -5,6 +5,8 @@
 package gen
 
 import (
+	"fmt"
+
 	"gate.computer/wag/internal/gen/debug"
 	"gate.computer/wag/internal/gen/link"
 	"gate.computer/wag/internal/gen/operand"
@@ -13,7 +15,6 @@ import (
 	"gate.computer/wag/internal/gen/storage"
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/wa"
-	errors "golang.org/x/xerrors"
 )
 
 type Block struct {
@@ -66,7 +67,7 @@ func (f *Func) LocalOffset(index int) int32 {
 		n--
 	}
 	if n < 0 {
-		panic(errors.New("effective stack offset of local variable #%d is negative"))
+		check(fmt.Errorf("effective stack offset of local variable #%d is negative", index))
 	}
 	return int32(n * obj.Word)
 }

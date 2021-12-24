@@ -17,6 +17,7 @@ import (
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
 	errors "golang.org/x/xerrors"
+	"import.name/pan"
 )
 
 var (
@@ -41,7 +42,7 @@ func stealDeadBlockOperandReg(f *gen.Func, t wa.Type) (r reg.R) {
 		}
 	}
 
-	panic(errors.New("suitable allocated register operand not found during robbery"))
+	panic(pan.Wrap(errors.New("suitable allocated register operand not found during robbery")))
 }
 
 // allocStealDeadReg may take current block's operand's register without
@@ -71,7 +72,7 @@ func popBranchTarget(f *gen.Func) (finalizedLabel *link.L) {
 
 func getBranchTarget(f *gen.Func, depth uint32) *gen.BranchTarget {
 	if depth >= uint32(len(f.BranchTargets)) {
-		panic(module.Errorf("relative branch depth out of bounds: %d", depth))
+		check(module.Errorf("relative branch depth out of bounds: %d", depth))
 	}
 	return f.BranchTargets[len(f.BranchTargets)-int(depth)-1]
 }
@@ -209,7 +210,7 @@ func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 		}
 
 		if target.ValueType != wa.Void {
-			panic(errBranchLoopValue)
+			check(errBranchLoopValue)
 		}
 
 		retAddrs := asm.BranchIfStub(f, cond, false, true)
@@ -232,7 +233,7 @@ func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableLen) {
-		panic(module.Errorf("branch table target count is too large: %d", targetCount))
+		check(module.Errorf("branch table target count is too large: %d", targetCount))
 	}
 
 	targetTable := make([]*gen.BranchTarget, targetCount)
@@ -274,7 +275,7 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 		}
 
 		if target.ValueType != defaultTarget.ValueType {
-			panic(module.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
+			check(module.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
 		}
 	}
 
@@ -325,7 +326,7 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 
 	if b := getCurrentBlock(f); loop && !b.Suspension && f.ImportContext == nil {
 		if value.Type != wa.Void {
-			panic(errBranchLoopValue)
+			check(errBranchLoopValue)
 		}
 		opReserveStackEntry(f)
 		asm.SuspendSaveInt(f, r)
@@ -407,7 +408,7 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 	thenDeadend, haveElse := genThenOps(f, load)
 
 	if ifType != wa.Void && !haveElse {
-		panic(errIfResultType)
+		check(errIfResultType)
 	}
 
 	if ifType != wa.Void {

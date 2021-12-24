@@ -11,9 +11,10 @@ import (
 
 	"gate.computer/wag/buffer"
 	werrors "gate.computer/wag/errors"
-	"gate.computer/wag/internal/errorpanic"
+	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/module"
 	"golang.org/x/xerrors"
+	"import.name/pan"
 )
 
 func TestModuleError(t *testing.T) {
@@ -27,8 +28,8 @@ func TestModuleError(t *testing.T) {
 	}
 }
 
-func TestErrorPanicEOF(t *testing.T) {
-	err := errorpanic.Handle(io.EOF)
+func TestInternalErrorEOF(t *testing.T) {
+	err := internal.Error(pan.Wrap(io.EOF))
 	if !xerrors.Is(err, io.ErrUnexpectedEOF) {
 		t.Error(err)
 	}

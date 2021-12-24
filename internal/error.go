@@ -2,30 +2,25 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package errorpanic
+package internal
 
 import (
 	"io"
-	"runtime"
+
+	"import.name/pan"
 )
 
-func Handle(x interface{}) (err error) {
-	if x != nil {
-		err, _ = x.(error)
-		if err == nil {
-			panic(x)
-		}
-
-		if _, ok := err.(runtime.Error); ok {
-			panic(x)
-		}
-
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
-			err = unexpectedEOF{}
-		}
+func Error(x interface{}) error {
+	err := pan.Error(x)
+	if err == nil {
+		return nil
 	}
 
-	return
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		return unexpectedEOF{}
+	}
+
+	return err
 }
 
 type unexpectedEOF struct{}

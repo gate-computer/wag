@@ -19,6 +19,7 @@ import (
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
 	errors "golang.org/x/xerrors"
+	"import.name/pan"
 )
 
 const (
@@ -72,7 +73,7 @@ func pushResultRegOperand(f *gen.Func, t wa.Type) {
 func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 	x = popAnyOperand(f)
 	if x.Type != t {
-		panic(module.Errorf("operand %s has wrong type; expected %s", x, t))
+		check(module.Errorf("operand %s has wrong type; expected %s", x, t))
 	}
 	return
 }
@@ -80,7 +81,7 @@ func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 func popAnyOperand(f *gen.Func) (x operand.O) {
 	i := len(f.Operands) - 1
 	if i < f.FrameBase {
-		panic(errPopNoOperand)
+		check(errPopNoOperand)
 	}
 
 	x = f.Operands[i]
@@ -145,7 +146,7 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 	for range load.Span(MaxFuncLocals, "function local group") {
 		count := load.Varuint32()
 		if uint64(len(f.LocalTypes))+uint64(count) >= MaxFuncLocals {
-			panic(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
+			check(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
 		}
 
 		t := typedecode.Value(load.Varint7())
@@ -182,7 +183,7 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 		}
 
 		if len(f.Operands) != 0 {
-			panic(errOperandStackNotEmpty)
+			check(errOperandStackNotEmpty)
 		}
 
 		f.Regs.CheckNoneAllocated()
@@ -199,7 +200,7 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 	asm.Return(&f.Prog, f.NumExtra+f.NumLocals+f.StackDepth)
 
 	if len(f.BranchTargets) != 0 {
-		panic(errBranchTargetStackNotEmpty)
+		check(errBranchTargetStackNotEmpty)
 	}
 
 	fullText := f.Text.Bytes()
@@ -377,7 +378,7 @@ func opReleaseStackEntry(f *gen.Func) {
 func opDropOperand(f *gen.Func) {
 	i := len(f.Operands) - 1
 	for i < f.FrameBase {
-		panic(errDropNoOperand)
+		check(errDropNoOperand)
 	}
 
 	x := f.Operands[i]
@@ -534,7 +535,7 @@ func opStealOperandRegBefore(f *gen.Func, t wa.Type, length int) reg.R {
 		}
 	}
 
-	panic(errors.New("no allocated registers found in operand stack while under register pressure"))
+	panic(pan.Wrap(errors.New("no allocated registers found in operand stack while under register pressure")))
 }
 
 func opAllocReg(f *gen.Func, t wa.Type) (r reg.R, operandsChanged bool) {

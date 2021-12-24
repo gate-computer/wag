@@ -54,7 +54,7 @@ func (Linker) UpdateFarBranches(text []byte, l *link.L) {
 
 func (Linker) UpdateStackCheck(text []byte, addr int32, depth int) {
 	if maxFuncOffset := len(text) - int(addr); maxFuncOffset > MaxFuncSize {
-		panic(module.Error("text size limit exceeded"))
+		check(module.Error("text size limit exceeded"))
 	}
 
 	// codegen.MaxFuncLocals ensures that alloc4 is not out of range.

@@ -41,7 +41,7 @@ func (l *Limited) Bytes() []byte {
 // PutByte panicks with ErrSizeLimit if the buffer is already full.
 func (l *Limited) PutByte(value byte) {
 	if len(l.d.buf) >= l.d.maxSize {
-		panic(ErrSizeLimit)
+		check(ErrSizeLimit)
 	}
 	l.d.PutByte(value)
 }
@@ -56,7 +56,7 @@ func (l *Limited) PutUint32(i uint32) {
 // buffer.
 func (l *Limited) Extend(n int) []byte {
 	if len(l.d.buf)+n > l.d.maxSize {
-		panic(ErrSizeLimit)
+		check(ErrSizeLimit)
 	}
 	return l.d.Extend(n)
 }
@@ -65,7 +65,7 @@ func (l *Limited) Extend(n int) []byte {
 // size.
 func (l *Limited) ResizeBytes(n int) []byte {
 	if n > l.d.maxSize {
-		panic(ErrSizeLimit)
+		check(ErrSizeLimit)
 	}
 	return l.d.ResizeBytes(n)
 }

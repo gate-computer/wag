@@ -131,7 +131,8 @@ honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWh
 import.name/confi v1.6.0/go.mod h1:jeyJVWX3Z5bFX91LPdetqunSrmgrWztnrgUQbQM/bJo=
 import.name/lock v0.0.0-20211205191324-f24933776f0b h1:BGZe3RGI6lRASOz5fdX9i00k9f5BXdWMG4DG7qohCAY=
 import.name/lock v0.0.0-20211205191324-f24933776f0b/go.mod h1:A/P+1darHq1WWQZaqhNcXx0mdLynmjtDPIu6g0ZxuX8=
-import.name/pan v0.1.0/go.mod h1:snP0jwjUyxGNm7n8LD3QF/uG7HNg8lg22zwC3wm0h9M=
+import.name/pan v0.1.1 h1:aTTOwLAwLmL4OOtrZqFGZqVq8GnVeFneGB5cTx+QgzY=
+import.name/pan v0.1.1/go.mod h1:snP0jwjUyxGNm7n8LD3QF/uG7HNg8lg22zwC3wm0h9M=
 kernel.org/pub/linux/libs/security/libcap/cap v1.2.49 h1:l/z5YU1YTeIo872V3L577f49PgLvSGTstopFJMASdAc=
 kernel.org/pub/linux/libs/security/libcap/cap v1.2.49/go.mod h1:SDveHFdFe7G0H/t18WEsVxAsBGUGvSF5tuOY6yN0+xo=
 kernel.org/pub/linux/libs/security/libcap/psx v1.2.49 h1:hlS5NSqyydHYranE120TzuEEaTAPLVyi1dm0tYSYMbg=

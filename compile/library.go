@@ -12,7 +12,6 @@ import (
 
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/count"
-	"gate.computer/wag/internal/errorpanic"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
@@ -41,7 +40,7 @@ type Library struct {
 
 func (mod Module) AsLibrary() (lib Library, err error) {
 	if internal.DontPanic() {
-		defer func() { err = errorpanic.Handle(recover()) }()
+		defer func() { err = internal.Error(recover()) }()
 	}
 
 	lib = mod.asLibrary()
@@ -50,13 +49,13 @@ func (mod Module) AsLibrary() (lib Library, err error) {
 
 func (mod Module) asLibrary() Library {
 	if len(mod.m.Globals) > 0 {
-		panic(module.Error("library contains globals"))
+		check(module.Error("library contains globals"))
 	}
 	if len(mod.m.ImportGlobals) > 0 {
-		panic(module.Error("library imports globals"))
+		check(module.Error("library imports globals"))
 	}
 	if len(mod.m.TableFuncs) > 0 {
-		panic(module.Error("library uses indirect function calls"))
+		check(module.Error("library uses indirect function calls"))
 	}
 
 	libImports := make([]module.ImportIndex, len(mod.m.ImportFuncs))
@@ -78,7 +77,7 @@ func (mod Module) asLibrary() Library {
 
 func (lib *Library) LoadSections(r Reader) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = errorpanic.Handle(recover()) }()
+		defer func() { err = internal.Error(recover()) }()
 	}
 
 	lib.loadSections(r)
@@ -120,10 +119,10 @@ func (lib *Library) loadSections(r Reader) {
 
 	data := new(DataConfig)
 	if err := LoadDataSection(data, r, mod); err != nil {
-		panic(err)
+		check(err)
 	}
 	if len(data.GlobalsMemory.Bytes()) > 0 {
-		panic(module.Error("library contains data"))
+		check(module.Error("library contains data"))
 	}
 }
 

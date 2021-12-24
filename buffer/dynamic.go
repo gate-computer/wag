@@ -71,7 +71,7 @@ func (d *Dynamic) Extend(addLen int) []byte {
 
 	if size := offset + addLen; size <= cap(d.buf) {
 		if size < offset { // Check for overflow
-			panic(errors.New("buffer size out of range"))
+			check(errors.New("buffer size out of range"))
 		}
 
 		d.buf = d.buf[:size]

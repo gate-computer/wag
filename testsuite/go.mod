@@ -16,6 +16,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	import.name/lock v0.0.0-20211205191324-f24933776f0b // indirect
+	import.name/pan v0.1.1 // indirect
 	kernel.org/pub/linux/libs/security/libcap/cap v1.2.49 // indirect
 	kernel.org/pub/linux/libs/security/libcap/psx v1.2.49 // indirect
 )

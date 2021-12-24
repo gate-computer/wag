@@ -17,7 +17,7 @@ import (
 func readLocalIndex(f *gen.Func, load *loader.L, op opcode.Opcode) (index int, t wa.Type) {
 	i := load.Varuint32()
 	if i >= uint32(len(f.LocalTypes)) {
-		panic(module.Errorf("%s index out of bounds: %d", op, i))
+		check(module.Errorf("%s index out of bounds: %d", op, i))
 	}
 
 	index = int(i)

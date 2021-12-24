@@ -36,7 +36,7 @@ func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 
 func opCallInNormalFunc(f *gen.Func, op opcode.Opcode, funcIndex uint32) {
 	if funcIndex >= uint32(len(f.Module.Funcs)) {
-		panic(module.Errorf("%s: function index out of bounds: %d", op, funcIndex))
+		check(module.Errorf("%s: function index out of bounds: %d", op, funcIndex))
 	}
 
 	sig := f.Module.Types[f.Module.Funcs[funcIndex]]
@@ -63,12 +63,12 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(f.Module.Types)) {
-		panic(module.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
+		check(module.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
 	}
 	sigIndex = getCanonicalIndirectCallSig(&f.Prog, sigIndex)
 
 	if load.Byte() != 0 {
-		panic(module.Errorf("%s: reserved byte is not zero", op))
+		check(module.Errorf("%s: reserved byte is not zero", op))
 	}
 
 	funcIndex := popOperand(f, wa.I32)
@@ -102,12 +102,12 @@ func checkCallOperandCount(f *gen.Func, sig wa.FuncType) {
 	}
 
 	if len(sig.Params) > f.StackDepth-f.FrameBase {
-		panic(errCallParamsExceedStack)
+		check(errCallParamsExceedStack)
 	}
 
 	for i, t := range sig.Params {
 		if t != f.Operands[len(f.Operands)-len(sig.Params)+i].Type {
-			panic(errCallParamTypeMismatch)
+			check(errCallParamTypeMismatch)
 		}
 	}
 }

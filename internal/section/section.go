@@ -39,7 +39,7 @@ func Find(
 			if err == io.EOF {
 				return sectionOffset, 0
 			}
-			panic(err)
+			check(err)
 		}
 
 		id := module.SectionID(sectionID)
@@ -55,12 +55,12 @@ func Find(
 					if err == Unwrapped {
 						partial = true
 					} else {
-						panic(err)
+						check(err)
 					}
 				}
 			} else {
 				if _, err := io.CopyN(ioutil.Discard, load, int64(payloadSize)); err != nil {
-					panic(err)
+					check(err)
 				}
 			}
 
@@ -85,12 +85,12 @@ func LoadPayloadSize(
 	payloadSize := load.Varuint32()
 	sectionSize := load.Tell() - sectionOffset + int64(payloadSize)
 	if sectionSize > math.MaxInt32 {
-		panic(module.Error("section end offset out of bounds"))
+		check(module.Error("section end offset out of bounds"))
 	}
 
 	if mapper != nil {
 		if err := mapper.PutSection(byte(id), sectionOffset, uint32(sectionSize), payloadSize); err != nil {
-			panic(err)
+			check(err)
 		}
 	}
 
@@ -105,5 +105,5 @@ func CheckConsumption(load *loader.L, payloadOffset int64, payloadSize uint32, p
 	if partial && consumed < int64(payloadSize) {
 		return
 	}
-	panic(module.Errorf("section size is %d but %d bytes was read", payloadSize, consumed))
+	check(module.Errorf("section size is %d but %d bytes was read", payloadSize, consumed))
 }

@@ -21,7 +21,6 @@ import (
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/trap"
 	"gate.computer/wag/wa"
-	errors "golang.org/x/xerrors"
 )
 
 const (
@@ -449,7 +448,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 				zeroExtended = true
 			} else {
 				if target != RegResult {
-					panic(errors.New("x86: register moved to itself"))
+					panic("x86: register moved to itself")
 				}
 			}
 
@@ -482,7 +481,7 @@ func (MacroAssembler) Move(f *gen.Func, target reg.R, x operand.O) (zeroExtended
 				f.Regs.Free(x.Type, source)
 			} else {
 				if target != RegResult {
-					panic(errors.New("x86: register moved to itself"))
+					panic("x86: register moved to itself")
 				}
 			}
 		}
