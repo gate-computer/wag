@@ -48,46 +48,28 @@ func (o *outbuf) access(f *gen.Func, op in.Memory, dataReg reg.R, index operand.
 		return
 	}
 
+	// Wrapping index to 32 bits avoids speculation beyond memory mapping.
+
 	switch index.Storage {
 	case storage.Imm:
-		value := uint64(index.ImmValue())
-		addr := value + uint64(offset)
-		if value >= 0x80000000 || addr >= 0x80000000 {
-			asm.Trap(f, trap.MemoryAccessOutOfBounds)
-			return
-		}
+		o.moveUintImm32(RegScratch, uint32(index.ImmValue()))
 
-		switch {
-		case addr <= 255:
-			o.insn(op.OpcodeUnscaled().RtRnI9(dataReg, RegMemoryBase, uint32(addr)))
+	case storage.Stack:
+		o.insn(in.PopReg(RegScratch, wa.I32))
+		f.StackValueConsumed()
 
-		default:
-			o.moveUintImm32(RegScratch, uint32(addr))
-			o.insn(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UXTW, RegScratch))
-		}
+	case storage.Reg:
+		r := index.Reg()
+		o.insn(in.ORRs.RdRnI6RmS2(RegScratch, RegZero, 0, r, 0, wa.Size32))
+		f.Regs.Free(index.Type, r)
 
-	default:
-		r := o.getScratchReg(f, index)
-
-		if offset < 1<<24 {
-			imm := uint64(offset)
-			if imm != 0 {
-				o.insn(in.ADDi.RdRnI12S2(r, r, in.Uint12(imm), 0, wa.Size32))
-			}
-			imm >>= 12
-			if imm != 0 {
-				o.insn(in.ADDi.RdRnI12S2(r, r, in.Uint12(imm), 1, wa.Size32))
-			}
-		} else {
-			o.moveUintImm32(RegScratch2, offset)
-			o.insn(in.ADDs.RdRnI6RmS2(r, r, 0, RegScratch2, 0, wa.Size32))
-		}
-
-		// UXTW masks index register unconditionally.
-		o.insn(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UXTW, r))
-
-		f.Regs.Free(wa.I32, r)
+	case storage.Flags:
+		o.setBool(RegScratch, index.FlagsCond())
 	}
+
+	o.moveUintImm32(RegScratch2, offset)
+	o.insn(in.ADDs.RdRnI6RmS2(RegScratch, RegScratch, 0, RegScratch2, 0, wa.Size64))
+	o.insn(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UXTX, RegScratch))
 
 	f.MapTrapAddr(o.addr(&f.Text)) // Address of instruction pointer during SIGSEGV handling.
 }
