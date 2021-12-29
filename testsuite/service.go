@@ -41,23 +41,13 @@ func (s *server) CreateInstance(context.Context, service.InstanceConfig, []byte)
 	return s, nil
 }
 
-func (s *server) Handle(ctx context.Context, send chan<- packet.Buf, received packet.Buf) error {
+func (s *server) Handle(ctx context.Context, send chan<- packet.Thunk, received packet.Buf) (packet.Buf, error) {
 	if received.Domain() != packet.DomainCall {
-		return nil
+		return nil, nil
 	}
 
 	content := s.handle(received.Content())
 	reply := packet.MakeCall(received.Code(), len(content))
 	copy(reply.Content(), content)
-
-	select {
-	case send <- reply:
-	case <-ctx.Done():
-	}
-
-	return nil
-}
-
-func (*server) Suspend(context.Context) ([]byte, error) {
-	return nil, nil
+	return reply, nil
 }

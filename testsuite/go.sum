@@ -1,7 +1,7 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 gate.computer/ga v0.0.0-20211218044256-b13e95063354/go.mod h1:ptFRNzPSeTorleDUxCozrDpJQS3r6tdBBnpJFOg3IJU=
-gate.computer/gate v0.0.0-20211222060558-95c50d159a8f h1:bCv9MtyfVXFYmlV01GgftIJgyNr4nX9Orel8G7OL0GM=
-gate.computer/gate v0.0.0-20211222060558-95c50d159a8f/go.mod h1:QQ2WKXreLZigt91AgUF9XcrtPp2dDC1hLEro4pHcBx8=
+gate.computer/gate v0.0.0-20211229132701-e6bbc90aedf0 h1:6JreompM7ux0iFle/AzOz4pGKC0AcVeg6IPASdZoR9Y=
+gate.computer/gate v0.0.0-20211229132701-e6bbc90aedf0/go.mod h1:QQ2WKXreLZigt91AgUF9XcrtPp2dDC1hLEro4pHcBx8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
@@ -131,6 +131,7 @@ honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWh
 import.name/confi v1.6.0/go.mod h1:jeyJVWX3Z5bFX91LPdetqunSrmgrWztnrgUQbQM/bJo=
 import.name/lock v0.0.0-20211205191324-f24933776f0b h1:BGZe3RGI6lRASOz5fdX9i00k9f5BXdWMG4DG7qohCAY=
 import.name/lock v0.0.0-20211205191324-f24933776f0b/go.mod h1:A/P+1darHq1WWQZaqhNcXx0mdLynmjtDPIu6g0ZxuX8=
+import.name/pan v0.1.0/go.mod h1:snP0jwjUyxGNm7n8LD3QF/uG7HNg8lg22zwC3wm0h9M=
 import.name/pan v0.1.1 h1:aTTOwLAwLmL4OOtrZqFGZqVq8GnVeFneGB5cTx+QgzY=
 import.name/pan v0.1.1/go.mod h1:snP0jwjUyxGNm7n8LD3QF/uG7HNg8lg22zwC3wm0h9M=
 kernel.org/pub/linux/libs/security/libcap/cap v1.2.49 h1:l/z5YU1YTeIo872V3L577f49PgLvSGTstopFJMASdAc=
