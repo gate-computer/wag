@@ -186,6 +186,10 @@ func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 	align := load.Varuint32()
 	offset := load.Varuint32()
 
+	if align > info.maxAlign() {
+		check(module.Error("alignment must not be larger than natural"))
+	}
+
 	result := asm.Load(f, info.props(), index, info.primaryType(), align, offset)
 	pushOperand(f, result)
 	return
@@ -196,6 +200,10 @@ func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deade
 
 	align := load.Varuint32()
 	offset := load.Varuint32()
+
+	if align > info.maxAlign() {
+		check(module.Error("alignment must not be larger than natural"))
+	}
 
 	value := popOperand(f, info.primaryType())
 	index := popOperand(f, wa.I32)

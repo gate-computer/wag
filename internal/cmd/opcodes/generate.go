@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"regexp"
@@ -202,16 +203,26 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 				}
 
 				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, props)
-			} else if m := regexp.MustCompile(`^(.)(..)\.(load|store)(.*)$`).FindStringSubmatch(op.name); m != nil {
+			} else if m := regexp.MustCompile(`^(.)(..)\.(load|store)([0-9]*)(.*)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "gen" + symbol(m[3])
 					type1 = "wa." + strings.ToUpper(m[1]+m[2])
-					props string
 				)
 
-				props = "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3]+m[4])
+				accessBits := m[4]
+				if accessBits == "" {
+					accessBits = m[2]
+				}
 
-				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
+				n, err := strconv.Atoi(accessBits)
+				if err != nil {
+					log.Fatal(err)
+				}
+				maxAlign := int(math.Log2(float64(n / 8)))
+
+				props := "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3]+m[4]+m[5])
+
+				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%d) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, maxAlign, props)
 			} else if m := regexp.MustCompile(`^(.)(..)\.(.+)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = operGen(m[3])

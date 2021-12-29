@@ -448,6 +448,9 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 			msg := skipUnsupported(t, err)
 
 			switch text {
+			case msg:
+				return true
+
 			case "global is immutable":
 				switch {
 				case msg == "set_global: global 0 is immutable":
@@ -570,7 +573,21 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 	defer p.close(t)
 
 	switch text {
-	case "alignment must not be larger than natural", "type mismatch", "unknown function", "unknown global", "unknown label", "unknown local", "unknown memory", "unknown memory 0", "unknown table":
+	case "type mismatch":
+		t.Skip("TODO")
+	case "unknown function":
+		t.Skip("TODO")
+	case "unknown global":
+		t.Skip("TODO")
+	case "unknown label":
+		t.Skip("TODO")
+	case "unknown local":
+		t.Skip("TODO")
+	case "unknown memory":
+		t.Skip("TODO")
+	case "unknown memory 0":
+		t.Skip("TODO")
+	case "unknown table":
 		t.Skip("TODO")
 	}
 

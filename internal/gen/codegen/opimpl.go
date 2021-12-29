@@ -21,6 +21,10 @@ func (info opInfo) secondaryType() wa.Type {
 	return wa.Type(info >> 8)
 }
 
+func (info opInfo) maxAlign() uint32 {
+	return uint32(uint8(info >> 8))
+}
+
 func (info opInfo) props() uint16 {
 	return uint16(info >> 16)
 }
