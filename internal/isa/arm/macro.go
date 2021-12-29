@@ -476,7 +476,7 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 	o.insn(in.PushReg(RegLink, wa.I64))
 
 	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
-	restartAddr := f.Text.Addr
+	restartAddr := o.addr(&f.Text)
 
 	// If the following (NumExtra == 0) instructions are changed,
 	// TrapHandlerRewindCallStackExhausted must be changed to match the
@@ -496,7 +496,7 @@ func (MacroAssembler) SetupStackFrame(f *gen.Func) (stackCheckAddr int32) {
 		// start of function.
 
 		o.insn(in.BL.I26(1)) // Next instruction.
-		o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, in.Uint12(uint64(f.Text.Addr-restartAddr)), 0, wa.Size64))
+		o.insn(in.SUBi.RdRnI12S2(RegLink, RegLink, in.Uint12(uint64(o.addr(&f.Text)-restartAddr)), 0, wa.Size64))
 
 		// The return address is in link register.  Inline the trap trampoline;
 		// the branch will be matched with a return sequence which pops the
