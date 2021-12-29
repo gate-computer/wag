@@ -102,6 +102,8 @@ func (s *specInstance) invoke(t *testing.T, field string, args []arg, restype *w
 	if !found {
 		t.Fatal("field not found")
 	}
+	t.Log("entry index:", index)
+
 	if restype != nil && *restype != sig.Result {
 		t.Fatal(*restype, sig.Result)
 	}

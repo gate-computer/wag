@@ -196,6 +196,8 @@ func newInstance(t *testing.T, p *program, entry string) *image.Instance {
 			return nil
 		}
 		entryIndex = int(i)
+
+		t.Log("entry index:", entryIndex)
 	}
 
 	inst, err := image.NewInstance(p.image, maxMemorySize, stackSize, entryIndex)
