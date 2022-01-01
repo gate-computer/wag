@@ -101,7 +101,7 @@ import (
 //   ARM64 load instruction.
 //
 // - All limits are small enough to keep values below 2^31, so that simple
-//   signed 32-bit comparisons can be used by the x86 backend.
+//   signed 32-bit comparisons can be used by the amd64 backend.
 //
 // (More limits are defined in codegen package.)
 

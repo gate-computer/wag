@@ -54,7 +54,7 @@ Security
 access detection requires that addressable but unallocated memory is
 inaccessible.  It naturally prevents conditional branch exploitation.
 
-Spectre variant 2: On x86, [Retpoline](https://support.google.com/faqs/answer/7625886)
+Spectre variant 2: On x86-64, [Retpoline](https://support.google.com/faqs/answer/7625886)
 is used to protect the runtime environment (although user programs shouldn't be
 able to inject arbitrary addresses into the branch target buffer).
 

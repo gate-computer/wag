@@ -11,7 +11,7 @@ import (
 const CommonsAddr = 128
 
 const (
-	// Masks are 16-byte aligned for x86-64 SSE.
+	// Masks are 16-byte aligned for amd64 SSE.
 	Mask7fAddr32 = CommonsAddr + iota*16
 	Mask7fAddr64
 	Mask80Addr32

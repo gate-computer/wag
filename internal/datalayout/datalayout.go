@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	MinAlignment = 16 // for x86-64 SSE
+	MinAlignment = 16 // for amd64 SSE
 )
 
 const (

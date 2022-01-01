@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	MaxFuncLocals     = 8190  // Largest value supported by arm backend's stack check.
+	MaxFuncLocals     = 8190  // Largest value supported by arm64 backend's stack check.
 	MaxBranchTableLen = 65520 // Industry standard.
 )
 
