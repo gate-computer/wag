@@ -116,7 +116,10 @@ func opFinalizeCall(f *gen.Func, sig wa.FuncType) {
 	f.Regs.CheckNoneAllocated()
 
 	opDropCallOperands(f, len(sig.Params))
-	pushResultRegOperand(f, sig.Result)
+
+	if len(sig.Results) > 0 {
+		pushResultRegOperand(f, sig.Results[0])
+	}
 }
 
 func opCall(f *gen.Func, l *link.L) {

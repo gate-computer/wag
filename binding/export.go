@@ -29,7 +29,15 @@ func EntryFunc(mod compile.Module, name string) (funcIndex uint32, err error) {
 
 // IsEntryFuncType checks if the signature is suitable for an entry function.
 func IsEntryFuncType(sig wa.FuncType) bool {
-	return len(sig.Params) == 0 && (sig.Result == wa.Void || sig.Result == wa.I32)
+	if len(sig.Params) == 0 {
+		if len(sig.Results) == 0 {
+			return true
+		}
+		if len(sig.Results) == 1 && sig.Results[0] == wa.I32 {
+			return true
+		}
+	}
+	return false
 }
 
 // IsStartFuncType checks if the signature is suitable for a start function.

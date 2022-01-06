@@ -140,7 +140,9 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 	// reader.
 	load.Varuint32()
 
-	f.ResultType = sig.Result
+	if len(sig.Results) > 0 {
+		f.ResultType = sig.Results[0]
+	}
 	f.LocalTypes = sig.Params
 
 	for range load.Span(MaxFuncLocals, "function local group") {

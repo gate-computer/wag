@@ -321,7 +321,7 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool 
 		switch load.Byte() {
 		case 0:
 		case 1:
-			sig.Result = typedecode.Value(load.Varint7())
+			sig.Results = []wa.Type{typedecode.Value(load.Varint7())}
 		default:
 			check(module.Error("multiple return values not supported"))
 		}
@@ -522,7 +522,7 @@ func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool
 
 	sigIndex := m.m.Funcs[index]
 	sig := m.m.Types[sigIndex]
-	if len(sig.Params) > 0 || sig.Result != wa.Void {
+	if len(sig.Params) > 0 || len(sig.Results) > 0 {
 		check(module.Errorf("invalid start function signature: %s", sig))
 	}
 

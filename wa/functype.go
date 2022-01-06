@@ -5,21 +5,26 @@
 package wa
 
 type FuncType struct {
-	Params []Type
-	Result Type
+	Params  []Type
+	Results []Type
 }
 
 func (f FuncType) Equal(other FuncType) bool {
-	if f.Result != other.Result {
+	if len(f.Params) != len(other.Params) {
 		return false
 	}
-
-	if len(f.Params) != len(other.Params) {
+	if len(f.Results) != len(other.Results) {
 		return false
 	}
 
 	for i := range f.Params {
 		if f.Params[i] != other.Params[i] {
+			return false
+		}
+	}
+
+	for i := range f.Results {
+		if f.Results[i] != other.Results[i] {
 			return false
 		}
 	}
@@ -36,8 +41,21 @@ func (f FuncType) String() (s string) {
 		s += t.String()
 	}
 	s += ")"
-	if f.Result != Void {
-		s += " " + f.Result.String()
+
+	switch len(f.Results) {
+	case 0:
+	case 1:
+		s += " " + f.Results[0].String()
+	default:
+		s += " ("
+		for i, t := range f.Results {
+			if i > 0 {
+				s += ", "
+			}
+			s += t.String()
+		}
+		s += ")"
 	}
+
 	return
 }

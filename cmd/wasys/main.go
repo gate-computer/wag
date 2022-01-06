@@ -59,8 +59,11 @@ func (r libResolver) ResolveFunc(module, field string, sig wa.FuncType) (index u
 	for _, t := range sig.Params {
 		name += t.String()
 	}
-	if sig.Result != wa.Void {
-		name += "_" + sig.Result.String()
+	if len(sig.Results) > 0 {
+		name += "_"
+		for _, t := range sig.Results {
+			name += t.String()
+		}
 	}
 
 	index, sig, found := r.lib.ExportFunc(name)
