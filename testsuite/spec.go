@@ -104,8 +104,8 @@ func (s *specInstance) invoke(t *testing.T, field string, args []arg, restype *w
 	}
 	t.Log("entry index:", index)
 
-	if restype != nil && *restype != sig.Result {
-		t.Fatal(*restype, sig.Result)
+	if restype != nil && !(*restype == wa.Void && len(sig.Results) == 0) && !(len(sig.Results) > 0 && sig.Results[0] == *restype) {
+		t.Fatal(*restype, sig.Results)
 	}
 	if len(args) != len(sig.Params) {
 		t.Fatal(len(args), len(sig.Params))
