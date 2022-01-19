@@ -5,6 +5,8 @@
 package codegen
 
 import (
+	"errors"
+
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/gen/debug"
 	"gate.computer/wag/internal/gen/link"
@@ -16,7 +18,6 @@ import (
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
-	errors "golang.org/x/xerrors"
 	"import.name/pan"
 )
 

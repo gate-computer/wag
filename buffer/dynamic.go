@@ -6,8 +6,7 @@ package buffer
 
 import (
 	"encoding/binary"
-
-	errors "golang.org/x/xerrors"
+	"errors"
 )
 
 // Dynamic is a variable-capacity buffer.  The default value is a valid buffer.

@@ -5,7 +5,7 @@
 package link
 
 import (
-	errors "golang.org/x/xerrors"
+	"errors"
 )
 
 type L struct {

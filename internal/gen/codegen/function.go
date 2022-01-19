@@ -6,6 +6,7 @@ package codegen
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/gen/debug"
@@ -18,7 +19,6 @@ import (
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
-	errors "golang.org/x/xerrors"
 	"import.name/pan"
 )
 
