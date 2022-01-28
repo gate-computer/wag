@@ -9,7 +9,6 @@ package wag
 
 import (
 	"bytes"
-	"errors"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -47,14 +46,10 @@ func FuzzCompile(f *testing.F) {
 		if err == nil {
 			return
 		}
-
-		var modErr werrors.ModuleError
-		if errors.As(err, &modErr) {
+		if werrors.AsModuleError(err) != nil {
 			return
 		}
-
-		var resErr werrors.ResourceLimit
-		if errors.As(err, &resErr) {
+		if werrors.AsResourceLimit(err) != nil {
 			return
 		}
 

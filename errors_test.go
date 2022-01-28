@@ -18,6 +18,16 @@ import (
 	"import.name/pan"
 )
 
+func TestPublicError(t *testing.T) {
+	if err := error(publicError{}); werrors.AsPublicError(err) == nil {
+		t.Error(err)
+	}
+
+	if err := error(nonpublicError{}); werrors.AsPublicError(err) != nil {
+		t.Error(err)
+	}
+}
+
 func TestModuleError(t *testing.T) {
 	var _ = module.Error("").(werrors.ModuleError)
 	var _ = module.Errorf("").(werrors.ModuleError)
@@ -35,8 +45,7 @@ func TestInternalErrorEOF(t *testing.T) {
 		t.Error(err)
 	}
 
-	var e werrors.ModuleError
-	if !errors.As(err, &e) {
+	if werrors.AsModuleError(err) == nil {
 		t.Error(err)
 	}
 }
@@ -49,8 +58,7 @@ func TestBufferSizeLimit(t *testing.T) {
 		t.Error(wrapped)
 	}
 
-	var e werrors.ResourceLimit
-	if errors.As(wrapped, &e) {
+	if e := werrors.AsResourceLimit(wrapped); e != nil {
 		if e != buffer.ErrSizeLimit {
 			t.Error(e)
 		}
@@ -64,11 +72,8 @@ func TestErrorData(t *testing.T) {
 	if err.Error() != io.EOF.Error() {
 		t.Error(err)
 	}
-	{
-		var e werrors.PublicError
-		if errors.As(err, &e) {
-			t.Error(err)
-		}
+	if werrors.AsPublicError(err) != nil {
+		t.Error(err)
 	}
 	if errors.Unwrap(err) != nil {
 		t.Error(err)
@@ -85,15 +90,12 @@ func TestPublicErrorData(t *testing.T) {
 	if err.Error() != "internal message" {
 		t.Error(err)
 	}
-	{
-		var e werrors.PublicError
-		if errors.As(err, &e) {
-			if e.PublicError() != "public message" {
-				t.Error(err)
-			}
-		} else {
+	if e := werrors.AsPublicError(err); e != nil {
+		if e.PublicError() != "public message" {
 			t.Error(err)
 		}
+	} else {
+		t.Error(err)
 	}
 	if errors.Unwrap(err) != nil {
 		t.Error(err)
@@ -103,15 +105,12 @@ func TestPublicErrorData(t *testing.T) {
 	if err.Error() != "public message" {
 		t.Error(err)
 	}
-	{
-		var e werrors.PublicError
-		if errors.As(err, &e) {
-			if e.PublicError() != "public message" {
-				t.Error(err)
-			}
-		} else {
+	if e := werrors.AsPublicError(err); e != nil {
+		if e.PublicError() != "public message" {
 			t.Error(err)
 		}
+	} else {
+		t.Error(err)
 	}
 }
 
@@ -120,26 +119,20 @@ func TestModuleErrorData(t *testing.T) {
 	if err.Error() != "foo" {
 		t.Error(err)
 	}
-	{
-		var e werrors.ModuleError
-		if errors.As(err, &e) {
-			if e.PublicError() != "foo" {
-				t.Error(err)
-			}
-		} else {
+	if e := werrors.AsModuleError(err); e != nil {
+		if e.PublicError() != "foo" {
 			t.Error(err)
 		}
+	} else {
+		t.Error(err)
 	}
 	if errors.Unwrap(err) != nil {
 		t.Error(err)
 	}
 
 	err = errordata.Deconstruct(internal.Error(pan.Wrap(io.EOF))).Reconstruct()
-	{
-		var e werrors.ModuleError
-		if !errors.As(err, &e) {
-			t.Error(err)
-		}
+	if werrors.AsModuleError(err) == nil {
+		t.Error(err)
 	}
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Error(err)
@@ -151,26 +144,20 @@ func TestResourceLimitData(t *testing.T) {
 	if err.Error() != buffer.ErrSizeLimit.Error() {
 		t.Error(err)
 	}
-	{
-		var e werrors.ResourceLimit
-		if errors.As(err, &e) {
-			if e.PublicError() != buffer.ErrSizeLimit.Error() {
-				t.Error(err)
-			}
-		} else {
+	if e := werrors.AsResourceLimit(err); e != nil {
+		if e.PublicError() != buffer.ErrSizeLimit.Error() {
 			t.Error(err)
 		}
+	} else {
+		t.Error(err)
 	}
 	if !errors.Is(err, buffer.ErrSizeLimit) {
 		t.Error(err)
 	}
 
 	err = errordata.Deconstruct(fmt.Errorf("wrapped: %w", buffer.ErrSizeLimit)).Reconstruct()
-	{
-		var e werrors.ResourceLimit
-		if !errors.As(err, &e) {
-			t.Error(err)
-		}
+	if werrors.AsResourceLimit(err) == nil {
+		t.Error(err)
 	}
 	if !errors.Is(err, buffer.ErrSizeLimit) {
 		t.Error(err)
@@ -181,3 +168,8 @@ type publicError struct{}
 
 func (publicError) Error() string       { return "internal message" }
 func (publicError) PublicError() string { return "public message" }
+
+type nonpublicError struct{}
+
+func (nonpublicError) Error() string       { return "message" }
+func (nonpublicError) PublicError() string { return "" }

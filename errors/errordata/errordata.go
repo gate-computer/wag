@@ -79,8 +79,8 @@ type Public struct {
 }
 
 func deconstructPublic(err error) *Public {
-	var e werrors.PublicError
-	if !errors.As(err, &e) {
+	e := werrors.AsPublicError(err)
+	if e == nil {
 		return nil
 	}
 
@@ -100,8 +100,8 @@ type Module struct {
 }
 
 func deconstructModule(err error) *Public {
-	var e werrors.ModuleError
-	if !errors.As(err, &e) {
+	e := werrors.AsModuleError(err)
+	if e == nil {
 		return nil
 	}
 
@@ -119,8 +119,8 @@ type ResourceLimit struct {
 }
 
 func deconstructResourceLimit(err error) *Public {
-	var e werrors.ResourceLimit
-	if !errors.As(err, &e) {
+	e := werrors.AsResourceLimit(err)
+	if e == nil {
 		return nil
 	}
 
@@ -142,59 +142,51 @@ func reconstructError(s string, x *Public) error {
 	return newPublicError(s, x)
 }
 
-type publicError struct {
-	s       string
-	public  string
-	wrapped error
+type dataError struct {
+	s      string
+	public string
+	module bool
+	rlimit bool
+	inner  error
 }
 
-var _ werrors.PublicError = (*publicError)(nil)
+var _ werrors.PublicError = (*dataError)(nil)
+var _ werrors.ModuleError = (*dataError)(nil)
+var _ werrors.ResourceLimit = (*dataError)(nil)
 
-func (e *publicError) Error() string       { return e.s }
-func (e *publicError) PublicError() string { return e.public }
-func (e *publicError) Unwrap() error       { return e.wrapped }
+func (e *dataError) Error() string       { return e.s }
+func (e *dataError) PublicError() string { return e.public }
+func (e *dataError) ModuleError() bool   { return e.module }
+func (e *dataError) ResourceLimit() bool { return e.rlimit }
+func (e *dataError) Unwrap() error       { return e.inner }
 
 func newPublicError(s string, x *Public) error {
-	return &publicError{
+	return &dataError{
 		s:      s,
 		public: x.Error,
 	}
 }
 
-type moduleError struct {
-	publicError
-}
-
-func (*moduleError) ModuleError() {}
-
-var _ werrors.ModuleError = (*moduleError)(nil)
-
 func newModuleError(s string, x *Public) error {
-	e := &moduleError{publicError{
+	e := &dataError{
 		s:      s,
 		public: x.Error,
-	}}
+		module: true,
+	}
 	if x.Module.UnexpectedEOF {
-		e.wrapped = io.ErrUnexpectedEOF
+		e.inner = io.ErrUnexpectedEOF
 	}
 	return e
 }
 
-type resourceLimit struct {
-	publicError
-}
-
-func (*resourceLimit) ResourceLimit() {}
-
-var _ werrors.ResourceLimit = (*resourceLimit)(nil)
-
 func newResourceLimit(s string, x *Public) error {
-	e := &resourceLimit{publicError{
+	e := &dataError{
 		s:      s,
 		public: x.Error,
-	}}
+		rlimit: true,
+	}
 	if x.ResourceLimit.BufferSizeExceeded {
-		e.wrapped = buffer.ErrSizeLimit
+		e.inner = buffer.ErrSizeLimit
 	}
 	return e
 }

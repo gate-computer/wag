@@ -11,4 +11,4 @@ type err struct{}
 
 func (err) Error() string       { return "buffer size limit exceeded" }
 func (err) PublicError() string { return "buffer size limit exceeded" }
-func (err) ResourceLimit()      {}
+func (err) ResourceLimit() bool { return true }

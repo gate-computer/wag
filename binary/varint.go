@@ -224,4 +224,4 @@ type moduleError string
 
 func (e moduleError) Error() string       { return string(e) }
 func (e moduleError) PublicError() string { return string(e) }
-func (e moduleError) ModuleError()        {}
+func (e moduleError) ModuleError() bool   { return true }

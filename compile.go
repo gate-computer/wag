@@ -279,4 +279,4 @@ func importErrorf(format string, args ...interface{}) error {
 
 func (e importError) Error() string       { return string(e) }
 func (e importError) PublicError() string { return string(e) }
-func (e importError) ModuleError()        {}
+func (e importError) ModuleError() bool   { return true }

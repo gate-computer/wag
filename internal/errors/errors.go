@@ -27,5 +27,5 @@ func WrapModuleError(cause error, text string) error {
 
 func (e *moduleError) Error() string       { return e.text }
 func (e *moduleError) PublicError() string { return e.text }
-func (e *moduleError) ModuleError()        {}
+func (e *moduleError) ModuleError() bool   { return true }
 func (e *moduleError) Unwrap() error       { return e.cause }

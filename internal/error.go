@@ -27,5 +27,5 @@ type unexpectedEOF struct{}
 
 func (unexpectedEOF) Error() string       { return "unexpected EOF" }
 func (unexpectedEOF) PublicError() string { return "unexpected EOF" }
-func (unexpectedEOF) ModuleError()        {}
+func (unexpectedEOF) ModuleError() bool   { return true }
 func (unexpectedEOF) Unwrap() error       { return io.ErrUnexpectedEOF }
