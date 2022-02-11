@@ -597,15 +597,7 @@ func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 // trap must generate exactly one instruction.
 func (o *outbuf) trap(f *gen.Func, id trap.ID) {
 	o.unmappedTrap(f, f.TrapLinks[id])
-	f.MapTrapAddr(o.addr(&f.Text))
-}
-
-func (MacroAssembler) Breakpoint(f *gen.Func) {
-	var o outbuf
-
-	o.unmappedTrap(f, f.TrapLinks[trap.Breakpoint])
-	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
-	o.copy(f.Text.Extend(o.size))
+	f.MapCallAddr(o.addr(&f.Text))
 }
 
 // unmappedTrap must generate exactly one instruction.
@@ -618,8 +610,7 @@ func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
 
 	o.insn(in.TBZ.RtI14Bit(RegStackLimit4, 4, 0)) // Skip until end.
 	o.insn(in.PushReg(saveReg, wa.I64))
-	o.unmappedTrap(f, f.TrapLinks[trap.Suspended])
-	f.MapCallAddr(o.addr(&f.Text)) // Resume address.
+	o.trap(f, trap.Suspended)
 	o.insn(in.PopReg(saveReg, wa.I64))
 	o.copy(f.Text.Extend(o.size))
 }
@@ -637,8 +628,7 @@ func (MacroAssembler) BranchSuspend(f *gen.Func, addr int32) {
 		o.unmappedTrap(f, f.TrapLinkRewindSuspended[0])
 	} else {
 		o.insn(in.TBZ.RtI14Bit(RegStackLimit4, 2, 0))
-		o.unmappedTrap(f, f.TrapLinks[trap.Suspended])
-		f.MapCallAddr(f.Text.Addr) // Resume address.
+		o.trap(f, trap.Suspended)
 		o.insn(in.B.I26(in.Int26((addr - o.addr(&f.Text)) / 4)))
 	}
 

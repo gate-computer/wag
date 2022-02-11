@@ -26,7 +26,7 @@ func FindCallSite(a []CallSite, retAddr uint32) (i int, found bool) {
 }
 
 // CallMap implements compile.ObjectMapper.  It stores function addresses, and
-// sites of function calls and suspension points.  Other trap and instruction
+// sites of function calls, suspension points and traps.  Instruction
 // information is not stored.
 //
 // Initial CallSites capacity may be allocated by initializing the field with a

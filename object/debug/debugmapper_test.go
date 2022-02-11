@@ -10,10 +10,6 @@ import (
 	"gate.computer/wag/internal/obj"
 )
 
-func TestTrapMap(*testing.T) {
-	var _ obj.DebugObjectMapper = new(TrapMap)
-}
-
 func TestInsnMap(*testing.T) {
 	var _ obj.DebugObjectMapper = new(InsnMap)
 }

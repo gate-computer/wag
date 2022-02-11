@@ -670,12 +670,7 @@ func (MacroAssembler) StoreStackReg(p *gen.Prog, t wa.Type, offset int32, r reg.
 
 func (MacroAssembler) Trap(f *gen.Func, id trap.ID) {
 	in.CALLcd.Addr32(&f.Text, f.TrapLinks[id].Addr)
-	f.MapTrapAddr(f.Text.Addr)
-}
-
-func (MacroAssembler) Breakpoint(f *gen.Func) {
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Breakpoint].Addr)
-	f.MapCallAddr(f.Text.Addr) // Resume address.
+	f.MapCallAddr(f.Text.Addr)
 }
 
 func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
@@ -683,8 +678,7 @@ func (MacroAssembler) SuspendSaveInt(f *gen.Func, saveReg reg.R) {
 	skipJump := in.JEcb.Stub8(&f.Text) // Skip if bit is zero (no trap).
 
 	in.PUSH.Reg(&f.Text, in.OneSize, saveReg)
-	in.CALLcd.Addr32(&f.Text, f.TrapLinks[trap.Suspended].Addr)
-	f.MapCallAddr(f.Text.Addr) // Resume address.
+	asm.Trap(f, trap.Suspended)
 	in.POP.Reg(&f.Text, in.OneSize, saveReg)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), skipJump)

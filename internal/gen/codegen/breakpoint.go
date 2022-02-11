@@ -7,6 +7,7 @@ package codegen
 import (
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/trap"
 )
 
 func makeDebugger(breakpoints map[uint32]gen.Breakpoint, load *loader.L) gen.Debugger {
@@ -28,7 +29,7 @@ func genBreakpoint(f *gen.Func, load *loader.L) {
 	}
 
 	opSaveOperands(f)
-	asm.Breakpoint(f)
+	asm.Trap(f, trap.Breakpoint)
 
 	bp.Set = true
 	f.Debugger.Breakpoints[addr] = bp

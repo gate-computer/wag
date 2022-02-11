@@ -6,6 +6,8 @@ package debug
 
 import (
 	"sort"
+
+	"gate.computer/wag/object"
 )
 
 // Instruction mapping from machine code to WebAssembly.  SourceOffset is zero
@@ -20,7 +22,7 @@ type InsnMapping struct {
 // instruction information.  The Mapper method must be used to obtain an actual
 // ObjectMapper implementation.
 type InsnMap struct {
-	TrapMap
+	object.CallMap
 	Insns []InsnMapping
 }
 
@@ -44,7 +46,7 @@ func (m *InsnMap) putMapping(objectOffset, sourceOffset uint32, blockLen int32) 
 }
 
 func (m *InsnMap) FindCall(retAddr uint32) (init bool, funcIndex, callIndex int, stackOffset int32, retOffset uint32) {
-	init, funcIndex, callIndex, stackOffset, retOffset = m.TrapMap.FindCall(retAddr)
+	init, funcIndex, callIndex, stackOffset, retOffset = m.CallMap.FindCall(retAddr)
 
 	retIndex := sort.Search(len(m.Insns), func(i int) bool {
 		return m.Insns[i].ObjectOffset >= retAddr

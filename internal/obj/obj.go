@@ -8,20 +8,18 @@ const (
 	Word = 8 // stack entry size
 )
 
-// ObjectMapper gathers information about positions of (WebAssembly) functions
-// and function calls within the text (machine code) section.
+// ObjectMapper gathers information about positions of (WebAssembly) functions,
+// function calls and traps within the text (machine code) section.
 type ObjectMapper interface {
 	InitObjectMap(numImportFuncs, numOtherFuncs int)
 	PutFuncAddr(addr uint32)
 	PutCallSite(returnAddr uint32, stackOffset int32)
 }
 
-// DebugObjectMapper gathers information about positions of (WebAssembly)
-// functions, function calls and instructions within the text (machine code)
-// section.
+// DebugObjectMapper gathers information about positions of all (WebAssembly)
+// instructions within the text (machine code) section.
 type DebugObjectMapper interface {
 	ObjectMapper
-	PutTrapSite(addr uint32, stackOffset int32)
 	PutInsnAddr(addr, sourceAddr uint32)
 	PutDataBlock(addr uint32, length int32)
 }
@@ -34,6 +32,5 @@ func (DummyMapper) PutCallSite(uint32, int32) {}
 
 type DummyDebugMapper struct{ DummyMapper }
 
-func (DummyDebugMapper) PutTrapSite(uint32, int32)  {}
 func (DummyDebugMapper) PutInsnAddr(uint32)         {}
 func (DummyDebugMapper) PutDataBlock(uint32, int32) {}

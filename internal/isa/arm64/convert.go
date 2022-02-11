@@ -63,7 +63,7 @@ func convertFloatToInt(f *gen.Func, props uint16, resultType wa.Type, source ope
 	o.insn(insn.RdRn(resultReg, sourceReg, source.Size(), resultType.Size()))
 	o.insn(in.MRS_FPSR.Rt(RegScratch))
 	o.insn(in.TBZ.RtI14Bit(RegScratch, 2, 0)) // Skip next instruction if valid operation.
-	o.unmappedTrap(f, f.TrapLinks[trap.IntegerOverflow])
+	o.trap(f, trap.IntegerOverflow)
 	o.copy(f.Text.Extend(o.size))
 
 	f.Regs.Free(wa.F64, sourceReg)

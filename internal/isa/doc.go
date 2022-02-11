@@ -230,9 +230,6 @@ type MacroAssembler interface {
 	// Trap may use RegResult and update condition flags.
 	Trap(f *gen.Func, id trap.ID)
 
-	// Breakpoint may use RegResult and update condition flags.
-	Breakpoint(f *gen.Func)
-
 	// Unary may allocate registers, use RegResult and update condition flags.
 	// The operand argument may be RegResult or condition flags.
 	Unary(f *gen.Func, props uint16, x operand.O) operand.O

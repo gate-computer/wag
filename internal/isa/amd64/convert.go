@@ -115,7 +115,7 @@ func truncateSigned(f *gen.Func, targetType wa.Type, target reg.R, sourceType wa
 		in.MOVAPx.RegReg(&f.Text, sourceType, RegResult, source)
 	}
 	in.CALLcd.Addr32(&f.Text, f.TrapLinkTruncOverflow[int(sourceType>>2)&2|int(targetType>>3)].Addr)
-	f.MapTrapAddr(f.Text.Addr)
+	f.MapCallAddr(f.Text.Addr)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), jumpUnlessMagicValue)
 }

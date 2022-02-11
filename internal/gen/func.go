@@ -101,12 +101,6 @@ func (f *Func) MapCallAddr(retAddr int32) {
 	f.LastCallAddr = retAddr // Needed only by arm64 backend.
 }
 
-func (f *Func) MapTrapAddr(retAddr int32) {
-	if f.DebugMap != nil {
-		f.DebugMap.PutTrapSite(uint32(retAddr), f.mapStackUsage())
-	}
-}
-
 func (f *Func) mapStackUsage() int32 {
 	// Add one entry for link address.
 	return int32((f.NumLocals + f.StackDepth + 1) * obj.Word)
