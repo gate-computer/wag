@@ -12,6 +12,7 @@ import (
 	"gate.computer/wag/object/stack"
 	"gate.computer/wag/section"
 	"gate.computer/wag/wa"
+	"github.com/ianlancetaylor/demangle"
 )
 
 func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names *section.NameSection, debug *dwarf.Data) (err error) {
@@ -54,7 +55,7 @@ func Fprint(w io.Writer, stacktrace []stack.Frame, funcSigs []wa.FuncType, names
 		var name string
 
 		if names != nil && int(frame.FuncIndex) < len(names.FuncNames) {
-			name = names.FuncNames[frame.FuncIndex].FuncName
+			name = demangle.Filter(names.FuncNames[frame.FuncIndex].FuncName)
 		} else {
 			name = fmt.Sprintf("function %d", frame.FuncIndex)
 		}
