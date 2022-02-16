@@ -124,8 +124,16 @@ var emptyCodeSectionPayload = []byte{
 	0, // function count
 }
 
-// Reader is a subset of bufio.Reader, bytes.Buffer and bytes.Reader.
+// Reader is suitable for reading a module.
 type Reader = binary.Reader
+
+// Loader is suitable for use with module loading functions.
+type Loader = loader.Loader
+
+// NewLoader creates a WebAssembly module loader.
+func NewLoader(r binary.Reader) Loader {
+	return loader.New(r, 0)
+}
 
 type CodeBuffer = code.Buffer
 type DataBuffer = data.Buffer
@@ -198,16 +206,16 @@ type Module struct {
 
 // LoadInitialSections reads module header and all sections preceding code and
 // data.
-func LoadInitialSections(config *ModuleConfig, r Reader) (m Module, err error) {
+func LoadInitialSections(config *ModuleConfig, r Loader) (m Module, err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	m = loadInitialSections(config, r)
+	m = loadInitialSections(config, loader.Get(r))
 	return
 }
 
-func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
+func loadInitialSections(config *ModuleConfig, load *loader.L) (m Module) {
 	if config == nil {
 		config = new(ModuleConfig)
 	}
@@ -216,8 +224,6 @@ func loadInitialSections(config *ModuleConfig, r Reader) (m Module) {
 	} else if config.MaxExports == 0 {
 		config.MaxExports = defaultMaxExports
 	}
-
-	load := loader.New(r)
 
 	var header module.Header
 	if err := encodingbinary.Read(load, encodingbinary.LittleEndian, &header); err != nil {
@@ -664,24 +670,23 @@ type CodeConfig struct {
 // machine code.
 //
 // If CodeBuffer panicks with an error, it will be returned by this function.
-func LoadCodeSection(config *CodeConfig, r Reader, mod Module, lib Library) (err error) {
+func LoadCodeSection(config *CodeConfig, r Loader, mod Module, lib Library) (err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	loadCodeSection(config, r, mod, &lib.l)
+	loadCodeSection(config, loader.Get(r), mod, &lib.l)
 	return
 }
 
-func loadCodeSection(config *CodeConfig, r Reader, mod Module, lib *module.Library) {
+func loadCodeSection(config *CodeConfig, load *loader.L, mod Module, lib *module.Library) {
 	var payloadSize uint32
-
-	load := loader.New(r)
 
 	switch sectionOffset, id := section.Find(module.SectionCode, load, config.ModuleMapper, config.CustomSectionLoader); id {
 	case module.SectionData, 0:
-		// No code section, but compiler needs to generate init routines.
-		load = loader.New(bytes.NewReader(emptyCodeSectionPayload))
+		// No code section, but compiler needs to generate init routines.  Use
+		// bogus offsets to avoid possible confusion.
+		load = loader.New(bytes.NewReader(emptyCodeSectionPayload), math.MaxUint32)
 		payloadSize = uint32(len(emptyCodeSectionPayload))
 
 	case module.SectionCode:
@@ -731,22 +736,20 @@ type DataConfig struct {
 // initial contents of mutable program state (globals and linear memory).
 //
 // If DataBuffer panicks with an error, it will be returned by this function.
-func LoadDataSection(config *DataConfig, r Reader, mod Module) (err error) {
+func LoadDataSection(config *DataConfig, r Loader, mod Module) (err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	loadDataSection(config, r, mod)
+	loadDataSection(config, loader.Get(r), mod)
 	return
 }
 
-func loadDataSection(config *DataConfig, r Reader, mod Module) {
+func loadDataSection(config *DataConfig, load *loader.L, mod Module) {
 	if config.MemoryAlignment == 0 {
 		config.MemoryAlignment = datalayout.MinAlignment
 	}
 	memoryOffset := datalayout.MemoryOffset(&mod.m, config.MemoryAlignment)
-
-	load := loader.New(r)
 
 	switch sectionOffset, id := section.Find(module.SectionData, load, config.ModuleMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
@@ -788,21 +791,19 @@ func loadDataSection(config *DataConfig, r Reader, mod Module) {
 }
 
 // ValidateDataSection reads a WebAssembly module's data section.
-func ValidateDataSection(config *Config, r Reader, mod Module) (err error) {
+func ValidateDataSection(config *Config, r Loader, mod Module) (err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	validateDataSection(config, r, mod)
+	validateDataSection(config, loader.Get(r), mod)
 	return
 }
 
-func validateDataSection(config *Config, r Reader, mod Module) {
+func validateDataSection(config *Config, load *loader.L, mod Module) {
 	if config == nil {
 		config = new(Config)
 	}
-
-	load := loader.New(r)
 
 	switch sectionOffset, id := section.Find(module.SectionData, load, config.ModuleMapper, config.CustomSectionLoader); id {
 	case module.SectionData:
@@ -820,21 +821,19 @@ func validateDataSection(config *Config, r Reader, mod Module) {
 }
 
 // LoadCustomSections reads WebAssembly module's extension sections.
-func LoadCustomSections(config *Config, r Reader) (err error) {
+func LoadCustomSections(config *Config, r Loader) (err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	loadCustomSections(config, r)
+	loadCustomSections(config, loader.Get(r))
 	return
 }
 
-func loadCustomSections(config *Config, r Reader) {
+func loadCustomSections(config *Config, load *loader.L) {
 	if config == nil {
 		config = new(Config)
 	}
-
-	load := loader.New(r)
 
 	section.Find(0, load, config.ModuleMapper, config.CustomSectionLoader)
 }

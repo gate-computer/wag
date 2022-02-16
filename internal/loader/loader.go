@@ -6,11 +6,21 @@ package loader
 
 import (
 	"io"
+	"io/ioutil"
 	"unicode/utf8"
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/module"
 )
+
+type Loader interface {
+	binary.Reader
+	loader()
+}
+
+func Get(load Loader) *L {
+	return load.(*L)
+}
 
 // L provides panicking reading and integer decoding methods.
 type L struct {
@@ -18,9 +28,14 @@ type L struct {
 	n int64
 }
 
-func New(r binary.Reader) *L {
-	return &L{r: r}
+func New(r binary.Reader, offset int64) *L {
+	if load, ok := r.(*L); ok && load.n == offset {
+		return load
+	}
+	return &L{r, offset}
 }
+
+func (*L) loader() {}
 
 // Tell how many bytes have been read.
 func (load *L) Tell() int64 {
@@ -55,9 +70,7 @@ func (load *L) UnreadByte() error {
 func (load *L) Into(buf []byte) {
 	n, err := io.ReadFull(load.r, buf)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 }
 
 func (load *L) String(n uint32, name string) string {
@@ -72,81 +85,63 @@ func (load *L) Bytes(n uint32) (data []byte) {
 
 func (load *L) Byte() byte {
 	x, err := load.ReadByte()
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Uint32() uint32 {
 	x, n, err := binary.Uint32(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Uint64() uint64 {
 	x, n, err := binary.Uint64(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Varint7() int8 {
 	x, n, err := binary.Varint7(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Varint32() int32 {
 	x, n, err := binary.Varint32(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Varint64() int64 {
 	x, n, err := binary.Varint64(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Varuint1() bool {
 	x, n, err := binary.Varuint1(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Varuint32() uint32 {
 	x, n, err := binary.Varuint32(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
 func (load *L) Varuint64() uint64 {
 	x, n, err := binary.Varuint64(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	return x
 }
 
@@ -154,9 +149,7 @@ func (load *L) Varuint64() uint64 {
 func (load *L) Count(max int, name string) int {
 	count, n, err := binary.Varuint32(load.r)
 	load.n += int64(n)
-	if err != nil {
-		check(err)
-	}
+	check(err)
 	if uint64(count) > uint64(max) {
 		check(module.Errorf("%s count is too large: 0x%x", name, count))
 	}
@@ -166,6 +159,12 @@ func (load *L) Count(max int, name string) int {
 // Span reads a varuint32 for iteration.
 func (load *L) Span(max int, name string) []struct{} {
 	return make([]struct{}, load.Count(max, name))
+}
+
+func (load *L) Discard(count uint32) {
+	n, err := io.CopyN(ioutil.Discard, load.r, int64(count))
+	load.n += n
+	check(err)
 }
 
 func String(b []byte, name string) string {

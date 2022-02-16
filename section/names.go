@@ -5,9 +5,8 @@
 package section
 
 import (
-	"bufio"
-	"bytes"
-	"io"
+	"errors"
+	"math"
 
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/loader"
@@ -43,37 +42,37 @@ func (ns *NameSection) Load(_ string, r Reader, length uint32) (err error) {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	r = bufio.NewReader(&io.LimitedReader{R: r, N: int64(length)})
-
-	for ns.readSubsection(r) {
+	load, ok := r.(*loader.L)
+	if !ok {
+		// Use bogus offsets to avoid possible confusion.
+		load = loader.New(r, math.MaxUint32)
 	}
 
-	return
+	for begin := load.Tell(); ; {
+		switch pos := load.Tell() - begin; {
+		case pos == int64(length):
+			return
+
+		case pos > int64(length):
+			check(errors.New("name section content exceeded payload length"))
+
+		default:
+			ns.readSubsection(load)
+		}
+	}
 }
 
-func (ns *NameSection) readSubsection(r Reader) (read bool) {
-	id, err := r.ReadByte()
-	if err != nil {
-		if err == io.EOF {
-			return
-		}
-		check(err)
-	}
-
-	load := loader.New(r)
-
+func (ns *NameSection) readSubsection(load *loader.L) {
+	id := load.Byte()
 	contentSize := load.Varuint32()
-	content := load.Bytes(contentSize)
 
 	switch id {
 	case nameSubsectionModuleName:
-		ns.ModuleName = loader.String(content, "name section: module name")
+		ns.ModuleName = load.String(contentSize, "name section: module name")
 
 	case nameSubsectionFunctionNames, nameSubsectionLocalNames:
-		loadContent := loader.New(bytes.NewReader(content))
-
-		for range loadContent.Span(maxFuncNames, "function name count") {
-			funcIndex := loadContent.Varuint32()
+		for range load.Span(maxFuncNames, "function name count") {
+			funcIndex := load.Varuint32()
 			if funcIndex >= uint32(len(ns.FuncNames)) {
 				if funcIndex >= maxFuncNames {
 					check(module.Errorf("function name index is too large: %d", funcIndex))
@@ -88,18 +87,18 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 
 			switch id {
 			case nameSubsectionFunctionNames:
-				funcNameLen := loadContent.Varuint32()
-				fn.FuncName = loadContent.String(funcNameLen, "name section: function name")
+				funcNameLen := load.Varuint32()
+				fn.FuncName = load.String(funcNameLen, "name section: function name")
 
 			case nameSubsectionLocalNames:
-				count := loadContent.Varuint32()
+				count := load.Varuint32()
 				if count > maxLocalNames {
 					check(module.Errorf("local name count is too large: %d", count))
 				}
 				fn.LocalNames = make([]string, count)
 
 				for range make([]struct{}, count) {
-					localIndex := loadContent.Varuint32()
+					localIndex := load.Varuint32()
 					if localIndex >= uint32(len(fn.LocalNames)) {
 						if localIndex >= maxLocalNames {
 							check(module.Errorf("local name index is too large: %d", localIndex))
@@ -110,15 +109,15 @@ func (ns *NameSection) readSubsection(r Reader) (read bool) {
 						fn.LocalNames = buf
 					}
 
-					localNameLen := loadContent.Varuint32()
-					fn.LocalNames[localIndex] = loadContent.String(localNameLen, "name section: local name")
+					localNameLen := load.Varuint32()
+					fn.LocalNames[localIndex] = load.String(localNameLen, "name section: local name")
 				}
 			}
 		}
-	}
 
-	read = true
-	return
+	default:
+		load.Discard(contentSize)
+	}
 }
 
 type MappedNameSection struct {

@@ -8,24 +8,24 @@ import (
 	"bufio"
 	"os"
 
-	"gate.computer/wag/binary"
+	"gate.computer/wag/internal/loader"
 )
 
 type L interface {
-	LoadSections(r binary.Reader) (err error)
+	LoadSections(r loader.Loader) (err error)
 	NumImportFuncs() int
 	SetImportFunc(i int, vectorIndex int)
 }
 
-func Load(filename string, dummyBinding bool, loadLibrary func(r binary.Reader) L) L {
+func Load(filename string, dummyBinding bool, loadLibrary func(*loader.L) L) L {
 	f, err := os.Open(filename)
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
 
-	r := bufio.NewReader(f)
-	lib := loadLibrary(r)
+	load := loader.New(bufio.NewReader(f), 0)
+	lib := loadLibrary(load)
 
 	if dummyBinding {
 		for i := 0; i < lib.NumImportFuncs(); i++ {
@@ -33,7 +33,7 @@ func Load(filename string, dummyBinding bool, loadLibrary func(r binary.Reader) 
 		}
 	}
 
-	if err := lib.LoadSections(r); err != nil {
+	if err := lib.LoadSections(load); err != nil {
 		panic(err)
 	}
 

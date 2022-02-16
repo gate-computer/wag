@@ -5,14 +5,14 @@
 package wag
 
 import (
-	"gate.computer/wag/binary"
 	"gate.computer/wag/binding"
 	"gate.computer/wag/compile"
+	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/test/library"
 )
 
-var testlib = *library.Load("testsuite/testdata/library.wasm", true, func(r binary.Reader) library.L {
-	mod, err := compile.LoadInitialSections(nil, r)
+var testlib = *library.Load("testsuite/testdata/library.wasm", true, func(load *loader.L) library.L {
+	mod, err := compile.LoadInitialSections(nil, load)
 	if err != nil {
 		panic(err)
 	}

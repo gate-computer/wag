@@ -13,12 +13,13 @@ import (
 
 	"gate.computer/wag/buffer"
 	"gate.computer/wag/compile/event"
+	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/section"
 )
 
-var lib = *library.Load("../testsuite/testdata/library.wasm", true, func(r Reader) library.L {
-	mod := loadInitialSections(nil, r)
+var lib = *library.Load("../testsuite/testdata/library.wasm", true, func(load *loader.L) library.L {
+	mod := loadInitialSections(nil, load)
 	lib := mod.asLibrary()
 	return &lib
 }).(*Library)
@@ -58,35 +59,35 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 		}
 	}
 
-	r := bytes.NewReader(wasm)
-	loadInitialSections(nil, r)
+	load := loader.New(bytes.NewReader(wasm), 0)
+	loadInitialSections(nil, load)
 
-	initLen := len(wasm) - r.Len()
+	initLen := load.Tell()
 
-	if err := section.SkipCustomSections(r, nil); err != nil {
+	if err := section.SkipCustomSections(load, nil); err != nil {
 		b.Fatal(err)
 	}
 
-	codePos := len(wasm) - r.Len()
+	codePos := load.Tell()
 
-	codePayloadLen, err := section.CopyStandardSection(ioutil.Discard, r, section.Code, nil)
+	codePayloadLen, err := section.CopyStandardSection(ioutil.Discard, load, section.Code, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	if err := section.SkipCustomSections(r, nil); err != nil {
+	if err := section.SkipCustomSections(load, nil); err != nil {
 		b.Fatal(err)
 	}
 
-	dataPos := len(wasm) - r.Len()
+	dataPos := load.Tell()
 
 	var mod Module
 
 	b.Run("Init", func(b *testing.B) {
-		b.SetBytes(int64(initLen))
+		b.SetBytes(initLen)
 
 		for i := 0; i < b.N; i++ {
-			mod = loadInitialSections(nil, bytes.NewReader(wasm))
+			mod = loadInitialSections(nil, loader.New(bytes.NewReader(wasm), 0))
 
 			for i := 0; i < mod.NumImportFuncs(); i++ {
 				// Arbitrary (but existing) implementation.
@@ -105,7 +106,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 			}
 
 			code.LastInitFunc, _, _ = mod.ExportFunc(entrySymbol)
-			loadCodeSection(&code, bytes.NewReader(wasm[codePos:]), mod, &lib.l)
+			loadCodeSection(&code, loader.New(bytes.NewReader(wasm[codePos:]), 0), mod, &lib.l)
 		}
 	})
 
@@ -115,7 +116,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 				GlobalsMemory: buffer.NewStatic(benchDataBuf[:0:len(benchDataBuf)]),
 			}
 
-			loadDataSection(&data, bytes.NewReader(wasm[dataPos:]), mod)
+			loadDataSection(&data, loader.New(bytes.NewReader(wasm[dataPos:]), 0), mod)
 		}
 	})
 }

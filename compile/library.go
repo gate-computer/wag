@@ -12,6 +12,7 @@ import (
 
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/count"
+	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
@@ -75,25 +76,25 @@ func (mod Module) asLibrary() Library {
 	}}
 }
 
-func (lib *Library) LoadSections(r Reader) (err error) {
+func (lib *Library) LoadSections(r Loader) (err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	lib.loadSections(r)
+	lib.loadSections(loader.Get(r))
 	return
 }
 
-func (lib *Library) loadSections(r Reader) {
+func (lib *Library) loadSections(load *loader.L) {
 	codeBuf := bytes.NewBuffer(nil)
 
 	mapper := &libraryMap{
 		reader: count.Reader{
-			R: bufio.NewReader(io.TeeReader(r, codeBuf)),
+			R: bufio.NewReader(io.TeeReader(load, codeBuf)),
 		},
 	}
 
-	r = &mapper.reader
+	load = loader.New(&mapper.reader, load.Tell())
 
 	modImports := make([]module.ImportFunc, len(lib.l.ImportFuncs))
 	for i, imp := range lib.l.ImportFuncs {
@@ -109,7 +110,7 @@ func (lib *Library) loadSections(r Reader) {
 		ImportFuncs: modImports,
 	}}
 
-	loadCodeSection(&CodeConfig{Mapper: mapper}, r, mod, &rootLib)
+	loadCodeSection(&CodeConfig{Mapper: mapper}, load, mod, &rootLib)
 
 	codeBytes := append([]byte{}, codeBuf.Bytes()...) // Avoid excess capacity.
 	lib.l.CodeFuncs = make([][]byte, len(mapper.offsets))
@@ -118,7 +119,7 @@ func (lib *Library) loadSections(r Reader) {
 	}
 
 	data := new(DataConfig)
-	if err := LoadDataSection(data, r, mod); err != nil {
+	if err := LoadDataSection(data, load, mod); err != nil {
 		check(err)
 	}
 	if len(data.GlobalsMemory.Bytes()) > 0 {

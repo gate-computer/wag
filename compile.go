@@ -32,7 +32,9 @@ import (
 )
 
 func CompileLibrary(r compile.Reader, imports binding.LibraryImportResolver) (lib compile.Library, err error) {
-	mod, err := compile.LoadInitialSections(nil, r)
+	load := compile.NewLoader(r)
+
+	mod, err := compile.LoadInitialSections(nil, load)
 	if err != nil {
 		return
 	}
@@ -47,7 +49,7 @@ func CompileLibrary(r compile.Reader, imports binding.LibraryImportResolver) (li
 		return
 	}
 
-	err = lib.LoadSections(r)
+	err = lib.LoadSections(load)
 	if err != nil {
 		return
 	}
@@ -93,6 +95,8 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		objectConfig = new(Config)
 	}
 
+	load := compile.NewLoader(r)
+
 	object = new(Object)
 
 	// In general, custom sections may appear at any position in the binary
@@ -126,7 +130,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		Config: loadingConfig,
 	}
 
-	module, err := compile.LoadInitialSections(moduleConfig, r)
+	module, err := compile.LoadInitialSections(moduleConfig, load)
 	object.FuncTypes = module.FuncTypes()
 	object.InitialMemorySize = module.InitialMemorySize()
 	object.MemorySizeLimit = module.MemorySizeLimit()
@@ -157,7 +161,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		Config: loadingConfig,
 	}
 
-	err = compile.LoadCodeSection(codeConfig, r, module, lib)
+	err = compile.LoadCodeSection(codeConfig, load, module, lib)
 	objectConfig.Text = codeConfig.Text
 	object.Text = codeConfig.Text.Bytes()
 	if err != nil {
@@ -175,7 +179,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		Config:          loadingConfig,
 	}
 
-	err = compile.LoadDataSection(dataConfig, r, module)
+	err = compile.LoadDataSection(dataConfig, load, module)
 	objectConfig.GlobalsMemory = dataConfig.GlobalsMemory
 	objectConfig.MemoryAlignment = dataConfig.MemoryAlignment
 	object.MemoryOffset = alignSize(module.GlobalsSize(), dataConfig.MemoryAlignment)
@@ -214,7 +218,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	// Read the whole binary module to get the name and DWARF sections.
 
-	err = compile.LoadCustomSections(&loadingConfig, r)
+	err = compile.LoadCustomSections(&loadingConfig, load)
 	if err != nil {
 		return
 	}

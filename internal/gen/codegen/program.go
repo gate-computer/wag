@@ -128,7 +128,8 @@ func GenProgram(
 		// arguments, and duplicate (dummy) link address.
 		numExtra := 1 + len(sig.Params) + 1
 
-		genFunction(&funcStorage, loader.New(code), i, sig, numExtra, false)
+		// Use loader with bogus offsets to avoid possible confusion.
+		genFunction(&funcStorage, loader.New(code, math.MaxUint32), i, sig, numExtra, false)
 	}
 
 	p.ImportContext = nil

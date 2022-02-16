@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"gate.computer/wag/compile"
+	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/section"
 )
 
@@ -32,7 +33,7 @@ func TestSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := bytes.NewReader(data)
+	r := loader.New(bytes.NewReader(data), 0)
 
 	mod, err := compile.LoadInitialSections(&compile.ModuleConfig{Config: loadConfig}, r)
 	if err != nil {

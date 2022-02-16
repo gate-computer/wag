@@ -16,7 +16,16 @@ import (
 // Unwrapped may be returned by custom section content loaders.
 var Unwrapped error = section.Unwrapped
 
+// Reader is suitable for reading sections.
 type Reader = binary.Reader
+
+// Loader is suitable for use with section loading functions.
+type Loader = loader.Loader
+
+// NewLoader creates a WebAssembly section loader.
+func NewLoader(r Reader) Loader {
+	return loader.New(r, 0)
+}
 
 type CustomContentLoader func(sectionName string, r Reader, payloadSize uint32) error
 
@@ -29,23 +38,26 @@ func CustomLoader(loaders map[string]CustomContentLoader) func(Reader, uint32) e
 	return mux.load
 }
 
-func (mux customLoaderMux) load(r Reader, length uint32) (err error) {
+func (mux customLoaderMux) load(r Reader, length uint32) error {
 	nameLen, n, err := binary.Varuint32(r)
 	if err != nil {
-		return
+		return err
 	}
 	length -= uint32(n)
 
-	name := loader.New(r).String(nameLen, "custom section name")
+	nameData := make([]byte, nameLen)
+	if _, err := io.ReadFull(r, nameData); err != nil {
+		return err
+	}
+	name := loader.String(nameData, "custom section name")
 	length -= nameLen
 
 	if f := mux.loaders[name]; f != nil {
-		err = f(name, r, length)
-		return
+		return f(name, r, length)
 	}
 
 	_, err = io.CopyN(ioutil.Discard, r, int64(length))
-	return
+	return err
 }
 
 type CustomMapping ByteRange

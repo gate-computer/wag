@@ -22,7 +22,7 @@ import (
 // length is returned.  If no standard section is encountered, zero length and
 // io.EOF are returned.  io.EOF is returned only when it occurs between
 // sections.
-func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reader, payloadSize uint32) error) (length int64, err error) {
+func CopyStandardSection(w io.Writer, l Loader, id ID, customLoader func(r Reader, payloadSize uint32) error) (length int64, err error) {
 	if internal.DontPanic() {
 		defer func() {
 			if x := recover(); x != nil {
@@ -31,7 +31,7 @@ func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reade
 		}()
 	}
 
-	load := loader.New(r)
+	load := loader.Get(l)
 
 	switch _, foundID := section.Find(id, load, nil, customLoader); foundID {
 	case id:
@@ -47,7 +47,7 @@ func CopyStandardSection(w io.Writer, r Reader, id ID, customLoader func(r Reade
 // are processed by customLoader (or discarded if it's nil).  If no standard
 // section is encountered, io.EOF is returned.  io.EOF is returned only when it
 // occurs between sections.
-func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err error) {
+func SkipCustomSections(l Loader, customLoader func(Reader, uint32) error) (err error) {
 	if internal.DontPanic() {
 		defer func() {
 			if x := recover(); x != nil {
@@ -56,7 +56,7 @@ func SkipCustomSections(r Reader, customLoader func(Reader, uint32) error) (err 
 		}()
 	}
 
-	load := loader.New(r)
+	load := loader.Get(l)
 
 	if _, id := section.Find(0, load, nil, customLoader); id == 0 {
 		err = io.EOF
