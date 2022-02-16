@@ -12,9 +12,9 @@ import (
 	"testing"
 
 	"gate.computer/gate/image"
-	"gate.computer/wag/binary"
 	"gate.computer/wag/binding"
 	"gate.computer/wag/compile"
+	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/object"
 	"gate.computer/wag/object/debug/dump"
@@ -28,8 +28,8 @@ const (
 	maxExports    = 479
 )
 
-var lib = *library.Load("testdata/library.wasm", false, func(r binary.Reader) library.L {
-	mod, err := compile.LoadInitialSections(nil, r)
+var lib = *library.Load("testdata/library.wasm", false, func(load *loader.L) library.L {
+	mod, err := compile.LoadInitialSections(nil, load)
 	if err != nil {
 		panic(err)
 	}
@@ -68,7 +68,7 @@ func buildProgram(t *testing.T, filename string, wasm []byte, expect *expected) 
 
 	t.Log("filename:", filename)
 
-	r := bytes.NewReader(wasm)
+	r := loader.New(bytes.NewReader(wasm), 0)
 
 	nameSection := new(section.NameSection)
 	config := compile.Config{
