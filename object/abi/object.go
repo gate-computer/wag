@@ -9,4 +9,5 @@ const (
 	TextAddrExit       = 0x10 // Exit routine.
 	TextAddrResume     = 0x20 // Return from import function or trap handler.
 	TextAddrEnter      = 0x30 // Call start and entry functions, and exit.
+	TextAddrMask       = 0xff
 )
