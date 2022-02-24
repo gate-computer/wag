@@ -9,9 +9,11 @@ import (
 	"gate.computer/wag/wa"
 )
 
-type Scale byte
-type Index byte
-type Base byte
+type (
+	Scale byte
+	Index byte
+	Base  byte
+)
 
 const (
 	Scale0 = Scale(0 << 6)

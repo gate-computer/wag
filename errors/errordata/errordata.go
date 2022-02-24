@@ -150,9 +150,11 @@ type dataError struct {
 	inner  error
 }
 
-var _ werrors.PublicError = (*dataError)(nil)
-var _ werrors.ModuleError = (*dataError)(nil)
-var _ werrors.ResourceLimit = (*dataError)(nil)
+var (
+	_ werrors.PublicError   = (*dataError)(nil)
+	_ werrors.ModuleError   = (*dataError)(nil)
+	_ werrors.ResourceLimit = (*dataError)(nil)
+)
 
 func (e *dataError) Error() string       { return e.s }
 func (e *dataError) PublicError() string { return e.public }

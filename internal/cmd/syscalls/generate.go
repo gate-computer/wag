@@ -174,8 +174,10 @@ func main() {
 	fmt.Fprintf(decl, "}\n")
 }
 
-var x86Regs = []string{"DI", "SI", "DX", "R10", "R8", "R9"}
-var armRegs = []string{"R0", "R1", "R2", "R3", "R4", "R5"}
+var (
+	x86Regs = []string{"DI", "SI", "DX", "R10", "R8", "R9"}
+	armRegs = []string{"R0", "R1", "R2", "R3", "R4", "R5"}
+)
 
 var generators = map[string]func(io.Writer, call){
 	"amd64": func(w io.Writer, sc call) {

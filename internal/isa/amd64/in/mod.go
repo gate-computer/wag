@@ -8,9 +8,11 @@ import (
 	"gate.computer/wag/internal/gen/reg"
 )
 
-type Mod byte
-type ModRO byte
-type ModRM byte
+type (
+	Mod   byte
+	ModRO byte
+	ModRM byte
+)
 
 const (
 	ModMem       = Mod(0)

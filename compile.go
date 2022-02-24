@@ -107,7 +107,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 
 	var debugData section.CustomSections
 
-	var customLoaders = map[string]section.CustomContentLoader{
+	customLoaders := map[string]section.CustomContentLoader{
 		section.CustomName: object.Names.Load,
 		".debug_abbrev":    debugData.Load,
 		".debug_info":      debugData.Load,
@@ -117,7 +117,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 		".debug_str":       debugData.Load,
 	}
 
-	var loadingConfig = compile.Config{
+	loadingConfig := compile.Config{
 		CustomSectionLoader: section.CustomLoader(customLoaders),
 	}
 
@@ -126,7 +126,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	// available during compilation and when looking up entry functions, but
 	// the program can later be executed without it.)
 
-	var moduleConfig = &compile.ModuleConfig{
+	moduleConfig := &compile.ModuleConfig{
 		Config: loadingConfig,
 	}
 
@@ -155,7 +155,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	// separately during execution).  It is also independent of entry function
 	// choice and program state.
 
-	var codeConfig = &compile.CodeConfig{
+	codeConfig := &compile.CodeConfig{
 		Text:   objectConfig.Text,
 		Mapper: &object.InsnMap,
 		Config: loadingConfig,
@@ -173,7 +173,7 @@ func Compile(objectConfig *Config, r compile.Reader, lib compile.Library) (objec
 	// values into the same buffer, just before the memory contents.
 	// MemoryAlignment causes padding to be inserted before the globals.
 
-	var dataConfig = &compile.DataConfig{
+	dataConfig := &compile.DataConfig{
 		GlobalsMemory:   objectConfig.GlobalsMemory,
 		MemoryAlignment: objectConfig.MemoryAlignment,
 		Config:          loadingConfig,

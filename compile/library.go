@@ -21,7 +21,7 @@ import (
 // rootLib has a dummy function.
 var rootLib = module.Library{
 	Types: []wa.FuncType{
-		wa.FuncType{},
+		{},
 	},
 	Funcs: []uint32{
 		0,
@@ -143,7 +143,7 @@ func (lib *Library) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	return
 }
 
-func (lib *Library) SetImportFunc(i int, vectorIndex int) {
+func (lib *Library) SetImportFunc(i, vectorIndex int) {
 	if vectorIndex >= 0 {
 		panic(vectorIndex)
 	}

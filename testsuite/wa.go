@@ -97,7 +97,7 @@ func equalF64(t *testing.T, a, b uint64) bool {
 }
 
 func isF32NaN(a uint64) bool {
-	return a&0x7f000000 == 0x7f000000 && a&0xffffff != 00
+	return a&0x7f000000 == 0x7f000000 && a&0xffffff != 0
 }
 
 func isF64NaN(a uint64) bool {

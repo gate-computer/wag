@@ -28,20 +28,25 @@ type memDispImmInsn interface {
 	MemDispImm(text *code.Buf, t wa.Type, base in.BaseReg, disp int32, val int64)
 }
 
-type opLoadInt32S struct{}
-type opLoadInt32U struct{}
-type opStoreRegInt32 struct{}
-type opStoreImm struct{}
+type (
+	opLoadInt32S    struct{}
+	opLoadInt32U    struct{}
+	opStoreRegInt32 struct{}
+	opStoreImm      struct{}
+)
 
 func (opLoadInt32S) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32) {
 	in.MOVSXD.RegMemDisp(text, wa.I64, r, base, disp)
 }
+
 func (opLoadInt32U) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32) {
 	in.MOV.RegMemDisp(text, wa.I32, r, base, disp)
 }
+
 func (opStoreRegInt32) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base in.BaseReg, disp int32) {
 	in.MOVmr.RegMemDisp(text, wa.I32, r, base, disp)
 }
+
 func (opStoreImm) MemDispImm(text *code.Buf, t wa.Type, base in.BaseReg, disp int32, val int64) {
 	switch {
 	case val == 0:

@@ -25,9 +25,7 @@ import (
 
 const linearMemoryAddressSpace = 8 * 1024 * 1024 * 1024
 
-var (
-	verbose = false
-)
+var verbose = false
 
 var (
 	importFuncs  = make(map[string]int)
@@ -80,7 +78,7 @@ func (libResolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, 
 	return
 }
 
-func makeMem(size int, prot, extraFlags int) (mem []byte, err error) {
+func makeMem(size, prot, extraFlags int) (mem []byte, err error) {
 	if size > 0 {
 		mem, err = syscall.Mmap(-1, 0, size, prot, syscall.MAP_PRIVATE|syscall.MAP_ANONYMOUS|extraFlags)
 	}

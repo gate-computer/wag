@@ -21,9 +21,7 @@ import (
 	"github.com/knightsc/gapstone"
 )
 
-var (
-	testEngine gapstone.Engine
-)
+var testEngine gapstone.Engine
 
 func init() {
 	engine, err := gapstone.New(gapstone.CS_ARCH_ARM64, 0)

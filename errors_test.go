@@ -29,9 +29,9 @@ func TestPublicError(t *testing.T) {
 }
 
 func TestModuleError(t *testing.T) {
-	var _ = module.Error("").(werrors.ModuleError)
-	var _ = module.Errorf("").(werrors.ModuleError)
-	var _ = module.WrapError(errors.New(""), "").(werrors.ModuleError)
+	_ = module.Error("").(werrors.ModuleError)
+	_ = module.Errorf("").(werrors.ModuleError)
+	_ = module.WrapError(errors.New(""), "").(werrors.ModuleError)
 
 	err := errors.New("")
 	if unwrapped := errors.Unwrap(module.WrapError(err, "")); unwrapped != err {
@@ -51,7 +51,7 @@ func TestInternalErrorEOF(t *testing.T) {
 }
 
 func TestBufferSizeLimit(t *testing.T) {
-	var _ = buffer.ErrSizeLimit.(werrors.ResourceLimit)
+	_ = buffer.ErrSizeLimit.(werrors.ResourceLimit)
 
 	wrapped := fmt.Errorf("wrapped: %w", buffer.ErrSizeLimit)
 	if !errors.Is(wrapped, buffer.ErrSizeLimit) {

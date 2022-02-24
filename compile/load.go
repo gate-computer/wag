@@ -135,12 +135,16 @@ func NewLoader(r binary.Reader) Loader {
 	return loader.New(r, 0)
 }
 
-type CodeBuffer = code.Buffer
-type DataBuffer = data.Buffer
+type (
+	CodeBuffer = code.Buffer
+	DataBuffer = data.Buffer
+)
 
-type ModuleMapper = section.ModuleMapper
-type ObjectMapper = obj.ObjectMapper
-type DebugObjectMapper = obj.DebugObjectMapper
+type (
+	ModuleMapper      = section.ModuleMapper
+	ObjectMapper      = obj.ObjectMapper
+	DebugObjectMapper = obj.DebugObjectMapper
+)
 
 type Breakpoint = gen.Breakpoint
 

@@ -14,7 +14,7 @@ import (
 type L interface {
 	LoadSections(r loader.Loader) (err error)
 	NumImportFuncs() int
-	SetImportFunc(i int, vectorIndex int)
+	SetImportFunc(i, vectorIndex int)
 }
 
 func Load(filename string, dummyBinding bool, loadLibrary func(*loader.L) L) L {

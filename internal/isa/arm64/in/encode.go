@@ -105,33 +105,35 @@ func SizeSignExt(t wa.Size) Ext {
 	return SXTW | Ext(bit3<<10)
 }
 
-type CondImm19 uint32
-type Imm16 uint32
-type Imm26 uint32
-type Reg uint32
-type RegImm14Bit uint32
-type RegImm16HwSf uint32
-type RegImm19Imm2 uint32
-type RegImm19Size uint32
-type RegRegCondRegSf uint32
-type RegRegImm3ExtRegSf uint32
-type RegRegImm6Imm6NSf uint32
-type RegRegImm6RegShiftSf uint32
-type RegRegImm9 uint32
-type RegRegImm9Size uint32
-type RegRegImm12ShiftSf uint32
-type RegRegImm12Size uint32
-type RegRegSf uint32
-type RegRegSOptionReg uint32
-type RegRegSOptionRegSize uint32
-type RegRegCondRegType uint32
-type RegRegType uint32
-type RegRegTypeSf uint32
-type RegRegRegSf uint32
-type RegRegRegType uint32
-type RegRegRegRegSf uint32
-type DiscardRegRegType uint32
-type SystemReg uint32
+type (
+	CondImm19            uint32
+	Imm16                uint32
+	Imm26                uint32
+	Reg                  uint32
+	RegImm14Bit          uint32
+	RegImm16HwSf         uint32
+	RegImm19Imm2         uint32
+	RegImm19Size         uint32
+	RegRegCondRegSf      uint32
+	RegRegImm3ExtRegSf   uint32
+	RegRegImm6Imm6NSf    uint32
+	RegRegImm6RegShiftSf uint32
+	RegRegImm9           uint32
+	RegRegImm9Size       uint32
+	RegRegImm12ShiftSf   uint32
+	RegRegImm12Size      uint32
+	RegRegSf             uint32
+	RegRegSOptionReg     uint32
+	RegRegSOptionRegSize uint32
+	RegRegCondRegType    uint32
+	RegRegType           uint32
+	RegRegTypeSf         uint32
+	RegRegRegSf          uint32
+	RegRegRegType        uint32
+	RegRegRegRegSf       uint32
+	DiscardRegRegType    uint32
+	SystemReg            uint32
+)
 
 func (op CondImm19) CondI19(cond Cond, imm uint32) uint32 {
 	return uint32(op) | imm<<5 | uint32(cond)

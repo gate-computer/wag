@@ -67,9 +67,7 @@ func init() {
 	)
 }
 
-var (
-	testEngine gapstone.Engine
-)
+var testEngine gapstone.Engine
 
 func init() {
 	engine, err := gapstone.New(gapstone.CS_ARCH_X86, gapstone.CS_MODE_64)

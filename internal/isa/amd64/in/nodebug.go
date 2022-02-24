@@ -7,9 +7,7 @@
 
 package in
 
-var (
-	debugPrinted bool
-)
+var debugPrinted bool
 
 func debugPrintInsn([]byte) {
 	if !debugPrinted {

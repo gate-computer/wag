@@ -19,9 +19,7 @@ const (
 	debugImplicitRegisters = true
 )
 
-var (
-	debugEngine gapstone.Engine
-)
+var debugEngine gapstone.Engine
 
 func init() {
 	engine, err := gapstone.New(gapstone.CS_ARCH_X86, gapstone.CS_MODE_64)
@@ -38,9 +36,7 @@ func init() {
 }
 
 func debugPrintInsn(data []byte) {
-	var (
-		hex string
-	)
+	var hex string
 
 	if debugInstructionBytes {
 		hex = " ;"

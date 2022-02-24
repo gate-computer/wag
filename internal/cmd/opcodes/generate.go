@@ -104,7 +104,7 @@ func generateFile(filename string, generator func(func(string, ...interface{}), 
 		log.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile(filename, buf.Bytes(), 0644); err != nil {
+	if err := ioutil.WriteFile(filename, buf.Bytes(), 0o644); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -232,9 +232,7 @@ func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
 
 				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
 			} else {
-				var (
-					impl = "gen" + op.sym
-				)
+				impl := "gen" + op.sym
 
 				out(`opcode.%s: {%s, 0},`, op.sym, impl)
 			}
