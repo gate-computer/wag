@@ -21,6 +21,7 @@ import (
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/trap"
 	"gate.computer/wag/wa"
+	"import.name/pan"
 )
 
 const (
@@ -304,7 +305,7 @@ func (MacroAssembler) CallImportVector(f *gen.Func, index int) {
 		o.insn(in.LDR.RdRnI12(RegScratch, RegScratch, uint32(4096+index), wa.I64)) // Scaled by 8.
 
 	default:
-		check(module.Errorf("import function index is out of range: %d", index))
+		pan.Panic(module.Errorf("import function index is out of range: %d", index))
 	}
 
 	o.insn(in.BLR.Rn(RegScratch))

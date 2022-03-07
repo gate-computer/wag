@@ -73,7 +73,7 @@ func pushResultRegOperand(f *gen.Func, t wa.Type) {
 func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 	x = popAnyOperand(f)
 	if x.Type != t {
-		check(module.Errorf("operand %s has wrong type; expected %s", x, t))
+		pan.Panic(module.Errorf("operand %s has wrong type; expected %s", x, t))
 	}
 	return
 }
@@ -81,7 +81,7 @@ func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
 func popAnyOperand(f *gen.Func) (x operand.O) {
 	i := len(f.Operands) - 1
 	if i < f.FrameBase {
-		check(errPopNoOperand)
+		pan.Panic(errPopNoOperand)
 	}
 
 	x = f.Operands[i]
@@ -148,7 +148,7 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 	for range load.Span(MaxFuncLocals, "function local group") {
 		count := load.Varuint32()
 		if uint64(len(f.LocalTypes))+uint64(count) >= MaxFuncLocals {
-			check(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
+			pan.Panic(module.Errorf("function #%d has too many variables: %d (at least)", funcIndex, len(f.LocalTypes)))
 		}
 
 		t := typedecode.Value(load.Varint7())
@@ -185,7 +185,7 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 		}
 
 		if len(f.Operands) != 0 {
-			check(errOperandStackNotEmpty)
+			pan.Panic(errOperandStackNotEmpty)
 		}
 
 		f.Regs.CheckNoneAllocated()
@@ -202,7 +202,7 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 	asm.Return(&f.Prog, f.NumExtra+f.NumLocals+f.StackDepth)
 
 	if len(f.BranchTargets) != 0 {
-		check(errBranchTargetStackNotEmpty)
+		pan.Panic(errBranchTargetStackNotEmpty)
 	}
 
 	fullText := f.Text.Bytes()
@@ -380,7 +380,7 @@ func opReleaseStackEntry(f *gen.Func) {
 func opDropOperand(f *gen.Func) {
 	i := len(f.Operands) - 1
 	for i < f.FrameBase {
-		check(errDropNoOperand)
+		pan.Panic(errDropNoOperand)
 	}
 
 	x := f.Operands[i]

@@ -91,6 +91,9 @@ import (
 	"gate.computer/wag/internal/section"
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
+	"import.name/pan"
+
+	. "import.name/pan/check"
 )
 
 // Some limits have been chosen based on the backends' limitations:
@@ -153,10 +156,10 @@ func readResizableLimits(load *loader.L, maxInit, maxMax, maxValid uint32, scale
 
 	init := load.Varuint32()
 	if maxValid > 0 && init > maxValid {
-		check(module.Errorf("invalid initial %s size: %d pages", kind, init))
+		pan.Panic(module.Errorf("invalid initial %s size: %d pages", kind, init))
 	}
 	if init > maxInit {
-		check(module.Errorf("initial %s size is too large: %d", kind, init))
+		pan.Panic(module.Errorf("initial %s size is too large: %d", kind, init))
 	}
 
 	limits := module.ResizableLimits{
@@ -167,13 +170,13 @@ func readResizableLimits(load *loader.L, maxInit, maxMax, maxValid uint32, scale
 	if maxFieldIsPresent {
 		max := load.Varuint32()
 		if maxValid > 0 && max > maxValid {
-			check(module.Errorf("invalid maximum %s size: %d pages", kind, max))
+			pan.Panic(module.Errorf("invalid maximum %s size: %d pages", kind, max))
 		}
 		if max > maxMax {
 			max = maxMax
 		}
 		if max < init {
-			check(module.Errorf("maximum %s size %d is smaller than initial %s size %d", kind, max, kind, init))
+			pan.Panic(module.Errorf("maximum %s size %d is smaller than initial %s size %d", kind, max, kind, init))
 		}
 		limits.Max = int(max) * scale
 	}
@@ -230,14 +233,12 @@ func loadInitialSections(config *ModuleConfig, load *loader.L) (m Module) {
 	}
 
 	var header module.Header
-	if err := encodingbinary.Read(load, encodingbinary.LittleEndian, &header); err != nil {
-		check(err)
-	}
+	Check(encodingbinary.Read(load, encodingbinary.LittleEndian, &header))
 	if header.MagicNumber != module.MagicNumber {
-		check(module.Error("not a WebAssembly module"))
+		pan.Panic(module.Error("not a WebAssembly module"))
 	}
 	if header.Version != module.Version {
-		check(module.Errorf("unsupported module version: %d", header.Version))
+		pan.Panic(module.Errorf("unsupported module version: %d", header.Version))
 	}
 
 	var seenID module.SectionID
@@ -246,18 +247,16 @@ func loadInitialSections(config *ModuleConfig, load *loader.L) (m Module) {
 		sectionOffset := load.Tell()
 
 		sectionID, err := load.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			check(err)
+		if err == io.EOF {
+			return
 		}
+		Check(err)
 
 		id := module.SectionID(sectionID)
 
 		if id != module.SectionCustom {
 			if id <= seenID {
-				check(module.Errorf("%s section follows %s section", id, seenID))
+				pan.Panic(module.Errorf("%s section follows %s section", id, seenID))
 			}
 			seenID = id
 		}
@@ -265,7 +264,7 @@ func loadInitialSections(config *ModuleConfig, load *loader.L) (m Module) {
 		if id > module.SectionElement {
 			load.UnreadByte()
 			if id >= module.NumSections {
-				check(module.Errorf("invalid section id: %d", byte(id)))
+				pan.Panic(module.Errorf("invalid section id: %d", byte(id)))
 			}
 			return
 		}
@@ -292,18 +291,16 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 
 func loadCustomSection(m *Module, config *ModuleConfig, payloadSize uint32, load *loader.L) bool {
 	if config.CustomSectionLoader == nil {
-		if _, err := io.CopyN(ioutil.Discard, load, int64(payloadSize)); err != nil {
-			check(err)
-		}
+		_, err := io.CopyN(ioutil.Discard, load, int64(payloadSize))
+		Check(err)
 		return false
 	}
 
-	if err := config.CustomSectionLoader(load, payloadSize); err != nil {
-		if err == section.Unwrapped {
-			return true
-		}
-		check(err)
+	err := config.CustomSectionLoader(load, payloadSize)
+	if err == section.Unwrapped {
+		return true
 	}
+	Check(err)
 	return false
 }
 
@@ -313,14 +310,14 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool 
 
 	for i := 0; i < count; i++ {
 		if form := load.Varint7(); form != -0x20 {
-			check(module.Errorf("unsupported function type form: %d", form))
+			pan.Panic(module.Errorf("unsupported function type form: %d", form))
 		}
 
 		var sig wa.FuncType
 
 		paramCount := load.Varuint32()
 		if paramCount > module.MaxFuncParams {
-			check(module.Errorf("function type #%d has too many parameters: %d", i, paramCount))
+			pan.Panic(module.Errorf("function type #%d has too many parameters: %d", i, paramCount))
 		}
 
 		sig.Params = make([]wa.Type, paramCount)
@@ -333,7 +330,7 @@ func loadTypeSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool 
 		case 1:
 			sig.Results = []wa.Type{typedecode.Value(load.Varint7())}
 		default:
-			check(module.Error("multiple return values not supported"))
+			pan.Panic(module.Error("multiple return values not supported"))
 		}
 
 		m.m.Types = append(m.m.Types, sig)
@@ -346,14 +343,14 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 	for i := range load.Span(module.MaxImports, "import") {
 		moduleLen := load.Varuint32()
 		if moduleLen > maxStringSize {
-			check(module.Errorf("module string is too long in import #%d", i))
+			pan.Panic(module.Errorf("module string is too long in import #%d", i))
 		}
 
 		moduleStr := load.String(moduleLen, "imported module name")
 
 		fieldLen := load.Varuint32()
 		if fieldLen > maxStringSize {
-			check(module.Errorf("field string is too long in import #%d", i))
+			pan.Panic(module.Errorf("field string is too long in import #%d", i))
 		}
 
 		fieldStr := load.String(fieldLen, "imported field name")
@@ -364,7 +361,7 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 		case module.ExternalKindFunction:
 			sigIndex := load.Varuint32()
 			if sigIndex >= uint32(len(m.m.Types)) {
-				check(module.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
+				pan.Panic(module.Errorf("function type index out of bounds in import #%d: 0x%x", i, sigIndex))
 			}
 
 			m.m.Funcs = append(m.m.Funcs, sigIndex)
@@ -379,13 +376,13 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 
 		case module.ExternalKindGlobal:
 			if len(m.m.Globals) >= maxGlobals {
-				check(module.Error("too many imported globals"))
+				pan.Panic(module.Error("too many imported globals"))
 			}
 
 			t := typedecode.Value(load.Varint7())
 
 			if mutable := load.Varuint1(); mutable {
-				check(module.Errorf("unsupported mutable global in import #%d", i))
+				pan.Panic(module.Errorf("unsupported mutable global in import #%d", i))
 			}
 
 			m.m.Globals = append(m.m.Globals, module.Global{
@@ -399,7 +396,7 @@ func loadImportSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 			})
 
 		default:
-			check(module.Errorf("import kind not supported: %s", kind))
+			pan.Panic(module.Errorf("import kind not supported: %s", kind))
 		}
 	}
 
@@ -416,7 +413,7 @@ func loadFunctionSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) b
 	for i := 0; i < count; i++ {
 		sigIndex := load.Varuint32()
 		if sigIndex >= uint32(len(m.m.Types)) {
-			check(module.Errorf("function type index out of bounds: %d", sigIndex))
+			pan.Panic(module.Errorf("function type index out of bounds: %d", sigIndex))
 		}
 
 		m.m.Funcs = append(m.m.Funcs, sigIndex)
@@ -431,7 +428,7 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool
 
 	case 1:
 		if elementType := load.Varint7(); elementType != -0x10 {
-			check(module.Errorf("unsupported table element type: %d", elementType))
+			pan.Panic(module.Errorf("unsupported table element type: %d", elementType))
 		}
 
 		m.m.TableLimit = readResizableLimits(load, maxTableLen, maxTableLen, 0, 1, "table")
@@ -440,7 +437,7 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool
 		}
 
 	default:
-		check(module.Error("multiple tables not supported"))
+		pan.Panic(module.Error("multiple tables not supported"))
 	}
 
 	return false
@@ -454,7 +451,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 		m.m.MemoryLimit = readResizableLimits(load, maxMemoryPages, maxMemoryPages, 65536, wa.PageSize, "memory")
 
 	default:
-		check(module.Error("multiple memories not supported"))
+		pan.Panic(module.Error("multiple memories not supported"))
 	}
 
 	return false
@@ -472,7 +469,7 @@ func loadGlobalSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 		index, value, exprType := initexpr.Read(&m.m, load)
 
 		if exprType != globalType {
-			check(module.Errorf("%s global #%d initializer expression has wrong type: %s", globalType, i, exprType))
+			pan.Panic(module.Errorf("%s global #%d initializer expression has wrong type: %s", globalType, i, exprType))
 		}
 
 		m.m.Globals = append(m.m.Globals, module.Global{
@@ -495,7 +492,7 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L
 	for i := 0; i < count; i++ {
 		fieldLen := load.Varuint32()
 		if fieldLen > maxStringSize {
-			check(module.Errorf("field string is too long in export #%d", i))
+			pan.Panic(module.Errorf("field string is too long in export #%d", i))
 		}
 
 		fieldStr := load.String(fieldLen, "exported field name")
@@ -503,21 +500,21 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L
 		index := load.Varuint32()
 
 		if _, exist := names[fieldStr]; exist {
-			check(module.Errorf("duplicate export name: %q", fieldStr))
+			pan.Panic(module.Errorf("duplicate export name: %q", fieldStr))
 		}
 		names[fieldStr] = struct{}{}
 
 		switch kind {
 		case module.ExternalKindFunction:
 			if index >= uint32(len(m.m.Funcs)) {
-				check(module.Errorf("export function index out of bounds: %d", index))
+				pan.Panic(module.Errorf("export function index out of bounds: %d", index))
 			}
 			m.m.ExportFuncs[fieldStr] = index
 
 		case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
 
 		default:
-			check(module.Errorf("custom export kind: %s", kind))
+			pan.Panic(module.Errorf("custom export kind: %s", kind))
 		}
 	}
 
@@ -527,13 +524,13 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L
 func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	index := load.Varuint32()
 	if index >= uint32(len(m.m.Funcs)) {
-		check(module.Errorf("start function index out of bounds: %d", index))
+		pan.Panic(module.Errorf("start function index out of bounds: %d", index))
 	}
 
 	sigIndex := m.m.Funcs[index]
 	sig := m.m.Types[sigIndex]
 	if len(sig.Params) > 0 || len(sig.Results) > 0 {
-		check(module.Errorf("invalid start function signature: %s", sig))
+		pan.Panic(module.Errorf("invalid start function signature: %s", sig))
 	}
 
 	m.m.StartIndex = index
@@ -544,7 +541,7 @@ func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool
 func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	for i := range load.Span(maxElements, "element") {
 		if index := load.Varuint32(); index != 0 {
-			check(module.Errorf("unsupported table index: %d", index))
+			pan.Panic(module.Errorf("unsupported table index: %d", index))
 		}
 
 		offset := initexpr.ReadOffset(&m.m, load)
@@ -553,7 +550,7 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bo
 
 		needSize := uint64(offset) + uint64(numElem)
 		if needSize > uint64(m.m.TableLimit.Init) {
-			check(module.Errorf("table segment #%d exceeds initial table size", i))
+			pan.Panic(module.Errorf("table segment #%d exceeds initial table size", i))
 		}
 
 		oldSize := len(m.m.TableFuncs)
@@ -569,7 +566,7 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bo
 		for j := int(offset); j < int(needSize); j++ {
 			elem := load.Varuint32()
 			if elem >= uint32(len(m.m.Funcs)) {
-				check(module.Errorf("table element index out of bounds: %d", elem))
+				pan.Panic(module.Errorf("table element index out of bounds: %d", elem))
 			}
 
 			m.m.TableFuncs[j] = elem
@@ -697,7 +694,7 @@ func loadCodeSection(config *CodeConfig, load *loader.L, mod Module, lib *module
 		payloadSize = section.LoadPayloadSize(sectionOffset, id, load, config.ModuleMapper)
 
 	default:
-		check(module.Errorf("unexpected section id: 0x%x (looking for code section)", id))
+		pan.Panic(module.Errorf("unexpected section id: 0x%x (looking for code section)", id))
 	}
 
 	if config.MaxTextSize == 0 || config.MaxTextSize > MaxTextSize {
@@ -725,7 +722,7 @@ func loadCodeSection(config *CodeConfig, load *loader.L, mod Module, lib *module
 	section.CheckConsumption(load, payloadOffset, payloadSize, false)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
-		check(module.Error("text size limit exceeded"))
+		pan.Panic(module.Error("text size limit exceeded"))
 	}
 }
 
@@ -790,7 +787,7 @@ func loadDataSection(config *DataConfig, load *loader.L, mod Module) {
 		datalayout.CopyGlobalsAlign(config.GlobalsMemory, &mod.m, memoryOffset)
 
 	default:
-		check(module.Errorf("unexpected section id: 0x%x (looking for data section)", id))
+		pan.Panic(module.Errorf("unexpected section id: 0x%x (looking for data section)", id))
 	}
 }
 
@@ -820,7 +817,7 @@ func validateDataSection(config *Config, load *loader.L, mod Module) {
 		// no data section
 
 	default:
-		check(module.Errorf("unexpected section id: 0x%x (looking for data section)", id))
+		pan.Panic(module.Errorf("unexpected section id: 0x%x (looking for data section)", id))
 	}
 }
 

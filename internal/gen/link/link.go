@@ -6,6 +6,8 @@ package link
 
 import (
 	"errors"
+
+	"import.name/pan"
 )
 
 type L struct {
@@ -23,7 +25,7 @@ func (l *L) AddSites(addrs []int32) {
 
 func (l L) FinalAddr() int32 {
 	if l.Addr == 0 {
-		check(errors.New("link address undefined while updating branch or call instruction"))
+		pan.Panic(errors.New("link address undefined while updating branch or call instruction"))
 	}
 	return l.Addr
 }

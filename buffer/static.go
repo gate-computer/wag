@@ -7,6 +7,8 @@ package buffer
 import (
 	"encoding/binary"
 	"io"
+
+	"import.name/pan"
 )
 
 // Static is a fixed-capacity buffer, for wrapping a memory-mapped region.  The
@@ -62,7 +64,7 @@ func (s *Static) Write(b []byte) (n int, err error) {
 func (s *Static) PutByte(value byte) {
 	offset := len(s.buf)
 	if offset >= cap(s.buf) {
-		check(ErrSizeLimit)
+		pan.Panic(ErrSizeLimit)
 	}
 	s.buf = s.buf[:offset+1]
 	s.buf[offset] = value
@@ -80,7 +82,7 @@ func (s *Static) Extend(n int) []byte {
 	offset := len(s.buf)
 	size := offset + n
 	if size > cap(s.buf) {
-		check(ErrSizeLimit)
+		pan.Panic(ErrSizeLimit)
 	}
 	s.buf = s.buf[:size]
 	return s.buf[offset:]
@@ -89,7 +91,7 @@ func (s *Static) Extend(n int) []byte {
 // ResizeBytes panicks with ErrSizeLimit if n is larger than buffer capacity.
 func (s *Static) ResizeBytes(n int) []byte {
 	if n > cap(s.buf) {
-		check(ErrSizeLimit)
+		pan.Panic(ErrSizeLimit)
 	}
 	s.buf = s.buf[:n]
 	return s.buf

@@ -13,6 +13,9 @@ import (
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
+	"import.name/pan"
+
+	. "import.name/pan/check"
 )
 
 var Unwrapped = errors.New("section unwrapped")
@@ -35,12 +38,10 @@ func Find(
 		sectionOffset := load.Tell()
 
 		sectionID, err := load.ReadByte()
-		if err != nil {
-			if err == io.EOF {
-				return sectionOffset, 0
-			}
-			check(err)
+		if err == io.EOF {
+			return sectionOffset, 0
 		}
+		Check(err)
 
 		id := module.SectionID(sectionID)
 
@@ -51,17 +52,14 @@ func Find(
 			partial := false
 
 			if customLoader != nil {
-				if err := customLoader(load, payloadSize); err != nil {
-					if err == Unwrapped {
-						partial = true
-					} else {
-						check(err)
-					}
+				err := customLoader(load, payloadSize)
+				if err == Unwrapped {
+					partial = true
 				}
+				Check(err)
 			} else {
-				if _, err := io.CopyN(ioutil.Discard, load, int64(payloadSize)); err != nil {
-					check(err)
-				}
+				_, err := io.CopyN(ioutil.Discard, load, int64(payloadSize))
+				Check(err)
 			}
 
 			CheckConsumption(load, payloadOffset, payloadSize, partial)
@@ -85,13 +83,11 @@ func LoadPayloadSize(
 	payloadSize := load.Varuint32()
 	sectionSize := load.Tell() - sectionOffset + int64(payloadSize)
 	if sectionSize > math.MaxInt32 {
-		check(module.Error("section end offset out of bounds"))
+		pan.Panic(module.Error("section end offset out of bounds"))
 	}
 
 	if mapper != nil {
-		if err := mapper.PutSection(byte(id), sectionOffset, uint32(sectionSize), payloadSize); err != nil {
-			check(err)
-		}
+		Check(mapper.PutSection(byte(id), sectionOffset, uint32(sectionSize), payloadSize))
 	}
 
 	return payloadSize
@@ -105,5 +101,5 @@ func CheckConsumption(load *loader.L, payloadOffset int64, payloadSize uint32, p
 	if partial && consumed < int64(payloadSize) {
 		return
 	}
-	check(module.Errorf("section size is %d but %d bytes was read", payloadSize, consumed))
+	pan.Panic(module.Errorf("section size is %d but %d bytes was read", payloadSize, consumed))
 }

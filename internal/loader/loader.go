@@ -11,6 +11,9 @@ import (
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/module"
+	"import.name/pan"
+
+	. "import.name/pan/check"
 )
 
 type Loader interface {
@@ -70,7 +73,7 @@ func (load *L) UnreadByte() error {
 func (load *L) Into(buf []byte) {
 	n, err := io.ReadFull(load.r, buf)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 }
 
 func (load *L) String(n uint32, name string) string {
@@ -85,63 +88,63 @@ func (load *L) Bytes(n uint32) (data []byte) {
 
 func (load *L) Byte() byte {
 	x, err := load.ReadByte()
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Uint32() uint32 {
 	x, n, err := binary.Uint32(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Uint64() uint64 {
 	x, n, err := binary.Uint64(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Varint7() int8 {
 	x, n, err := binary.Varint7(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Varint32() int32 {
 	x, n, err := binary.Varint32(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Varint64() int64 {
 	x, n, err := binary.Varint64(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Varuint1() bool {
 	x, n, err := binary.Varuint1(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Varuint32() uint32 {
 	x, n, err := binary.Varuint32(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
 func (load *L) Varuint64() uint64 {
 	x, n, err := binary.Varuint64(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	return x
 }
 
@@ -149,9 +152,9 @@ func (load *L) Varuint64() uint64 {
 func (load *L) Count(max int, name string) int {
 	count, n, err := binary.Varuint32(load.r)
 	load.n += int64(n)
-	check(err)
+	Check(err)
 	if uint64(count) > uint64(max) {
-		check(module.Errorf("%s count is too large: 0x%x", name, count))
+		pan.Panic(module.Errorf("%s count is too large: 0x%x", name, count))
 	}
 	return int(count)
 }
@@ -164,12 +167,12 @@ func (load *L) Span(max int, name string) []struct{} {
 func (load *L) Discard(count uint32) {
 	n, err := io.CopyN(ioutil.Discard, load.r, int64(count))
 	load.n += n
-	check(err)
+	Check(err)
 }
 
 func String(b []byte, name string) string {
 	if !utf8.Valid(b) {
-		check(module.Errorf("%s is not a valid UTF-8 string", name))
+		pan.Panic(module.Errorf("%s is not a valid UTF-8 string", name))
 	}
 	return string(b)
 }

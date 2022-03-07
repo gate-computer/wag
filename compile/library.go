@@ -16,6 +16,9 @@ import (
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
+	"import.name/pan"
+
+	. "import.name/pan/check"
 )
 
 // rootLib has a dummy function.
@@ -50,13 +53,13 @@ func (mod Module) AsLibrary() (lib Library, err error) {
 
 func (mod Module) asLibrary() Library {
 	if len(mod.m.Globals) > 0 {
-		check(module.Error("library contains globals"))
+		pan.Panic(module.Error("library contains globals"))
 	}
 	if len(mod.m.ImportGlobals) > 0 {
-		check(module.Error("library imports globals"))
+		pan.Panic(module.Error("library imports globals"))
 	}
 	if len(mod.m.TableFuncs) > 0 {
-		check(module.Error("library uses indirect function calls"))
+		pan.Panic(module.Error("library uses indirect function calls"))
 	}
 
 	libImports := make([]module.ImportIndex, len(mod.m.ImportFuncs))
@@ -119,11 +122,9 @@ func (lib *Library) loadSections(load *loader.L) {
 	}
 
 	data := new(DataConfig)
-	if err := LoadDataSection(data, load, mod); err != nil {
-		check(err)
-	}
+	Check(LoadDataSection(data, load, mod))
 	if len(data.GlobalsMemory.Bytes()) > 0 {
-		check(module.Error("library contains data"))
+		pan.Panic(module.Error("library contains data"))
 	}
 }
 

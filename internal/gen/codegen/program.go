@@ -22,6 +22,7 @@ import (
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/object/abi"
 	"gate.computer/wag/trap"
+	"import.name/pan"
 )
 
 func GenProgram(
@@ -53,7 +54,7 @@ func GenProgram(
 
 	userFuncCount := len(m.Funcs) - len(m.ImportFuncs)
 	if n := load.Varuint32(); n != uint32(userFuncCount) {
-		check(module.Errorf("wrong number of function bodies: %d (should be: %d)", n, userFuncCount))
+		pan.Panic(module.Errorf("wrong number of function bodies: %d (should be: %d)", n, userFuncCount))
 	}
 	p.Map.InitObjectMap(len(m.ImportFuncs), userFuncCount)
 
@@ -61,7 +62,7 @@ func GenProgram(
 	p.Debugger = makeDebugger(breakpoints, load)
 
 	if p.Text.Addr != abi.TextAddrNoFunction {
-		check(errors.New("unexpected initial text address"))
+		pan.Panic(errors.New("unexpected initial text address"))
 	}
 	asm.TrapHandlerRewindNoFunction(p)
 

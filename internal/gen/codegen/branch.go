@@ -73,7 +73,7 @@ func popBranchTarget(f *gen.Func) (finalizedLabel *link.L) {
 
 func getBranchTarget(f *gen.Func, depth uint32) *gen.BranchTarget {
 	if depth >= uint32(len(f.BranchTargets)) {
-		check(module.Errorf("relative branch depth out of bounds: %d", depth))
+		pan.Panic(module.Errorf("relative branch depth out of bounds: %d", depth))
 	}
 	return f.BranchTargets[len(f.BranchTargets)-int(depth)-1]
 }
@@ -211,7 +211,7 @@ func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 		}
 
 		if target.ValueType != wa.Void {
-			check(errBranchLoopValue)
+			pan.Panic(errBranchLoopValue)
 		}
 
 		retAddrs := asm.BranchIfStub(f, cond, false, true)
@@ -234,7 +234,7 @@ func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableLen) {
-		check(module.Errorf("branch table target count is too large: %d", targetCount))
+		pan.Panic(module.Errorf("branch table target count is too large: %d", targetCount))
 	}
 
 	targetTable := make([]*gen.BranchTarget, targetCount)
@@ -276,7 +276,7 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 		}
 
 		if target.ValueType != defaultTarget.ValueType {
-			check(module.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
+			pan.Panic(module.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
 		}
 	}
 
@@ -327,7 +327,7 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 
 	if b := getCurrentBlock(f); loop && !b.Suspension && f.ImportContext == nil {
 		if value.Type != wa.Void {
-			check(errBranchLoopValue)
+			pan.Panic(errBranchLoopValue)
 		}
 		opReserveStackEntry(f)
 		asm.SuspendSaveInt(f, r)
@@ -409,7 +409,7 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 	thenDeadend, haveElse := genThenOps(f, load)
 
 	if ifType != wa.Void && !haveElse {
-		check(errIfResultType)
+		pan.Panic(errIfResultType)
 	}
 
 	if ifType != wa.Void {

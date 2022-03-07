@@ -11,6 +11,7 @@ import (
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
+	"import.name/pan"
 )
 
 const (
@@ -54,7 +55,7 @@ func (ns *NameSection) Load(_ string, r Reader, length uint32) (err error) {
 			return
 
 		case pos > int64(length):
-			check(errors.New("name section content exceeded payload length"))
+			pan.Panic(errors.New("name section content exceeded payload length"))
 
 		default:
 			ns.readSubsection(load)
@@ -75,7 +76,7 @@ func (ns *NameSection) readSubsection(load *loader.L) {
 			funcIndex := load.Varuint32()
 			if funcIndex >= uint32(len(ns.FuncNames)) {
 				if funcIndex >= maxFuncNames {
-					check(module.Errorf("function name index is too large: %d", funcIndex))
+					pan.Panic(module.Errorf("function name index is too large: %d", funcIndex))
 				}
 
 				buf := make([]FuncName, funcIndex+1)
@@ -93,7 +94,7 @@ func (ns *NameSection) readSubsection(load *loader.L) {
 			case nameSubsectionLocalNames:
 				count := load.Varuint32()
 				if count > maxLocalNames {
-					check(module.Errorf("local name count is too large: %d", count))
+					pan.Panic(module.Errorf("local name count is too large: %d", count))
 				}
 				fn.LocalNames = make([]string, count)
 
@@ -101,7 +102,7 @@ func (ns *NameSection) readSubsection(load *loader.L) {
 					localIndex := load.Varuint32()
 					if localIndex >= uint32(len(fn.LocalNames)) {
 						if localIndex >= maxLocalNames {
-							check(module.Errorf("local name index is too large: %d", localIndex))
+							pan.Panic(module.Errorf("local name index is too large: %d", localIndex))
 						}
 
 						buf := make([]string, localIndex+1)

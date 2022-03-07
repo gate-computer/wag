@@ -16,6 +16,7 @@ import (
 	"gate.computer/wag/internal/isa/arm64/in"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/wa"
+	"import.name/pan"
 )
 
 const (
@@ -54,7 +55,7 @@ func (Linker) UpdateFarBranches(text []byte, l *link.L) {
 
 func (Linker) UpdateStackCheck(text []byte, addr int32, depth int) {
 	if maxFuncOffset := len(text) - int(addr); maxFuncOffset > MaxFuncSize {
-		check(module.Error("text size limit exceeded"))
+		pan.Panic(module.Error("text size limit exceeded"))
 	}
 
 	// codegen.MaxFuncLocals ensures that alloc4 is not out of range.

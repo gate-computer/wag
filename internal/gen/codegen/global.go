@@ -11,6 +11,7 @@ import (
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/wa/opcode"
+	"import.name/pan"
 )
 
 func globalOffset(f *gen.Func, index uint32) int32 {
@@ -20,7 +21,7 @@ func globalOffset(f *gen.Func, index uint32) int32 {
 func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(f.Module.Globals)) {
-		check(module.Errorf("%s index out of bounds: %d", op, globalIndex))
+		pan.Panic(module.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
 	global := f.Module.Globals[globalIndex]
@@ -33,12 +34,12 @@ func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (d
 func genSetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
 	globalIndex := load.Varuint32()
 	if globalIndex >= uint32(len(f.Module.Globals)) {
-		check(module.Errorf("%s index out of bounds: %d", op, globalIndex))
+		pan.Panic(module.Errorf("%s index out of bounds: %d", op, globalIndex))
 	}
 
 	global := f.Module.Globals[globalIndex]
 	if !global.Mutable {
-		check(module.Errorf("%s: global %d is immutable", op, globalIndex))
+		pan.Panic(module.Errorf("%s: global %d is immutable", op, globalIndex))
 	}
 
 	x := popOperand(f, global.Type)

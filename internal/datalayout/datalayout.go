@@ -15,6 +15,9 @@ import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
+	"import.name/pan"
+
+	. "import.name/pan/check"
 )
 
 const (
@@ -70,22 +73,21 @@ func ValidateMemory(load *loader.L, m *module.M) {
 	for i := range load.Span(maxSegments, "segment") {
 		_, size := readSegmentHeader(load, m, i)
 
-		if _, err := io.CopyN(ioutil.Discard, load, int64(size)); err != nil {
-			check(err)
-		}
+		_, err := io.CopyN(ioutil.Discard, load, int64(size))
+		Check(err)
 	}
 }
 
 func readSegmentHeader(load *loader.L, m *module.M, segmentIndex int) (offset, size uint32) {
 	if memoryIndex := load.Varuint32(); memoryIndex != 0 {
-		check(module.Errorf("unsupported memory index: %d", memoryIndex))
+		pan.Panic(module.Errorf("unsupported memory index: %d", memoryIndex))
 	}
 
 	offset = initexpr.ReadOffset(m, load)
 	size = load.Varuint32()
 
 	if uint64(offset)+uint64(size) > uint64(m.MemoryLimit.Init) {
-		check(module.Errorf("memory segment #%d exceeds initial memory size", segmentIndex))
+		pan.Panic(module.Errorf("memory segment #%d exceeds initial memory size", segmentIndex))
 	}
 
 	return

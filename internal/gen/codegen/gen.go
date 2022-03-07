@@ -15,6 +15,7 @@ import (
 	"gate.computer/wag/trap"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
+	"import.name/pan"
 )
 
 // If true, known but unsupported ops will be replaced with breakpoints.
@@ -137,7 +138,7 @@ func genBinaryCommute(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo
 
 func opBinary(f *gen.Func, op opcode.Opcode, left, right operand.O, info opInfo) {
 	if t := info.primaryType(); left.Type != t || right.Type != t {
-		check(module.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
+		pan.Panic(module.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}
 
 	result := asm.Binary(f, info.props(), left, right)
@@ -187,7 +188,7 @@ func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 	offset := load.Varuint32()
 
 	if align > info.maxAlign() {
-		check(module.Error("alignment must not be larger than natural"))
+		pan.Panic(module.Error("alignment must not be larger than natural"))
 	}
 
 	result := asm.Load(f, info.props(), index, info.primaryType(), align, offset)
@@ -202,7 +203,7 @@ func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deade
 	offset := load.Varuint32()
 
 	if align > info.maxAlign() {
-		check(module.Error("alignment must not be larger than natural"))
+		pan.Panic(module.Error("alignment must not be larger than natural"))
 	}
 
 	value := popOperand(f, info.primaryType())
@@ -226,7 +227,7 @@ func genCurrentMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo
 	opSaveOperands(f)
 
 	if load.Byte() != 0 {
-		check(module.Errorf("%s: reserved byte is not zero", op))
+		pan.Panic(module.Errorf("%s: reserved byte is not zero", op))
 	}
 
 	f.MapCallAddr(asm.CurrentMemory(f))
@@ -243,7 +244,7 @@ func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (
 	opSaveOperands(f)
 
 	if load.Byte() != 0 {
-		check(module.Errorf("%s: reserved byte is not zero", op))
+		pan.Panic(module.Errorf("%s: reserved byte is not zero", op))
 	}
 
 	// This is a possible suspension point.  Operands must be on stack, and the
@@ -285,7 +286,7 @@ func genSelect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dead
 	right := popAnyOperand(f)
 	left := popAnyOperand(f)
 	if left.Type != right.Type {
-		check(module.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
+		pan.Panic(module.Errorf("%s: operands have inconsistent types: %s, %s", op, left.Type, right.Type))
 	}
 
 	result := asm.Select(f, left, right, cond)
@@ -328,7 +329,7 @@ func badGen(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend
 
 func badOp(load *loader.L, op opcode.Opcode) {
 	if opcode.Exists(byte(op)) {
-		check(module.Errorf("unexpected opcode: %s", op))
+		pan.Panic(module.Errorf("unexpected opcode: %s", op))
 	}
 
 	if UnsupportedOpBreakpoint {
@@ -360,10 +361,10 @@ func badOp(load *loader.L, op opcode.Opcode) {
 				return
 
 			default:
-				check(module.Errorf("unknown opcode: 0xfc 0x%02x", op))
+				pan.Panic(module.Errorf("unknown opcode: 0xfc 0x%02x", op))
 			}
 		}
 	}
 
-	check(module.Errorf("unknown opcode: 0x%02x", byte(op)))
+	pan.Panic(module.Errorf("unknown opcode: 0x%02x", byte(op)))
 }

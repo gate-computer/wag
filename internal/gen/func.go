@@ -15,6 +15,7 @@ import (
 	"gate.computer/wag/internal/gen/storage"
 	"gate.computer/wag/internal/obj"
 	"gate.computer/wag/wa"
+	"import.name/pan"
 )
 
 type Block struct {
@@ -67,7 +68,7 @@ func (f *Func) LocalOffset(index int) int32 {
 		n--
 	}
 	if n < 0 {
-		check(fmt.Errorf("effective stack offset of local variable #%d is negative", index))
+		pan.Panic(fmt.Errorf("effective stack offset of local variable #%d is negative", index))
 	}
 	return int32(n * obj.Word)
 }

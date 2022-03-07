@@ -6,6 +6,8 @@ package buffer
 
 import (
 	"encoding/binary"
+
+	"import.name/pan"
 )
 
 // Limited is a dynamic buffer with a maximum size.  The default value is an
@@ -41,7 +43,7 @@ func (l *Limited) Bytes() []byte {
 // PutByte panicks with ErrSizeLimit if the buffer is already full.
 func (l *Limited) PutByte(value byte) {
 	if len(l.d.buf) >= l.d.maxSize {
-		check(ErrSizeLimit)
+		pan.Panic(ErrSizeLimit)
 	}
 	l.d.PutByte(value)
 }
@@ -56,7 +58,7 @@ func (l *Limited) PutUint32(i uint32) {
 // buffer.
 func (l *Limited) Extend(n int) []byte {
 	if len(l.d.buf)+n > l.d.maxSize {
-		check(ErrSizeLimit)
+		pan.Panic(ErrSizeLimit)
 	}
 	return l.d.Extend(n)
 }
@@ -65,7 +67,7 @@ func (l *Limited) Extend(n int) []byte {
 // size.
 func (l *Limited) ResizeBytes(n int) []byte {
 	if n > l.d.maxSize {
-		check(ErrSizeLimit)
+		pan.Panic(ErrSizeLimit)
 	}
 	return l.d.ResizeBytes(n)
 }
