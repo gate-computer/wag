@@ -148,6 +148,7 @@ func TestInsnRMint(test *testing.T) {
 		op2RegNames []string
 		memSize     string
 		commutative bool
+		noPtrPrefix bool
 	}{
 		{mn: "add", op: ADD},
 		{mn: "or", op: OR},
@@ -176,7 +177,7 @@ func TestInsnRMint(test *testing.T) {
 		{mn: "test", op: TEST, mr: true, commutative: true},
 		{mn: "mov", op: MOVmr, mr: true, skipRegReg: true},
 		{mn: "mov", op: MOV},
-		{mn: "lea", op: LEA, skipRegReg: true},
+		{mn: "lea", op: LEA, skipRegReg: true, noPtrPrefix: true},
 		{mn: "imul", op: IMUL},
 		{mn: "movzx", op: MOVZX8, memSize: "byte", skipRegReg: true},
 		{mn: "movzx", op: MOVZX16, memSize: "word", skipRegReg: true},
@@ -194,9 +195,14 @@ func TestInsnRMint(test *testing.T) {
 		}
 
 		for _, t := range types {
-			ms := i.memSize
-			if ms == "" {
-				ms = memSizes[t]
+			memSize := i.memSize
+			if memSize == "" {
+				memSize = memSizes[t]
+			}
+
+			var ptrPrefix string
+			if !i.noPtrPrefix {
+				ptrPrefix = fmt.Sprintf("%s ptr ", memSize)
 			}
 
 			for _, r := range allRegs {
@@ -225,7 +231,7 @@ func TestInsnRMint(test *testing.T) {
 				if op, ok := i.op.(rmRegMemDisp); ok {
 					for _, base := range baseRegs {
 						for disp, dispStr := range testDisp32 {
-							opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [%s%s]", ms, regNamesI64[base], dispStr))
+							opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s[%s%s]", ptrPrefix, regNamesI64[base], dispStr))
 
 							testEncode(test, i.mn, opStr, func(text *code.Buf) {
 								op.RegMemDisp(text, t, r, base, disp)
@@ -240,7 +246,7 @@ func TestInsnRMint(test *testing.T) {
 						for _, index := range indexRegs {
 							for _, s := range scales {
 								for disp, dispStr := range testDisp32 {
-									opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [%s + %s%s%s]", ms, regNamesI64[base], regNamesI64[index], s.string, dispStr))
+									opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s[%s + %s%s%s]", ptrPrefix, regNamesI64[base], regNamesI64[index], s.string, dispStr))
 
 									testEncode(test, i.mn, opStr, func(text *code.Buf) {
 										op.RegMemIndexDisp(text, t, r, base, index, s.Scale, disp)
@@ -253,7 +259,7 @@ func TestInsnRMint(test *testing.T) {
 
 				// Test RegStack
 				if op, ok := i.op.(rmRegStack); ok {
-					opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [rsp]", ms))
+					opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [rsp]", memSize))
 
 					testEncode(test, i.mn, opStr, func(text *code.Buf) {
 						op.RegStack(text, t, r)
@@ -263,7 +269,7 @@ func TestInsnRMint(test *testing.T) {
 				// Test RegStackDisp
 				if op, ok := i.op.(rmRegStackDisp); ok {
 					for disp, dispStr := range testDisp32 {
-						opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [rsp%s]", ms, dispStr))
+						opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s[rsp%s]", ptrPrefix, dispStr))
 
 						testEncode(test, i.mn, opStr, func(text *code.Buf) {
 							op.RegStackDisp(text, t, r, disp)
@@ -274,7 +280,7 @@ func TestInsnRMint(test *testing.T) {
 				// Test RegStackDisp8
 				if op, ok := i.op.(rmRegStackDisp8); ok {
 					for disp, dispStr := range testDisp8 {
-						opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [rsp%s]", ms, dispStr))
+						opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s[rsp%s]", ptrPrefix, dispStr))
 
 						testEncode(test, i.mn, opStr, func(text *code.Buf) {
 							op.RegStackDisp8(text, t, r, disp)
@@ -284,7 +290,7 @@ func TestInsnRMint(test *testing.T) {
 
 				// Test RegStackStub32
 				if op, ok := i.op.(rmRegStackStub32); ok {
-					opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s ptr [rsp - 0x80000000]", ms))
+					opStr := opStrSwapIf(i.mr, rn, fmt.Sprintf("%s[rsp - 0x80000000]", ptrPrefix))
 
 					testEncode(test, i.mn, opStr, func(text *code.Buf) {
 						op.RegStackStub32(text, t, r)
