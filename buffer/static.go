@@ -60,7 +60,7 @@ func (s *Static) Write(b []byte) (n int, err error) {
 	return
 }
 
-// PutByte panicks with ErrSizeLimit if the buffer is already full.
+// PutByte panics with ErrSizeLimit if the buffer is already full.
 func (s *Static) PutByte(value byte) {
 	offset := len(s.buf)
 	if offset >= cap(s.buf) {
@@ -70,14 +70,12 @@ func (s *Static) PutByte(value byte) {
 	s.buf[offset] = value
 }
 
-// Extend panicks with ErrSizeLimit if 4 bytes cannot be appended to the
-// buffer.
+// Extend panics with ErrSizeLimit if 4 bytes cannot be appended to the buffer.
 func (s *Static) PutUint32(i uint32) {
 	binary.LittleEndian.PutUint32(s.Extend(4), i)
 }
 
-// Extend panicks with ErrSizeLimit if n bytes cannot be appended to the
-// buffer.
+// Extend panics with ErrSizeLimit if n bytes cannot be appended to the buffer.
 func (s *Static) Extend(n int) []byte {
 	offset := len(s.buf)
 	size := offset + n
@@ -88,7 +86,7 @@ func (s *Static) Extend(n int) []byte {
 	return s.buf[offset:]
 }
 
-// ResizeBytes panicks with ErrSizeLimit if n is larger than buffer capacity.
+// ResizeBytes panics with ErrSizeLimit if n is larger than buffer capacity.
 func (s *Static) ResizeBytes(n int) []byte {
 	if n > cap(s.buf) {
 		pan.Panic(ErrSizeLimit)

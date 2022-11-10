@@ -40,7 +40,7 @@ func (l *Limited) Bytes() []byte {
 	return l.d.Bytes()
 }
 
-// PutByte panicks with ErrSizeLimit if the buffer is already full.
+// PutByte panics with ErrSizeLimit if the buffer is already full.
 func (l *Limited) PutByte(value byte) {
 	if len(l.d.buf) >= l.d.maxSize {
 		pan.Panic(ErrSizeLimit)
@@ -48,14 +48,12 @@ func (l *Limited) PutByte(value byte) {
 	l.d.PutByte(value)
 }
 
-// Extend panicks with ErrSizeLimit if 4 bytes cannot be appended to the
-// buffer.
+// Extend panics with ErrSizeLimit if 4 bytes cannot be appended to the buffer.
 func (l *Limited) PutUint32(i uint32) {
 	binary.LittleEndian.PutUint32(l.Extend(4), i)
 }
 
-// Extend panicks with ErrSizeLimit if n bytes cannot be appended to the
-// buffer.
+// Extend panics with ErrSizeLimit if n bytes cannot be appended to the buffer.
 func (l *Limited) Extend(n int) []byte {
 	if len(l.d.buf)+n > l.d.maxSize {
 		pan.Panic(ErrSizeLimit)
@@ -63,7 +61,7 @@ func (l *Limited) Extend(n int) []byte {
 	return l.d.Extend(n)
 }
 
-// ResizeBytes panicks with ErrSizeLimit if n is larger than maximum buffer
+// ResizeBytes panics with ErrSizeLimit if n is larger than maximum buffer
 // size.
 func (l *Limited) ResizeBytes(n int) []byte {
 	if n > l.d.maxSize {
