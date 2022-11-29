@@ -3,8 +3,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build (debug || indebug) && cgo
-// +build debug indebug
-// +build cgo
 
 package in
 
