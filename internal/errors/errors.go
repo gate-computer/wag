@@ -17,7 +17,7 @@ func ModuleError(text string) error {
 	return &moduleError{text, nil}
 }
 
-func ModuleErrorf(format string, args ...interface{}) error {
+func ModuleErrorf(format string, args ...any) error {
 	return &moduleError{fmt.Sprintf(format, args...), nil}
 }
 

@@ -10,7 +10,7 @@ import (
 	"import.name/pan"
 )
 
-func Error(x interface{}) error {
+func Error(x any) error {
 	err := pan.Error(x)
 	if err == nil {
 		return nil

@@ -10,6 +10,6 @@ const Enabled = false
 
 var Depth int
 
-func Printf(string, ...interface{}) {
+func Printf(string, ...any) {
 	panic("debug.Printf called without debug.Enabled")
 }

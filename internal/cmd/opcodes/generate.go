@@ -50,7 +50,7 @@ func main() {
 	generateFile("wa/opcode/opcodes.go", forPackageOpcode, opcodes)
 }
 
-func generateFile(filename string, generator func(func(string, ...interface{}), []opcode), opcodes []opcode) {
+func generateFile(filename string, generator func(func(string, ...any), []opcode), opcodes []opcode) {
 	gofmt := os.Getenv("GOFMT")
 	if gofmt == "" {
 		gofmt = "gofmt"
@@ -109,14 +109,14 @@ func generateFile(filename string, generator func(func(string, ...interface{}), 
 	}
 }
 
-func generateTo(w io.Writer, generator func(func(string, ...interface{}), []opcode), opcodes []opcode) (err error) {
+func generateTo(w io.Writer, generator func(func(string, ...any), []opcode), opcodes []opcode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
 		}
 	}()
 
-	out := func(format string, args ...interface{}) {
+	out := func(format string, args ...any) {
 		if format == "}" {
 			format += "\n"
 		}
@@ -133,7 +133,7 @@ func generateTo(w io.Writer, generator func(func(string, ...interface{}), []opco
 	return
 }
 
-func forPackageOpcode(out func(string, ...interface{}), opcodes []opcode) {
+func forPackageOpcode(out func(string, ...any), opcodes []opcode) {
 	out(`package opcode`)
 
 	out(`const (`)
@@ -153,7 +153,7 @@ func forPackageOpcode(out func(string, ...interface{}), opcodes []opcode) {
 	out(`}`)
 }
 
-func forPackageCodegen(out func(string, ...interface{}), opcodes []opcode) {
+func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 	out(`package codegen`)
 
 	out(`import (`)

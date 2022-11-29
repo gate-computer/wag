@@ -140,7 +140,7 @@ func TestInsnM(test *testing.T) {
 func TestInsnRMint(test *testing.T) {
 	for _, i := range []struct {
 		mn          string
-		op          interface{}
+		op          any
 		mr          bool
 		skipRegReg  bool
 		types       []wa.Type

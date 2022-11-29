@@ -12,12 +12,12 @@ import (
 
 type spec struct {
 	input  []byte
-	expect interface{} // nil means error.
+	expect any // nil means error.
 }
 
 func test(
 	t *testing.T,
-	f func(*bytes.Reader) (interface{}, int, error),
+	f func(*bytes.Reader) (any, int, error),
 	specs []spec,
 ) {
 	t.Helper()
@@ -53,7 +53,7 @@ func test(
 }
 
 func TestVaruint1(t *testing.T) {
-	f := func(r *bytes.Reader) (interface{}, int, error) {
+	f := func(r *bytes.Reader) (any, int, error) {
 		return Varuint1(r)
 	}
 
@@ -72,7 +72,7 @@ func TestVaruint1(t *testing.T) {
 }
 
 func TestVarint7(t *testing.T) {
-	f := func(r *bytes.Reader) (interface{}, int, error) {
+	f := func(r *bytes.Reader) (any, int, error) {
 		return Varint7(r)
 	}
 
@@ -93,7 +93,7 @@ func TestVarint7(t *testing.T) {
 }
 
 func TestVaruint32(t *testing.T) {
-	f := func(r *bytes.Reader) (interface{}, int, error) {
+	f := func(r *bytes.Reader) (any, int, error) {
 		return Varuint32(r)
 	}
 
@@ -113,7 +113,7 @@ func TestVaruint32(t *testing.T) {
 }
 
 func TestVarint32(t *testing.T) {
-	f := func(r *bytes.Reader) (interface{}, int, error) {
+	f := func(r *bytes.Reader) (any, int, error) {
 		return Varint32(r)
 	}
 
@@ -189,7 +189,7 @@ func TestVarint32(t *testing.T) {
 }
 
 func TestVarint64(t *testing.T) {
-	f := func(r *bytes.Reader) (interface{}, int, error) {
+	f := func(r *bytes.Reader) (any, int, error) {
 		return Varint64(r)
 	}
 
@@ -285,7 +285,7 @@ func TestVarint64(t *testing.T) {
 }
 
 func TestVaruint64(t *testing.T) {
-	f := func(r *bytes.Reader) (interface{}, int, error) {
+	f := func(r *bytes.Reader) (any, int, error) {
 		return Varuint64(r)
 	}
 

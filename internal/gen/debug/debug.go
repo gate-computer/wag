@@ -14,7 +14,7 @@ const Enabled = true
 
 var Depth int
 
-func Printf(format string, args ...interface{}) {
+func Printf(format string, args ...any) {
 	if Depth < 0 {
 		panic("negative DebugDepth")
 	}

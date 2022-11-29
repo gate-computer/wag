@@ -12,7 +12,7 @@ func Error(text string) error {
 	return internal.ModuleError(text)
 }
 
-func Errorf(format string, args ...interface{}) error {
+func Errorf(format string, args ...any) error {
 	return internal.ModuleErrorf(format, args...)
 }
 

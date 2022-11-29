@@ -94,11 +94,11 @@ func testEncodeAny(t *testing.T, expectMnemonic string, expectOpStrs []string, e
 	testEncode_(t, expectMnemonic, expectOpStrs, nil, encodeInsn)
 }
 
-func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm interface{}, encodeInsn func(*code.Buf)) {
+func testEncodeImm(t *testing.T, expectMnemonic, expectOpStr string, expectImm any, encodeInsn func(*code.Buf)) {
 	testEncode_(t, expectMnemonic, []string{expectOpStr}, expectImm, encodeInsn)
 }
 
-func testEncode_(t *testing.T, expectMnemonic string, expectOpStrs []string, expectImm interface{}, encodeInsn func(*code.Buf)) {
+func testEncode_(t *testing.T, expectMnemonic string, expectOpStrs []string, expectImm any, encodeInsn func(*code.Buf)) {
 	t.Helper()
 
 	text := code.Buf{
@@ -209,7 +209,7 @@ fail:
 	t.Errorf("%s %s <> %s %s", expectMnemonic, expectOpStr, insn.Mnemonic, insn.OpStr)
 }
 
-func opStr(xs ...interface{}) (s string) {
+func opStr(xs ...any) (s string) {
 	for i, x := range xs {
 		if i > 0 {
 			s += ", "
@@ -219,7 +219,7 @@ func opStr(xs ...interface{}) (s string) {
 	return
 }
 
-func opStrSwapIf(mr bool, xs ...interface{}) (s string) {
+func opStrSwapIf(mr bool, xs ...any) (s string) {
 	if !mr {
 		return opStr(xs...)
 	}
@@ -233,7 +233,7 @@ func opStrSwapIf(mr bool, xs ...interface{}) (s string) {
 	return
 }
 
-func optimalImm(val int32) interface{} {
+func optimalImm(val int32) any {
 	if val >= -128 && val < 128 {
 		return int8(val)
 	} else {

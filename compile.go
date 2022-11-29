@@ -275,7 +275,7 @@ func (r resolver) ResolveGlobal(module, field string, t wa.Type) (init uint64, e
 
 type importError string
 
-func importErrorf(format string, args ...interface{}) error {
+func importErrorf(format string, args ...any) error {
 	return importError(fmt.Sprintf(format, args...))
 }
 
