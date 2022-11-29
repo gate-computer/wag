@@ -1,6 +1,6 @@
 module gate.computer/wag
 
-go 1.17
+go 1.18
 
 require (
 	github.com/ianlancetaylor/demangle v0.0.0-20220517205856-0058ec4f073c

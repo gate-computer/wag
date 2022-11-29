@@ -94,14 +94,13 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 
 // Algorithm:
 //
-//     target_i = Convert(source_f)
-//     if target_i == MinInt {
-//         if &source_f != &RegResult_f {
-//             RegResult_f = source_f
-//         }
-//         TrapTruncOverflow()
-//     }
-//
+//	target_i = Convert(source_f)
+//	if target_i == MinInt {
+//	    if &source_f != &RegResult_f {
+//	        RegResult_f = source_f
+//	    }
+//	    TrapTruncOverflow()
+//	}
 func truncateSigned(f *gen.Func, targetType wa.Type, target reg.R, sourceType wa.Type, source reg.R) {
 	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, targetType, target, source)
 
@@ -122,11 +121,10 @@ func truncateSigned(f *gen.Func, targetType wa.Type, target reg.R, sourceType wa
 
 // Algorithm:
 //
-//     target_i = ConvertToI64(source_f)
-//     if target_i < 0 || target_i > MaxUint32 {
-//         Trap()
-//     }
-//
+//	target_i = ConvertToI64(source_f)
+//	if target_i < 0 || target_i > MaxUint32 {
+//	    Trap()
+//	}
 func truncateUnsignedI32(f *gen.Func, target reg.R, sourceType wa.Type, source reg.R) {
 	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
 
@@ -142,19 +140,18 @@ func truncateUnsignedI32(f *gen.Func, target reg.R, sourceType wa.Type, source r
 
 // Algorithm:
 //
-//     if source_f < ConvertToFloat(MaxInt64+1) {
-//         target_i = ConvertToI64(source_f)
-//         if target_i < 0 {
-//             Trap()
-//         }
-//     } else {
-//         target_i = ConvertToI64(source_f - ConvertToFloat(MaxInt64+1))
-//         if target_i < 0 {
-//             Trap()
-//         }
-//         target_i = target_i ^ (MaxInt64+1)
-//     }
-//
+//	if source_f < ConvertToFloat(MaxInt64+1) {
+//	    target_i = ConvertToI64(source_f)
+//	    if target_i < 0 {
+//	        Trap()
+//	    }
+//	} else {
+//	    target_i = ConvertToI64(source_f - ConvertToFloat(MaxInt64+1))
+//	    if target_i < 0 {
+//	        Trap()
+//	    }
+//	    target_i = target_i ^ (MaxInt64+1)
+//	}
 func truncateUnsignedI64(f *gen.Func, target reg.R, sourceType wa.Type, source reg.R) {
 	intRangeAsFloat := rodata.MaskAddr(rodata.MaskTruncBase, sourceType)
 

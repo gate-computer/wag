@@ -98,13 +98,12 @@ func negFloatReg(p *gen.Prog, t wa.Type, r reg.R) {
 
 // Population count algorithm:
 //
-//     func popcnt(x uint) (count int) {
-//         for count = 0; x != 0; count++ {
-//             x &= x - 1
-//         }
-//         return
-//     }
-//
+//	func popcnt(x uint) (count int) {
+//	    for count = 0; x != 0; count++ {
+//	        x &= x - 1
+//	    }
+//	    return
+//	}
 func popcnt(f *gen.Func, x operand.O) (count reg.R) {
 	count = f.Regs.AllocResult(x.Type)
 	pop, _ := getScratchReg(f, x)

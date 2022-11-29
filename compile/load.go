@@ -5,8 +5,7 @@
 /*
 Package compile implements a WebAssembly compiler.
 
-
-Text
+# Text
 
 Module sections (wasm v1) which affect the immutable text (machine code):
 
@@ -32,13 +31,11 @@ Sections which have no effect on text:
 Vector-based import function indexes also affect text, but their addresses are
 configured at run-time by mapping the vector immediately before text.
 
-
-Globals and memory
+# Globals and memory
 
 The memory, global and data sections comprise a single mutable buffer.
 
-
-Stack
+# Stack
 
 Any effect the export and start sections have happens via the run-time stack
 buffer, which must be initialized with optional start and entry function
@@ -46,14 +43,14 @@ addresses.
 
 Stack regions from low to high address:
 
-	1. Space for runtime-specific variables.
-	2. Space for signal stacks and red zones.
-	3. 240 bytes for use by trap handlers and vector-based import functions.
-	4. 8 bytes for trap handler return address (included in call stack).
-	5. 8 bytes for an extra function call (included in call stack).
-	6. The rest of the call stack (size must be a multiple of 8).
-	7. Start function address (4 bytes padded to 8).
-	8. Entry function address (4 bytes padded to 8).
+ 1. Space for runtime-specific variables.
+ 2. Space for signal stacks and red zones.
+ 3. 240 bytes for use by trap handlers and vector-based import functions.
+ 4. 8 bytes for trap handler return address (included in call stack).
+ 5. 8 bytes for an extra function call (included in call stack).
+ 6. The rest of the call stack (size must be a multiple of 8).
+ 7. Start function address (4 bytes padded to 8).
+ 8. Entry function address (4 bytes padded to 8).
 
 Address of region 3 must be aligned so that the threshold between regions 5 and
 6 (the stack limit) is a multiple of 256.
@@ -64,7 +61,6 @@ function to be skipped.
 Stack pointer is initially positioned between regions 6 and 7.  Function
 prologue compares the stack pointer against the threshold between regions 5 and
 6 (the stack limit).
-
 */
 package compile
 

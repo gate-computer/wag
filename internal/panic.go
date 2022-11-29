@@ -10,7 +10,7 @@ package internal
 //
 // This can be set during linking:
 //
-//     go build -ldflags="-X gate.computer/wag/internal.Panic=1"
+//	go build -ldflags="-X gate.computer/wag/internal.Panic=1"
 //
 // This is not a stable feature: it may change or disappear at any time.
 var Panic string
