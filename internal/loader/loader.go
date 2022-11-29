@@ -13,7 +13,7 @@ import (
 	"gate.computer/wag/internal/module"
 	"import.name/pan"
 
-	. "import.name/pan/check"
+	. "import.name/pan/mustcheck"
 )
 
 type Loader interface {
@@ -87,9 +87,7 @@ func (load *L) Bytes(n uint32) (data []byte) {
 }
 
 func (load *L) Byte() byte {
-	x, err := load.ReadByte()
-	Check(err)
-	return x
+	return Must(load.ReadByte())
 }
 
 func (load *L) Uint32() uint32 {

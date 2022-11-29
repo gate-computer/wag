@@ -18,7 +18,7 @@ import (
 	"gate.computer/wag/wa/opcode"
 	"import.name/pan"
 
-	. "import.name/pan/check"
+	. "import.name/pan/mustcheck"
 )
 
 // rootLib has a dummy function.

@@ -89,7 +89,7 @@ import (
 	"gate.computer/wag/wa"
 	"import.name/pan"
 
-	. "import.name/pan/check"
+	. "import.name/pan/mustcheck"
 )
 
 // Some limits have been chosen based on the backends' limitations:
@@ -287,8 +287,7 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 
 func loadCustomSection(m *Module, config *ModuleConfig, payloadSize uint32, load *loader.L) bool {
 	if config.CustomSectionLoader == nil {
-		_, err := io.CopyN(ioutil.Discard, load, int64(payloadSize))
-		Check(err)
+		Must(io.CopyN(ioutil.Discard, load, int64(payloadSize)))
 		return false
 	}
 

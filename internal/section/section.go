@@ -15,7 +15,7 @@ import (
 	"gate.computer/wag/internal/module"
 	"import.name/pan"
 
-	. "import.name/pan/check"
+	. "import.name/pan/mustcheck"
 )
 
 var Unwrapped = errors.New("section unwrapped")
@@ -58,8 +58,7 @@ func Find(
 				}
 				Check(err)
 			} else {
-				_, err := io.CopyN(ioutil.Discard, load, int64(payloadSize))
-				Check(err)
+				Must(io.CopyN(ioutil.Discard, load, int64(payloadSize)))
 			}
 
 			CheckConsumption(load, payloadOffset, payloadSize, partial)

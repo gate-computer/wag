@@ -17,7 +17,7 @@ import (
 	"gate.computer/wag/internal/obj"
 	"import.name/pan"
 
-	. "import.name/pan/check"
+	. "import.name/pan/mustcheck"
 )
 
 const (
@@ -72,9 +72,7 @@ func ReadMemory(buffer data.Buffer, load *loader.L, m *module.M) {
 func ValidateMemory(load *loader.L, m *module.M) {
 	for i := range load.Span(maxSegments, "segment") {
 		_, size := readSegmentHeader(load, m, i)
-
-		_, err := io.CopyN(ioutil.Discard, load, int64(size))
-		Check(err)
+		Must(io.CopyN(ioutil.Discard, load, int64(size)))
 	}
 }
 
