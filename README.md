@@ -33,7 +33,8 @@ Features
 - Cross-compilation is supported via Go build tags.  If `wagamd64` is
   specified, the x86-64 code generator is used regardless of host architecture,
   and CPU feature detection is disabled with pessimistic assumptions.  Likewise
-  for `wagarm64` (but feature detection is not used for ARM64).
+  for `wagarm64` (but feature detection is not currently used for ARM64 in any
+  case).
 
 
 Status
