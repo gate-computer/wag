@@ -226,7 +226,7 @@ func (MacroAssembler) ClearIntResultReg(p *gen.Prog) {
 func (MacroAssembler) LoadGlobal(p *gen.Prog, t wa.Type, target reg.R, offset int32) (zeroExt bool) {
 	// compile.maxGlobals ensures that offset is never below -256.
 	p.Text.PutUint32(in.LDUR.RtRnI9(target, RegMemoryBase, in.Int9(offset), t))
-	return false // TODO: yes, no?
+	return true
 }
 
 func (MacroAssembler) StoreGlobal(f *gen.Func, offset int32, x operand.O) {
