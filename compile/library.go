@@ -42,28 +42,28 @@ type Library struct {
 	l module.Library
 }
 
-func (mod Module) AsLibrary() (lib Library, err error) {
+func (m *Module) AsLibrary() (lib Library, err error) {
 	if internal.DontPanic() {
 		defer func() { err = internal.Error(recover()) }()
 	}
 
-	lib = mod.asLibrary()
+	lib = m.asLibrary()
 	return
 }
 
-func (mod Module) asLibrary() Library {
-	if len(mod.m.Globals) > 0 {
+func (m *Module) asLibrary() Library {
+	if len(m.m.Globals) > 0 {
 		pan.Panic(module.Error("library contains globals"))
 	}
-	if len(mod.m.ImportGlobals) > 0 {
+	if len(m.m.ImportGlobals) > 0 {
 		pan.Panic(module.Error("library imports globals"))
 	}
-	if len(mod.m.TableFuncs) > 0 {
+	if len(m.m.TableFuncs) > 0 {
 		pan.Panic(module.Error("library uses indirect function calls"))
 	}
 
-	libImports := make([]module.ImportIndex, len(mod.m.ImportFuncs))
-	for i, imp := range mod.m.ImportFuncs {
+	libImports := make([]module.ImportIndex, len(m.m.ImportFuncs))
+	for i, imp := range m.m.ImportFuncs {
 		libImports[i] = module.ImportIndex{
 			Import:      imp.Import,
 			VectorIndex: math.MinInt32, // Outrageous value by default.
@@ -72,10 +72,10 @@ func (mod Module) asLibrary() Library {
 
 	// Copy all arrays in case the originals have excess capacity.
 	return Library{module.Library{
-		Types:       append([]wa.FuncType{}, mod.m.Types...),
-		Funcs:       append([]uint32{}, mod.m.Funcs...),
+		Types:       append([]wa.FuncType{}, m.m.Types...),
+		Funcs:       append([]uint32{}, m.m.Funcs...),
 		ImportFuncs: libImports,
-		ExportFuncs: mod.m.ExportFuncs,
+		ExportFuncs: m.m.ExportFuncs,
 	}}
 }
 

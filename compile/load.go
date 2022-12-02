@@ -571,10 +571,10 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bo
 	return false
 }
 
-func (m Module) Types() []wa.FuncType      { return m.m.Types }
-func (m Module) FuncTypeIndexes() []uint32 { return m.m.Funcs }
+func (m *Module) Types() []wa.FuncType      { return m.m.Types }
+func (m *Module) FuncTypeIndexes() []uint32 { return m.m.Funcs }
 
-func (m Module) FuncTypes() []wa.FuncType {
+func (m *Module) FuncTypes() []wa.FuncType {
 	sigs := make([]wa.FuncType, len(m.m.Funcs))
 	for i, sigIndex := range m.m.Funcs {
 		sigs[i] = m.m.Types[sigIndex]
@@ -582,10 +582,10 @@ func (m Module) FuncTypes() []wa.FuncType {
 	return sigs
 }
 
-func (m Module) InitialMemorySize() int { return m.m.MemoryLimit.Init }
-func (m Module) MemorySizeLimit() int   { return m.m.MemoryLimit.Max }
+func (m *Module) InitialMemorySize() int { return m.m.MemoryLimit.Init }
+func (m *Module) MemorySizeLimit() int   { return m.m.MemoryLimit.Max }
 
-func (m Module) GlobalTypes() []wa.GlobalType {
+func (m *Module) GlobalTypes() []wa.GlobalType {
 	gs := make([]wa.GlobalType, len(m.m.Globals))
 	for i, g := range m.m.Globals {
 		gs[i] = wa.MakeGlobalType(g.Type, g.Mutable)
@@ -593,10 +593,10 @@ func (m Module) GlobalTypes() []wa.GlobalType {
 	return gs
 }
 
-func (m Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
-func (m Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }
+func (m *Module) NumImportFuncs() int   { return len(m.m.ImportFuncs) }
+func (m *Module) NumImportGlobals() int { return len(m.m.ImportGlobals) }
 
-func (m Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
+func (m *Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	imp := m.m.ImportFuncs[i]
 	module = imp.Module
 	field = imp.Field
@@ -606,7 +606,7 @@ func (m Module) ImportFunc(i int) (module, field string, sig wa.FuncType) {
 	return
 }
 
-func (m Module) ImportGlobal(i int) (module, field string, t wa.Type) {
+func (m *Module) ImportGlobal(i int) (module, field string, t wa.Type) {
 	imp := m.m.ImportGlobals[i]
 	module = imp.Module
 	field = imp.Field
@@ -624,15 +624,15 @@ func (m *Module) SetImportGlobal(i int, value uint64) {
 	m.m.Globals[i].InitConst = value
 }
 
-func (m Module) GlobalsSize() int {
+func (m *Module) GlobalsSize() int {
 	size := len(m.m.Globals) * obj.Word
 	mask := datalayout.MinAlignment - 1 // Round up so that linear memory will
 	return (size + mask) &^ mask        // have at least minimum alignment.
 }
 
-func (m Module) ExportFuncs() map[string]uint32 { return m.m.ExportFuncs }
+func (m *Module) ExportFuncs() map[string]uint32 { return m.m.ExportFuncs }
 
-func (m Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
+func (m *Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, found bool) {
 	funcIndex, found = m.m.ExportFuncs[field]
 	if found {
 		sigIndex := m.m.Funcs[funcIndex]
@@ -641,7 +641,7 @@ func (m Module) ExportFunc(field string) (funcIndex uint32, sig wa.FuncType, fou
 	return
 }
 
-func (m Module) StartFunc() (funcIndex uint32, defined bool) {
+func (m *Module) StartFunc() (funcIndex uint32, defined bool) {
 	funcIndex = m.m.StartIndex
 	defined = m.m.StartDefined
 	return
