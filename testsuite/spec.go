@@ -543,7 +543,7 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 					return true
 				}
 
-			case "unknown global 0", "unknown global 1":
+			case "unknown global", "unknown global 0", "unknown global 1":
 				switch {
 				case strings.HasPrefix(msg, "import global index out of bounds in initializer expression"):
 					return true
@@ -694,6 +694,12 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 			msg := skipUnsupported(t, err)
 
 			switch text {
+			case "END opcode expected":
+				switch {
+				case msg == "unexpected opcode: else":
+					return true
+				}
+
 			case "function and code section have inconsistent lengths":
 				switch {
 				case strings.HasPrefix(msg, "wrong number of function bodies"):
@@ -712,6 +718,12 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 					return true
 				}
 
+			case "section size mismatch":
+				switch {
+				case strings.HasPrefix(msg, "section size is"):
+					return true
+				}
+
 			case "too many locals":
 				switch {
 				case strings.Contains(msg, "has too many variables"):
@@ -719,6 +731,12 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 				}
 
 			case "unexpected end":
+				switch {
+				case msg == "unexpected EOF":
+					return true
+				}
+
+			case "unexpected end of section or function":
 				switch {
 				case msg == "unexpected EOF":
 					return true
