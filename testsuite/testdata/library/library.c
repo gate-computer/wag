@@ -96,6 +96,13 @@ EXPORT void spectest_print_i32_f32(uint32_t v1, float v2)
 	read_reply();
 }
 
+EXPORT void spectest_print_i64(uint64_t v)
+{
+	write_header(PRINT_I64, NOP, 8);
+	write8(v);
+	read_reply();
+}
+
 EXPORT void test_func(void) {}
 EXPORT void test_func_f32(float v) {}
 EXPORT void test_func_i32(uint32_t v) {}
