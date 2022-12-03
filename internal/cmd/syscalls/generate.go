@@ -50,7 +50,7 @@ func (sc call) variants() (vs []variant) {
 		for i := 0; i < sc.params; i++ {
 			v.name += "i32"
 			v.sig += " i32"
-			v.args += fmt.Sprintf("\n      (get_local %d)", i)
+			v.args += fmt.Sprintf("\n      (local.get %d)", i)
 		}
 		v.sig += ") "
 	}

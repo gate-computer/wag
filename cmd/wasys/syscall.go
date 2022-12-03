@@ -219,56 +219,56 @@ func setImportVectorMemoryAddr(vec []byte, addr uintptr) {
   (func (export "read_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_read_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "write_i32i32i32")
     (param i32 i32 i32) 
     (call $sys_write_i32i32i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "write_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_write_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "close_i32_i32")
     (param i32) (result i32)
     (call $sys_close_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "lseek_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_lseek_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "pread_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_pread_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "pwrite_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_pwrite_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "dup_i32_i32")
     (param i32) (result i32)
     (call $sys_dup_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "getpid__i32")
     (result i32)
@@ -277,86 +277,86 @@ func setImportVectorMemoryAddr(vec []byte, addr uintptr) {
   (func (export "sendfile_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_sendfile_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "shutdown_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_shutdown_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "socketpair_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_socketpair_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "flock_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_flock_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "fsync_i32_i32")
     (param i32) (result i32)
     (call $sys_fsync_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "fdatasync_i32_i32")
     (param i32) (result i32)
     (call $sys_fdatasync_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "truncate_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_truncate_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "ftruncate_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_ftruncate_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "getcwd_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_getcwd_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "chdir_i32_i32")
     (param i32) (result i32)
     (call $sys_chdir_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "fchdir_i32_i32")
     (param i32) (result i32)
     (call $sys_fchdir_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "fchmod_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_fchmod_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "fchown_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_fchown_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "umask_i32_i32")
     (param i32) (result i32)
     (call $sys_umask_i32_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "getuid__i32")
     (result i32)
@@ -381,15 +381,15 @@ func setImportVectorMemoryAddr(vec []byte, addr uintptr) {
   (func (export "posix_fadvise_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_posix_fadvise_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "_exit_i32")
     (param i32) 
     (call $sys__exit_i32
-      (get_local 0)))
+      (local.get 0)))
 
   (func (export "inotify_init1__i32")
     (result i32)
@@ -398,147 +398,147 @@ func setImportVectorMemoryAddr(vec []byte, addr uintptr) {
   (func (export "inotify_add_watch_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_inotify_add_watch_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "inotify_rm_watch_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_inotify_rm_watch_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "openat_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_openat_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "mkdirat_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_mkdirat_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "fchownat_i32i32i32i32i32_i32")
     (param i32 i32 i32 i32 i32) (result i32)
     (call $sys_fchownat_i32i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)
-      (get_local 4)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)
+      (local.get 4)))
 
   (func (export "unlinkat_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_unlinkat_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "renameat_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_renameat_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "linkat_i32i32i32i32i32_i32")
     (param i32 i32 i32 i32 i32) (result i32)
     (call $sys_linkat_i32i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)
-      (get_local 4)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)
+      (local.get 4)))
 
   (func (export "symlinkat_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_symlinkat_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "readlinkat_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_readlinkat_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "fchmodat_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_fchmodat_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "faccessat_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_faccessat_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "splice_i32i32i32i32i32i32_i32")
     (param i32 i32 i32 i32 i32 i32) (result i32)
     (call $sys_splice_i32i32i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)
-      (get_local 4)
-      (get_local 5)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)
+      (local.get 4)
+      (local.get 5)))
 
   (func (export "tee_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_tee_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "sync_file_range_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_sync_file_range_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "fallocate_i32i32i32i32_i32")
     (param i32 i32 i32 i32) (result i32)
     (call $sys_fallocate_i32i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)
-      (get_local 3)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)
+      (local.get 3)))
 
   (func (export "eventfd_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_eventfd_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
   (func (export "dup3_i32i32i32_i32")
     (param i32 i32 i32) (result i32)
     (call $sys_dup3_i32i32i32_i32
-      (get_local 0)
-      (get_local 1)
-      (get_local 2)))
+      (local.get 0)
+      (local.get 1)
+      (local.get 2)))
 
   (func (export "pipe2_i32i32_i32")
     (param i32 i32) (result i32)
     (call $sys_pipe2_i32i32_i32
-      (get_local 0)
-      (get_local 1)))
+      (local.get 0)
+      (local.get 1)))
 
 )
 */
