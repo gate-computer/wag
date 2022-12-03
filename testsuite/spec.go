@@ -329,6 +329,15 @@ func (x *specTestInstance) assertTrap(t *testing.T, field string, args []arg, ex
 }
 
 func assertInvalidSpec(t *testing.T, filename, text string) {
+	// Recheck these when updating testsuite/testdata/spec submodule.
+	switch t.Name() {
+	case "Test_block/assert_invalid:497":
+		t.Skip("wast2json miscompiles block type as void")
+
+	case "Test_loop/assert_invalid:601":
+		t.Skip("wast2json miscompiles loop type as void")
+	}
+
 	t.Log("expect:", text)
 
 	expect := &expected{
