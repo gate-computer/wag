@@ -30,7 +30,7 @@ func (info opInfo) props() uint16 {
 }
 
 type opImpl struct {
-	gen  func(*gen.Func, *loader.L, opcode.Opcode, opInfo) bool
+	gen  func(*gen.Func, *loader.L, opcode.Opcode, opInfo)
 	info opInfo
 }
 
@@ -40,8 +40,4 @@ func init() {
 	opcodeImpls[opcode.Block].gen = genBlock
 	opcodeImpls[opcode.Loop].gen = genLoop
 	opcodeImpls[opcode.If].gen = genIf
-
-	opcodeSkips[opcode.Block] = skipBlock
-	opcodeSkips[opcode.Loop] = skipLoop
-	opcodeSkips[opcode.If] = skipIf
 }

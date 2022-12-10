@@ -157,9 +157,7 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 	out(`package codegen`)
 
 	out(`import (`)
-	out(`    "gate.computer/wag/internal/gen"`)
 	out(`    "gate.computer/wag/internal/isa/prop"`)
-	out(`    "gate.computer/wag/internal/loader"`)
 	out(`    "gate.computer/wag/wa"`)
 	out(`    "gate.computer/wag/wa/opcode"`)
 	out(`)`)
@@ -235,34 +233,6 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 				impl := "gen" + op.sym
 
 				out(`opcode.%s: {%s, 0},`, op.sym, impl)
-			}
-		}
-	}
-	out(`}`)
-
-	out(`var opcodeSkips = [256]func(*gen.Func, *loader.L, opcode.Opcode){`)
-	for code, op := range opcodes {
-		switch op.name {
-		case "":
-			out(`0x%02x: badSkip,`, code)
-
-		case "block", "loop", "if":
-			out(`opcode.%s: nil, // initialized by init()`, op.sym)
-
-		case "else":
-			out(`opcode.%s: badSkip,`, op.sym)
-
-		case "end":
-			out(`opcode.%s: nil,`, op.sym)
-
-		case "br_table", "call_indirect":
-			out(`opcode.%s: skip%s,`, op.sym, op.sym)
-
-		default:
-			if op.imm != "" {
-				out(`opcode.%s: skip%s,`, op.sym, op.imm)
-			} else {
-				out(`opcode.%s: skipNothing,`, op.sym)
 			}
 		}
 	}

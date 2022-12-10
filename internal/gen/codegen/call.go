@@ -23,7 +23,24 @@ var (
 	errUnknownTable          = module.Error("unknown table")
 )
 
-func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func checkCallFuncIndex(f *gen.Func, op opcode.Opcode, index uint32) {
+	if index >= uint32(len(f.Module.Funcs)) {
+		pan.Panic(module.Errorf("%s: function index out of bounds: %d", op, index))
+	}
+}
+
+func checkIndirectCallTypeIndex(f *gen.Func, op opcode.Opcode, index uint32) uint32 {
+	if !f.Module.Table {
+		pan.Panic(errUnknownTable)
+	}
+
+	if index >= uint32(len(f.Module.Types)) {
+		pan.Panic(module.Errorf("%s: signature index out of bounds: %d", op, index))
+	}
+	return index
+}
+
+func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
@@ -33,13 +50,10 @@ func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 	} else {
 		opCallInNormalFunc(f, op, funcIndex)
 	}
-	return
 }
 
 func opCallInNormalFunc(f *gen.Func, op opcode.Opcode, funcIndex uint32) {
-	if funcIndex >= uint32(len(f.Module.Funcs)) {
-		pan.Panic(module.Errorf("%s: function index out of bounds: %d", op, funcIndex))
-	}
+	checkCallFuncIndex(f, op, funcIndex)
 
 	sig := f.Module.Types[f.Module.Funcs[funcIndex]]
 	checkCallOperandCount(f, sig)
@@ -62,15 +76,8 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 	opFinalizeCall(f, sig)
 }
 
-func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	if !f.Module.Table {
-		pan.Panic(errUnknownTable)
-	}
-
-	sigIndex := load.Varuint32()
-	if sigIndex >= uint32(len(f.Module.Types)) {
-		pan.Panic(module.Errorf("%s: signature index out of bounds: %d", op, sigIndex))
-	}
+func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+	sigIndex := checkIndirectCallTypeIndex(f, op, load.Varuint32())
 	sigIndex = getCanonicalIndirectCallSig(&f.Prog, sigIndex)
 
 	if load.Byte() != 0 {
@@ -99,7 +106,6 @@ func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo)
 	}
 
 	opFinalizeCall(f, sig)
-	return
 }
 
 func checkCallOperandCount(f *gen.Func, sig wa.FuncType) {
@@ -107,12 +113,21 @@ func checkCallOperandCount(f *gen.Func, sig wa.FuncType) {
 		debug.Printf("sig: %s", sig)
 	}
 
-	if len(sig.Params) > f.StackDepth-f.FrameBase {
-		pan.Panic(errCallParamsExceedStack)
-	}
+	oper := len(f.Operands) - 1
 
-	for i, t := range sig.Params {
-		if t != f.Operands[len(f.Operands)-len(sig.Params)+i].Type {
+	for param := len(sig.Params) - 1; param >= 0; param-- {
+		if oper < f.FrameBase {
+			pan.Panic(errCallParamsExceedStack)
+		}
+
+		x := f.Operands[oper]
+		oper--
+
+		if x.Storage == storage.Unreachable {
+			return // All good.
+		}
+
+		if x.Type != sig.Params[param] {
 			pan.Panic(errCallParamTypeMismatch)
 		}
 	}

@@ -18,24 +18,25 @@ func globalOffset(f *gen.Func, index uint32) int32 {
 	return (int32(index) - int32(len(f.Module.Globals))) * obj.Word
 }
 
-func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	globalIndex := load.Varuint32()
-	if globalIndex >= uint32(len(f.Module.Globals)) {
-		pan.Panic(module.Errorf("%s index out of bounds: %d", op, globalIndex))
+func loadGlobalIndex(f *gen.Func, load *loader.L, op opcode.Opcode) uint32 {
+	index := load.Varuint32()
+	if index >= uint32(len(f.Module.Globals)) {
+		pan.Panic(module.Errorf("%s index out of bounds: %d", op, index))
 	}
+	return index
+}
+
+func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+	globalIndex := loadGlobalIndex(f, load, op)
 
 	global := f.Module.Globals[globalIndex]
 	r, _ := opAllocReg(f, global.Type)
 	asm.LoadGlobal(&f.Prog, global.Type, r, globalOffset(f, globalIndex))
 	pushOperand(f, operand.Reg(global.Type, r))
-	return
 }
 
-func genSetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	globalIndex := load.Varuint32()
-	if globalIndex >= uint32(len(f.Module.Globals)) {
-		pan.Panic(module.Errorf("%s index out of bounds: %d", op, globalIndex))
-	}
+func genSetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+	globalIndex := loadGlobalIndex(f, load, op)
 
 	global := f.Module.Globals[globalIndex]
 	if !global.Mutable {
@@ -44,5 +45,4 @@ func genSetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (d
 
 	x := popOperand(f, global.Type)
 	asm.StoreGlobal(f, globalOffset(f, globalIndex), x)
-	return
 }

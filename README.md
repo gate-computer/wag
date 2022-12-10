@@ -63,9 +63,8 @@ Testing
 
 Requires Linux, Make, Go, Python, [Capstone](https://www.capstone-engine.org),
 and a recent version of [WABT](https://github.com/WebAssembly/wabt).
-The applicable parts of the WebAssembly spec testsuite are
-run[<sup>*</sup>](https://github.com/gate-computer/wag/issues/21).
-Code execution tests are implemented in a separate Go module in the testsuite
-subdirectory (to work around circular dependencies).  All tests can be run by
-checking out Git submodules and running `make check`.
+The applicable parts of the WebAssembly spec testsuite are run.  Code execution
+tests are implemented in a separate Go module in the testsuite subdirectory (to
+work around circular dependencies).  All tests can be run by checking out Git
+submodules and running `make check`.
 

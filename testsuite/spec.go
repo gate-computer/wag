@@ -496,6 +496,8 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 					return true
 				case msg == "operand stack not empty at end of function":
 					return true
+				case msg == "unexpected number of operands on stack after block":
+					return true
 				case msg == "unknown block type 1":
 					return true
 				case strings.HasPrefix(msg, "br_table targets have inconsistent value types"):
@@ -586,19 +588,6 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 		return
 	}
 	defer p.close(t)
-
-	switch text {
-	case "type mismatch":
-		t.Skip("TODO")
-	case "unknown function":
-		t.Skip("TODO")
-	case "unknown global":
-		t.Skip("TODO")
-	case "unknown label":
-		t.Skip("TODO")
-	case "unknown local":
-		t.Skip("TODO")
-	}
 
 	t.Fatal("invalidity not detected")
 }
@@ -741,7 +730,7 @@ func assertMalformedSpec(t *testing.T, filename, text string) {
 
 			case "unexpected end":
 				switch {
-				case msg == "unexpected EOF":
+				case strings.HasPrefix(msg, "unknown block type"):
 					return true
 				}
 

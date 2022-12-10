@@ -20,6 +20,7 @@ import (
 
 type Block struct {
 	Suspension bool
+	Deadend    bool
 }
 
 type BranchTarget struct {

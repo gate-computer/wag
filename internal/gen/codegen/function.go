@@ -28,6 +28,7 @@ const (
 )
 
 var (
+	errBlockEndOperands          = module.Error("unexpected number of operands on stack after block")
 	errOperandStackNotEmpty      = module.Error("operand stack not empty at end of function")
 	errBranchTargetStackNotEmpty = module.Error("branch target stack not empty at end of function")
 	errPopNoOperand              = module.Error("block has no operand to pop")
@@ -71,20 +72,32 @@ func pushResultRegOperand(f *gen.Func, t wa.Type) {
 }
 
 func popOperand(f *gen.Func, t wa.Type) (x operand.O) {
-	x = popAnyOperand(f)
+	x = popAnyOperand(f, t)
 	if x.Type != t {
 		pan.Panic(module.Errorf("operand %s has wrong type; expected %s", x, t))
 	}
 	return
 }
 
-func popAnyOperand(f *gen.Func) (x operand.O) {
+func popAnyOperand(f *gen.Func, fallbackType wa.Type) operand.O {
 	i := len(f.Operands) - 1
 	if i < f.FrameBase {
 		pan.Panic(errPopNoOperand)
 	}
 
-	x = f.Operands[i]
+	x := f.Operands[i]
+
+	if x.Storage == storage.Unreachable {
+		fallback := operand.UnreachableFallback(fallbackType)
+
+		if debug.Enabled {
+			debug.Printf("pop operand #%d: %s -> %s", i, x, fallback)
+		}
+
+		// Leave the sentinel on the operand stack.
+		return fallback
+	}
+
 	f.Operands = f.Operands[:i]
 
 	if len(f.Operands) < f.NumStableOperands {
@@ -95,21 +108,7 @@ func popAnyOperand(f *gen.Func) (x operand.O) {
 		debug.Printf("pop operand #%d: %s", i, x)
 	}
 
-	return
-}
-
-func popBlockResultOperand(f *gen.Func, t wa.Type, deadend bool) operand.O {
-	if !deadend {
-		return popOperand(f, t)
-	} else if len(f.Operands) > f.FrameBase {
-		return popAnyOperand(f)
-	} else {
-		if debug.Enabled {
-			debug.Printf("no block result operand to pop at deadend")
-		}
-
-		return operand.Placeholder(t)
-	}
+	return x
 }
 
 func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, numExtra int, atomicCallStubs bool) {
@@ -168,31 +167,43 @@ func genFunction(f *gen.Func, load *loader.L, funcIndex int, sig wa.FuncType, nu
 
 	pushBranchTarget(f, f.ResultType, true)
 
-	if deadend := genOps(f, load); !deadend {
-		var zeroExtended bool
+	genOps(f, load)
 
-		if f.ResultType != wa.Void {
-			result := popOperand(f, f.ResultType)
-			zeroExtended = asm.Move(f, reg.Result, result)
-		}
-
-		switch {
-		case f.ResultType == wa.I32 && !zeroExtended:
-			asm.ZeroExtendResultReg(&f.Prog)
-
-		case f.ResultType == wa.Void || f.ResultType.Category() == wa.Float:
-			asm.ClearIntResultReg(&f.Prog)
-		}
-
-		if len(f.Operands) != 0 {
-			pan.Panic(errOperandStackNotEmpty)
-		}
-
-		f.Regs.CheckNoneAllocated()
-	} else {
+	deadend := f.BranchTargets[0].Block.Deadend
+	if deadend {
 		if debug.Enabled {
 			debug.Printf("body is a deadend")
 		}
+	}
+
+	var result operand.O
+	if f.ResultType != wa.Void {
+		result = popOperand(f, f.ResultType)
+	}
+
+	if len(f.Operands) > 0 && f.Operands[len(f.Operands)-1].Storage != storage.Unreachable {
+		pan.Panic(errOperandStackNotEmpty)
+	}
+
+	if !deadend {
+		switch f.ResultType {
+		case wa.Void:
+			asm.ClearIntResultReg(&f.Prog)
+
+		case wa.I32:
+			if zeroExt := asm.Move(f, reg.Result, result); !zeroExt {
+				asm.ZeroExtendResultReg(&f.Prog)
+			}
+
+		case wa.I64:
+			asm.Move(f, reg.Result, result)
+
+		default:
+			asm.Move(f, reg.Result, result)
+			asm.ClearIntResultReg(&f.Prog)
+		}
+
+		f.Regs.CheckNoneAllocated()
 	}
 
 	end := popBranchTarget(f)
@@ -307,14 +318,12 @@ restart:
 }
 
 func opSaveOperands(f *gen.Func) {
-	opSaveSomeOperands(f, len(f.Operands))
-}
-
-func opSaveSomeOperands(f *gen.Func, count int) {
-	var i int
-
-	for i = f.StackDepth; i < count; i++ {
+	for i := f.StackDepth; i < len(f.Operands); i++ {
 		x := &f.Operands[i]
+
+		if x.Storage == storage.Unreachable {
+			continue
+		}
 
 		if debug.Enabled {
 			debug.Printf("save operand #%d: %s", i, *x)
@@ -350,11 +359,7 @@ func opSaveSomeOperands(f *gen.Func, count int) {
 		}
 	}
 
-	// There may be unconsumed stack values that have already been popped from
-	// operand stack
-	if i <= count && f.NumStableOperands < i {
-		f.NumStableOperands = i
-	}
+	f.NumStableOperands = len(f.Operands)
 }
 
 func opReserveStackEntry(f *gen.Func) {
@@ -384,14 +389,19 @@ func opDropOperand(f *gen.Func) {
 	}
 
 	x := f.Operands[i]
+
+	if debug.Enabled {
+		debug.Printf("drop operand #%d: %s", i, x)
+	}
+
+	if x.Storage == storage.Unreachable {
+		return
+	}
+
 	f.Operands = f.Operands[:i]
 
 	if len(f.Operands) < f.NumStableOperands {
 		f.NumStableOperands = len(f.Operands)
-	}
-
-	if debug.Enabled {
-		debug.Printf("drop operand #%d: %s", i, x)
 	}
 
 	switch x.Storage {
@@ -410,39 +420,65 @@ func opDropOperand(f *gen.Func) {
 
 // opDropCallOperands caller knows for sure that the dropped operands are stack
 // operands within the current block.
-func opDropCallOperands(f *gen.Func, n int) {
-	if n == 0 {
+func opDropCallOperands(f *gen.Func, paramCount int) {
+	if paramCount == 0 {
 		return
 	}
 
-	if debug.Enabled {
-		for i := len(f.Operands) - n; i < len(f.Operands); i++ {
-			x := f.Operands[i]
+	var dropCount int
 
+	for i := len(f.Operands) - 1; i >= len(f.Operands)-paramCount; i-- {
+		x := f.Operands[i]
+
+		if x.Storage == storage.Unreachable {
 			if debug.Enabled {
-				debug.Printf("drop call operand #%d: %s", i, x)
+				debug.Printf("unreachable call operands: %d", paramCount-dropCount)
 			}
+			break
+		}
+
+		dropCount++
+
+		if debug.Enabled {
+			debug.Printf("drop call operand #%d: %s", i, x)
 		}
 	}
 
-	asm.DropStackValues(&f.Prog, n)
-	f.StackDepth -= n
+	asm.DropStackValues(&f.Prog, dropCount)
+	f.StackDepth -= dropCount
 
 	if debug.Enabled {
-		debug.Printf("stack depth: %d (after dropping %d)", f.StackDepth, n)
+		debug.Printf("stack depth: %d (after dropping %d)", f.StackDepth, dropCount)
 	}
 
-	f.Operands = f.Operands[:len(f.Operands)-n]
+	f.Operands = f.Operands[:len(f.Operands)-dropCount]
 
 	if len(f.Operands) < f.NumStableOperands {
 		f.NumStableOperands = len(f.Operands)
 	}
 }
 
-func opTruncateBlockOperands(f *gen.Func) {
-	var numStack int
+func truncateBlockOperands(f *gen.Func, deadend bool) {
+	if deadend {
+		truncateUnreachableBlockOperands(f)
+		return
+	}
 
-	for i := f.FrameBase; i < len(f.Operands); i++ {
+	if len(f.Operands) != f.FrameBase {
+		pan.Panic(errBlockEndOperands)
+	}
+}
+
+func truncateUnreachableBlockOperands(f *gen.Func) {
+	top := len(f.Operands) - 1
+	if top < f.FrameBase {
+		panic("no unreachable sentinel on operand stack after deadend block")
+	}
+	if f.Operands[top].Storage != storage.Unreachable {
+		pan.Panic(errBlockEndOperands)
+	}
+
+	for i := f.FrameBase; i < top; i++ {
 		x := f.Operands[i]
 
 		if debug.Enabled {
@@ -451,20 +487,16 @@ func opTruncateBlockOperands(f *gen.Func) {
 
 		switch x.Storage {
 		case storage.Stack:
-			numStack++
+			// Deadend; no need to generate instructions.
+			f.StackDepth--
 
 		case storage.Reg:
 			f.Regs.Free(x.Type, x.Reg())
 		}
 	}
 
-	if numStack != 0 {
-		asm.DropStackValues(&f.Prog, numStack)
-		f.StackDepth -= numStack
-	}
-
 	if debug.Enabled {
-		debug.Printf("stack depth: %d (after dropping %d)", f.StackDepth, numStack)
+		debug.Printf("stack depth: %d", f.StackDepth)
 	}
 
 	f.Operands = f.Operands[:f.FrameBase]
@@ -485,6 +517,11 @@ func opStealOperandRegBefore(f *gen.Func, t wa.Type, length int) reg.R {
 		if debug.Enabled {
 			debug.Printf("save operand #%d: %s", i, *x)
 			debug.Depth++
+		}
+
+		if x.Storage == storage.Unreachable {
+			length++
+			continue
 		}
 
 		opReserveStackEntry(f)

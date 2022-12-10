@@ -19,8 +19,9 @@ const (
 )
 
 type O struct {
-	Storage storage.Storage
-	Type    wa.Type
+	Storage             storage.Storage
+	Type                wa.Type
+	UnreachableFallback bool
 
 	payload uint64
 }
@@ -35,15 +36,41 @@ func Placeholder(t wa.Type) (o O) {
 }
 
 func Imm(t wa.Type, value uint64) O {
-	return O{storage.Imm, t, value}
+	return O{
+		Storage: storage.Imm,
+		Type:    t,
+		payload: value,
+	}
 }
 
 func Reg(t wa.Type, r reg.R) O {
-	return O{storage.Reg, t, uint64(byte(r))}
+	return O{
+		Storage: storage.Reg,
+		Type:    t,
+		payload: uint64(byte(r)),
+	}
 }
 
 func Flags(cond condition.C) O {
-	return O{storage.Flags, wa.I32, uint64(cond)}
+	return O{
+		Storage: storage.Flags,
+		Type:    wa.I32,
+		payload: uint64(cond),
+	}
+}
+
+func UnreachableSentinel() O {
+	return O{
+		Storage: storage.Unreachable,
+	}
+}
+
+func UnreachableFallback(t wa.Type) O {
+	return O{
+		Storage:             storage.Imm,
+		Type:                t,
+		UnreachableFallback: true,
+	}
 }
 
 func (o O) Size() wa.Size {
@@ -79,6 +106,10 @@ func (o O) Reg() reg.R             { return reg.R(byte(o.payload)) }
 func (o O) FlagsCond() condition.C { return condition.C(int(o.payload)) }
 
 func (o O) String() string {
+	if o.UnreachableFallback {
+		return fmt.Sprintf("unreachable fallback %s", o.Type)
+	}
+
 	if debug.Enabled && o.payload == payloadDebug {
 		if o.Storage == storage.Imm {
 			return fmt.Sprintf("%s placeholder", o.Type)
@@ -107,6 +138,9 @@ func (o O) String() string {
 
 	case storage.Flags:
 		return fmt.Sprintf("volatile %s comparison result", o.FlagsCond())
+
+	case storage.Unreachable:
+		return "unreachable sentinel"
 
 	default:
 		return "<invalid operand>"

@@ -15,34 +15,35 @@ import (
 	"import.name/pan"
 )
 
-func readLocalIndex(f *gen.Func, load *loader.L, op opcode.Opcode) (index int, t wa.Type) {
-	i := load.Varuint32()
-	if i >= uint32(len(f.LocalTypes)) {
-		pan.Panic(module.Errorf("%s index out of bounds: %d", op, i))
+func loadLocalIndex(f *gen.Func, load *loader.L, op opcode.Opcode) uint32 {
+	index := load.Varuint32()
+	if index >= uint32(len(f.LocalTypes)) {
+		pan.Panic(module.Errorf("%s index out of bounds: %d", op, index))
 	}
-
-	index = int(i)
-	t = f.LocalTypes[index]
-	return
+	return index
 }
 
-func genGetLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	index, t := readLocalIndex(f, load, op)
+func loadLocalIndexType(f *gen.Func, load *loader.L, op opcode.Opcode) (int, wa.Type) {
+	index := loadLocalIndex(f, load, op)
+	t := f.LocalTypes[index]
+	return int(index), t
+}
+
+func genGetLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+	index, t := loadLocalIndexType(f, load, op)
 	r, _ := opAllocReg(f, t)
 	asm.LoadStack(&f.Prog, t, r, f.LocalOffset(index))
 	pushOperand(f, operand.Reg(t, r))
-	return
 }
 
-func genSetLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	index, t := readLocalIndex(f, load, op)
+func genSetLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+	index, t := loadLocalIndexType(f, load, op)
 	value := popOperand(f, t)
 	asm.StoreStack(f, f.LocalOffset(index), value)
-	return
 }
 
-func genTeeLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
-	index, t := readLocalIndex(f, load, op)
+func genTeeLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+	index, t := loadLocalIndexType(f, load, op)
 	value := popOperand(f, t)
 
 	switch value.Storage {
@@ -60,5 +61,4 @@ func genTeeLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (de
 	}
 
 	pushOperand(f, value)
-	return
 }

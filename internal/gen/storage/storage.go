@@ -11,6 +11,7 @@ const (
 	Stack
 	Reg
 	Flags
+	Unreachable
 )
 
 func (s Storage) String() string {
@@ -26,6 +27,9 @@ func (s Storage) String() string {
 
 	case Flags:
 		return "flags"
+
+	case Unreachable:
+		return "unreachable"
 
 	default:
 		return "<invalid operand storage type>"

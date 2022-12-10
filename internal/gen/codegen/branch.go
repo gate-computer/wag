@@ -71,10 +71,14 @@ func popBranchTarget(f *gen.Func) (finalizedLabel *link.L) {
 	return
 }
 
-func getBranchTarget(f *gen.Func, depth uint32) *gen.BranchTarget {
+func checkBranchIndex(f *gen.Func, depth uint32) {
 	if depth >= uint32(len(f.BranchTargets)) {
 		pan.Panic(module.Errorf("relative branch depth out of bounds: %d", depth))
 	}
+}
+
+func getBranchTarget(f *gen.Func, depth uint32) *gen.BranchTarget {
+	checkBranchIndex(f, depth)
 	return f.BranchTargets[len(f.BranchTargets)-int(depth)-1]
 }
 
@@ -92,7 +96,7 @@ func label(f *gen.Func, l *link.L) {
 	l.Addr = f.Text.Addr
 }
 
-func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
+func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	opSaveOperands(f)
 
 	blockType := typedecode.Block(load.Varint7())
@@ -106,10 +110,11 @@ func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 	}
 
 	frame := beginFrame(f)
-	deadend := genOps(f, load)
+	genOps(f, load)
+	deadend := getCurrentBlock(f).Deadend
 
 	if blockType != wa.Void {
-		result := popBlockResultOperand(f, blockType, deadend)
+		result := popOperand(f, blockType)
 		opMoveResult(f, result, deadend)
 
 		if debug.Enabled {
@@ -122,18 +127,16 @@ func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 		debug.Printf("stack depth: %d", f.StackDepth)
 	}
 
-	opTruncateBlockOperands(f)
+	truncateBlockOperands(f, deadend)
 	frame.end(f)
 	pushResultRegOperand(f, blockType)
 
 	end := popBranchTarget(f)
 	label(f, end)
 	linker.UpdateFarBranches(f.Text.Bytes(), end)
-
-	return false
 }
 
-func genBr(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func genBr(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -167,11 +170,11 @@ func genBr(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend 
 		}
 	}
 
-	deadend = true
-	return
+	pushOperand(f, operand.UnreachableSentinel())
+	getCurrentBlock(f).Deadend = true
 }
 
-func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -227,11 +230,9 @@ func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 	}
 
 	pushResultRegOperand(f, target.ValueType)
-
-	return
 }
 
-func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableLen) {
 		pan.Panic(module.Errorf("branch table target count is too large: %d", targetCount))
@@ -251,6 +252,15 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 
 	if debug.Enabled {
 		debug.Printf("index: %s", index)
+	}
+
+	var value operand.O
+	if defaultTarget.ValueType != wa.Void {
+		value = popOperand(f, defaultTarget.ValueType)
+
+		if debug.Enabled {
+			debug.Printf("value: %s", value)
+		}
 	}
 
 	loop := (defaultTarget.Label.Addr != 0)
@@ -275,7 +285,12 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 			tableType = wa.I64 // need space for target-specific operand counts
 		}
 
-		if target.ValueType != defaultTarget.ValueType {
+		match := target.ValueType == defaultTarget.ValueType
+		if !match && value.UnreachableFallback {
+			// It's enough that arity matches.
+			match = (target.ValueType == wa.Void) == (defaultTarget.ValueType == wa.Void)
+		}
+		if !match {
 			pan.Panic(module.Errorf("%s targets have inconsistent value types: %s (default target) vs. %s (target #%d)", op, defaultTarget.ValueType, target.ValueType, i))
 		}
 	}
@@ -287,15 +302,6 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 		debug.Printf("common target stack depth: %d", commonStackDepth)
 		debug.Printf("table element type: %s", tableType)
 		debug.Printf("loop: %v", loop)
-	}
-
-	var value operand.O
-	if defaultTarget.ValueType != wa.Void {
-		value = popOperand(f, defaultTarget.ValueType)
-
-		if debug.Enabled {
-			debug.Printf("value: %s", value)
-		}
 	}
 
 	if value.Type != wa.Void {
@@ -360,7 +366,8 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 	}
 
 	asm.BranchIndirect(f, r)
-	deadend = true
+	pushOperand(f, operand.UnreachableSentinel())
+	getCurrentBlock(f).Deadend = true
 
 	asm.AlignData(&f.Prog, int(tableType.Size()))
 	linker.UpdateNearLoad(f.Text.Bytes(), loadInsnAddr)
@@ -383,10 +390,9 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 		table.StackDepth = defaultTarget.StackDepth
 	}
 	f.BranchTables = append(f.BranchTables, table)
-	return
 }
 
-func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
+func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	ifType := typedecode.Block(load.Varint7())
 
 	if debug.Enabled {
@@ -406,15 +412,16 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 	afterThen.AddSites(retAddrs)
 
 	frame := beginFrame(f)
-	thenDeadend, haveElse := genThenOps(f, load)
+	haveElse := genThenOps(f, load)
+	deadend := getCurrentBlock(f).Deadend
 
 	if ifType != wa.Void && !haveElse {
 		pan.Panic(errIfResultType)
 	}
 
 	if ifType != wa.Void {
-		result := popBlockResultOperand(f, ifType, thenDeadend)
-		opMoveResult(f, result, thenDeadend)
+		result := popOperand(f, ifType)
+		opMoveResult(f, result, deadend)
 
 		if debug.Enabled {
 			debug.Printf("result: %s", result)
@@ -426,9 +433,9 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 		debug.Printf("stack depth: %d", f.StackDepth)
 	}
 
-	opTruncateBlockOperands(f)
+	truncateBlockOperands(f, deadend)
 
-	if haveElse && !thenDeadend {
+	if haveElse && !deadend {
 		opBranch(f, &getBranchTarget(f, 0).Label) // end
 	}
 
@@ -436,11 +443,13 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 	linker.UpdateFarBranches(f.Text.Bytes(), &afterThen)
 
 	if haveElse {
-		elseDeadend := genOps(f, load)
+		getCurrentBlock(f).Deadend = false
+		genOps(f, load)
+		deadend := getCurrentBlock(f).Deadend
 
 		if ifType != wa.Void {
-			result := popBlockResultOperand(f, ifType, elseDeadend)
-			opMoveResult(f, result, elseDeadend)
+			result := popOperand(f, ifType)
+			opMoveResult(f, result, deadend)
 
 			if debug.Enabled {
 				debug.Printf("result: %s", result)
@@ -452,7 +461,7 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 			debug.Printf("stack depth: %d", f.StackDepth)
 		}
 
-		opTruncateBlockOperands(f)
+		truncateBlockOperands(f, deadend)
 	}
 
 	frame.end(f)
@@ -461,11 +470,9 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) bool {
 	end := popBranchTarget(f)
 	label(f, end)
 	linker.UpdateFarBranches(f.Text.Bytes(), end)
-
-	return false
 }
 
-func genLoop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+func genLoop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	opSaveOperands(f)
 
 	blockType := typedecode.Block(load.Varint7())
@@ -480,11 +487,12 @@ func genLoop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 	}
 
 	frame := beginFrame(f)
-	deadend = genOps(f, load)
+	genOps(f, load)
+	deadend := getCurrentBlock(f).Deadend
 
 	var result operand.O
 	if blockType != wa.Void {
-		result = popBlockResultOperand(f, blockType, deadend)
+		result = popOperand(f, blockType)
 
 		if debug.Enabled {
 			debug.Printf("result: %s", result)
@@ -496,15 +504,13 @@ func genLoop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 		debug.Printf("stack depth: %d", f.StackDepth)
 	}
 
-	opTruncateBlockOperands(f)
+	truncateBlockOperands(f, deadend)
 	frame.end(f)
 	if blockType != wa.Void {
 		pushOperand(f, result)
 	}
 
 	popBranchTarget(f) // no need to update branch addresses
-
-	return
 }
 
 func opBranch(f *gen.Func, l *link.L) {
