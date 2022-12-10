@@ -10,8 +10,8 @@ import (
 	"errors"
 	"math"
 
-	"gate.computer/wag/compile/event"
 	"gate.computer/wag/internal/code"
+	"gate.computer/wag/internal/event"
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/gen/atomic"
 	"gate.computer/wag/internal/gen/debug"

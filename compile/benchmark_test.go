@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"gate.computer/wag/buffer"
-	"gate.computer/wag/compile/event"
+	"gate.computer/wag/internal/event"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/test/library"
 	"gate.computer/wag/section"
@@ -102,10 +102,10 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 		for i := 0; i < b.N; i++ {
 			code := CodeConfig{
 				Text:         buffer.NewStatic(benchTextBuf[:0:len(benchTextBuf)]),
-				EventHandler: eventHandler,
+				eventHandler: eventHandler,
 			}
 
-			code.LastInitFunc, _, _ = mod.ExportFunc(entrySymbol)
+			code.lastInitFunc, _, _ = mod.ExportFunc(entrySymbol)
 			loadCodeSection(&code, loader.New(bytes.NewReader(wasm[codePos:]), 0), mod, &lib.l)
 		}
 	})

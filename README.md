@@ -16,9 +16,7 @@ Features
   including all import functions, needs to be implemented separately.  Wag has
   been developed for the [Gate](https://gate.computer/gate) runtime.
 
-- Single-pass, fast ahead-of-time compilation.  Early functions can be executed
-  while the latter functions are still being compiled, even while the source is
-  still being downloaded.
+- Single-pass, fast ahead-of-time compilation.
 
 - The generated code requires minimal runtime support; it's designed to be
   executed in an isolated environment.  Calling standard library ABIs is not

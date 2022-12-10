@@ -72,11 +72,11 @@ import (
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/buffer"
-	"gate.computer/wag/compile/event"
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/code"
 	"gate.computer/wag/internal/data"
 	"gate.computer/wag/internal/datalayout"
+	"gate.computer/wag/internal/event"
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/gen/codegen"
 	"gate.computer/wag/internal/initexpr"
@@ -667,13 +667,14 @@ func (m *Module) StartFunc() (funcIndex uint32, defined bool) {
 // specified.  To limit memory allocations when providing a custom CodeBuffer
 // implementation, the implementation must take care of it.
 type CodeConfig struct {
-	MaxTextSize  int        // Set to MaxTextSize if unspecified or too large.
-	Text         CodeBuffer // Initialized with default implementation if nil.
-	Mapper       ObjectMapper
-	EventHandler func(event.Event)
-	LastInitFunc uint32
-	Breakpoints  map[uint32]Breakpoint
+	MaxTextSize int        // Set to MaxTextSize if unspecified or too large.
+	Text        CodeBuffer // Initialized with default implementation if nil.
+	Mapper      ObjectMapper
+	Breakpoints map[uint32]Breakpoint
 	Config
+
+	eventHandler func(event.Event)
+	lastInitFunc uint32
 }
 
 // LoadCodeSection reads a WebAssembly module's code section and generates
@@ -727,7 +728,7 @@ func loadCodeSection(config *CodeConfig, load *loader.L, mod Module, lib *module
 	}
 
 	payloadOffset := load.Tell()
-	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.EventHandler, int(config.LastInitFunc)+1, config.Breakpoints)
+	codegen.GenProgram(config.Text, mapper, load, &mod.m, lib, config.eventHandler, int(config.lastInitFunc)+1, config.Breakpoints)
 	section.CheckConsumption(load, payloadOffset, payloadSize, false)
 
 	if len(config.Text.Bytes()) > config.MaxTextSize {
