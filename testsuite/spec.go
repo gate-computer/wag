@@ -425,6 +425,8 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 
 			case "unknown global":
 				switch {
+				case strings.HasPrefix(msg, "export global index out of bounds"):
+					return true
 				case strings.HasPrefix(msg, "get_global index out of bounds"):
 					return true
 				case strings.HasPrefix(msg, "import global index out of bounds in initializer expression"):

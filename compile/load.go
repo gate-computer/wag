@@ -506,7 +506,12 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L
 			}
 			m.m.ExportFuncs[fieldStr] = index
 
-		case module.ExternalKindTable, module.ExternalKindMemory, module.ExternalKindGlobal:
+		case module.ExternalKindTable, module.ExternalKindMemory:
+
+		case module.ExternalKindGlobal:
+			if index >= uint32(len(m.m.Globals)) {
+				pan.Panic(module.Errorf("export global index out of bounds: %d", index))
+			}
 
 		default:
 			pan.Panic(module.Errorf("custom export kind: %s", kind))
