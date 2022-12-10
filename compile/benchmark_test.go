@@ -6,7 +6,7 @@ package compile
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -50,7 +50,7 @@ func bench(b *testing.B, filename, entrySymbol string) {
 func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.Event)) {
 	b.Helper()
 
-	wasm, err := ioutil.ReadFile(path.Join("..", benchDir, filename) + ".wasm")
+	wasm, err := os.ReadFile(path.Join("..", benchDir, filename) + ".wasm")
 	if err != nil {
 		if os.IsNotExist(err) {
 			b.Skip(err)
@@ -70,7 +70,7 @@ func benchE(b *testing.B, filename, entrySymbol string, eventHandler func(event.
 
 	codePos := load.Tell()
 
-	codePayloadLen, err := section.CopyStandardSection(ioutil.Discard, load, section.Code, nil)
+	codePayloadLen, err := section.CopyStandardSection(io.Discard, load, section.Code, nil)
 	if err != nil {
 		b.Fatal(err)
 	}

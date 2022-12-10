@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"os"
@@ -26,7 +25,7 @@ type opcode struct {
 }
 
 func main() {
-	input, err := ioutil.ReadFile("internal/design/BinaryEncoding.md")
+	input, err := os.ReadFile("internal/design/BinaryEncoding.md")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -104,7 +103,7 @@ func generateFile(filename string, generator func(func(string, ...any), []opcode
 		log.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile(filename, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(filename, buf.Bytes(), 0o644); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -241,7 +240,7 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 
 func symbol(s string) string {
 	s = strings.Replace(s, "_", ".", -1)
-	s = strings.Title(s)
+	s = strings.Title(s) //lint:ignore SA1019 works for ASCII
 	s = strings.Replace(s, ".", "", -1)
 	s = strings.Replace(s, "/", "", -1)
 	return s

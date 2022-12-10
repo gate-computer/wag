@@ -7,7 +7,6 @@ package datalayout
 import (
 	"encoding/binary"
 	"io"
-	"io/ioutil"
 	"math"
 
 	"gate.computer/wag/internal/data"
@@ -72,7 +71,7 @@ func ReadMemory(buffer data.Buffer, load *loader.L, m *module.M) {
 func ValidateMemory(load *loader.L, m *module.M) {
 	for i := range load.Span(maxSegments, "segment") {
 		_, size := readSegmentHeader(load, m, i)
-		Must(io.CopyN(ioutil.Discard, load, int64(size)))
+		Must(io.CopyN(io.Discard, load, int64(size)))
 	}
 }
 

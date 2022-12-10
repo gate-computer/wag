@@ -1,5 +1,6 @@
 GO		?= go
 GOFMT		?= gofmt
+STATICCHECK	?= staticcheck
 WAST2JSON	?= wast2json
 WAT2WASM	?= wat2wasm
 PYTHON		?= python3
@@ -30,6 +31,8 @@ build:
 	GOARCH=arm64 $(GO) vet $(BUILDFLAGS) $(PACKAGES)
 	$(GO) vet $(BUILDFLAGS) -tags=wagamd64 $(PACKAGES)
 	$(GO) vet $(BUILDFLAGS) -tags=wagarm64 $(PACKAGES)
+
+	$(STATICCHECK) ./...
 
 .PHONY: check
 check: build

@@ -6,7 +6,7 @@ package wag
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -20,7 +20,7 @@ func FuzzCompile(f *testing.F) {
 		f.Fatal(err)
 	}
 	for _, filename := range filenames {
-		wasm, err := ioutil.ReadFile(filename)
+		wasm, err := os.ReadFile(filename)
 		if err != nil {
 			f.Fatal(err)
 		}

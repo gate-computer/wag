@@ -6,7 +6,7 @@ package wag
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"gate.computer/wag/compile"
@@ -28,7 +28,7 @@ func TestSection(t *testing.T) {
 		}
 	)
 
-	data, err := ioutil.ReadFile("testdata/hello.wasm")
+	data, err := os.ReadFile("testdata/hello.wasm")
 	if err != nil {
 		t.Fatal(err)
 	}

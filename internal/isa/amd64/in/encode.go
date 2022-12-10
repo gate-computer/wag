@@ -37,7 +37,7 @@ type output struct {
 
 func (o output) len() int           { return int(o.offset) }
 func (o output) copy(target []byte) { copy(target, o.buf[:]) }
-func (o output) debugPrint()        { debugPrintInsn(o.buf[:o.offset]) }
+func (o output) debugPrint()        { debugPrintInsn(o.buf[:o.offset]) } //lint:ignore U1000 useful
 
 func (o *output) byte(b byte) {
 	o.buf[o.offset] = b
@@ -568,6 +568,7 @@ func (op RMIscalar) RegRegImm8(text *code.Buf, t wa.Type, r, r2 reg.R, val int8)
 // D
 
 type (
+	//lint:ignore ST1003 Db doesn't mean database
 	Db  byte   // opcode byte
 	Dd  byte   // opcode byte
 	D2d uint16 // two opcode bytes

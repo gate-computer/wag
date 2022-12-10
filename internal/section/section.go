@@ -7,7 +7,6 @@ package section
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"math"
 
 	"gate.computer/wag/binary"
@@ -18,7 +17,7 @@ import (
 	. "import.name/pan/mustcheck"
 )
 
-var Unwrapped = errors.New("section unwrapped")
+var Unwrapped = errors.New("section unwrapped") //lint:ignore ST1012 special
 
 // ModuleMapper gathers information about positions of WebAssembly sections.
 type ModuleMapper interface {
@@ -58,7 +57,7 @@ func Find(
 				}
 				Check(err)
 			} else {
-				Must(io.CopyN(ioutil.Discard, load, int64(payloadSize)))
+				Must(io.CopyN(io.Discard, load, int64(payloadSize)))
 			}
 
 			CheckConsumption(load, payloadOffset, payloadSize, partial)

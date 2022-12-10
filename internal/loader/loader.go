@@ -6,7 +6,6 @@ package loader
 
 import (
 	"io"
-	"io/ioutil"
 	"unicode/utf8"
 
 	"gate.computer/wag/binary"
@@ -163,7 +162,7 @@ func (load *L) Span(max int, name string) []struct{} {
 }
 
 func (load *L) Discard(count uint32) {
-	n, err := io.CopyN(ioutil.Discard, load.r, int64(count))
+	n, err := io.CopyN(io.Discard, load.r, int64(count))
 	load.n += n
 	Check(err)
 }

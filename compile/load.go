@@ -68,7 +68,6 @@ import (
 	"bytes"
 	encodingbinary "encoding/binary"
 	"io"
-	"io/ioutil"
 	"math"
 
 	"gate.computer/wag/binary"
@@ -287,7 +286,7 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 
 func loadCustomSection(m *Module, config *ModuleConfig, payloadSize uint32, load *loader.L) bool {
 	if config.CustomSectionLoader == nil {
-		Must(io.CopyN(ioutil.Discard, load, int64(payloadSize)))
+		Must(io.CopyN(io.Discard, load, int64(payloadSize)))
 		return false
 	}
 

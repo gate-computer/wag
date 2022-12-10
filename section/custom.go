@@ -6,7 +6,6 @@ package section
 
 import (
 	"io"
-	"io/ioutil"
 
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
@@ -56,7 +55,7 @@ func (mux customLoaderMux) load(r Reader, length uint32) error {
 		return f(name, r, length)
 	}
 
-	_, err = io.CopyN(ioutil.Discard, r, int64(length))
+	_, err = io.CopyN(io.Discard, r, int64(length))
 	return err
 }
 
@@ -66,7 +65,7 @@ type CustomMapping ByteRange
 func (target *CustomMapping) Loader(sectionMap *Map) CustomContentLoader {
 	return func(_ string, r Reader, length uint32) (err error) {
 		*target = CustomMapping(sectionMap.Sections[Custom]) // The latest one.
-		_, err = io.CopyN(ioutil.Discard, r, int64(length))
+		_, err = io.CopyN(io.Discard, r, int64(length))
 		return
 	}
 }
