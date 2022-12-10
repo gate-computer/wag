@@ -21,8 +21,6 @@ export GOFMT WAST2JSON WAT2WASM
 
 .PHONY: build
 build:
-	$(GO) build $(BUILDFLAGS) -o bin/wasys ./cmd/wasys
-
 	GOARCH=amd64 $(GO) build $(BUILDFLAGS) $(PACKAGES)
 	GOARCH=arm64 $(GO) build $(BUILDFLAGS) $(PACKAGES)
 	$(GO) build $(BUILDFLAGS) -tags=wagamd64 $(PACKAGES)
@@ -39,9 +37,6 @@ check: build
 
 	cd testsuite && $(GO) vet $(BUILDFLAGS) ./...
 	cd testsuite && $(GO) test $(TESTFLAGS) ./...
-
-	bin/wasys $(WASYSFLAGS) testdata/hello.wasm
-	bin/wasys $(WASYSFLAGS) testdata/rust/test.wasm
 
 .PHONY: benchmark
 benchmark:
@@ -60,6 +55,5 @@ library:
 
 .PHONY: clean
 clean:
-	rm -f bin/wasys
 	rm -rf testsuite/testdata/include
 	rm -rf testsuite/testdata/specdata

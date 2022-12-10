@@ -1,6 +1,5 @@
 bench-new.txt
 bench-old.txt
-bin/wasys
 config.mk
 testsuite/testdata/include
 testsuite/testdata/specdata

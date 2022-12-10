@@ -14,8 +14,7 @@ Features
 
 - It is only a compiler.  A runtime environment for the compiled program,
   including all import functions, needs to be implemented separately.  Wag has
-  been developed for the [Gate](https://gate.computer/gate) runtime.  See
-  [wasys](cmd/wasys) for a simple example runtime.
+  been developed for the [Gate](https://gate.computer/gate) runtime.
 
 - Single-pass, fast ahead-of-time compilation.  Early functions can be executed
   while the latter functions are still being compiled, even while the source is
@@ -23,8 +22,7 @@ Features
 
 - The generated code requires minimal runtime support; it's designed to be
   executed in an isolated environment.  Calling standard library ABIs is not
-  directly supported, but see [wasys](cmd/wasys) for an example which exposes
-  syscalls as WebAssembly import functions.
+  directly supported.
 
 - Supports snapshot-and-restore across compiler versions and CPU architectures.
 
@@ -70,18 +68,4 @@ run[<sup>*</sup>](https://github.com/gate-computer/wag/issues/21).
 Code execution tests are implemented in a separate Go module in the testsuite
 subdirectory (to work around circular dependencies).  All tests can be run by
 checking out Git submodules and running `make check`.
-
-
-Screenshot
-----------
-
-	$ make
-	$ bin/wasys -v testdata/hello.wasm
-	import write(i32, i32, i32) i32
-	import openat(i32, i32, i32, i32) i32
-	import read(i32, i32, i32) i32
-	import close(i32) i32
-	import pipe2(i32, i32) i32
-	import _exit(i32)
-	hello, world
 
