@@ -75,6 +75,7 @@ func (m *Module) asLibrary() Library {
 		Types:       append([]wa.FuncType{}, m.m.Types...),
 		Funcs:       append([]uint32{}, m.m.Funcs...),
 		ImportFuncs: libImports,
+		Memory:      m.m.Memory,
 		ExportFuncs: m.m.ExportFuncs,
 	}}
 }
@@ -111,6 +112,7 @@ func (lib *Library) loadSections(load *loader.L) {
 		Types:       lib.l.Types,
 		Funcs:       lib.l.Funcs,
 		ImportFuncs: modImports,
+		Memory:      lib.l.Memory,
 	}}
 
 	loadCodeSection(&CodeConfig{Mapper: mapper}, load, mod, &rootLib)

@@ -20,6 +20,7 @@ import (
 var (
 	errCallParamsExceedStack = module.Error("function call parameter count exceeds stack operand count")
 	errCallParamTypeMismatch = module.Error("function call argument has wrong type")
+	errUnknownTable          = module.Error("unknown table")
 )
 
 func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
@@ -62,6 +63,10 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 }
 
 func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+	if !f.Module.Table {
+		pan.Panic(errUnknownTable)
+	}
+
 	sigIndex := load.Varuint32()
 	if sigIndex >= uint32(len(f.Module.Types)) {
 		pan.Panic(module.Errorf("%s: signature index out of bounds: %d", op, sigIndex))

@@ -426,6 +426,7 @@ func loadTableSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool
 			pan.Panic(module.Errorf("unsupported table element type: %d", elementType))
 		}
 
+		m.m.Table = true
 		m.m.TableLimit = readResizableLimits(load, maxTableLen, maxTableLen, 0, 1, "table")
 		if m.m.TableLimit.Max < 0 {
 			m.m.TableLimit.Max = maxTableLen
@@ -443,6 +444,7 @@ func loadMemorySection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) boo
 	case 0:
 
 	case 1:
+		m.m.Memory = true
 		m.m.MemoryLimit = readResizableLimits(load, maxMemoryPages, maxMemoryPages, 65536, wa.PageSize, "memory")
 
 	default:
@@ -506,7 +508,15 @@ func loadExportSection(m *Module, config *ModuleConfig, _ uint32, load *loader.L
 			}
 			m.m.ExportFuncs[fieldStr] = index
 
-		case module.ExternalKindTable, module.ExternalKindMemory:
+		case module.ExternalKindTable:
+			if index >= m.m.NumTable() {
+				pan.Panic(module.Errorf("export table index out of bounds: %d", index))
+			}
+
+		case module.ExternalKindMemory:
+			if index >= m.m.NumMemory() {
+				pan.Panic(module.Errorf("export memory index out of bounds: %d", index))
+			}
 
 		case module.ExternalKindGlobal:
 			if index >= uint32(len(m.m.Globals)) {
@@ -540,8 +550,8 @@ func loadStartSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool
 
 func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bool {
 	for i := range load.Span(maxElements, "element") {
-		if index := load.Varuint32(); index != 0 {
-			pan.Panic(module.Errorf("unsupported table index: %d", index))
+		if index := load.Varuint32(); index >= m.m.NumTable() {
+			pan.Panic(module.Errorf("unknown table: %d", index))
 		}
 
 		offset := initexpr.ReadOffset(&m.m, load)

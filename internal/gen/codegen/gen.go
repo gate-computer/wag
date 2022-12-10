@@ -21,6 +21,10 @@ import (
 // If true, known but unsupported ops will be replaced with breakpoints.
 var UnsupportedOpBreakpoint bool
 
+var (
+	errUnknownMemory = module.Error("unknown memory")
+)
+
 func genOps(f *gen.Func, load *loader.L) (deadend bool) {
 	if debug.Enabled {
 		debug.Printf("{")
@@ -180,6 +184,10 @@ func genConvert(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (dea
 }
 
 func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+	if !f.Module.Memory {
+		pan.Panic(errUnknownMemory)
+	}
+
 	index := popOperand(f, wa.I32)
 
 	opStabilizeOperands(f)
@@ -197,6 +205,10 @@ func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 }
 
 func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+	if !f.Module.Memory {
+		pan.Panic(errUnknownMemory)
+	}
+
 	opStabilizeOperands(f)
 
 	align := load.Varuint32()
@@ -224,6 +236,10 @@ func genUnary(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deade
 }
 
 func genCurrentMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+	if !f.Module.Memory {
+		pan.Panic(errUnknownMemory)
+	}
+
 	opSaveOperands(f)
 
 	if load.Byte() != 0 {
@@ -241,6 +257,10 @@ func genDrop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deaden
 }
 
 func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) (deadend bool) {
+	if !f.Module.Memory {
+		pan.Panic(errUnknownMemory)
+	}
+
 	opSaveOperands(f)
 
 	if load.Byte() != 0 {

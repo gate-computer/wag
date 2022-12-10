@@ -77,8 +77,8 @@ func ValidateMemory(load *loader.L, m *module.M) {
 }
 
 func readSegmentHeader(load *loader.L, m *module.M, segmentIndex int) (offset, size uint32) {
-	if memoryIndex := load.Varuint32(); memoryIndex != 0 {
-		pan.Panic(module.Errorf("unsupported memory index: %d", memoryIndex))
+	if index := load.Varuint32(); index >= m.NumMemory() {
+		pan.Panic(module.Errorf("unknown memory: %d", index))
 	}
 
 	offset = initexpr.ReadOffset(m, load)

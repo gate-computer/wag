@@ -120,7 +120,9 @@ type M struct {
 	Types         []wa.FuncType
 	Funcs         []uint32
 	ImportFuncs   []ImportFunc
+	Table         bool
 	TableLimit    ResizableLimits
+	Memory        bool
 	MemoryLimit   ResizableLimits
 	Globals       []Global
 	ImportGlobals []Import
@@ -128,6 +130,20 @@ type M struct {
 	StartIndex    uint32
 	StartDefined  bool
 	TableFuncs    []uint32
+}
+
+func (m *M) NumTable() uint32 {
+	if m.Table {
+		return 1
+	}
+	return 0
+}
+
+func (m *M) NumMemory() uint32 {
+	if m.Memory {
+		return 1
+	}
+	return 0
 }
 
 func (m *M) EvaluateGlobalInitializer(index int, value uint64) uint64 {
@@ -149,6 +165,7 @@ type Library struct {
 	Types       []wa.FuncType
 	Funcs       []uint32
 	ImportFuncs []ImportIndex
+	Memory      bool
 	ExportFuncs map[string]uint32
 	CodeFuncs   [][]byte
 }

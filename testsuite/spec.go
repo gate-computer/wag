@@ -395,11 +395,11 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 					return true
 				case strings.HasPrefix(msg, "offset initializer expression has invalid type"):
 					return true
+				case strings.HasPrefix(msg, "unknown table"):
+					return true
 				case strings.HasPrefix(msg, "unexpected operation in initializer expression when expecting end"):
 					return true
 				case strings.HasPrefix(msg, "unsupported operation in initializer expression"):
-					return true
-				case strings.HasPrefix(msg, "unsupported table index"):
 					return true
 				case strings.Contains(msg, "initializer expression has wrong type"):
 					return true
@@ -439,9 +439,19 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 					return true
 				}
 
+			case "unknown memory":
+				switch {
+				case strings.HasPrefix(msg, "export memory index out of bounds"):
+					return true
+				}
+
 			case "unknown table":
 				switch {
 				case strings.HasSuffix(msg, "exceeds initial table size"):
+					return true
+				case strings.HasPrefix(msg, "export table index out of bounds"):
+					return true
+				case strings.HasPrefix(msg, "unknown table"):
 					return true
 				}
 
@@ -560,15 +570,9 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 					return true
 				}
 
-			case "unknown memory":
+			case "unknown memory", "unknown memory 0", "unknown memory 1":
 				switch {
-				case strings.HasSuffix(msg, "exceeds initial memory size"):
-					return true
-				}
-
-			case "unknown memory 1":
-				switch {
-				case strings.HasPrefix(msg, "unsupported memory index"):
+				case strings.HasPrefix(msg, "unknown memory"):
 					return true
 				}
 			}
@@ -593,12 +597,6 @@ func assertInvalidSpec(t *testing.T, filename, text string) {
 	case "unknown label":
 		t.Skip("TODO")
 	case "unknown local":
-		t.Skip("TODO")
-	case "unknown memory":
-		t.Skip("TODO")
-	case "unknown memory 0":
-		t.Skip("TODO")
-	case "unknown table":
 		t.Skip("TODO")
 	}
 
@@ -908,13 +906,11 @@ func isUnsupported(err error) bool {
 		return true
 	case msg == "unsupported table element type: -17":
 		return true
-	case strings.HasPrefix(msg, "invalid section id"):
+	case strings.HasPrefix(msg, "unknown memory"):
 		return true
-	case strings.HasPrefix(msg, "unsupported memory index"):
+	case strings.HasPrefix(msg, "unknown table"):
 		return true
 	case strings.HasPrefix(msg, "unsupported mutable global in import"):
-		return true
-	case strings.HasPrefix(msg, "unsupported table index"):
 		return true
 	}
 
