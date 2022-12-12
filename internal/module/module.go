@@ -117,19 +117,20 @@ type Global struct {
 }
 
 type M struct {
-	Types         []wa.FuncType
-	Funcs         []uint32
-	ImportFuncs   []ImportFunc
-	Table         bool
-	TableLimit    ResizableLimits
-	Memory        bool
-	MemoryLimit   ResizableLimits
-	Globals       []Global
-	ImportGlobals []Import
-	ExportFuncs   map[string]uint32
-	StartIndex    uint32
-	StartDefined  bool
-	TableFuncs    []uint32
+	Types          []wa.FuncType
+	Funcs          []uint32
+	ImportFuncs    []ImportFunc
+	Table          bool
+	TableLimit     ResizableLimits
+	Memory         bool
+	MemoryLimit    ResizableLimits
+	Globals        []Global
+	ImportGlobals  []Import
+	ExportFuncs    map[string]uint32
+	StartIndex     uint32
+	StartDefined   bool
+	TableFuncs     []uint32
+	CanonicalTypes map[uint32]uint32 // Includes only remapped indexes.
 }
 
 func (m *M) NumTable() uint32 {
@@ -154,6 +155,13 @@ func (m *M) EvaluateGlobalInitializer(index int, value uint64) uint64 {
 	// If the global value has not been initialized, index will be invalid, and
 	// this will panic (on purpose).
 	return m.Globals[index].InitConst
+}
+
+func (m *M) GetCanonicalTypeIndex(index uint32) uint32 {
+	if i, found := m.CanonicalTypes[index]; found {
+		return i
+	}
+	return index
 }
 
 type ImportIndex struct {

@@ -161,7 +161,7 @@ func GenProgram(
 
 		if funcIndex < uint32(len(m.Funcs)) {
 			sigIndex = m.Funcs[funcIndex]
-			sigIndex = getCanonicalIndirectCallSig(p, sigIndex)
+			sigIndex = p.Module.GetCanonicalTypeIndex(sigIndex)
 		}
 
 		binary.LittleEndian.PutUint64(ptr[:8], (uint64(sigIndex)<<32)|uint64(funcAddr))

@@ -78,7 +78,7 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 
 func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	sigIndex := checkIndirectCallTypeIndex(f, op, load.Varuint32())
-	sigIndex = getCanonicalIndirectCallSig(&f.Prog, sigIndex)
+	sigIndex = f.Module.GetCanonicalTypeIndex(sigIndex)
 
 	if load.Byte() != 0 {
 		pan.Panic(module.Errorf("%s: reserved byte is not zero", op))
@@ -158,17 +158,4 @@ func opCall(f *gen.Func, l *link.L) {
 func opCallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) {
 	asm.CallIndirect(f, sigIndex, funcIndexReg)
 	f.MapCallAddr(f.Text.Addr)
-}
-
-func getCanonicalIndirectCallSig(p *gen.Prog, likeIndex uint32) uint32 {
-	like := p.Module.Types[likeIndex]
-
-	// TODO: optimize
-	for i, sig := range p.Module.Types {
-		if sig.Equal(like) {
-			return uint32(i)
-		}
-	}
-
-	panic(likeIndex)
 }

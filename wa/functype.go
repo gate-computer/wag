@@ -32,6 +32,41 @@ func (f FuncType) Equal(other FuncType) bool {
 	return true
 }
 
+func (f FuncType) Compare(other FuncType) int {
+	if n := compareTypes(f.Params, other.Params); n != 0 {
+		return n
+	}
+	if n := compareTypes(f.Results, other.Results); n != 0 {
+		return n
+	}
+	return 0
+}
+
+func compareTypes(a, b []Type) int {
+	commonLen := len(a)
+	if commonLen > len(b) {
+		commonLen = len(b)
+	}
+
+	for i := 0; i < commonLen; i++ {
+		if a[i] < b[i] {
+			return -1
+		}
+		if a[i] > b[i] {
+			return 1
+		}
+	}
+
+	if len(a) < len(b) {
+		return -1
+	}
+	if len(a) > len(b) {
+		return 1
+	}
+
+	return 0
+}
+
 func (f FuncType) String() (s string) {
 	s = "("
 	for i, t := range f.Params {

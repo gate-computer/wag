@@ -582,6 +582,7 @@ func loadElementSection(m *Module, _ *ModuleConfig, _ uint32, load *loader.L) bo
 		}
 	}
 
+	initTableTypes(m)
 	return false
 }
 
