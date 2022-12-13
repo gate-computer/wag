@@ -43,8 +43,8 @@ const (
 // Binary
 
 const (
-	BinaryIntALAdd      = 0
-	BinaryIntALSub      = 1
+	BinaryIntALSub      = 0
+	BinaryIntALAddsub   = 1
 	BinaryIntAL         = 2
 	BinaryIntCmp        = 3
 	BinaryIntMul        = 4
@@ -78,8 +78,8 @@ const (
 	FloatGt       = BinaryFloatCmp | condition.OrderedAndGt<<8
 	FloatLe       = BinaryFloatCmp | condition.OrderedAndLe<<8
 	FloatGe       = BinaryFloatCmp | condition.OrderedAndGe<<8
-	IntAdd        = BinaryIntALAdd | uint64(in.InsnAdd)<<8
-	IntSub        = BinaryIntALSub | uint64(in.InsnSub)<<8
+	IntAdd        = BinaryIntALAddsub | uint64(in.InsnAdd)<<8 | uint64(in.INC)<<16
+	IntSub        = BinaryIntALSub | uint64(in.InsnSub)<<8 | uint64(in.DEC)<<16
 	IntMul        = BinaryIntMul
 	IntDivS       = BinaryIntDivS
 	IntDivU       = BinaryIntDivU
