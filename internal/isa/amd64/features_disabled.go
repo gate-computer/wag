@@ -6,6 +6,8 @@
 
 package amd64
 
-func haveLZCNT() bool  { return false }
-func havePOPCNT() bool { return false }
-func haveTZCNT() bool  { return false }
+const (
+	haveLZCNT  = false
+	havePOPCNT = false
+	haveTZCNT  = false
+)

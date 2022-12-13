@@ -27,7 +27,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint64, x operand.O) operand.O {
 
 	case prop.UnaryIntClz:
 		r, _ := allocResultReg(f, x)
-		if haveLZCNT() {
+		if haveLZCNT {
 			in.LZCNT.RegReg(&f.Text, x.Type, r, r)
 		} else {
 			in.BSR.RegReg(&f.Text, x.Type, RegScratch, r)
@@ -40,7 +40,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint64, x operand.O) operand.O {
 
 	case prop.UnaryIntCtz:
 		r, _ := allocResultReg(f, x)
-		if haveTZCNT() {
+		if haveTZCNT {
 			in.TZCNT.RegReg(&f.Text, x.Type, r, r)
 		} else {
 			in.BSF.RegReg(&f.Text, x.Type, r, r)
@@ -51,7 +51,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint64, x operand.O) operand.O {
 
 	case prop.UnaryIntPopcnt:
 		var r reg.R
-		if havePOPCNT() {
+		if havePOPCNT {
 			r, _ = allocResultReg(f, x)
 			in.POPCNT.RegReg(&f.Text, x.Type, r, r)
 		} else {
