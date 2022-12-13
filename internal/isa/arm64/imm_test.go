@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build arm64 && !wagamd64 && cgo
-// +build arm64,!wagamd64,cgo
 
 package arm64
 
