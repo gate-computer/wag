@@ -156,37 +156,42 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 	out(`package codegen`)
 
 	out(`import (`)
+	out(`    "gate.computer/wag/internal/gen"`)
+	out(`    "gate.computer/wag/internal/gen/debug"`)
 	out(`    "gate.computer/wag/internal/isa/prop"`)
+	out(`    "gate.computer/wag/internal/loader"`)
 	out(`    "gate.computer/wag/wa"`)
 	out(`    "gate.computer/wag/wa/opcode"`)
 	out(`)`)
 
-	out(`var opcodeImpls = [256]opImpl{`)
-	for code, op := range opcodes {
+	out(`func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {`)
+	out(`    if debug.Enabled {`)
+	out(`        debug.Printf("%%s op", op)`)
+	out(`        debug.Depth++`)
+	out(`    }`)
+	out(``)
+	out(`    switch op {`)
+	for _, op := range opcodes {
 		switch op.name {
 		case "":
-			out(`0x%02x: {badGen, 0},`, code)
-
-		case "block", "loop", "if":
-			out(`opcode.%s: {nil, 0}, // initialized by init()`, op.sym)
+			// Unknown opcode.
 
 		case "else":
-			out(`opcode.%s: {badGen, 0},`, op.sym)
+			out(`case opcode.%s: badGen(f, load, op)`, op.sym)
 
 		case "end":
-			out(`opcode.%s: {nil, 0},`, op.sym)
+			out(`case opcode.%s: panic(op)`, op.sym)
 
 		case "i32.wrap/i64":
-			out(`opcode.%s: {genWrap, 0},`, op.sym)
+			out(`case opcode.%s: genWrap(f, load, op)`, op.sym)
 
 		default:
 			if m := regexp.MustCompile(`^(...)\.const$`).FindStringSubmatch(op.name); m != nil {
 				var (
-					impl  = "genConst" + strings.ToUpper(m[1])
-					type1 = "wa." + strings.ToUpper(m[1])
+					impl = "genConst" + strings.ToUpper(m[1])
 				)
 
-				out(`opcode.%s: {%s, opInfo(%s)},`, op.sym, impl, type1)
+				out(`case opcode.%s: %s(f, load, op)`, op.sym, impl)
 			} else if m := regexp.MustCompile(`^(...)\.(.+)/(...)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "genConvert"
@@ -199,7 +204,7 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 					props += typeCategory(m[3][:1])
 				}
 
-				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, type2, props)
+				out(`case opcode.%s: %s(f, load, op, %s, %s, uint64(%s))`, op.sym, impl, type1, type2, props)
 			} else if m := regexp.MustCompile(`^(.)(..)\.(load|store)([0-9]*)(.*)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = "gen" + symbol(m[3])
@@ -219,7 +224,7 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 
 				props := "prop." + strings.ToUpper(m[1]+m[2]) + symbol(m[3]+m[4]+m[5])
 
-				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%d) << 8) | (opInfo(%s) << 16)},`, op.sym, impl, type1, maxAlign, props)
+				out(`case opcode.%s: %s(f, load, op, %s, %d, uint64(%s))`, op.sym, impl, type1, maxAlign, props)
 			} else if m := regexp.MustCompile(`^(.)(..)\.(.+)$`).FindStringSubmatch(op.name); m != nil {
 				var (
 					impl  = operGen(m[3])
@@ -227,14 +232,21 @@ func forPackageCodegen(out func(string, ...any), opcodes []opcode) {
 					props = "prop." + typeCategory(m[1]) + symbol(m[3])
 				)
 
-				out(`opcode.%s: {%s, opInfo(%s) | (opInfo(%s) << 16)},`, op.sym, impl, type1, props)
+				out(`case opcode.%s: %s(f, load, op, %s, uint64(%s))`, op.sym, impl, type1, props)
 			} else {
 				impl := "gen" + op.sym
 
-				out(`opcode.%s: {%s, 0},`, op.sym, impl)
+				out(`case opcode.%s: %s(f, load, op)`, op.sym, impl)
 			}
 		}
 	}
+	out(`        default: badGen(f, load, op)`)
+	out(`    }`)
+	out(``)
+	out(`    if debug.Enabled {`)
+	out(`        debug.Depth--`)
+	out(`        debug.Printf("%%s operated", op)`)
+	out(`    }`)
 	out(`}`)
 }
 

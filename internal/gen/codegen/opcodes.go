@@ -3,266 +3,371 @@
 package codegen
 
 import (
+	"gate.computer/wag/internal/gen"
+	"gate.computer/wag/internal/gen/debug"
 	"gate.computer/wag/internal/isa/prop"
+	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
 )
 
-var opcodeImpls = [256]opImpl{
-	opcode.Unreachable:       {genUnreachable, 0},
-	opcode.Nop:               {genNop, 0},
-	opcode.Block:             {nil, 0}, // initialized by init()
-	opcode.Loop:              {nil, 0}, // initialized by init()
-	opcode.If:                {nil, 0}, // initialized by init()
-	opcode.Else:              {badGen, 0},
-	0x06:                     {badGen, 0},
-	0x07:                     {badGen, 0},
-	0x08:                     {badGen, 0},
-	0x09:                     {badGen, 0},
-	0x0a:                     {badGen, 0},
-	opcode.End:               {nil, 0},
-	opcode.Br:                {genBr, 0},
-	opcode.BrIf:              {genBrIf, 0},
-	opcode.BrTable:           {genBrTable, 0},
-	opcode.Return:            {genReturn, 0},
-	opcode.Call:              {genCall, 0},
-	opcode.CallIndirect:      {genCallIndirect, 0},
-	0x12:                     {badGen, 0},
-	0x13:                     {badGen, 0},
-	0x14:                     {badGen, 0},
-	0x15:                     {badGen, 0},
-	0x16:                     {badGen, 0},
-	0x17:                     {badGen, 0},
-	0x18:                     {badGen, 0},
-	0x19:                     {badGen, 0},
-	opcode.Drop:              {genDrop, 0},
-	opcode.Select:            {genSelect, 0},
-	0x1c:                     {badGen, 0},
-	0x1d:                     {badGen, 0},
-	0x1e:                     {badGen, 0},
-	0x1f:                     {badGen, 0},
-	opcode.GetLocal:          {genGetLocal, 0},
-	opcode.SetLocal:          {genSetLocal, 0},
-	opcode.TeeLocal:          {genTeeLocal, 0},
-	opcode.GetGlobal:         {genGetGlobal, 0},
-	opcode.SetGlobal:         {genSetGlobal, 0},
-	0x25:                     {badGen, 0},
-	0x26:                     {badGen, 0},
-	0x27:                     {badGen, 0},
-	opcode.I32Load:           {genLoad, opInfo(wa.I32) | (opInfo(2) << 8) | (opInfo(prop.I32Load) << 16)},
-	opcode.I64Load:           {genLoad, opInfo(wa.I64) | (opInfo(3) << 8) | (opInfo(prop.I64Load) << 16)},
-	opcode.F32Load:           {genLoad, opInfo(wa.F32) | (opInfo(2) << 8) | (opInfo(prop.F32Load) << 16)},
-	opcode.F64Load:           {genLoad, opInfo(wa.F64) | (opInfo(3) << 8) | (opInfo(prop.F64Load) << 16)},
-	opcode.I32Load8S:         {genLoad, opInfo(wa.I32) | (opInfo(0) << 8) | (opInfo(prop.I32Load8S) << 16)},
-	opcode.I32Load8U:         {genLoad, opInfo(wa.I32) | (opInfo(0) << 8) | (opInfo(prop.I32Load8U) << 16)},
-	opcode.I32Load16S:        {genLoad, opInfo(wa.I32) | (opInfo(1) << 8) | (opInfo(prop.I32Load16S) << 16)},
-	opcode.I32Load16U:        {genLoad, opInfo(wa.I32) | (opInfo(1) << 8) | (opInfo(prop.I32Load16U) << 16)},
-	opcode.I64Load8S:         {genLoad, opInfo(wa.I64) | (opInfo(0) << 8) | (opInfo(prop.I64Load8S) << 16)},
-	opcode.I64Load8U:         {genLoad, opInfo(wa.I64) | (opInfo(0) << 8) | (opInfo(prop.I64Load8U) << 16)},
-	opcode.I64Load16S:        {genLoad, opInfo(wa.I64) | (opInfo(1) << 8) | (opInfo(prop.I64Load16S) << 16)},
-	opcode.I64Load16U:        {genLoad, opInfo(wa.I64) | (opInfo(1) << 8) | (opInfo(prop.I64Load16U) << 16)},
-	opcode.I64Load32S:        {genLoad, opInfo(wa.I64) | (opInfo(2) << 8) | (opInfo(prop.I64Load32S) << 16)},
-	opcode.I64Load32U:        {genLoad, opInfo(wa.I64) | (opInfo(2) << 8) | (opInfo(prop.I64Load32U) << 16)},
-	opcode.I32Store:          {genStore, opInfo(wa.I32) | (opInfo(2) << 8) | (opInfo(prop.I32Store) << 16)},
-	opcode.I64Store:          {genStore, opInfo(wa.I64) | (opInfo(3) << 8) | (opInfo(prop.I64Store) << 16)},
-	opcode.F32Store:          {genStore, opInfo(wa.F32) | (opInfo(2) << 8) | (opInfo(prop.F32Store) << 16)},
-	opcode.F64Store:          {genStore, opInfo(wa.F64) | (opInfo(3) << 8) | (opInfo(prop.F64Store) << 16)},
-	opcode.I32Store8:         {genStore, opInfo(wa.I32) | (opInfo(0) << 8) | (opInfo(prop.I32Store8) << 16)},
-	opcode.I32Store16:        {genStore, opInfo(wa.I32) | (opInfo(1) << 8) | (opInfo(prop.I32Store16) << 16)},
-	opcode.I64Store8:         {genStore, opInfo(wa.I64) | (opInfo(0) << 8) | (opInfo(prop.I64Store8) << 16)},
-	opcode.I64Store16:        {genStore, opInfo(wa.I64) | (opInfo(1) << 8) | (opInfo(prop.I64Store16) << 16)},
-	opcode.I64Store32:        {genStore, opInfo(wa.I64) | (opInfo(2) << 8) | (opInfo(prop.I64Store32) << 16)},
-	opcode.CurrentMemory:     {genCurrentMemory, 0},
-	opcode.GrowMemory:        {genGrowMemory, 0},
-	opcode.I32Const:          {genConstI32, opInfo(wa.I32)},
-	opcode.I64Const:          {genConstI64, opInfo(wa.I64)},
-	opcode.F32Const:          {genConstF32, opInfo(wa.F32)},
-	opcode.F64Const:          {genConstF64, opInfo(wa.F64)},
-	opcode.I32Eqz:            {genUnary, opInfo(wa.I32) | (opInfo(prop.IntEqz) << 16)},
-	opcode.I32Eq:             {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntEq) << 16)},
-	opcode.I32Ne:             {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntNe) << 16)},
-	opcode.I32LtS:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntLtS) << 16)},
-	opcode.I32LtU:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntLtU) << 16)},
-	opcode.I32GtS:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntGtS) << 16)},
-	opcode.I32GtU:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntGtU) << 16)},
-	opcode.I32LeS:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntLeS) << 16)},
-	opcode.I32LeU:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntLeU) << 16)},
-	opcode.I32GeS:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntGeS) << 16)},
-	opcode.I32GeU:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntGeU) << 16)},
-	opcode.I64Eqz:            {genUnary, opInfo(wa.I64) | (opInfo(prop.IntEqz) << 16)},
-	opcode.I64Eq:             {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntEq) << 16)},
-	opcode.I64Ne:             {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntNe) << 16)},
-	opcode.I64LtS:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntLtS) << 16)},
-	opcode.I64LtU:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntLtU) << 16)},
-	opcode.I64GtS:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntGtS) << 16)},
-	opcode.I64GtU:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntGtU) << 16)},
-	opcode.I64LeS:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntLeS) << 16)},
-	opcode.I64LeU:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntLeU) << 16)},
-	opcode.I64GeS:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntGeS) << 16)},
-	opcode.I64GeU:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntGeU) << 16)},
-	opcode.F32Eq:             {genBinaryCommute, opInfo(wa.F32) | (opInfo(prop.FloatEq) << 16)},
-	opcode.F32Ne:             {genBinaryCommute, opInfo(wa.F32) | (opInfo(prop.FloatNe) << 16)},
-	opcode.F32Lt:             {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatLt) << 16)},
-	opcode.F32Gt:             {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatGt) << 16)},
-	opcode.F32Le:             {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatLe) << 16)},
-	opcode.F32Ge:             {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatGe) << 16)},
-	opcode.F64Eq:             {genBinaryCommute, opInfo(wa.F64) | (opInfo(prop.FloatEq) << 16)},
-	opcode.F64Ne:             {genBinaryCommute, opInfo(wa.F64) | (opInfo(prop.FloatNe) << 16)},
-	opcode.F64Lt:             {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatLt) << 16)},
-	opcode.F64Gt:             {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatGt) << 16)},
-	opcode.F64Le:             {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatLe) << 16)},
-	opcode.F64Ge:             {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatGe) << 16)},
-	opcode.I32Clz:            {genUnary, opInfo(wa.I32) | (opInfo(prop.IntClz) << 16)},
-	opcode.I32Ctz:            {genUnary, opInfo(wa.I32) | (opInfo(prop.IntCtz) << 16)},
-	opcode.I32Popcnt:         {genUnary, opInfo(wa.I32) | (opInfo(prop.IntPopcnt) << 16)},
-	opcode.I32Add:            {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntAdd) << 16)},
-	opcode.I32Sub:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntSub) << 16)},
-	opcode.I32Mul:            {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntMul) << 16)},
-	opcode.I32DivS:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntDivS) << 16)},
-	opcode.I32DivU:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntDivU) << 16)},
-	opcode.I32RemS:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntRemS) << 16)},
-	opcode.I32RemU:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntRemU) << 16)},
-	opcode.I32And:            {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntAnd) << 16)},
-	opcode.I32Or:             {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntOr) << 16)},
-	opcode.I32Xor:            {genBinaryCommute, opInfo(wa.I32) | (opInfo(prop.IntXor) << 16)},
-	opcode.I32Shl:            {genBinary, opInfo(wa.I32) | (opInfo(prop.IntShl) << 16)},
-	opcode.I32ShrS:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntShrS) << 16)},
-	opcode.I32ShrU:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntShrU) << 16)},
-	opcode.I32Rotl:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntRotl) << 16)},
-	opcode.I32Rotr:           {genBinary, opInfo(wa.I32) | (opInfo(prop.IntRotr) << 16)},
-	opcode.I64Clz:            {genUnary, opInfo(wa.I64) | (opInfo(prop.IntClz) << 16)},
-	opcode.I64Ctz:            {genUnary, opInfo(wa.I64) | (opInfo(prop.IntCtz) << 16)},
-	opcode.I64Popcnt:         {genUnary, opInfo(wa.I64) | (opInfo(prop.IntPopcnt) << 16)},
-	opcode.I64Add:            {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntAdd) << 16)},
-	opcode.I64Sub:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntSub) << 16)},
-	opcode.I64Mul:            {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntMul) << 16)},
-	opcode.I64DivS:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntDivS) << 16)},
-	opcode.I64DivU:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntDivU) << 16)},
-	opcode.I64RemS:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntRemS) << 16)},
-	opcode.I64RemU:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntRemU) << 16)},
-	opcode.I64And:            {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntAnd) << 16)},
-	opcode.I64Or:             {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntOr) << 16)},
-	opcode.I64Xor:            {genBinaryCommute, opInfo(wa.I64) | (opInfo(prop.IntXor) << 16)},
-	opcode.I64Shl:            {genBinary, opInfo(wa.I64) | (opInfo(prop.IntShl) << 16)},
-	opcode.I64ShrS:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntShrS) << 16)},
-	opcode.I64ShrU:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntShrU) << 16)},
-	opcode.I64Rotl:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntRotl) << 16)},
-	opcode.I64Rotr:           {genBinary, opInfo(wa.I64) | (opInfo(prop.IntRotr) << 16)},
-	opcode.F32Abs:            {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatAbs) << 16)},
-	opcode.F32Neg:            {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatNeg) << 16)},
-	opcode.F32Ceil:           {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatCeil) << 16)},
-	opcode.F32Floor:          {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatFloor) << 16)},
-	opcode.F32Trunc:          {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatTrunc) << 16)},
-	opcode.F32Nearest:        {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatNearest) << 16)},
-	opcode.F32Sqrt:           {genUnary, opInfo(wa.F32) | (opInfo(prop.FloatSqrt) << 16)},
-	opcode.F32Add:            {genBinaryCommute, opInfo(wa.F32) | (opInfo(prop.FloatAdd) << 16)},
-	opcode.F32Sub:            {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatSub) << 16)},
-	opcode.F32Mul:            {genBinaryCommute, opInfo(wa.F32) | (opInfo(prop.FloatMul) << 16)},
-	opcode.F32Div:            {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatDiv) << 16)},
-	opcode.F32Min:            {genBinaryCommute, opInfo(wa.F32) | (opInfo(prop.FloatMin) << 16)},
-	opcode.F32Max:            {genBinaryCommute, opInfo(wa.F32) | (opInfo(prop.FloatMax) << 16)},
-	opcode.F32Copysign:       {genBinary, opInfo(wa.F32) | (opInfo(prop.FloatCopysign) << 16)},
-	opcode.F64Abs:            {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatAbs) << 16)},
-	opcode.F64Neg:            {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatNeg) << 16)},
-	opcode.F64Ceil:           {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatCeil) << 16)},
-	opcode.F64Floor:          {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatFloor) << 16)},
-	opcode.F64Trunc:          {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatTrunc) << 16)},
-	opcode.F64Nearest:        {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatNearest) << 16)},
-	opcode.F64Sqrt:           {genUnary, opInfo(wa.F64) | (opInfo(prop.FloatSqrt) << 16)},
-	opcode.F64Add:            {genBinaryCommute, opInfo(wa.F64) | (opInfo(prop.FloatAdd) << 16)},
-	opcode.F64Sub:            {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatSub) << 16)},
-	opcode.F64Mul:            {genBinaryCommute, opInfo(wa.F64) | (opInfo(prop.FloatMul) << 16)},
-	opcode.F64Div:            {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatDiv) << 16)},
-	opcode.F64Min:            {genBinaryCommute, opInfo(wa.F64) | (opInfo(prop.FloatMin) << 16)},
-	opcode.F64Max:            {genBinaryCommute, opInfo(wa.F64) | (opInfo(prop.FloatMax) << 16)},
-	opcode.F64Copysign:       {genBinary, opInfo(wa.F64) | (opInfo(prop.FloatCopysign) << 16)},
-	opcode.I32WrapI64:        {genWrap, 0},
-	opcode.I32TruncSF32:      {genConvert, opInfo(wa.I32) | (opInfo(wa.F32) << 8) | (opInfo(prop.TruncS) << 16)},
-	opcode.I32TruncUF32:      {genConvert, opInfo(wa.I32) | (opInfo(wa.F32) << 8) | (opInfo(prop.TruncU) << 16)},
-	opcode.I32TruncSF64:      {genConvert, opInfo(wa.I32) | (opInfo(wa.F64) << 8) | (opInfo(prop.TruncS) << 16)},
-	opcode.I32TruncUF64:      {genConvert, opInfo(wa.I32) | (opInfo(wa.F64) << 8) | (opInfo(prop.TruncU) << 16)},
-	opcode.I64ExtendSI32:     {genConvert, opInfo(wa.I64) | (opInfo(wa.I32) << 8) | (opInfo(prop.ExtendS) << 16)},
-	opcode.I64ExtendUI32:     {genConvert, opInfo(wa.I64) | (opInfo(wa.I32) << 8) | (opInfo(prop.ExtendU) << 16)},
-	opcode.I64TruncSF32:      {genConvert, opInfo(wa.I64) | (opInfo(wa.F32) << 8) | (opInfo(prop.TruncS) << 16)},
-	opcode.I64TruncUF32:      {genConvert, opInfo(wa.I64) | (opInfo(wa.F32) << 8) | (opInfo(prop.TruncU) << 16)},
-	opcode.I64TruncSF64:      {genConvert, opInfo(wa.I64) | (opInfo(wa.F64) << 8) | (opInfo(prop.TruncS) << 16)},
-	opcode.I64TruncUF64:      {genConvert, opInfo(wa.I64) | (opInfo(wa.F64) << 8) | (opInfo(prop.TruncU) << 16)},
-	opcode.F32ConvertSI32:    {genConvert, opInfo(wa.F32) | (opInfo(wa.I32) << 8) | (opInfo(prop.ConvertS) << 16)},
-	opcode.F32ConvertUI32:    {genConvert, opInfo(wa.F32) | (opInfo(wa.I32) << 8) | (opInfo(prop.ConvertU) << 16)},
-	opcode.F32ConvertSI64:    {genConvert, opInfo(wa.F32) | (opInfo(wa.I64) << 8) | (opInfo(prop.ConvertS) << 16)},
-	opcode.F32ConvertUI64:    {genConvert, opInfo(wa.F32) | (opInfo(wa.I64) << 8) | (opInfo(prop.ConvertU) << 16)},
-	opcode.F32DemoteF64:      {genConvert, opInfo(wa.F32) | (opInfo(wa.F64) << 8) | (opInfo(prop.Demote) << 16)},
-	opcode.F64ConvertSI32:    {genConvert, opInfo(wa.F64) | (opInfo(wa.I32) << 8) | (opInfo(prop.ConvertS) << 16)},
-	opcode.F64ConvertUI32:    {genConvert, opInfo(wa.F64) | (opInfo(wa.I32) << 8) | (opInfo(prop.ConvertU) << 16)},
-	opcode.F64ConvertSI64:    {genConvert, opInfo(wa.F64) | (opInfo(wa.I64) << 8) | (opInfo(prop.ConvertS) << 16)},
-	opcode.F64ConvertUI64:    {genConvert, opInfo(wa.F64) | (opInfo(wa.I64) << 8) | (opInfo(prop.ConvertU) << 16)},
-	opcode.F64PromoteF32:     {genConvert, opInfo(wa.F64) | (opInfo(wa.F32) << 8) | (opInfo(prop.Promote) << 16)},
-	opcode.I32ReinterpretF32: {genConvert, opInfo(wa.I32) | (opInfo(wa.F32) << 8) | (opInfo(prop.ReinterpretFloat) << 16)},
-	opcode.I64ReinterpretF64: {genConvert, opInfo(wa.I64) | (opInfo(wa.F64) << 8) | (opInfo(prop.ReinterpretFloat) << 16)},
-	opcode.F32ReinterpretI32: {genConvert, opInfo(wa.F32) | (opInfo(wa.I32) << 8) | (opInfo(prop.ReinterpretInt) << 16)},
-	opcode.F64ReinterpretI64: {genConvert, opInfo(wa.F64) | (opInfo(wa.I64) << 8) | (opInfo(prop.ReinterpretInt) << 16)},
-	0xc0:                     {badGen, 0},
-	0xc1:                     {badGen, 0},
-	0xc2:                     {badGen, 0},
-	0xc3:                     {badGen, 0},
-	0xc4:                     {badGen, 0},
-	0xc5:                     {badGen, 0},
-	0xc6:                     {badGen, 0},
-	0xc7:                     {badGen, 0},
-	0xc8:                     {badGen, 0},
-	0xc9:                     {badGen, 0},
-	0xca:                     {badGen, 0},
-	0xcb:                     {badGen, 0},
-	0xcc:                     {badGen, 0},
-	0xcd:                     {badGen, 0},
-	0xce:                     {badGen, 0},
-	0xcf:                     {badGen, 0},
-	0xd0:                     {badGen, 0},
-	0xd1:                     {badGen, 0},
-	0xd2:                     {badGen, 0},
-	0xd3:                     {badGen, 0},
-	0xd4:                     {badGen, 0},
-	0xd5:                     {badGen, 0},
-	0xd6:                     {badGen, 0},
-	0xd7:                     {badGen, 0},
-	0xd8:                     {badGen, 0},
-	0xd9:                     {badGen, 0},
-	0xda:                     {badGen, 0},
-	0xdb:                     {badGen, 0},
-	0xdc:                     {badGen, 0},
-	0xdd:                     {badGen, 0},
-	0xde:                     {badGen, 0},
-	0xdf:                     {badGen, 0},
-	0xe0:                     {badGen, 0},
-	0xe1:                     {badGen, 0},
-	0xe2:                     {badGen, 0},
-	0xe3:                     {badGen, 0},
-	0xe4:                     {badGen, 0},
-	0xe5:                     {badGen, 0},
-	0xe6:                     {badGen, 0},
-	0xe7:                     {badGen, 0},
-	0xe8:                     {badGen, 0},
-	0xe9:                     {badGen, 0},
-	0xea:                     {badGen, 0},
-	0xeb:                     {badGen, 0},
-	0xec:                     {badGen, 0},
-	0xed:                     {badGen, 0},
-	0xee:                     {badGen, 0},
-	0xef:                     {badGen, 0},
-	0xf0:                     {badGen, 0},
-	0xf1:                     {badGen, 0},
-	0xf2:                     {badGen, 0},
-	0xf3:                     {badGen, 0},
-	0xf4:                     {badGen, 0},
-	0xf5:                     {badGen, 0},
-	0xf6:                     {badGen, 0},
-	0xf7:                     {badGen, 0},
-	0xf8:                     {badGen, 0},
-	0xf9:                     {badGen, 0},
-	0xfa:                     {badGen, 0},
-	0xfb:                     {badGen, 0},
-	0xfc:                     {badGen, 0},
-	0xfd:                     {badGen, 0},
-	0xfe:                     {badGen, 0},
-	0xff:                     {badGen, 0},
+func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
+	if debug.Enabled {
+		debug.Printf("%s op", op)
+		debug.Depth++
+	}
+
+	switch op {
+	case opcode.Unreachable:
+		genUnreachable(f, load, op)
+	case opcode.Nop:
+		genNop(f, load, op)
+	case opcode.Block:
+		genBlock(f, load, op)
+	case opcode.Loop:
+		genLoop(f, load, op)
+	case opcode.If:
+		genIf(f, load, op)
+	case opcode.Else:
+		badGen(f, load, op)
+	case opcode.End:
+		panic(op)
+	case opcode.Br:
+		genBr(f, load, op)
+	case opcode.BrIf:
+		genBrIf(f, load, op)
+	case opcode.BrTable:
+		genBrTable(f, load, op)
+	case opcode.Return:
+		genReturn(f, load, op)
+	case opcode.Call:
+		genCall(f, load, op)
+	case opcode.CallIndirect:
+		genCallIndirect(f, load, op)
+	case opcode.Drop:
+		genDrop(f, load, op)
+	case opcode.Select:
+		genSelect(f, load, op)
+	case opcode.GetLocal:
+		genGetLocal(f, load, op)
+	case opcode.SetLocal:
+		genSetLocal(f, load, op)
+	case opcode.TeeLocal:
+		genTeeLocal(f, load, op)
+	case opcode.GetGlobal:
+		genGetGlobal(f, load, op)
+	case opcode.SetGlobal:
+		genSetGlobal(f, load, op)
+	case opcode.I32Load:
+		genLoad(f, load, op, wa.I32, 2, uint64(prop.I32Load))
+	case opcode.I64Load:
+		genLoad(f, load, op, wa.I64, 3, uint64(prop.I64Load))
+	case opcode.F32Load:
+		genLoad(f, load, op, wa.F32, 2, uint64(prop.F32Load))
+	case opcode.F64Load:
+		genLoad(f, load, op, wa.F64, 3, uint64(prop.F64Load))
+	case opcode.I32Load8S:
+		genLoad(f, load, op, wa.I32, 0, uint64(prop.I32Load8S))
+	case opcode.I32Load8U:
+		genLoad(f, load, op, wa.I32, 0, uint64(prop.I32Load8U))
+	case opcode.I32Load16S:
+		genLoad(f, load, op, wa.I32, 1, uint64(prop.I32Load16S))
+	case opcode.I32Load16U:
+		genLoad(f, load, op, wa.I32, 1, uint64(prop.I32Load16U))
+	case opcode.I64Load8S:
+		genLoad(f, load, op, wa.I64, 0, uint64(prop.I64Load8S))
+	case opcode.I64Load8U:
+		genLoad(f, load, op, wa.I64, 0, uint64(prop.I64Load8U))
+	case opcode.I64Load16S:
+		genLoad(f, load, op, wa.I64, 1, uint64(prop.I64Load16S))
+	case opcode.I64Load16U:
+		genLoad(f, load, op, wa.I64, 1, uint64(prop.I64Load16U))
+	case opcode.I64Load32S:
+		genLoad(f, load, op, wa.I64, 2, uint64(prop.I64Load32S))
+	case opcode.I64Load32U:
+		genLoad(f, load, op, wa.I64, 2, uint64(prop.I64Load32U))
+	case opcode.I32Store:
+		genStore(f, load, op, wa.I32, 2, uint64(prop.I32Store))
+	case opcode.I64Store:
+		genStore(f, load, op, wa.I64, 3, uint64(prop.I64Store))
+	case opcode.F32Store:
+		genStore(f, load, op, wa.F32, 2, uint64(prop.F32Store))
+	case opcode.F64Store:
+		genStore(f, load, op, wa.F64, 3, uint64(prop.F64Store))
+	case opcode.I32Store8:
+		genStore(f, load, op, wa.I32, 0, uint64(prop.I32Store8))
+	case opcode.I32Store16:
+		genStore(f, load, op, wa.I32, 1, uint64(prop.I32Store16))
+	case opcode.I64Store8:
+		genStore(f, load, op, wa.I64, 0, uint64(prop.I64Store8))
+	case opcode.I64Store16:
+		genStore(f, load, op, wa.I64, 1, uint64(prop.I64Store16))
+	case opcode.I64Store32:
+		genStore(f, load, op, wa.I64, 2, uint64(prop.I64Store32))
+	case opcode.CurrentMemory:
+		genCurrentMemory(f, load, op)
+	case opcode.GrowMemory:
+		genGrowMemory(f, load, op)
+	case opcode.I32Const:
+		genConstI32(f, load, op)
+	case opcode.I64Const:
+		genConstI64(f, load, op)
+	case opcode.F32Const:
+		genConstF32(f, load, op)
+	case opcode.F64Const:
+		genConstF64(f, load, op)
+	case opcode.I32Eqz:
+		genUnary(f, load, op, wa.I32, uint64(prop.IntEqz))
+	case opcode.I32Eq:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntEq))
+	case opcode.I32Ne:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntNe))
+	case opcode.I32LtS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntLtS))
+	case opcode.I32LtU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntLtU))
+	case opcode.I32GtS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntGtS))
+	case opcode.I32GtU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntGtU))
+	case opcode.I32LeS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntLeS))
+	case opcode.I32LeU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntLeU))
+	case opcode.I32GeS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntGeS))
+	case opcode.I32GeU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntGeU))
+	case opcode.I64Eqz:
+		genUnary(f, load, op, wa.I64, uint64(prop.IntEqz))
+	case opcode.I64Eq:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntEq))
+	case opcode.I64Ne:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntNe))
+	case opcode.I64LtS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntLtS))
+	case opcode.I64LtU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntLtU))
+	case opcode.I64GtS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntGtS))
+	case opcode.I64GtU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntGtU))
+	case opcode.I64LeS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntLeS))
+	case opcode.I64LeU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntLeU))
+	case opcode.I64GeS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntGeS))
+	case opcode.I64GeU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntGeU))
+	case opcode.F32Eq:
+		genBinaryCommute(f, load, op, wa.F32, uint64(prop.FloatEq))
+	case opcode.F32Ne:
+		genBinaryCommute(f, load, op, wa.F32, uint64(prop.FloatNe))
+	case opcode.F32Lt:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatLt))
+	case opcode.F32Gt:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatGt))
+	case opcode.F32Le:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatLe))
+	case opcode.F32Ge:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatGe))
+	case opcode.F64Eq:
+		genBinaryCommute(f, load, op, wa.F64, uint64(prop.FloatEq))
+	case opcode.F64Ne:
+		genBinaryCommute(f, load, op, wa.F64, uint64(prop.FloatNe))
+	case opcode.F64Lt:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatLt))
+	case opcode.F64Gt:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatGt))
+	case opcode.F64Le:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatLe))
+	case opcode.F64Ge:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatGe))
+	case opcode.I32Clz:
+		genUnary(f, load, op, wa.I32, uint64(prop.IntClz))
+	case opcode.I32Ctz:
+		genUnary(f, load, op, wa.I32, uint64(prop.IntCtz))
+	case opcode.I32Popcnt:
+		genUnary(f, load, op, wa.I32, uint64(prop.IntPopcnt))
+	case opcode.I32Add:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntAdd))
+	case opcode.I32Sub:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntSub))
+	case opcode.I32Mul:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntMul))
+	case opcode.I32DivS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntDivS))
+	case opcode.I32DivU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntDivU))
+	case opcode.I32RemS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntRemS))
+	case opcode.I32RemU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntRemU))
+	case opcode.I32And:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntAnd))
+	case opcode.I32Or:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntOr))
+	case opcode.I32Xor:
+		genBinaryCommute(f, load, op, wa.I32, uint64(prop.IntXor))
+	case opcode.I32Shl:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntShl))
+	case opcode.I32ShrS:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntShrS))
+	case opcode.I32ShrU:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntShrU))
+	case opcode.I32Rotl:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntRotl))
+	case opcode.I32Rotr:
+		genBinary(f, load, op, wa.I32, uint64(prop.IntRotr))
+	case opcode.I64Clz:
+		genUnary(f, load, op, wa.I64, uint64(prop.IntClz))
+	case opcode.I64Ctz:
+		genUnary(f, load, op, wa.I64, uint64(prop.IntCtz))
+	case opcode.I64Popcnt:
+		genUnary(f, load, op, wa.I64, uint64(prop.IntPopcnt))
+	case opcode.I64Add:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntAdd))
+	case opcode.I64Sub:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntSub))
+	case opcode.I64Mul:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntMul))
+	case opcode.I64DivS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntDivS))
+	case opcode.I64DivU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntDivU))
+	case opcode.I64RemS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntRemS))
+	case opcode.I64RemU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntRemU))
+	case opcode.I64And:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntAnd))
+	case opcode.I64Or:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntOr))
+	case opcode.I64Xor:
+		genBinaryCommute(f, load, op, wa.I64, uint64(prop.IntXor))
+	case opcode.I64Shl:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntShl))
+	case opcode.I64ShrS:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntShrS))
+	case opcode.I64ShrU:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntShrU))
+	case opcode.I64Rotl:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntRotl))
+	case opcode.I64Rotr:
+		genBinary(f, load, op, wa.I64, uint64(prop.IntRotr))
+	case opcode.F32Abs:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatAbs))
+	case opcode.F32Neg:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatNeg))
+	case opcode.F32Ceil:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatCeil))
+	case opcode.F32Floor:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatFloor))
+	case opcode.F32Trunc:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatTrunc))
+	case opcode.F32Nearest:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatNearest))
+	case opcode.F32Sqrt:
+		genUnary(f, load, op, wa.F32, uint64(prop.FloatSqrt))
+	case opcode.F32Add:
+		genBinaryCommute(f, load, op, wa.F32, uint64(prop.FloatAdd))
+	case opcode.F32Sub:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatSub))
+	case opcode.F32Mul:
+		genBinaryCommute(f, load, op, wa.F32, uint64(prop.FloatMul))
+	case opcode.F32Div:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatDiv))
+	case opcode.F32Min:
+		genBinaryCommute(f, load, op, wa.F32, uint64(prop.FloatMin))
+	case opcode.F32Max:
+		genBinaryCommute(f, load, op, wa.F32, uint64(prop.FloatMax))
+	case opcode.F32Copysign:
+		genBinary(f, load, op, wa.F32, uint64(prop.FloatCopysign))
+	case opcode.F64Abs:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatAbs))
+	case opcode.F64Neg:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatNeg))
+	case opcode.F64Ceil:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatCeil))
+	case opcode.F64Floor:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatFloor))
+	case opcode.F64Trunc:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatTrunc))
+	case opcode.F64Nearest:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatNearest))
+	case opcode.F64Sqrt:
+		genUnary(f, load, op, wa.F64, uint64(prop.FloatSqrt))
+	case opcode.F64Add:
+		genBinaryCommute(f, load, op, wa.F64, uint64(prop.FloatAdd))
+	case opcode.F64Sub:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatSub))
+	case opcode.F64Mul:
+		genBinaryCommute(f, load, op, wa.F64, uint64(prop.FloatMul))
+	case opcode.F64Div:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatDiv))
+	case opcode.F64Min:
+		genBinaryCommute(f, load, op, wa.F64, uint64(prop.FloatMin))
+	case opcode.F64Max:
+		genBinaryCommute(f, load, op, wa.F64, uint64(prop.FloatMax))
+	case opcode.F64Copysign:
+		genBinary(f, load, op, wa.F64, uint64(prop.FloatCopysign))
+	case opcode.I32WrapI64:
+		genWrap(f, load, op)
+	case opcode.I32TruncSF32:
+		genConvert(f, load, op, wa.I32, wa.F32, uint64(prop.TruncS))
+	case opcode.I32TruncUF32:
+		genConvert(f, load, op, wa.I32, wa.F32, uint64(prop.TruncU))
+	case opcode.I32TruncSF64:
+		genConvert(f, load, op, wa.I32, wa.F64, uint64(prop.TruncS))
+	case opcode.I32TruncUF64:
+		genConvert(f, load, op, wa.I32, wa.F64, uint64(prop.TruncU))
+	case opcode.I64ExtendSI32:
+		genConvert(f, load, op, wa.I64, wa.I32, uint64(prop.ExtendS))
+	case opcode.I64ExtendUI32:
+		genConvert(f, load, op, wa.I64, wa.I32, uint64(prop.ExtendU))
+	case opcode.I64TruncSF32:
+		genConvert(f, load, op, wa.I64, wa.F32, uint64(prop.TruncS))
+	case opcode.I64TruncUF32:
+		genConvert(f, load, op, wa.I64, wa.F32, uint64(prop.TruncU))
+	case opcode.I64TruncSF64:
+		genConvert(f, load, op, wa.I64, wa.F64, uint64(prop.TruncS))
+	case opcode.I64TruncUF64:
+		genConvert(f, load, op, wa.I64, wa.F64, uint64(prop.TruncU))
+	case opcode.F32ConvertSI32:
+		genConvert(f, load, op, wa.F32, wa.I32, uint64(prop.ConvertS))
+	case opcode.F32ConvertUI32:
+		genConvert(f, load, op, wa.F32, wa.I32, uint64(prop.ConvertU))
+	case opcode.F32ConvertSI64:
+		genConvert(f, load, op, wa.F32, wa.I64, uint64(prop.ConvertS))
+	case opcode.F32ConvertUI64:
+		genConvert(f, load, op, wa.F32, wa.I64, uint64(prop.ConvertU))
+	case opcode.F32DemoteF64:
+		genConvert(f, load, op, wa.F32, wa.F64, uint64(prop.Demote))
+	case opcode.F64ConvertSI32:
+		genConvert(f, load, op, wa.F64, wa.I32, uint64(prop.ConvertS))
+	case opcode.F64ConvertUI32:
+		genConvert(f, load, op, wa.F64, wa.I32, uint64(prop.ConvertU))
+	case opcode.F64ConvertSI64:
+		genConvert(f, load, op, wa.F64, wa.I64, uint64(prop.ConvertS))
+	case opcode.F64ConvertUI64:
+		genConvert(f, load, op, wa.F64, wa.I64, uint64(prop.ConvertU))
+	case opcode.F64PromoteF32:
+		genConvert(f, load, op, wa.F64, wa.F32, uint64(prop.Promote))
+	case opcode.I32ReinterpretF32:
+		genConvert(f, load, op, wa.I32, wa.F32, uint64(prop.ReinterpretFloat))
+	case opcode.I64ReinterpretF64:
+		genConvert(f, load, op, wa.I64, wa.F64, uint64(prop.ReinterpretFloat))
+	case opcode.F32ReinterpretI32:
+		genConvert(f, load, op, wa.F32, wa.I32, uint64(prop.ReinterpretInt))
+	case opcode.F64ReinterpretI64:
+		genConvert(f, load, op, wa.F64, wa.I64, uint64(prop.ReinterpretInt))
+	default:
+		badGen(f, load, op)
+	}
+
+	if debug.Enabled {
+		debug.Depth--
+		debug.Printf("%s operated", op)
+	}
 }

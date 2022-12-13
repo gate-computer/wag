@@ -87,66 +87,50 @@ loop:
 	return
 }
 
-func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
-	if debug.Enabled {
-		debug.Printf("%s op", op)
-		debug.Depth++
-	}
-
-	impl := opcodeImpls[op]
-	impl.gen(f, load, op, impl.info)
-
-	if debug.Enabled {
-		debug.Depth--
-		debug.Printf("%s operated", op)
-	}
-
-}
-
-func genBinary(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genBinary(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, props uint64) {
 	opStabilizeOperands(f)
 
-	right := popAnyOperand(f, info.primaryType())
+	right := popAnyOperand(f, t)
 	left := popAnyOperand(f, right.Type)
 
-	opBinary(f, op, left, right, info)
+	opBinary(f, op, left, right, t, props)
 }
 
-func genBinaryCommute(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genBinaryCommute(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, props uint64) {
 	opStabilizeOperands(f)
 
-	right := popAnyOperand(f, info.primaryType())
+	right := popAnyOperand(f, t)
 	left := popAnyOperand(f, right.Type)
 
 	if left.Storage == storage.Imm {
 		left, right = right, left
 	}
 
-	opBinary(f, op, left, right, info)
+	opBinary(f, op, left, right, t, props)
 }
 
-func opBinary(f *gen.Func, op opcode.Opcode, left, right operand.O, info opInfo) {
-	if t := info.primaryType(); left.Type != t || right.Type != t {
+func opBinary(f *gen.Func, op opcode.Opcode, left, right operand.O, t wa.Type, props uint64) {
+	if left.Type != t || right.Type != t {
 		pan.Panic(module.Errorf("%s operands have wrong types: %s, %s", op, left.Type, right.Type))
 	}
 
-	result := asm.Binary(f, info.props(), left, right)
+	result := asm.Binary(f, props, left, right)
 	pushOperand(f, result)
 }
 
-func genConstI32(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genConstI32(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opConst(f, wa.I32, uint64(int64(load.Varint32())))
 }
 
-func genConstI64(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genConstI64(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opConst(f, wa.I64, uint64(load.Varint64()))
 }
 
-func genConstF32(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genConstF32(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opConst(f, wa.F32, uint64(load.Uint32()))
 }
 
-func genConstF64(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genConstF64(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opConst(f, wa.F64, load.Uint64())
 }
 
@@ -154,16 +138,16 @@ func opConst(f *gen.Func, t wa.Type, value uint64) {
 	pushOperand(f, operand.Imm(t, value))
 }
 
-func genConvert(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
-	x := popOperand(f, info.secondaryType())
+func genConvert(f *gen.Func, load *loader.L, op opcode.Opcode, t1, t2 wa.Type, props uint64) {
+	x := popOperand(f, t2)
 
 	opStabilizeOperands(f)
 
-	result := asm.Convert(f, info.props(), info.primaryType(), x)
+	result := asm.Convert(f, props, t1, x)
 	pushOperand(f, result)
 }
 
-func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, maxAlign uint32, props uint64) {
 	if !f.Module.Memory {
 		pan.Panic(errUnknownMemory)
 	}
@@ -175,15 +159,15 @@ func genLoad(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	align := load.Varuint32()
 	offset := load.Varuint32()
 
-	if align > info.maxAlign() {
+	if align > maxAlign {
 		pan.Panic(module.Error("alignment must not be larger than natural"))
 	}
 
-	result := asm.Load(f, info.props(), index, info.primaryType(), align, offset)
+	result := asm.Load(f, props, index, t, align, offset)
 	pushOperand(f, result)
 }
 
-func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, maxAlign uint32, props uint64) {
 	if !f.Module.Memory {
 		pan.Panic(errUnknownMemory)
 	}
@@ -193,26 +177,26 @@ func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	align := load.Varuint32()
 	offset := load.Varuint32()
 
-	if align > info.maxAlign() {
+	if align > maxAlign {
 		pan.Panic(module.Error("alignment must not be larger than natural"))
 	}
 
-	value := popOperand(f, info.primaryType())
+	value := popOperand(f, t)
 	index := popOperand(f, wa.I32)
 
-	asm.Store(f, info.props(), index, value, align, offset)
+	asm.Store(f, props, index, value, align, offset)
 }
 
-func genUnary(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
-	x := popOperand(f, info.primaryType())
+func genUnary(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, props uint64) {
+	x := popOperand(f, t)
 
 	opStabilizeOperands(f)
 
-	result := asm.Unary(f, info.props(), x)
+	result := asm.Unary(f, props, x)
 	pushOperand(f, result)
 }
 
-func genCurrentMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genCurrentMemory(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	if !f.Module.Memory {
 		pan.Panic(errUnknownMemory)
 	}
@@ -227,11 +211,11 @@ func genCurrentMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo
 	pushResultRegOperand(f, wa.I32)
 }
 
-func genDrop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genDrop(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opDropOperand(f)
 }
 
-func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	if !f.Module.Memory {
 		pan.Panic(errUnknownMemory)
 	}
@@ -257,10 +241,10 @@ func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	pushResultRegOperand(f, wa.I32)
 }
 
-func genNop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genNop(f *gen.Func, load *loader.L, op opcode.Opcode) {
 }
 
-func genReturn(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genReturn(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	if f.ResultType != wa.Void {
 		result := popOperand(f, f.ResultType)
 		asm.Move(f, reg.Result, result)
@@ -271,7 +255,7 @@ func genReturn(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	getCurrentBlock(f).Deadend = true
 }
 
-func genSelect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genSelect(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	cond := popOperand(f, wa.I32)
 
 	opStabilizeOperands(f)
@@ -286,13 +270,13 @@ func genSelect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	pushOperand(f, result)
 }
 
-func genUnreachable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genUnreachable(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	asm.Trap(f, trap.Unreachable)
 	pushOperand(f, operand.UnreachableSentinel())
 	getCurrentBlock(f).Deadend = true
 }
 
-func genWrap(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genWrap(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	x := popOperand(f, wa.I64)
 
 	switch x.Storage {
@@ -306,7 +290,7 @@ func genWrap(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	pushOperand(f, x)
 }
 
-func badGen(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func badGen(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	badOp(load, op)
 
 	if debug.Enabled {

@@ -26,7 +26,7 @@ func loadGlobalIndex(f *gen.Func, load *loader.L, op opcode.Opcode) uint32 {
 	return index
 }
 
-func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	globalIndex := loadGlobalIndex(f, load, op)
 
 	global := f.Module.Globals[globalIndex]
@@ -35,7 +35,7 @@ func genGetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	pushOperand(f, operand.Reg(global.Type, r))
 }
 
-func genSetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genSetGlobal(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	globalIndex := loadGlobalIndex(f, load, op)
 
 	global := f.Module.Globals[globalIndex]

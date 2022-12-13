@@ -18,7 +18,7 @@ import (
 	"gate.computer/wag/wa"
 )
 
-func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
+func (MacroAssembler) Load(f *gen.Func, props uint64, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
 	var o outbuf
 
 	r := f.Regs.AllocResult(resultType)
@@ -28,7 +28,7 @@ func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultTyp
 	return operand.Reg(resultType, r)
 }
 
-func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
+func (MacroAssembler) Store(f *gen.Func, props uint64, index, x operand.O, align, offset uint32) {
 	var o outbuf
 
 	r := RegZero

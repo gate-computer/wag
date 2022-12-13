@@ -14,45 +14,51 @@ import (
 // Unary
 
 const (
-	IntEqz       = 0
-	IntClz       = 1
-	IntCtz       = 2
-	IntPopcnt    = 3
-	FloatAbs     = 4
-	FloatNeg     = 5
-	FloatRoundOp = 6
-	FloatSqrt    = 7
+	UnaryIntEqz     = 0
+	UnaryIntClz     = 1
+	UnaryIntCtz     = 2
+	UnaryIntPopcnt  = 3
+	UnaryFloatAbs   = 4
+	UnaryFloatNeg   = 5
+	UnaryFloatRound = 6
+	UnaryFloatSqrt  = 7
 
-	FloatCeil    = FloatRoundOp | in.RoundModeCeil<<8
-	FloatFloor   = FloatRoundOp | in.RoundModeFloor<<8
-	FloatTrunc   = FloatRoundOp | in.RoundModeTrunc<<8
-	FloatNearest = FloatRoundOp | in.RoundModeNearest<<8
+	MaskUnary = 0x7
+)
+
+const (
+	IntEqz       = UnaryIntEqz
+	IntClz       = UnaryIntClz
+	IntCtz       = UnaryIntCtz
+	IntPopcnt    = UnaryIntPopcnt
+	FloatAbs     = UnaryFloatAbs
+	FloatNeg     = UnaryFloatNeg
+	FloatCeil    = UnaryFloatRound | in.RoundModeCeil<<8
+	FloatFloor   = UnaryFloatRound | in.RoundModeFloor<<8
+	FloatTrunc   = UnaryFloatRound | in.RoundModeTrunc<<8
+	FloatNearest = UnaryFloatRound | in.RoundModeNearest<<8
+	FloatSqrt    = UnaryFloatSqrt
 )
 
 // Binary
 
 const (
-	BinaryIntALAdd = iota
-	BinaryIntALSub
-	BinaryIntAL
-	BinaryIntCmp
-	BinaryIntMul
-	BinaryIntDivU
-	BinaryIntDivS
-	BinaryIntRemU
-	BinaryIntRemS
-	BinaryIntShift
-	BinaryFloatCommon
-	BinaryFloatMinmax
-	BinaryFloatCmp
-	BinaryFloatCopysign
+	BinaryIntALAdd      = 0
+	BinaryIntALSub      = 1
+	BinaryIntAL         = 2
+	BinaryIntCmp        = 3
+	BinaryIntMul        = 4
+	BinaryIntDivU       = 5
+	BinaryIntDivS       = 6
+	BinaryIntRemU       = 7
+	BinaryIntRemS       = 8
+	BinaryIntShift      = 9
+	BinaryFloatCommon   = 10
+	BinaryFloatMinmax   = 11
+	BinaryFloatCmp      = 12
+	BinaryFloatCopysign = 13
 
-	BinaryMask = 15
-)
-
-const (
-	IndexMinmaxMin = iota
-	IndexMinmaxMax
+	MaskBinary = 0xf
 )
 
 const (
@@ -72,27 +78,27 @@ const (
 	FloatGt       = BinaryFloatCmp | condition.OrderedAndGt<<8
 	FloatLe       = BinaryFloatCmp | condition.OrderedAndLe<<8
 	FloatGe       = BinaryFloatCmp | condition.OrderedAndGe<<8
-	IntAdd        = BinaryIntALAdd | uint(in.InsnAdd)<<8
-	IntSub        = BinaryIntALSub | uint(in.InsnSub)<<8
+	IntAdd        = BinaryIntALAdd | uint64(in.InsnAdd)<<8
+	IntSub        = BinaryIntALSub | uint64(in.InsnSub)<<8
 	IntMul        = BinaryIntMul
 	IntDivS       = BinaryIntDivS
 	IntDivU       = BinaryIntDivU
 	IntRemS       = BinaryIntRemS
 	IntRemU       = BinaryIntRemU
-	IntAnd        = BinaryIntAL | uint(in.InsnAnd)<<8
-	IntOr         = BinaryIntAL | uint(in.InsnOr)<<8
-	IntXor        = BinaryIntAL | uint(in.InsnXor)<<8
-	IntShl        = BinaryIntShift | uint(in.InsnShl)<<8
-	IntShrS       = BinaryIntShift | uint(in.InsnShrS)<<8
-	IntShrU       = BinaryIntShift | uint(in.InsnShrU)<<8
-	IntRotl       = BinaryIntShift | uint(in.InsnRotl)<<8
-	IntRotr       = BinaryIntShift | uint(in.InsnRotr)<<8
-	FloatAdd      = BinaryFloatCommon | uint(in.ADDSx)<<8
-	FloatSub      = BinaryFloatCommon | uint(in.SUBSx)<<8
-	FloatMul      = BinaryFloatCommon | uint(in.MULSx)<<8
-	FloatDiv      = BinaryFloatCommon | uint(in.DIVSx)<<8
-	FloatMin      = BinaryFloatMinmax | IndexMinmaxMin<<8
-	FloatMax      = BinaryFloatMinmax | IndexMinmaxMax<<8
+	IntAnd        = BinaryIntAL | uint64(in.InsnAnd)<<8
+	IntOr         = BinaryIntAL | uint64(in.InsnOr)<<8
+	IntXor        = BinaryIntAL | uint64(in.InsnXor)<<8
+	IntShl        = BinaryIntShift | uint64(in.InsnShl)<<8
+	IntShrS       = BinaryIntShift | uint64(in.InsnShrS)<<8
+	IntShrU       = BinaryIntShift | uint64(in.InsnShrU)<<8
+	IntRotl       = BinaryIntShift | uint64(in.InsnRotl)<<8
+	IntRotr       = BinaryIntShift | uint64(in.InsnRotr)<<8
+	FloatAdd      = BinaryFloatCommon | uint64(in.ADDSx)<<8
+	FloatSub      = BinaryFloatCommon | uint64(in.SUBSx)<<8
+	FloatMul      = BinaryFloatCommon | uint64(in.MULSx)<<8
+	FloatDiv      = BinaryFloatCommon | uint64(in.DIVSx)<<8
+	FloatMin      = BinaryFloatMinmax | uint64(in.MINSx)<<8
+	FloatMax      = BinaryFloatMinmax | uint64(in.MAXSx)<<8
 	FloatCopysign = BinaryFloatCopysign
 )
 
@@ -129,11 +135,11 @@ const (
 // Store
 
 const (
-	IndexIntStore = iota
-	IndexIntStore8
-	IndexIntStore16
-	IndexIntStore32
-	IndexFloatStore
+	IndexIntStore   = 0
+	IndexIntStore8  = 1
+	IndexIntStore16 = 2
+	IndexIntStore32 = 3
+	IndexFloatStore = 4
 )
 
 const (
@@ -151,17 +157,27 @@ const (
 // Conversion
 
 const (
-	ExtendS = iota
-	ExtendU
-	Mote
-	TruncS
-	TruncU
-	ConvertS
-	ConvertU
-	Reinterpret
+	ConversionExtendS     = 0
+	ConversionExtendU     = 1
+	ConversionMote        = 2 // Demote or promote.
+	ConversionTruncS      = 3
+	ConversionTruncU      = 4
+	ConversionConvertS    = 5
+	ConversionConvertU    = 6
+	ConversionReinterpret = 7
 
-	Demote           = Mote
-	Promote          = Mote
-	ReinterpretInt   = Reinterpret
-	ReinterpretFloat = Reinterpret
+	MaskConversion = 0x7
+)
+
+const (
+	ExtendS          = ConversionExtendS
+	ExtendU          = ConversionExtendU
+	Demote           = ConversionMote
+	Promote          = ConversionMote
+	TruncS           = ConversionTruncS
+	TruncU           = ConversionTruncU
+	ConvertS         = ConversionConvertS
+	ConvertU         = ConversionConvertU
+	ReinterpretInt   = ConversionReinterpret
+	ReinterpretFloat = ConversionReinterpret
 )

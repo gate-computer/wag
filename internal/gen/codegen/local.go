@@ -29,20 +29,20 @@ func loadLocalIndexType(f *gen.Func, load *loader.L, op opcode.Opcode) (int, wa.
 	return int(index), t
 }
 
-func genGetLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genGetLocal(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	index, t := loadLocalIndexType(f, load, op)
 	r, _ := opAllocReg(f, t)
 	asm.LoadStack(&f.Prog, t, r, f.LocalOffset(index))
 	pushOperand(f, operand.Reg(t, r))
 }
 
-func genSetLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genSetLocal(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	index, t := loadLocalIndexType(f, load, op)
 	value := popOperand(f, t)
 	asm.StoreStack(f, f.LocalOffset(index), value)
 }
 
-func genTeeLocal(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genTeeLocal(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	index, t := loadLocalIndexType(f, load, op)
 	value := popOperand(f, t)
 

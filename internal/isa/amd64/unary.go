@@ -17,15 +17,15 @@ import (
 	"gate.computer/wag/wa"
 )
 
-func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
-	switch uint8(props) {
-	case prop.IntEqz:
+func (MacroAssembler) Unary(f *gen.Func, props uint64, x operand.O) operand.O {
+	switch props & prop.MaskUnary {
+	case prop.UnaryIntEqz:
 		r, _ := getScratchReg(f, x)
 		in.TEST.RegReg(&f.Text, x.Type, r, r)
 		f.Regs.Free(x.Type, r)
 		return operand.Flags(condition.Eq)
 
-	case prop.IntClz:
+	case prop.UnaryIntClz:
 		r, _ := allocResultReg(f, x)
 		if haveLZCNT() {
 			in.LZCNT.RegReg(&f.Text, x.Type, r, r)
@@ -38,7 +38,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 		}
 		return operand.Reg(x.Type, r)
 
-	case prop.IntCtz:
+	case prop.UnaryIntCtz:
 		r, _ := allocResultReg(f, x)
 		if haveTZCNT() {
 			in.TZCNT.RegReg(&f.Text, x.Type, r, r)
@@ -49,7 +49,7 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 		}
 		return operand.Reg(x.Type, r)
 
-	case prop.IntPopcnt:
+	case prop.UnaryIntPopcnt:
 		var r reg.R
 		if havePOPCNT() {
 			r, _ = allocResultReg(f, x)
@@ -59,27 +59,29 @@ func (MacroAssembler) Unary(f *gen.Func, props uint16, x operand.O) operand.O {
 		}
 		return operand.Reg(x.Type, r)
 
-	case prop.FloatAbs:
+	case prop.UnaryFloatAbs:
 		r, _ := allocResultReg(f, x)
 		absFloatReg(&f.Prog, x.Type, r)
 		return operand.Reg(x.Type, r)
 
-	case prop.FloatNeg:
+	case prop.UnaryFloatNeg:
 		r, _ := allocResultReg(f, x)
 		negFloatReg(&f.Prog, x.Type, r)
 		return operand.Reg(x.Type, r)
 
-	case prop.FloatRoundOp:
+	case prop.UnaryFloatRound:
 		r, _ := allocResultReg(f, x)
 		roundMode := int8(props >> 8)
 		in.ROUNDSx.RegRegImm8(&f.Text, x.Type, r, r, roundMode)
 		return operand.Reg(x.Type, r)
 
-	default: // FloatSqrt
+	case prop.UnaryFloatSqrt:
 		r, _ := allocResultReg(f, x)
 		in.SQRTSx.RegReg(&f.Text, x.Type, r, r)
 		return operand.Reg(x.Type, r)
 	}
+
+	panic(props)
 }
 
 // absFloatReg in-place.

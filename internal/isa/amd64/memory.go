@@ -84,7 +84,7 @@ var storeImmInsns = [5]memDispImmInsn{
 	prop.IndexFloatStore: opStoreImm{},
 }
 
-func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
+func (MacroAssembler) Load(f *gen.Func, props uint64, index operand.O, resultType wa.Type, align, offset uint32) operand.O {
 	base, disp := checkAccess(f, index, offset)
 
 	r := f.Regs.AllocResult(resultType)
@@ -92,7 +92,7 @@ func (MacroAssembler) Load(f *gen.Func, props uint16, index operand.O, resultTyp
 	return operand.Reg(resultType, r)
 }
 
-func (MacroAssembler) Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32) {
+func (MacroAssembler) Store(f *gen.Func, props uint64, index, x operand.O, align, offset uint32) {
 	base, disp := checkAccess(f, index, offset)
 
 	if x.Storage == storage.Imm {

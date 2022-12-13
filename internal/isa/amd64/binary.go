@@ -19,38 +19,65 @@ import (
 	"gate.computer/wag/wa"
 )
 
-func (MacroAssembler) Binary(f *gen.Func, props uint16, a, b operand.O) operand.O {
-	return ops[props&prop.BinaryMask](f, uint8(props>>8), a, b)
+func (MacroAssembler) Binary(f *gen.Func, props uint64, a, b operand.O) operand.O {
+	switch props & prop.MaskBinary {
+	case prop.BinaryIntALAdd:
+		return binaryIntALAdd(f, props, a, b)
+
+	case prop.BinaryIntALSub:
+		return binaryIntALSub(f, props, a, b)
+
+	case prop.BinaryIntAL:
+		return binaryIntAL(f, props, a, b)
+
+	case prop.BinaryIntCmp:
+		return binaryIntCmp(f, props, a, b)
+
+	case prop.BinaryIntMul:
+		return binaryIntMul(f, a, b)
+
+	case prop.BinaryIntDivU:
+		return binaryIntDivU(f, a, b)
+
+	case prop.BinaryIntDivS:
+		return binaryIntDivS(f, a, b)
+
+	case prop.BinaryIntRemU:
+		return binaryIntRemU(f, a, b)
+
+	case prop.BinaryIntRemS:
+		return binaryIntRemS(f, a, b)
+
+	case prop.BinaryIntShift:
+		return binaryIntShift(f, props, a, b)
+
+	case prop.BinaryFloatCommon:
+		return binaryFloatCommon(f, props, a, b)
+
+	case prop.BinaryFloatMinmax:
+		return binaryFloatMinmax(f, props, a, b)
+
+	case prop.BinaryFloatCmp:
+		return binaryFloatCmp(f, props, a, b)
+
+	case prop.BinaryFloatCopysign:
+		return binaryFloatCopysign(f, a, b)
+	}
+
+	panic(props)
 }
 
-var ops = [prop.BinaryMask + 1]func(*gen.Func, uint8, operand.O, operand.O) operand.O{
-	prop.BinaryIntALAdd:      binaryIntALAdd,
-	prop.BinaryIntALSub:      binaryIntALSub,
-	prop.BinaryIntAL:         binaryIntAL,
-	prop.BinaryIntCmp:        binaryIntCmp,
-	prop.BinaryIntMul:        binaryIntMul,
-	prop.BinaryIntDivU:       binaryIntDivU,
-	prop.BinaryIntDivS:       binaryIntDivS,
-	prop.BinaryIntRemU:       binaryIntRemU,
-	prop.BinaryIntRemS:       binaryIntRemS,
-	prop.BinaryIntShift:      binaryIntShift,
-	prop.BinaryFloatCommon:   binaryFloatCommon,
-	prop.BinaryFloatMinmax:   binaryFloatMinmax,
-	prop.BinaryFloatCmp:      binaryFloatCmp,
-	prop.BinaryFloatCopysign: binaryFloatCopysign,
-}
-
-func binaryIntALAdd(f *gen.Func, index uint8, a, b operand.O) operand.O {
+func binaryIntALAdd(f *gen.Func, props uint64, a, b operand.O) operand.O {
 	switch {
 	case b.Storage == storage.Imm && b.ImmValue() == 1:
 		return opInplaceInt(f, in.INC, a)
 
 	default:
-		return binaryIntAL(f, index, a, b)
+		return binaryIntAL(f, props, a, b)
 	}
 }
 
-func binaryIntALSub(f *gen.Func, index uint8, a, b operand.O) operand.O {
+func binaryIntALSub(f *gen.Func, props uint64, a, b operand.O) operand.O {
 	switch {
 	case b.Storage == storage.Imm && b.ImmValue() == 1:
 		return opInplaceInt(f, in.DEC, a)
@@ -61,12 +88,12 @@ func binaryIntALSub(f *gen.Func, index uint8, a, b operand.O) operand.O {
 		return operand.Reg(b.Type, r)
 
 	default:
-		return binaryIntAL(f, index, a, b)
+		return binaryIntAL(f, props, a, b)
 	}
 }
 
-func binaryIntAL(f *gen.Func, index uint8, a, b operand.O) operand.O {
-	insn := in.ALInsn(index)
+func binaryIntAL(f *gen.Func, props uint64, a, b operand.O) operand.O {
+	insn := in.ALInsn(props >> 8)
 
 	switch b.Storage {
 	case storage.Imm:
@@ -95,7 +122,7 @@ func binaryIntAL(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, targetReg)
 }
 
-func binaryIntCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
+func binaryIntCmp(f *gen.Func, props uint64, a, b operand.O) operand.O {
 	if b.Storage == storage.Stack {
 		// Since b is in stack, a must also be.  We must pop b before a.
 		in.POPo.RegScratch(&f.Text)
@@ -121,10 +148,10 @@ func binaryIntCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
 		}
 	}
 
-	return operand.Flags(condition.C(cond))
+	return operand.Flags(condition.C(props >> 8))
 }
 
-func binaryIntMul(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+func binaryIntMul(f *gen.Func, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 
 	var sourceReg reg.R
@@ -149,7 +176,7 @@ func binaryIntMul(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, targetReg)
 }
 
-func binaryIntDivU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+func binaryIntDivU(f *gen.Func, a, b operand.O) operand.O {
 	divisorReg := opPrepareDiv(f, a, b)
 
 	// RegDividendHigh is RegZero.
@@ -160,7 +187,7 @@ func binaryIntDivU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, RegResult)
 }
 
-func binaryIntRemU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+func binaryIntRemU(f *gen.Func, a, b operand.O) operand.O {
 	divisorReg := opPrepareDiv(f, a, b)
 
 	// RegDividendHigh is RegZero.
@@ -174,7 +201,7 @@ func binaryIntRemU(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, resultReg)
 }
 
-func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+func binaryIntDivS(f *gen.Func, a, b operand.O) operand.O {
 	divisorReg := opPrepareDiv(f, a, b)
 
 	if a.Type == wa.I32 {
@@ -201,7 +228,7 @@ func binaryIntDivS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, RegResult)
 }
 
-func binaryIntRemS(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+func binaryIntRemS(f *gen.Func, a, b operand.O) operand.O {
 	divisorReg := opPrepareDiv(f, a, b)
 
 	// RegDividendHigh (remainer) is RegZero, so correct result is already in
@@ -244,8 +271,8 @@ func opPrepareDiv(f *gen.Func, a, b operand.O) (divisorReg reg.R) {
 	return
 }
 
-func binaryIntShift(f *gen.Func, index uint8, a, b operand.O) operand.O {
-	insn := in.ShiftInsn(index)
+func binaryIntShift(f *gen.Func, props uint64, a, b operand.O) operand.O {
+	insn := in.ShiftInsn(props >> 8)
 	r, _ := allocResultReg(f, a)
 
 	if b.Storage == storage.Imm {
@@ -259,12 +286,11 @@ func binaryIntShift(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, r)
 }
 
-func binaryFloatCommon(f *gen.Func, index uint8, a, b operand.O) operand.O {
-	opcode := in.RMscalar(index)
+func binaryFloatCommon(f *gen.Func, props uint64, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
-	opcode.RegReg(&f.Text, a.Type, targetReg, sourceReg)
+	in.RMscalar(props>>8).RegReg(&f.Text, a.Type, targetReg, sourceReg)
 
 	f.Regs.Free(b.Type, sourceReg)
 	return operand.Reg(a.Type, targetReg)
@@ -273,12 +299,7 @@ func binaryFloatCommon(f *gen.Func, index uint8, a, b operand.O) operand.O {
 // TODO: Intel says that this behavior can be accomplished "using a sequence of
 //       instructions, such as, a comparison followed by AND, ANDN and OR."
 
-var binaryFloatMinmaxInsns = [2]in.RMscalar{
-	prop.IndexMinmaxMin: in.MINSx,
-	prop.IndexMinmaxMax: in.MAXSx,
-}
-
-func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
+func binaryFloatMinmax(f *gen.Func, props uint64, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 
@@ -288,7 +309,7 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	endJumps[0] = in.JPcb.Stub8(&f.Text)
 	in.UCOMISx.RegReg(&f.Text, a.Type, sourceReg, sourceReg)
 	takeSourceJump := in.JPcb.Stub8(&f.Text)
-	binaryFloatMinmaxInsns[index].RegReg(&f.Text, a.Type, targetReg, sourceReg)
+	in.RMscalar(props>>8).RegReg(&f.Text, a.Type, targetReg, sourceReg)
 	endJumps[1] = in.JMPcb.Stub8(&f.Text)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), takeSourceJump)
@@ -301,17 +322,17 @@ func binaryFloatMinmax(f *gen.Func, index uint8, a, b operand.O) operand.O {
 	return operand.Reg(a.Type, targetReg)
 }
 
-func binaryFloatCmp(f *gen.Func, cond uint8, a, b operand.O) operand.O {
+func binaryFloatCmp(f *gen.Func, props uint64, a, b operand.O) operand.O {
 	aReg, _ := allocResultReg(f, a)
 	bReg, _ := getScratchReg(f, b)
 
 	in.UCOMISx.RegReg(&f.Text, a.Type, aReg, bReg)
 
 	f.Regs.Free2(a.Type, aReg, bReg)
-	return operand.Flags(condition.C(cond))
+	return operand.Flags(condition.C(props >> 8))
 }
 
-func binaryFloatCopysign(f *gen.Func, _ uint8, a, b operand.O) operand.O {
+func binaryFloatCopysign(f *gen.Func, a, b operand.O) operand.O {
 	targetReg, _ := allocResultReg(f, a)
 	sourceReg, _ := getScratchReg(f, b)
 

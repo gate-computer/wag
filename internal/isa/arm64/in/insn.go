@@ -116,156 +116,149 @@ const (
 	MRS_FPSR = SystemReg(0x354<<22 | 1<<21 | 1<<20 | 0xda21<<5)
 )
 
-// Add/subtract instruction's "op" field
-type Addsub uint8
+// Add/subtract instruction variants
+type Addsub uint32
 
 const (
-	AddsubAdd = Addsub(0)
-	AddsubSub = Addsub(1)
+	AddsubAdd Addsub = 0 << 30
+	AddsubSub Addsub = 1 << 30
 )
 
 func (op Addsub) OpcodeImm() RegRegImm12ShiftSf {
-	return RegRegImm12ShiftSf(uint32(op)<<30 | 0<<29 | 0x11<<24)
+	return RegRegImm12ShiftSf(op | 0<<29 | 0x11<<24)
 }
 
 func (op Addsub) OpcodeRegExt() RegRegImm3ExtRegSf {
-	return RegRegImm3ExtRegSf(uint32(op)<<30 | 0<<29 | 0x0b<<24 | 0<<22 | 1<<21)
+	return RegRegImm3ExtRegSf(op | 0<<29 | 0x0b<<24 | 0<<22 | 1<<21)
 }
 
-// Logical instruction's "opc" field
-type Logic uint8
+// Logical instruction variants
+type Logic uint32
 
 const (
-	LogicAnd = Logic(0)
-	LogicOrr = Logic(1)
-	LogicEor = Logic(2)
+	LogicAnd Logic = 0 << 29
+	LogicOrr Logic = 1 << 29
+	LogicEor Logic = 2 << 29
 )
 
 func (op Logic) OpcodeImm() RegRegImm6Imm6NSf {
-	return RegRegImm6Imm6NSf(uint32(op)<<29 | 0x24<<23)
+	return RegRegImm6Imm6NSf(op | 0x24<<23)
 }
 
 func (op Logic) OpcodeReg() RegRegImm6RegShiftSf {
-	return RegRegImm6RegShiftSf(uint32(op)<<29 | 0x0a<<24 | 0<<21)
+	return RegRegImm6RegShiftSf(op | 0x0a<<24 | 0<<21)
 }
 
-// Bitfield instruction’s "opc" field
-type Bitfield uint8
+// Bitfield instruction variants
+type Bitfield uint32
 
 const (
-	ExtendS = Bitfield(0)
-	ExtendU = Bitfield(2)
+	ExtendS Bitfield = 0<<29 | 0x26<<23 | 0<<22
+	ExtendU Bitfield = 2<<29 | 0x26<<23 | 0<<22
 )
 
 func (op Bitfield) Opcode() RegRegImm6Imm6NSf {
-	return RegRegImm6Imm6NSf(uint32(op)<<29 | 0x26<<23 | 0<<22)
+	return RegRegImm6Imm6NSf(op)
 }
 
-// Data-processing (2 source) instruction's "opcode" field
-type DataProcessing2 uint8
+// Data-processing (2 source) instruction variants
+type DataProcessing2 uint32
 
 const (
-	DivisionUnsigned = DataProcessing2(0x2)
-	DivisionSigned   = DataProcessing2(0x3)
+	DivisionUnsigned DataProcessing2 = 0<<30 | 0<<29 | 0xd6<<21 | 0x2<<10
+	DivisionSigned   DataProcessing2 = 0<<30 | 0<<29 | 0xd6<<21 | 0x3<<10
 
-	VariableShiftL  = DataProcessing2(0x8)
-	VariableShiftLR = DataProcessing2(0x9)
-	VariableShiftAR = DataProcessing2(0xa)
-	VariableShiftRR = DataProcessing2(0xb)
+	VariableShiftL  DataProcessing2 = 0<<30 | 0<<29 | 0xd6<<21 | 0x8<<10
+	VariableShiftLR DataProcessing2 = 0<<30 | 0<<29 | 0xd6<<21 | 0x9<<10
+	VariableShiftAR DataProcessing2 = 0<<30 | 0<<29 | 0xd6<<21 | 0xa<<10
+	VariableShiftRR DataProcessing2 = 0<<30 | 0<<29 | 0xd6<<21 | 0xb<<10
 )
 
 func (op DataProcessing2) OpcodeReg() RegRegRegSf {
-	return RegRegRegSf(0<<30 | 0<<29 | 0xd6<<21 | uint32(op)<<10)
+	return RegRegRegSf(op)
 }
 
-// Floating-point (1 source) instruction's bits 15-20
-type UnaryFloat uint8
+// Floating-point (1 source) instruction variants
+type UnaryFloat uint32
 
 const (
-	//                            17     15
-	UnaryFloatAbs     = UnaryFloat(0<<2 | 1<<0)
-	UnaryFloatNeg     = UnaryFloat(0<<2 | 2<<0)
-	UnaryFloatSqrt    = UnaryFloat(0<<2 | 3<<0)
-	UnaryFloatCvtTo32 = UnaryFloat(1<<2 | 0<<0)
-	UnaryFloatCvtTo64 = UnaryFloat(1<<2 | 1<<0)
+	UnaryFloatAbs     UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<17 | 1<<15 | 0x10<<10
+	UnaryFloatNeg     UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<17 | 2<<15 | 0x10<<10
+	UnaryFloatSqrt    UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<17 | 3<<15 | 0x10<<10
+	UnaryFloatCvtTo32 UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<17 | 0<<15 | 0x10<<10
+	UnaryFloatCvtTo64 UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<17 | 1<<15 | 0x10<<10
 
-	//                             18     15
-	UnaryFloatRIntN = UnaryFloat(1<<3 | 0<<0)
-	UnaryFloatRIntP = UnaryFloat(1<<3 | 1<<0)
-	UnaryFloatRIntM = UnaryFloat(1<<3 | 2<<0)
-	UnaryFloatRIntZ = UnaryFloat(1<<3 | 3<<0)
+	UnaryFloatRIntN UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<18 | 0<<15 | 0x10<<10
+	UnaryFloatRIntP UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<18 | 1<<15 | 0x10<<10
+	UnaryFloatRIntM UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<18 | 2<<15 | 0x10<<10
+	UnaryFloatRIntZ UnaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<18 | 3<<15 | 0x10<<10
 )
 
 func (op UnaryFloat) Opcode() RegRegType {
-	return RegRegType(0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | uint32(op)<<15 | 0x10<<10)
+	return RegRegType(op)
 }
 
-// Floating-point (2 source) instruction's bits 10-15
-type BinaryFloat uint8
+// Floating-point (2 source) instruction variants
+type BinaryFloat uint32
 
 const (
-	//                             13     12     10
-	BinaryFloatAdd = BinaryFloat(1<<3 | 0<<2 | 2<<0)
-	BinaryFloatSub = BinaryFloat(1<<3 | 1<<2 | 2<<0)
+	BinaryFloatAdd BinaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<13 | 0<<12 | 2<<10
+	BinaryFloatSub BinaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<13 | 1<<12 | 2<<10
 
-	//                             15     12     10
-	BinaryFloatMul = BinaryFloat(0<<5 | 0<<2 | 2<<0)
-	BinaryFloatDiv = BinaryFloat( /***/ 1<<2 | 2<<0)
+	BinaryFloatMul BinaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<15 | 0<<12 | 2<<10
+	BinaryFloatDiv BinaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | /*****/ 1<<12 | 2<<10
 
-	//                             14     12     10
-	BinaryFloatMax = BinaryFloat(1<<4 | 0<<2 | 2<<0)
-	BinaryFloatMin = BinaryFloat(1<<4 | 1<<2 | 2<<0)
+	BinaryFloatMax BinaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<14 | 0<<12 | 2<<10
+	BinaryFloatMin BinaryFloat = 0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 1<<14 | 1<<12 | 2<<10
 )
 
 func (op BinaryFloat) OpcodeReg() RegRegRegType {
-	return RegRegRegType(0<<31 | 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | uint32(op)<<10)
+	return RegRegRegType(op)
 }
 
-// Floating-point/integer instruction's "rmode" and "opcode" fields
-type ConvertCategory uint8
+// Floating-point/integer instruction variants
+type Conversion uint32
 
 const (
-	//                                   19     16
-	ConvertIntS      = ConvertCategory(0<<3 | 2<<0) // SCVTF
-	ConvertIntU      = ConvertCategory(0<<3 | 3<<0) // UCVTF
-	ReinterpretFloat = ConvertCategory(0<<3 | 6<<0) // FMOV
-	ReinterpretInt   = ConvertCategory(0<<3 | 7<<0) // FMOV
-	TruncFloatS      = ConvertCategory(3<<3 | 0<<0) // FCVTZS
-	TruncFloatU      = ConvertCategory(3<<3 | 1<<0) // FCVTZU
+	ConvertIntS      Conversion = 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<19 | 2<<16 | 0<<10 // SCVTF
+	ConvertIntU      Conversion = 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<19 | 3<<16 | 0<<10 // UCVTF
+	ReinterpretFloat Conversion = 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<19 | 6<<16 | 0<<10 // FMOV
+	ReinterpretInt   Conversion = 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 0<<19 | 7<<16 | 0<<10 // FMOV
+	TruncFloatS      Conversion = 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 3<<19 | 0<<16 | 0<<10 // FCVTZS
+	TruncFloatU      Conversion = 0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | 3<<19 | 1<<16 | 0<<10 // FCVTZU
 )
 
-func (op ConvertCategory) Opcode() RegRegTypeSf {
-	return RegRegTypeSf(0<<30 | 0<<29 | 0x1e<<24 | 1<<21 | uint32(op)<<16 | 0<<10)
+func (op Conversion) Opcode() RegRegTypeSf {
+	return RegRegTypeSf(op)
 }
 
-// Load/store instruction's most significant half-word excluding bit 24 (and 21)
-type Memory uint16
+// Load/store instruction variants
+type Memory uint32
 
 const (
-	//                   30      27      26     22
-	StoreB   = Memory(0<<14 | 7<<11 | 0<<10 | 0<<6)
-	LoadB    = Memory(0<<14 | 7<<11 | 0<<10 | 1<<6)
-	LoadSB64 = Memory(0<<14 | 7<<11 | 0<<10 | 2<<6)
-	LoadSB32 = Memory(0<<14 | 7<<11 | 0<<10 | 3<<6)
-	StoreH   = Memory(1<<14 | 7<<11 | 0<<10 | 0<<6)
-	LoadH    = Memory(1<<14 | 7<<11 | 0<<10 | 1<<6)
-	LoadSH64 = Memory(1<<14 | 7<<11 | 0<<10 | 2<<6)
-	LoadSH32 = Memory(1<<14 | 7<<11 | 0<<10 | 3<<6)
-	StoreW   = Memory(2<<14 | 7<<11 | 0<<10 | 0<<6)
-	LoadW    = Memory(2<<14 | 7<<11 | 0<<10 | 1<<6)
-	LoadSW64 = Memory(2<<14 | 7<<11 | 0<<10 | 2<<6)
-	StoreF32 = Memory(2<<14 | 7<<11 | 1<<10 | 0<<6)
-	LoadF32  = Memory(2<<14 | 7<<11 | 1<<10 | 1<<6)
-	StoreD   = Memory(3<<14 | 7<<11 | 0<<10 | 0<<6)
-	LoadD    = Memory(3<<14 | 7<<11 | 0<<10 | 1<<6)
-	StoreF64 = Memory(3<<14 | 7<<11 | 1<<10 | 0<<6)
-	LoadF64  = Memory(3<<14 | 7<<11 | 1<<10 | 1<<6)
+	StoreB   Memory = 0<<30 | 7<<27 | 0<<26 | 0<<24 | 0<<22
+	LoadB    Memory = 0<<30 | 7<<27 | 0<<26 | 0<<24 | 1<<22
+	LoadSB64 Memory = 0<<30 | 7<<27 | 0<<26 | 0<<24 | 2<<22
+	LoadSB32 Memory = 0<<30 | 7<<27 | 0<<26 | 0<<24 | 3<<22
+	StoreH   Memory = 1<<30 | 7<<27 | 0<<26 | 0<<24 | 0<<22
+	LoadH    Memory = 1<<30 | 7<<27 | 0<<26 | 0<<24 | 1<<22
+	LoadSH64 Memory = 1<<30 | 7<<27 | 0<<26 | 0<<24 | 2<<22
+	LoadSH32 Memory = 1<<30 | 7<<27 | 0<<26 | 0<<24 | 3<<22
+	StoreW   Memory = 2<<30 | 7<<27 | 0<<26 | 0<<24 | 0<<22
+	LoadW    Memory = 2<<30 | 7<<27 | 0<<26 | 0<<24 | 1<<22
+	LoadSW64 Memory = 2<<30 | 7<<27 | 0<<26 | 0<<24 | 2<<22
+	StoreF32 Memory = 2<<30 | 7<<27 | 1<<26 | 0<<24 | 0<<22
+	LoadF32  Memory = 2<<30 | 7<<27 | 1<<26 | 0<<24 | 1<<22
+	StoreD   Memory = 3<<30 | 7<<27 | 0<<26 | 0<<24 | 0<<22
+	LoadD    Memory = 3<<30 | 7<<27 | 0<<26 | 0<<24 | 1<<22
+	StoreF64 Memory = 3<<30 | 7<<27 | 1<<26 | 0<<24 | 0<<22
+	LoadF64  Memory = 3<<30 | 7<<27 | 1<<26 | 0<<24 | 1<<22
 )
 
 func (op Memory) OpcodeUnscaled() RegRegImm9 {
-	return RegRegImm9(uint32(op)<<16 | 0<<24 | 0<<21 | 0<<10)
+	return RegRegImm9(op | 0<<21 | 0<<10)
 }
 
 func (op Memory) OpcodeReg() RegRegSOptionReg {
-	return RegRegSOptionReg(uint32(op)<<16 | 0<<24 | 1<<21 | 2<<10)
+	return RegRegSOptionReg(op | 1<<21 | 2<<10)
 }

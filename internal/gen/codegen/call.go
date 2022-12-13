@@ -40,7 +40,7 @@ func checkIndirectCallTypeIndex(f *gen.Func, op opcode.Opcode, index uint32) uin
 	return index
 }
 
-func genCall(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genCall(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opSaveOperands(f)
 
 	funcIndex := load.Varuint32()
@@ -76,7 +76,7 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 	opFinalizeCall(f, sig)
 }
 
-func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	sigIndex := checkIndirectCallTypeIndex(f, op, load.Varuint32())
 	sigIndex = f.Module.GetCanonicalTypeIndex(sigIndex)
 

@@ -20,7 +20,7 @@ const (
 	UnaryIntPopcnt = 3
 	UnaryFloat     = 4
 
-	MaskUnary = 7
+	MaskUnary = 0x7
 )
 
 const (
@@ -28,13 +28,13 @@ const (
 	IntClz       = UnaryIntClz
 	IntCtz       = UnaryIntCtz
 	IntPopcnt    = UnaryIntPopcnt
-	FloatAbs     = UnaryFloat | uint(in.UnaryFloatAbs)<<8
-	FloatNeg     = UnaryFloat | uint(in.UnaryFloatNeg)<<8
-	FloatCeil    = UnaryFloat | uint(in.UnaryFloatRIntP)<<8
-	FloatFloor   = UnaryFloat | uint(in.UnaryFloatRIntM)<<8
-	FloatTrunc   = UnaryFloat | uint(in.UnaryFloatRIntZ)<<8
-	FloatNearest = UnaryFloat | uint(in.UnaryFloatRIntN)<<8
-	FloatSqrt    = UnaryFloat | uint(in.UnaryFloatSqrt)<<8
+	FloatAbs     = UnaryFloat | uint64(in.UnaryFloatAbs)<<8
+	FloatNeg     = UnaryFloat | uint64(in.UnaryFloatNeg)<<8
+	FloatCeil    = UnaryFloat | uint64(in.UnaryFloatRIntP)<<8
+	FloatFloor   = UnaryFloat | uint64(in.UnaryFloatRIntM)<<8
+	FloatTrunc   = UnaryFloat | uint64(in.UnaryFloatRIntZ)<<8
+	FloatNearest = UnaryFloat | uint64(in.UnaryFloatRIntN)<<8
+	FloatSqrt    = UnaryFloat | uint64(in.UnaryFloatSqrt)<<8
 )
 
 // Binary
@@ -53,7 +53,7 @@ const (
 	BinaryFloat         = 10
 	BinaryFloatCopysign = 11
 
-	MaskBinary = 15
+	MaskBinary = 0xf
 )
 
 const (
@@ -73,27 +73,27 @@ const (
 	FloatGt       = BinaryFloatCmp | condition.OrderedAndGt<<8
 	FloatLe       = BinaryFloatCmp | condition.OrderedAndLe<<8
 	FloatGe       = BinaryFloatCmp | condition.OrderedAndGe<<8
-	IntAdd        = BinaryIntAddsub | uint(in.AddsubAdd)<<8
-	IntSub        = BinaryIntAddsub | uint(in.AddsubSub)<<8
+	IntAdd        = BinaryIntAddsub | uint64(in.AddsubAdd)<<8
+	IntSub        = BinaryIntAddsub | uint64(in.AddsubSub)<<8
 	IntMul        = BinaryIntMul
 	IntDivS       = BinaryIntDivS
 	IntDivU       = BinaryIntDivU
-	IntRemS       = BinaryIntRem | uint(in.DivisionSigned)<<8
-	IntRemU       = BinaryIntRem | uint(in.DivisionUnsigned)<<8
-	IntAnd        = BinaryIntLogic | uint(in.LogicAnd)<<8
-	IntOr         = BinaryIntLogic | uint(in.LogicOrr)<<8
-	IntXor        = BinaryIntLogic | uint(in.LogicEor)<<8
-	IntShl        = BinaryIntShift | uint(in.VariableShiftL)<<8
-	IntShrS       = BinaryIntShift | uint(in.VariableShiftAR)<<8
-	IntShrU       = BinaryIntShift | uint(in.VariableShiftLR)<<8
+	IntRemS       = BinaryIntRem | uint64(in.DivisionSigned)<<8
+	IntRemU       = BinaryIntRem | uint64(in.DivisionUnsigned)<<8
+	IntAnd        = BinaryIntLogic | uint64(in.LogicAnd)<<8
+	IntOr         = BinaryIntLogic | uint64(in.LogicOrr)<<8
+	IntXor        = BinaryIntLogic | uint64(in.LogicEor)<<8
+	IntShl        = BinaryIntShift | uint64(in.VariableShiftL)<<8
+	IntShrS       = BinaryIntShift | uint64(in.VariableShiftAR)<<8
+	IntShrU       = BinaryIntShift | uint64(in.VariableShiftLR)<<8
 	IntRotl       = BinaryIntRotl
-	IntRotr       = BinaryIntShift | uint(in.VariableShiftRR)<<8
-	FloatAdd      = BinaryFloat | uint(in.BinaryFloatAdd)<<8
-	FloatSub      = BinaryFloat | uint(in.BinaryFloatSub)<<8
-	FloatMul      = BinaryFloat | uint(in.BinaryFloatMul)<<8
-	FloatDiv      = BinaryFloat | uint(in.BinaryFloatDiv)<<8
-	FloatMin      = BinaryFloat | uint(in.BinaryFloatMin)<<8
-	FloatMax      = BinaryFloat | uint(in.BinaryFloatMax)<<8
+	IntRotr       = BinaryIntShift | uint64(in.VariableShiftRR)<<8
+	FloatAdd      = BinaryFloat | uint64(in.BinaryFloatAdd)<<8
+	FloatSub      = BinaryFloat | uint64(in.BinaryFloatSub)<<8
+	FloatMul      = BinaryFloat | uint64(in.BinaryFloatMul)<<8
+	FloatDiv      = BinaryFloat | uint64(in.BinaryFloatDiv)<<8
+	FloatMin      = BinaryFloat | uint64(in.BinaryFloatMin)<<8
+	FloatMax      = BinaryFloat | uint64(in.BinaryFloatMax)<<8
 	FloatCopysign = BinaryFloatCopysign
 )
 
@@ -135,23 +135,23 @@ const (
 // Conversion
 
 const (
-	ConvertExtend     = 0
-	ConvertMote       = 1
-	ConvertFloatToInt = 2
-	ConvertIntToFloat = 3
+	ConversionExtend     = 0
+	ConversionMote       = 1
+	ConversionFloatToInt = 2
+	ConversionIntToFloat = 3
 
-	MaskConvert = 3
+	MaskConversion = 0x3
 )
 
 const (
-	ExtendS          = ConvertExtend | uint(in.ExtendS)<<8
-	ExtendU          = ConvertExtend | uint(in.ExtendU)<<8
-	Demote           = ConvertMote | uint(in.UnaryFloatCvtTo32)<<8
-	Promote          = ConvertMote | uint(in.UnaryFloatCvtTo64)<<8
-	TruncS           = ConvertFloatToInt | uint(in.TruncFloatS)<<8
-	TruncU           = ConvertFloatToInt | uint(in.TruncFloatU)<<8
-	ConvertS         = ConvertIntToFloat | uint(in.ConvertIntS)<<8
-	ConvertU         = ConvertIntToFloat | uint(in.ConvertIntU)<<8
-	ReinterpretInt   = ConvertIntToFloat | uint(in.ReinterpretInt)<<8
-	ReinterpretFloat = ConvertFloatToInt | uint(in.ReinterpretFloat)<<8
+	ExtendS          = ConversionExtend | uint64(in.ExtendS)<<8
+	ExtendU          = ConversionExtend | uint64(in.ExtendU)<<8
+	Demote           = ConversionMote | uint64(in.UnaryFloatCvtTo32)<<8
+	Promote          = ConversionMote | uint64(in.UnaryFloatCvtTo64)<<8
+	TruncS           = ConversionFloatToInt | uint64(in.TruncFloatS)<<8
+	TruncU           = ConversionFloatToInt | uint64(in.TruncFloatU)<<8
+	ConvertS         = ConversionIntToFloat | uint64(in.ConvertIntS)<<8
+	ConvertU         = ConversionIntToFloat | uint64(in.ConvertIntU)<<8
+	ReinterpretInt   = ConversionIntToFloat | uint64(in.ReinterpretInt)<<8
+	ReinterpretFloat = ConversionFloatToInt | uint64(in.ReinterpretFloat)<<8
 )

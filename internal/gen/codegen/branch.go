@@ -96,7 +96,7 @@ func label(f *gen.Func, l *link.L) {
 	l.Addr = f.Text.Addr
 }
 
-func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opSaveOperands(f)
 
 	blockType := typedecode.Block(load.Varint7())
@@ -136,7 +136,7 @@ func genBlock(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	linker.UpdateFarBranches(f.Text.Bytes(), end)
 }
 
-func genBr(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genBr(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -174,7 +174,7 @@ func genBr(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	getCurrentBlock(f).Deadend = true
 }
 
-func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	relativeDepth := load.Varuint32()
 	target := getBranchTarget(f, relativeDepth)
 
@@ -232,7 +232,7 @@ func genBrIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	pushResultRegOperand(f, target.ValueType)
 }
 
-func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	targetCount := load.Varuint32()
 	if targetCount >= uint32(MaxBranchTableLen) {
 		pan.Panic(module.Errorf("branch table target count is too large: %d", targetCount))
@@ -392,7 +392,7 @@ func genBrTable(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	f.BranchTables = append(f.BranchTables, table)
 }
 
-func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genIf(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	ifType := typedecode.Block(load.Varint7())
 
 	if debug.Enabled {
@@ -472,7 +472,7 @@ func genIf(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
 	linker.UpdateFarBranches(f.Text.Bytes(), end)
 }
 
-func genLoop(f *gen.Func, load *loader.L, op opcode.Opcode, info opInfo) {
+func genLoop(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	opSaveOperands(f)
 
 	blockType := typedecode.Block(load.Varint7())

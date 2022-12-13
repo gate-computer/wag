@@ -17,33 +17,33 @@ import (
 	"gate.computer/wag/wa"
 )
 
-func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, source operand.O) (result operand.O) {
-	switch props {
-	case prop.ExtendS:
+func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, source operand.O) operand.O {
+	switch props & prop.MaskConversion {
+	case prop.ConversionExtendS:
 		r, _ := allocResultReg(f, source)
 		in.MOVSXD.RegReg(&f.Text, wa.I64, r, r)
-		result = operand.Reg(resultType, r)
+		return operand.Reg(resultType, r)
 
-	case prop.ExtendU:
+	case prop.ConversionExtendU:
 		r, zeroExtended := allocResultReg(f, source)
 		if !zeroExtended {
 			in.MOV.RegReg(&f.Text, wa.I32, r, r)
 		}
-		result = operand.Reg(wa.I64, r)
+		return operand.Reg(wa.I64, r)
 
-	case prop.Mote:
+	case prop.ConversionMote:
 		r, _ := allocResultReg(f, source)
 		in.CVTS2Sx.RegReg(&f.Text, source.Type, r, r)
-		result = operand.Reg(resultType, r)
+		return operand.Reg(resultType, r)
 
-	case prop.TruncS:
+	case prop.ConversionTruncS:
 		sourceReg, _ := allocResultReg(f, source)
 		resultReg := f.Regs.AllocResult(wa.I64)
 		truncateSigned(f, resultType, resultReg, source.Type, sourceReg)
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg)
+		return operand.Reg(resultType, resultReg)
 
-	case prop.TruncU:
+	case prop.ConversionTruncU:
 		sourceReg, _ := allocResultReg(f, source)
 		resultReg := f.Regs.AllocResult(wa.I64)
 		if resultType == wa.I32 {
@@ -52,16 +52,16 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			truncateUnsignedI64(f, resultReg, source.Type, sourceReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg)
+		return operand.Reg(resultType, resultReg)
 
-	case prop.ConvertS:
+	case prop.ConversionConvertS:
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		in.CVTSI2Sx.TypeRegReg(&f.Text, resultType, source.Type, resultReg, sourceReg)
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg)
+		return operand.Reg(resultType, resultReg)
 
-	case prop.ConvertU:
+	case prop.ConversionConvertU:
 		sourceReg, zeroExtended := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		if source.Type == wa.I32 {
@@ -73,9 +73,9 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			convertUnsignedI64ToFloat(f, resultType, resultReg, sourceReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg)
+		return operand.Reg(resultType, resultReg)
 
-	case prop.Reinterpret:
+	case prop.ConversionReinterpret:
 		sourceReg, _ := getScratchReg(f, source)
 		resultReg := f.Regs.AllocResult(resultType)
 		if source.Type.Category() == wa.Int {
@@ -84,10 +84,10 @@ func (MacroAssembler) Convert(f *gen.Func, props uint16, resultType wa.Type, sou
 			in.MOVxmr.RegReg(&f.Text, source.Type, sourceReg, resultReg)
 		}
 		f.Regs.Free(source.Type, sourceReg)
-		result = operand.Reg(resultType, resultReg)
+		return operand.Reg(resultType, resultReg)
 	}
 
-	return
+	panic(props)
 }
 
 // Algorithm:

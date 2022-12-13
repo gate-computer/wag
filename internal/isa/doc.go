@@ -61,7 +61,7 @@ type MacroAssembler interface {
 	AlignFunc(p *gen.Prog)
 
 	// Binary may allocate registers, use RegResult and update condition flags.
-	Binary(f *gen.Func, props uint16, lhs, rhs operand.O) operand.O
+	Binary(f *gen.Func, props uint64, lhs, rhs operand.O) operand.O
 
 	// Branch may use RegResult and update condition flags.
 	Branch(p *gen.Prog, addr int32)
@@ -112,7 +112,7 @@ type MacroAssembler interface {
 
 	// Convert may allocate registers, use RegResult and update condition
 	// flags.  The source operand may be RegResult or condition flags.
-	Convert(f *gen.Func, props uint16, result wa.Type, source operand.O) operand.O
+	Convert(f *gen.Func, props uint64, result wa.Type, source operand.O) operand.O
 
 	// CurrentMemory may allocate registers, use RegResult and update condition
 	// flags.
@@ -154,7 +154,7 @@ type MacroAssembler interface {
 
 	// Load may allocate registers, use RegResult and update condition flags.
 	// The index operand may be RegResult or the condition flags.
-	Load(f *gen.Func, props uint16, index operand.O, result wa.Type, align, offset uint32) operand.O
+	Load(f *gen.Func, props uint64, index operand.O, result wa.Type, align, offset uint32) operand.O
 
 	// LoadGlobal has default restrictions.
 	LoadGlobal(p *gen.Prog, t wa.Type, dest reg.R, offset int32) (zeroExtended bool)
@@ -210,7 +210,7 @@ type MacroAssembler interface {
 	SetupStackFrame(f *gen.Func) (stackCheckAddr int32)
 
 	// Store may allocate registers, use RegResult and update condition flags.
-	Store(f *gen.Func, props uint16, index, x operand.O, align, offset uint32)
+	Store(f *gen.Func, props uint64, index, x operand.O, align, offset uint32)
 
 	// StoreGlobal has default restrictions.
 	StoreGlobal(f *gen.Func, offset int32, x operand.O)
@@ -232,7 +232,7 @@ type MacroAssembler interface {
 
 	// Unary may allocate registers, use RegResult and update condition flags.
 	// The operand argument may be RegResult or condition flags.
-	Unary(f *gen.Func, props uint16, x operand.O) operand.O
+	Unary(f *gen.Func, props uint64, x operand.O) operand.O
 
 	// ZeroExtendResultReg may use RegResult and update condition flags.
 	ZeroExtendResultReg(p *gen.Prog)
