@@ -60,7 +60,11 @@ func (MacroAssembler) Unary(f *gen.Func, props uint64, x operand.O) operand.O {
 		return operand.Reg(x.Type, count)
 
 	case prop.UnaryFloat:
-		return convertFloat(f, props, x.Type, x)
+		r := o.allocResultReg(f, x)
+		o.insn(in.UnaryFloat(props>>8).Opcode().RdRn(r, r, x.Size()))
+		o.copy(f.Text.Extend(o.size))
+
+		return operand.Reg(x.Type, r)
 	}
 
 	panic(props)
