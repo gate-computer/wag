@@ -49,7 +49,6 @@ benchmark:
 
 .PHONY: generate
 generate:
-	$(GO) generate
 	cd testsuite && $(GO) generate
 
 .PHONY: library
