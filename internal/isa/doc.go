@@ -114,6 +114,10 @@ type MacroAssembler interface {
 	// flags.  The source operand may be RegResult or condition flags.
 	Convert(f *gen.Func, props uint64, result wa.Type, source operand.O) operand.O
 
+	// TruncSat may allocate registers, use RegResult and update condition
+	// flags.  The source operand may be RegResult or condition flags.
+	TruncSat(f *gen.Func, props uint64, result wa.Type, source operand.O) operand.O
+
 	// CurrentMemory may allocate registers, use RegResult and update condition
 	// flags.
 	CurrentMemory(f *gen.Func) (site int32)

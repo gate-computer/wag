@@ -372,8 +372,22 @@ func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
 		genUnsupported(f, load, op)
 	case opcode.MiscPrefix:
 		switch op := opcode.MiscOpcode(load.Varuint32()); op {
-		case 0, 1, 2, 3, 4, 5, 6, 7: // Non-trapping float-to-int conversion.
-			genUnsupportedMisc(f, load, op)
+		case opcode.I32TruncSatSF32:
+			genTruncSat(f, load, op, wa.I32, wa.F32, prop.TruncS)
+		case opcode.I32TruncSatUF32:
+			genTruncSat(f, load, op, wa.I32, wa.F32, prop.TruncU)
+		case opcode.I32TruncSatSF64:
+			genTruncSat(f, load, op, wa.I32, wa.F64, prop.TruncS)
+		case opcode.I32TruncSatUF64:
+			genTruncSat(f, load, op, wa.I32, wa.F64, prop.TruncU)
+		case opcode.I64TruncSatSF32:
+			genTruncSat(f, load, op, wa.I64, wa.F32, prop.TruncS)
+		case opcode.I64TruncSatUF32:
+			genTruncSat(f, load, op, wa.I64, wa.F32, prop.TruncU)
+		case opcode.I64TruncSatSF64:
+			genTruncSat(f, load, op, wa.I64, wa.F64, prop.TruncS)
+		case opcode.I64TruncSatUF64:
+			genTruncSat(f, load, op, wa.I64, wa.F64, prop.TruncU)
 		case 0x0b: // Bulk memory operations: memory.fill
 			load.Byte()
 			genUnsupportedMisc(f, load, op)

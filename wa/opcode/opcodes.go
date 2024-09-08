@@ -357,7 +357,23 @@ var strings = [256]string{
 }
 
 const (
+	I32TruncSatSF32 = MiscOpcode(0x00)
+	I32TruncSatUF32 = MiscOpcode(0x01)
+	I32TruncSatSF64 = MiscOpcode(0x02)
+	I32TruncSatUF64 = MiscOpcode(0x03)
+	I64TruncSatSF32 = MiscOpcode(0x04)
+	I64TruncSatUF32 = MiscOpcode(0x05)
+	I64TruncSatSF64 = MiscOpcode(0x06)
+	I64TruncSatUF64 = MiscOpcode(0x07)
 )
 
 var miscStrings = [...]string{
+	I32TruncSatSF32: "i32.trunc_sat_s/f32",
+	I32TruncSatUF32: "i32.trunc_sat_u/f32",
+	I32TruncSatSF64: "i32.trunc_sat_s/f64",
+	I32TruncSatUF64: "i32.trunc_sat_u/f64",
+	I64TruncSatSF32: "i64.trunc_sat_s/f32",
+	I64TruncSatUF32: "i64.trunc_sat_u/f32",
+	I64TruncSatSF64: "i64.trunc_sat_s/f64",
+	I64TruncSatUF64: "i64.trunc_sat_u/f64",
 }

@@ -39,7 +39,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, sou
 	case prop.ConversionTruncS:
 		sourceReg, _ := allocResultReg(f, source)
 		resultReg := f.Regs.AllocResult(wa.I64)
-		truncateSigned(f, resultType, resultReg, source.Type, sourceReg)
+		truncateSigned(f, resultType, resultReg, source.Type, sourceReg, false)
 		f.Regs.Free(source.Type, sourceReg)
 		return operand.Reg(resultType, resultReg)
 
@@ -47,7 +47,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, sou
 		sourceReg, _ := allocResultReg(f, source)
 		resultReg := f.Regs.AllocResult(wa.I64)
 		if resultType == wa.I32 {
-			truncateUnsignedI32(f, resultReg, source.Type, sourceReg)
+			truncateUnsignedI32(f, resultReg, source.Type, sourceReg, false)
 		} else {
 			truncateUnsignedI64(f, resultReg, source.Type, sourceReg)
 		}
@@ -90,7 +90,23 @@ func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, sou
 	panic(props)
 }
 
-// Algorithm:
+func (MacroAssembler) TruncSat(f *gen.Func, props uint64, resultType wa.Type, source operand.O) operand.O {
+	sourceReg, _ := allocResultReg(f, source)
+	resultReg := f.Regs.AllocResult(wa.I64)
+
+	if props == prop.TruncS {
+		truncateSigned(f, resultType, resultReg, source.Type, sourceReg, true)
+	} else if resultType == wa.I32 {
+		truncateUnsignedI32(f, resultReg, source.Type, sourceReg, true)
+	} else {
+		truncateUnsignedI64Sat(f, resultReg, source.Type, sourceReg)
+	}
+
+	f.Regs.Free(source.Type, sourceReg)
+	return operand.Reg(resultType, resultReg)
+}
+
+// Algorithm (non-saturating version):
 //
 //	target_i = Convert(source_f)
 //	if target_i == MinInt {
@@ -99,7 +115,7 @@ func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, sou
 //	    }
 //	    TrapTruncOverflow()
 //	}
-func truncateSigned(f *gen.Func, targetType wa.Type, target reg.R, sourceType wa.Type, source reg.R) {
+func truncateSigned(f *gen.Func, targetType wa.Type, target reg.R, sourceType wa.Type, source reg.R, saturate bool) {
 	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, targetType, target, source)
 
 	// Target is the smallest negative integer if source is invalid; see if
@@ -107,23 +123,38 @@ func truncateSigned(f *gen.Func, targetType wa.Type, target reg.R, sourceType wa
 	in.CMPi.RegImm8(&f.Text, targetType, target, 1)
 	jumpUnlessMagicValue := in.JNOcb.Stub8(&f.Text)
 
-	if source != RegResult {
-		// Trap handler expects conversion input value in result register.
-		in.MOVAPx.RegReg(&f.Text, sourceType, RegResult, source)
+	if saturate {
+		in.MOVx.RegReg(&f.Text, sourceType, RegScratch, RegZero)
+		in.UCOMISx.RegReg(&f.Text, sourceType, source, RegScratch)
+		jumpIfNaN := in.JPcb.Stub8(&f.Text)
+		jumpIfBelow := in.JBcb.Stub8(&f.Text)
+		in.MOV64i.RegImm64(&f.Text, target, (1<<(targetType.Size()*8-1) - 1)) // Max value.
+		jumpIfAbove := in.JAcb.Stub8(&f.Text)
+
+		linker.UpdateNearBranch(f.Text.Bytes(), jumpIfNaN)
+		in.MOV.RegReg(&f.Text, targetType, target, RegZero)
+
+		linker.UpdateNearBranch(f.Text.Bytes(), jumpIfAbove)
+		linker.UpdateNearBranch(f.Text.Bytes(), jumpIfBelow)
+	} else {
+		if source != RegResult {
+			// Trap handler expects conversion input value in result register.
+			in.MOVAPx.RegReg(&f.Text, sourceType, RegResult, source)
+		}
+		in.CALLcd.Addr32(&f.Text, f.TrapLinkTruncOverflow[int(sourceType>>2)&2|int(targetType>>3)].Addr)
+		f.MapCallAddr(f.Text.Addr)
 	}
-	in.CALLcd.Addr32(&f.Text, f.TrapLinkTruncOverflow[int(sourceType>>2)&2|int(targetType>>3)].Addr)
-	f.MapCallAddr(f.Text.Addr)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), jumpUnlessMagicValue)
 }
 
-// Algorithm:
+// Algorithm (non-saturating version):
 //
 //	target_i = ConvertToI64(source_f)
 //	if target_i < 0 || target_i > MaxUint32 {
 //	    Trap()
 //	}
-func truncateUnsignedI32(f *gen.Func, target reg.R, sourceType wa.Type, source reg.R) {
+func truncateUnsignedI32(f *gen.Func, target reg.R, sourceType wa.Type, source reg.R, saturate bool) {
 	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
 
 	// Some high bits are set if the target is negative or the magic value.
@@ -131,7 +162,23 @@ func truncateUnsignedI32(f *gen.Func, target reg.R, sourceType wa.Type, source r
 	in.SHRi.RegImm8(&f.Text, wa.I64, RegScratch, 32)
 	jumpIfZero := in.JEcb.Stub8(&f.Text)
 
-	asm.Trap(f, trap.IntegerOverflow)
+	if saturate {
+		in.MOVx.RegReg(&f.Text, sourceType, RegScratch, RegZero)
+		in.UCOMISx.RegReg(&f.Text, sourceType, source, RegScratch)
+		jumpIfNaN := in.JPcb.Stub8(&f.Text)
+		jumpIfBelow := in.JBcb.Stub8(&f.Text)
+
+		in.MOVi.RegImm32(&f.Text, wa.I32, target, -1) // Max value.
+		jumpDone := in.JMPcb.Stub8(&f.Text)
+
+		linker.UpdateNearBranch(f.Text.Bytes(), jumpIfBelow)
+		linker.UpdateNearBranch(f.Text.Bytes(), jumpIfNaN)
+		in.MOV.RegReg(&f.Text, wa.I32, target, RegZero)
+
+		linker.UpdateNearBranch(f.Text.Bytes(), jumpDone)
+	} else {
+		asm.Trap(f, trap.IntegerOverflow)
+	}
 
 	linker.UpdateNearBranch(f.Text.Bytes(), jumpIfZero)
 }
@@ -153,10 +200,11 @@ func truncateUnsignedI32(f *gen.Func, target reg.R, sourceType wa.Type, source r
 func truncateUnsignedI64(f *gen.Func, target reg.R, sourceType wa.Type, source reg.R) {
 	intRangeAsFloat := rodata.MaskAddr(rodata.MaskTruncBase, sourceType)
 
-	// source_f < ConvertToFloat(MaxInt64+1)
+	// if source_f < ConvertToFloat(MaxInt64+1)
 	in.UCOMISx.RegMemDisp(&f.Text, sourceType, source, in.BaseText, intRangeAsFloat)
 	jumpIfAboveOrEqual := in.JAEcb.Stub8(&f.Text)
 
+	// if source_f < ConvertToFloat(MaxInt64+1)
 	// target_i = ConvertToI64(source_f)
 	// if target_i < 0
 	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
@@ -175,6 +223,8 @@ func truncateUnsignedI64(f *gen.Func, target reg.R, sourceType wa.Type, source r
 	in.SUBSx.RegMemDisp(&f.Text, sourceType, source, in.BaseText, intRangeAsFloat)
 	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
 	in.TEST.RegReg(&f.Text, wa.I64, target, target)
+
+	// Trap()
 	in.JLcb.Addr8(&f.Text, trapAddr)
 
 	// target_i = target_i ^ (MaxInt64+1)
@@ -183,6 +233,69 @@ func truncateUnsignedI64(f *gen.Func, target reg.R, sourceType wa.Type, source r
 
 	// endif
 	linker.UpdateNearBranch(f.Text.Bytes(), jumpIfNonNegative)
+}
+
+// Algorithm:
+//
+//	target_i = 0
+//	if !(IsNaN(source_f) || source_f < 0) {
+//	    if source_f < ConvertToFloat(MaxInt64+1) {
+//	        target_i = ConvertToI64(source_f)
+//	    } else {
+//	        target_i = MaxUint64
+//	        scratch_f = source_f - ConvertToFloat(MaxInt64+1)
+//	        if scratch_f < ConvertToFloat(MaxInt64+1) {
+//	            target_i = ConvertToI64(scratch_f)
+//	            target_i = target_i ^ (MaxInt64+1)
+//	        }
+//	    }
+//	}
+func truncateUnsignedI64Sat(f *gen.Func, target reg.R, sourceType wa.Type, source reg.R) {
+	intRangeAsFloat := rodata.MaskAddr(rodata.MaskTruncBase, sourceType)
+
+	// target_i = 0
+	in.MOV.RegReg(&f.Text, wa.I64, target, RegZero)
+
+	// if !(IsNaN(source_f) || source_f < 0)
+	in.MOVx.RegReg(&f.Text, sourceType, RegScratch, RegZero)
+	in.UCOMISx.RegReg(&f.Text, sourceType, source, RegScratch)
+	jumpIfNaN := in.JPcb.Stub8(&f.Text)
+	jumpIfLE := in.JBEcb.Stub8(&f.Text)
+
+	// if source_f < ConvertToFloat(MaxInt64+1)
+	in.UCOMISx.RegMemDisp(&f.Text, sourceType, source, in.BaseText, intRangeAsFloat)
+	jumpToElse := in.JAEcb.Stub8(&f.Text)
+
+	// target_i = ConvertToI64(source_f)
+	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, source)
+	jumpToEnd := in.JMPcb.Stub8(&f.Text)
+
+	// else
+	linker.UpdateNearBranch(f.Text.Bytes(), jumpToElse)
+
+	// target_i = MaxUint64
+	in.DEC.Reg(&f.Text, wa.I64, target)
+
+	// scratch_f = source_f - ConvertToFloat(MaxInt64+1)
+	in.MOVAPx.RegReg(&f.Text, sourceType, RegScratch, source)
+	in.SUBSx.RegMemDisp(&f.Text, sourceType, RegScratch, in.BaseText, intRangeAsFloat)
+
+	// if scratch_f < ConvertToFloat(MaxInt64+1)
+	in.UCOMISx.RegMemDisp(&f.Text, sourceType, RegScratch, in.BaseText, intRangeAsFloat)
+	jumpIfGE := in.JAEcb.Stub8(&f.Text)
+
+	// target_i = ConvertToI64(scratch_f)
+	in.CVTTSx2SI.TypeRegReg(&f.Text, sourceType, wa.I64, target, RegScratch)
+
+	// target_i = target_i ^ (MaxInt64+1)
+	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, rodata.Mask80Addr64)
+	in.XOR.RegReg(&f.Text, wa.I64, target, RegScratch)
+
+	// endif
+	linker.UpdateNearBranch(f.Text.Bytes(), jumpIfGE)
+	linker.UpdateNearBranch(f.Text.Bytes(), jumpToEnd)
+	linker.UpdateNearBranch(f.Text.Bytes(), jumpIfLE)
+	linker.UpdateNearBranch(f.Text.Bytes(), jumpIfNaN)
 }
 
 func convertUnsignedI64ToFloat(f *gen.Func, targetType wa.Type, target, source reg.R) {

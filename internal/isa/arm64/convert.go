@@ -58,3 +58,15 @@ func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, sou
 
 	panic(props)
 }
+
+func (MacroAssembler) TruncSat(f *gen.Func, props uint64, resultType wa.Type, source operand.O) operand.O {
+	var o outbuf
+
+	resultReg := f.Regs.AllocResult(wa.I64)
+	sourceReg := o.getScratchReg(f, source)
+	o.insn(in.Conversion(props>>8).Opcode().RdRn(resultReg, sourceReg, source.Size(), resultType.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	f.Regs.Free(wa.F64, sourceReg)
+	return operand.Reg(resultType, resultReg)
+}

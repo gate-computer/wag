@@ -36,7 +36,8 @@ Features
 Status
 ------
 
-- Supports WebAssembly version 1 (wasm32).  No wasm extensions are supported.
+- Supports WebAssembly version 1 (wasm32) and the non-trapping float-to-int
+  conversions extension.
 
 - Supports x86-64 and ARM64 code generation.
 

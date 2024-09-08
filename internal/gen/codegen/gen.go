@@ -187,6 +187,15 @@ func genStore(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, maxAlign
 	asm.Store(f, props, index, value, align, offset)
 }
 
+func genTruncSat(f *gen.Func, load *loader.L, op opcode.MiscOpcode, t1, t2 wa.Type, props uint64) {
+	x := popOperand(f, t2)
+
+	opStabilizeOperands(f)
+
+	result := asm.TruncSat(f, props, t1, x)
+	pushOperand(f, result)
+}
+
 func genUnary(f *gen.Func, load *loader.L, op opcode.Opcode, t wa.Type, props uint64) {
 	x := popOperand(f, t)
 
