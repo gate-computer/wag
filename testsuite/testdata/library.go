@@ -5,4 +5,4 @@
 package main
 
 //go:generate go run gate.computer/cmd/gate-resource -d include include/rt.h
-//go:generate go run gate.computer/cmd/gate-librarian -v library.wasm -- library/compile.sh -c -o /dev/stdout
+//go:generate go run gate.computer/cmd/gate-librarian library.wasm -- library/compile.sh -c -o /dev/stdout

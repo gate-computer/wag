@@ -1,8 +1,8 @@
-github.com/ianlancetaylor/demangle v0.0.0-20220517205856-0058ec4f073c h1:rwmN+hgiyp8QyBqzdEX43lTjKAxaqCrYHaU5op5P9J8=
-github.com/ianlancetaylor/demangle v0.0.0-20220517205856-0058ec4f073c/go.mod h1:aYm2/VgdVmcIU8iMfdMvDMsRAQjcfZSKFby6HOFvi/w=
+github.com/ianlancetaylor/demangle v0.0.0-20240805132620-81f5be970eca h1:T54Ema1DU8ngI+aef9ZhAhNGQhcRTrWxVeG07F+c/Rw=
+github.com/ianlancetaylor/demangle v0.0.0-20240805132620-81f5be970eca/go.mod h1:gx7rwoVhcfuVKG5uya9Hs3Sxj7EIvldVofAWIUtGouw=
 github.com/knightsc/gapstone v0.0.0-20211014144438-5e0e64002a6e h1:6J5obSn9umEThiYzWzndcPOZR0Qj/sVCZpH6V1G7yNE=
 github.com/knightsc/gapstone v0.0.0-20211014144438-5e0e64002a6e/go.mod h1:1K5hEzsMBLTPdRJKEHqBFJ8Zt2VRqDhomcQ11KH0WW4=
-golang.org/x/sys v0.2.0 h1:ljd4t30dBnAvMZaQCevtY0xLLD0A+bRZXbgLMLU1F/A=
-golang.org/x/sys v0.2.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.25.0 h1:r+8e+loiHxRqhXVl6ML1nO3l1+oFoWbnlu2Ehimmi34=
+golang.org/x/sys v0.25.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 import.name/pan v0.2.0 h1:wSKQfOXNKHhol1Hf3gyo6kmoAmFe0vp3Y0jsSpykPqQ=
 import.name/pan v0.2.0/go.mod h1:jzAC3o4KYbMoLWPgtxfDXjtZxa+JikGUdbQGgaDqf7U=

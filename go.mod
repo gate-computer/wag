@@ -1,10 +1,10 @@
 module gate.computer/wag
 
-go 1.18
+go 1.23
 
 require (
-	github.com/ianlancetaylor/demangle v0.0.0-20220517205856-0058ec4f073c
+	github.com/ianlancetaylor/demangle v0.0.0-20240805132620-81f5be970eca
 	github.com/knightsc/gapstone v0.0.0-20211014144438-5e0e64002a6e
-	golang.org/x/sys v0.2.0
+	golang.org/x/sys v0.25.0
 	import.name/pan v0.2.0
 )
