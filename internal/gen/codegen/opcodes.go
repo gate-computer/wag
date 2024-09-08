@@ -9,8 +9,10 @@ import (
 	"gate.computer/wag/internal/gen/debug"
 	"gate.computer/wag/internal/isa/prop"
 	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/module"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
+	"import.name/pan"
 )
 
 func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
@@ -31,7 +33,7 @@ func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	case opcode.If:
 		genIf(f, load, op)
 	case opcode.Else:
-		badGen(f, load, op)
+		pan.Panic(module.Errorf("unexpected opcode: %s", op))
 	case opcode.End:
 		panic(op)
 	case opcode.Br:
@@ -364,8 +366,33 @@ func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
 		genConvert(f, load, op, wa.F32, wa.I32, uint64(prop.ReinterpretInt))
 	case opcode.F64ReinterpretI64:
 		genConvert(f, load, op, wa.F64, wa.I64, uint64(prop.ReinterpretInt))
+	case 0xc0, 0xc1, 0xc2, 0xc3, 0xc4: // Sign-extension.
+		genUnsupported(f, load, op)
+	case 0xd0, 0xd1, 0xd2: // Reference types.
+		genUnsupported(f, load, op)
+	case opcode.MiscPrefix:
+		switch op := opcode.MiscOpcode(load.Varuint32()); op {
+		case 0, 1, 2, 3, 4, 5, 6, 7: // Non-trapping float-to-int conversion.
+			genUnsupportedMisc(f, load, op)
+		case 0x0b: // Bulk memory operations: memory.fill
+			load.Byte()
+			genUnsupportedMisc(f, load, op)
+		case 0x0a, 0x0e: // Bulk memory operations: memory.copy, table.copy
+			load.Byte()
+			load.Byte()
+			genUnsupportedMisc(f, load, op)
+		case 0x09, 0x0d: // Bulk memory operations: data.drop, elem.drop
+			load.Varuint32()
+			genUnsupportedMisc(f, load, op)
+		case 0x08, 0x0c: // Bulk memory operations: memory.init, table.init
+			load.Varuint32()
+			load.Byte()
+			genUnsupportedMisc(f, load, op)
+		default:
+			pan.Panic(module.Errorf("unknown opcode: 0x%02x 0x%02x", byte(opcode.MiscPrefix), uint32(op)))
+		}
 	default:
-		badGen(f, load, op)
+		pan.Panic(module.Errorf("unknown opcode: 0x%02x", byte(op)))
 	}
 
 	if debug.Enabled {

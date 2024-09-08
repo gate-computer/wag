@@ -290,56 +290,28 @@ func genWrap(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	pushOperand(f, x)
 }
 
-func badGen(f *gen.Func, load *loader.L, op opcode.Opcode) {
-	badOp(load, op)
-
+func genUnsupported(f *gen.Func, load *loader.L, op opcode.Opcode) {
+	if !UnsupportedOpBreakpoint {
+		pan.Panic(module.Errorf("unknown opcode: 0x%02x", byte(op)))
+	}
 	if debug.Enabled {
 		debug.Printf("unsupported opcode: 0x%02x", byte(op))
 	}
+	genUnsupportedTrap(f)
+}
 
+func genUnsupportedMisc(f *gen.Func, load *loader.L, op opcode.MiscOpcode) {
+	if !UnsupportedOpBreakpoint {
+		pan.Panic(module.Errorf("unknown opcode: 0x%02x 0x%02x", byte(opcode.MiscPrefix), byte(op)))
+	}
+	if debug.Enabled {
+		debug.Printf("unsupported opcode: 0x%02x 0x%02x", byte(opcode.MiscPrefix), byte(op))
+	}
+	genUnsupportedTrap(f)
+}
+
+func genUnsupportedTrap(f *gen.Func) {
 	asm.Trap(f, trap.Breakpoint)
 	pushOperand(f, operand.UnreachableSentinel())
 	getCurrentBlock(f).Deadend = true
-}
-
-func badOp(load *loader.L, op opcode.Opcode) {
-	if opcode.Exists(byte(op)) {
-		pan.Panic(module.Errorf("unexpected opcode: %s", op))
-	}
-
-	if UnsupportedOpBreakpoint {
-		switch op {
-		case 0xc0, 0xc1, 0xc2, 0xc3, 0xc4: // Sign-extension.
-			return
-
-		case 0xd0, 0xd1, 0xd2: // Reference types.
-			return
-
-		case 0xfc: // Miscellaneous operations.
-			switch op := load.Varuint32(); op {
-			case 0, 1, 2, 3, 4, 5, 6, 7: // Non-trapping float-to-int conversion.
-				return
-
-			case 0x0b: // Bulk memory operations: memory.fill
-				load.Byte()
-				return
-			case 0x0a, 0x0e: // Bulk memory operations: memory.copy, table.copy
-				load.Byte()
-				load.Byte()
-				return
-			case 0x09, 0x0d: // Bulk memory operations: data.drop, elem.drop
-				load.Varuint32()
-				return
-			case 0x08, 0x0c: // Bulk memory operations: memory.init, table.init
-				load.Varuint32()
-				load.Byte()
-				return
-
-			default:
-				pan.Panic(module.Errorf("unknown opcode: 0xfc 0x%02x", op))
-			}
-		}
-	}
-
-	pan.Panic(module.Errorf("unknown opcode: 0x%02x", byte(op)))
 }

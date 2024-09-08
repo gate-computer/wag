@@ -177,6 +177,7 @@ const (
 	I64ReinterpretF64 = Opcode(0xbd)
 	F32ReinterpretI32 = Opcode(0xbe)
 	F64ReinterpretI64 = Opcode(0xbf)
+	MiscPrefix        = Opcode(0xfc)
 )
 
 var strings = [256]string{
@@ -352,4 +353,11 @@ var strings = [256]string{
 	I64ReinterpretF64: "i64.reinterpret/f64",
 	F32ReinterpretI32: "f32.reinterpret/i32",
 	F64ReinterpretI64: "f64.reinterpret/i64",
+	MiscPrefix:        "misc",
+}
+
+const (
+)
+
+var miscStrings = [...]string{
 }

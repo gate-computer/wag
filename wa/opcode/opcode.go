@@ -19,6 +19,11 @@ func (op Opcode) String() (s string) {
 	return
 }
 
-func Exists(opcode byte) bool {
-	return strings[opcode] != ""
+type MiscOpcode uint32
+
+func (op MiscOpcode) String() (s string) {
+	if uint32(op) >= uint32(len(miscStrings)) {
+		return fmt.Sprintf("0x%02x 0x%02x", byte(MiscPrefix), uint32(op))
+	}
+	return miscStrings[op]
 }
