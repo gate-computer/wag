@@ -49,6 +49,8 @@ benchmark:
 
 .PHONY: generate
 generate:
+	GOARCH=amd64 $(GO) generate ./internal/isa/...
+	GOARCH=arm64 $(GO) generate ./internal/isa/...
 	cd testsuite && $(GO) generate
 
 .PHONY: library
@@ -57,5 +59,6 @@ library:
 
 .PHONY: clean
 clean:
+	rm -f internal/isa/*/*.elf internal/isa/*/*.o
 	rm -rf testsuite/testdata/include
 	rm -rf testsuite/testdata/specdata

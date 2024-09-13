@@ -365,6 +365,8 @@ const (
 	I64TruncSatUF32 = MiscOpcode(0x05)
 	I64TruncSatSF64 = MiscOpcode(0x06)
 	I64TruncSatUF64 = MiscOpcode(0x07)
+	MemoryCopy      = MiscOpcode(0x0a)
+	MemoryFill      = MiscOpcode(0x0b)
 )
 
 var miscStrings = [...]string{
@@ -376,4 +378,6 @@ var miscStrings = [...]string{
 	I64TruncSatUF32: "i64.trunc_sat_u/f32",
 	I64TruncSatSF64: "i64.trunc_sat_s/f64",
 	I64TruncSatUF64: "i64.trunc_sat_u/f64",
+	MemoryCopy:      "memory.copy",
+	MemoryFill:      "memory.fill",
 }

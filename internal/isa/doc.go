@@ -132,6 +132,9 @@ type MacroAssembler interface {
 	// Exit may do anything.  It MUST NOT generate over 16 bytes of code.
 	Exit(p *gen.Prog)
 
+	// Routines may do anything.
+	Routines(p *gen.Prog)
+
 	// GrowMemory may allocate registers, use RegResult and update condition
 	// flags.  The generated instruction sequence is part of ISA-specific ABI:
 	// the instruction sequence size up to and including the function call

@@ -250,6 +250,24 @@ func genGrowMemory(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	pushResultRegOperand(f, wa.I32)
 }
 
+func genMemoryCopy(f *gen.Func, load *loader.L, op opcode.MiscOpcode) {
+	index1 := load.Byte()
+	index2 := load.Byte()
+	if index1 != 0 || index2 != 0 {
+		pan.Panic(module.Errorf("%s: reserved byte is not zero", op))
+	}
+
+	opCallMemoryRoutine(f, load, op, f.MemoryCopyAddr)
+}
+
+func genMemoryFill(f *gen.Func, load *loader.L, op opcode.MiscOpcode) {
+	if load.Byte() != 0 {
+		pan.Panic(module.Errorf("%s: reserved byte is not zero", op))
+	}
+
+	opCallMemoryRoutine(f, load, op, f.MemoryFillAddr)
+}
+
 func genNop(f *gen.Func, load *loader.L, op opcode.Opcode) {
 }
 

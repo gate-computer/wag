@@ -7,6 +7,7 @@
 package arm64
 
 import (
+	"gate.computer/wag/internal/code"
 	"gate.computer/wag/internal/gen"
 	"gate.computer/wag/internal/gen/operand"
 	"gate.computer/wag/internal/gen/reg"
@@ -73,13 +74,16 @@ func (o *outbuf) access(f *gen.Func, op in.Memory, dataReg reg.R, index operand.
 }
 
 func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {
+	getCurrentMemoryPages(&f.Text)
+	return f.Text.Addr
+}
+
+func getCurrentMemoryPages(text *code.Buf) {
 	var o outbuf
 
 	o.insn(in.LDUR.RtRnI9(RegScratch, RegTextBase, in.Int9(gen.VectorOffsetCurrentMemory), wa.I64))
 	o.insn(in.BLR.Rn(RegScratch))
-	o.copy(f.Text.Extend(o.size))
-
-	return f.Text.Addr
+	o.copy(text.Extend(o.size))
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func) int32 {

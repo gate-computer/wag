@@ -29,7 +29,7 @@ def main():
     for filename in sorted(glob("testdata/spec/test/core/*.wast")):
         basename = match(r".*/(.*)\.wast$", filename)[1]
 
-        if basename in ("bulk", "linking", "memory_copy", "memory_fill", "memory_init", "ref_func", "ref_is_null", "ref_null", "table_init"):
+        if basename in ("bulk", "linking", "memory_init", "ref_func", "ref_is_null", "ref_null", "table_init"):
             text += '\n func Test_{}(t *testing.T) {{'.format(basename.replace("-", "_"))
             text += ' t.Skip("{} not supported")'.format(basename)
             text += '} \n'

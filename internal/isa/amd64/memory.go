@@ -143,9 +143,14 @@ func invalidAccess(f *gen.Func) (base in.BaseReg, disp int32) {
 }
 
 func (MacroAssembler) CurrentMemory(f *gen.Func) int32 {
-	in.MOV.RegMemDisp(&f.Text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetCurrentMemory)
-	in.CALLcd.Addr32(&f.Text, nonabi.TextAddrRetpoline)
+	getCurrentMemoryPages(&f.Text)
 	return f.Text.Addr
+}
+
+// getCurrentMemoryPages count in RegResult.
+func getCurrentMemoryPages(text *code.Buf) {
+	in.MOV.RegMemDisp(text, wa.I64, RegScratch, in.BaseText, gen.VectorOffsetCurrentMemory)
+	in.CALLcd.Addr32(text, nonabi.TextAddrRetpoline)
 }
 
 func (MacroAssembler) GrowMemory(f *gen.Func) int32 {

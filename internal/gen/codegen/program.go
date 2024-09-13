@@ -119,6 +119,8 @@ func GenProgram(
 		asm.TrapHandlerTruncOverflow(p, i)
 	}
 
+	asm.Routines(p)
+
 	p.ImportContext = lib // Generate import functions in library context.
 
 	for i, imp := range m.ImportFuncs {

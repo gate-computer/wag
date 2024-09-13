@@ -1,3 +1,5 @@
+*.elf
+*.o
 bench-new.txt
 bench-old.txt
 config.mk

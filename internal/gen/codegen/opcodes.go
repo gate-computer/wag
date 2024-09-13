@@ -388,10 +388,11 @@ func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
 			genTruncSat(f, load, op, wa.I64, wa.F64, prop.TruncS)
 		case opcode.I64TruncSatUF64:
 			genTruncSat(f, load, op, wa.I64, wa.F64, prop.TruncU)
-		case 0x0b: // Bulk memory operations: memory.fill
-			load.Byte()
-			genUnsupportedMisc(f, load, op)
-		case 0x0a, 0x0e: // Bulk memory operations: memory.copy, table.copy
+		case opcode.MemoryCopy:
+			genMemoryCopy(f, load, op)
+		case opcode.MemoryFill:
+			genMemoryFill(f, load, op)
+		case 0x0e: // Bulk memory operations: memory.copy, table.copy
 			load.Byte()
 			load.Byte()
 			genUnsupportedMisc(f, load, op)

@@ -159,3 +159,25 @@ func opCallIndirect(f *gen.Func, sigIndex int32, funcIndexReg reg.R) {
 	asm.CallIndirect(f, sigIndex, funcIndexReg)
 	f.MapCallAddr(f.Text.Addr)
 }
+
+func opCallMemoryRoutine(f *gen.Func, load *loader.L, op opcode.MiscOpcode, routineAddr int32) {
+	if !f.Module.Memory {
+		pan.Panic(errUnknownMemory)
+	}
+
+	opSaveOperands(f)
+
+	if len(f.Operands)-f.FrameBase < 3 {
+		pan.Panic(module.Errorf("%s parameter count exceeds stack operand count", op))
+	}
+	for i := len(f.Operands) - 3; i < len(f.Operands); i++ {
+		if f.Operands[i].Type != wa.I32 {
+			pan.Panic(module.Errorf("%s argument has wrong type", op))
+		}
+	}
+
+	asm.Call(&f.Prog, routineAddr)
+	f.MapCallAddr(f.Text.Addr)
+
+	opDropCallOperands(f, 3)
+}
