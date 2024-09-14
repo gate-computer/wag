@@ -177,6 +177,11 @@ const (
 	I64ReinterpretF64 = Opcode(0xbd)
 	F32ReinterpretI32 = Opcode(0xbe)
 	F64ReinterpretI64 = Opcode(0xbf)
+	I32Extend8S       = Opcode(0xc0)
+	I32Extend16S      = Opcode(0xc1)
+	I64Extend8S       = Opcode(0xc2)
+	I64Extend16S      = Opcode(0xc3)
+	I64Extend32S      = Opcode(0xc4)
 	MiscPrefix        = Opcode(0xfc)
 )
 
@@ -353,6 +358,11 @@ var strings = [256]string{
 	I64ReinterpretF64: "i64.reinterpret/f64",
 	F32ReinterpretI32: "f32.reinterpret/i32",
 	F64ReinterpretI64: "f64.reinterpret/i64",
+	I32Extend8S:       "i32.extend8_s",
+	I32Extend16S:      "i32.extend16_s",
+	I64Extend8S:       "i64.extend8_s",
+	I64Extend16S:      "i64.extend16_s",
+	I64Extend32S:      "i64.extend32_s",
 	MiscPrefix:        "misc",
 }
 

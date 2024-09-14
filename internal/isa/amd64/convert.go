@@ -19,18 +19,6 @@ import (
 
 func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, source operand.O) operand.O {
 	switch props & prop.MaskConversion {
-	case prop.ConversionExtendS:
-		r, _ := allocResultReg(f, source)
-		in.MOVSXD.RegReg(&f.Text, wa.I64, r, r)
-		return operand.Reg(resultType, r)
-
-	case prop.ConversionExtendU:
-		r, zeroExtended := allocResultReg(f, source)
-		if !zeroExtended {
-			in.MOV.RegReg(&f.Text, wa.I32, r, r)
-		}
-		return operand.Reg(wa.I64, r)
-
 	case prop.ConversionMote:
 		r, _ := allocResultReg(f, source)
 		in.CVTS2Sx.RegReg(&f.Text, source.Type, r, r)
@@ -320,4 +308,26 @@ func convertUnsignedI64ToFloat(f *gen.Func, targetType wa.Type, target, source r
 	in.ADDSx.RegReg(&f.Text, targetType, target, target)
 
 	linker.UpdateNearBranch(f.Text.Bytes(), doneJump)
+}
+
+func (MacroAssembler) Extend(f *gen.Func, props uint32, resultType wa.Type, source operand.O) operand.O {
+	r, zeroExtended := allocResultReg(f, source)
+
+	switch props {
+	case prop.ExtensionMOVSX8:
+		in.MOVSX8.RegReg(&f.Text, resultType, r, r)
+
+	case prop.ExtensionMOVSX16:
+		in.MOVSX16.RegReg(&f.Text, resultType, r, r)
+
+	case prop.ExtensionMOVSXD:
+		in.MOVSXD.RegReg(&f.Text, resultType, r, r)
+
+	default:
+		if !zeroExtended {
+			in.MOV.RegReg(&f.Text, wa.I32, r, r)
+		}
+	}
+
+	return operand.Reg(resultType, r)
 }

@@ -138,12 +138,21 @@ func opConst(f *gen.Func, t wa.Type, value uint64) {
 	pushOperand(f, operand.Imm(t, value))
 }
 
-func genConvert(f *gen.Func, load *loader.L, op opcode.Opcode, t1, t2 wa.Type, props uint64) {
+func genConvert(f *gen.Func, load *loader.L, op opcode.Opcode, t, t2 wa.Type, props uint64) {
 	x := popOperand(f, t2)
 
 	opStabilizeOperands(f)
 
-	result := asm.Convert(f, props, t1, x)
+	result := asm.Convert(f, props, t, x)
+	pushOperand(f, result)
+}
+
+func genExtend(f *gen.Func, dest, src wa.Type, props uint32) {
+	x := popOperand(f, src)
+
+	opStabilizeOperands(f)
+
+	result := asm.Extend(f, props, dest, x)
 	pushOperand(f, result)
 }
 

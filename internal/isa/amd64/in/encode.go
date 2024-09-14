@@ -162,8 +162,9 @@ func (op Mex2) OneSizeReg(text *code.Buf, r reg.R) {
 // RM (MR)
 
 type (
-	RM  byte   // opcode byte
-	RM2 uint16 // two opcode bytes
+	RM    byte   // opcode byte
+	RM2   uint16 // two opcode bytes
+	RMex2 uint16 // rex byte if second operand is register; two opcode bytes
 )
 
 func (op RM) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
@@ -177,6 +178,14 @@ func (op RM) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 func (op RM2) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
 	var o output
 	o.rexIf(typeRexW(t) | regRexR(r) | regRexB(r2))
+	o.word(uint16(op))
+	o.mod(ModReg, regRO(r), regRM(r2))
+	o.copy(text.Extend(o.len()))
+}
+
+func (op RMex2) RegReg(text *code.Buf, t wa.Type, r, r2 reg.R) {
+	var o output
+	o.rex(typeRexW(t) | regRexR(r) | regRexB(r2))
 	o.word(uint16(op))
 	o.mod(ModReg, regRO(r), regRM(r2))
 	o.copy(text.Extend(o.len()))
@@ -200,6 +209,10 @@ func (op RM2) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp 
 	o.mod(mod, regRO(r), regRM(reg.R(base)))
 	o.int(disp, dispSize)
 	o.copy(text.Extend(o.len()))
+}
+
+func (op RMex2) RegMemDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, disp int32) {
+	RM2(op).RegMemDisp(text, t, r, base, disp)
 }
 
 func (op RM) RegMemIndexDisp(text *code.Buf, t wa.Type, r reg.R, base BaseReg, index reg.R, s Scale, disp int32) {

@@ -123,6 +123,7 @@ type (
 	RegRegImm12ShiftSf   uint32
 	RegRegImm12Size      uint32
 	RegRegSf             uint32
+	RegRegNSf            uint32
 	RegRegSOptionReg     uint32
 	RegRegSOptionRegSize uint32
 	RegRegCondRegType    uint32
@@ -201,6 +202,10 @@ func (op RegRegImm12Size) RdRnI12(rt, rn reg.R, imm uint32, t wa.Type) uint32 {
 
 func (op RegRegSf) RdRn(rd, rn reg.R, t wa.Size) uint32 {
 	return uint32(op) | sf(t) | uint32(rn)<<5 | uint32(rd)
+}
+
+func (op RegRegNSf) RdRn(rd, rn reg.R, t wa.Size) uint32 {
+	return uint32(op) | sfN(t) | uint32(rn)<<5 | uint32(rd)
 }
 
 func (op RegRegSOptionReg) RtRnSOptionRm(rt, rn reg.R, s S, option Ext, rm reg.R) uint32 {

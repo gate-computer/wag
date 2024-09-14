@@ -54,6 +54,12 @@ const (
 	// Bitfield
 	UBFM = RegRegImm6Imm6NSf(2<<29 | 0x26<<23 | 0<<22)
 
+	// Extend
+	SXTB = RegRegNSf(0<<29 | 0x26<<23 | 0x07<<10)
+	SXTH = RegRegNSf(0<<29 | 0x26<<23 | 0x0f<<10)
+	SXTW = RegRegNSf(0<<29 | 0x26<<23 | 0x1f<<10)
+	UXTW = RegRegNSf(2<<29 | 0x26<<23 | 0x1f<<10)
+
 	// Move wide (immediate)
 	MOVN = RegImm16HwSf(0<<29 | 0x25<<23)
 	MOVZ = RegImm16HwSf(2<<29 | 0x25<<23)
@@ -147,18 +153,6 @@ func (op Logic) OpcodeImm() RegRegImm6Imm6NSf {
 
 func (op Logic) OpcodeReg() RegRegImm6RegShiftSf {
 	return RegRegImm6RegShiftSf(op | 0x0a<<24 | 0<<21)
-}
-
-// Bitfield instruction variants
-type Bitfield uint32
-
-const (
-	ExtendS Bitfield = 0<<29 | 0x26<<23 | 0<<22
-	ExtendU Bitfield = 2<<29 | 0x26<<23 | 0<<22
-)
-
-func (op Bitfield) Opcode() RegRegImm6Imm6NSf {
-	return RegRegImm6Imm6NSf(op)
 }
 
 // Data-processing (2 source) instruction variants

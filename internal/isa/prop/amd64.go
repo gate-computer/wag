@@ -157,8 +157,6 @@ const (
 // Conversion
 
 const (
-	ConversionExtendS     = 0
-	ConversionExtendU     = 1
 	ConversionMote        = 2 // Demote or promote.
 	ConversionTruncS      = 3
 	ConversionTruncU      = 4
@@ -170,8 +168,6 @@ const (
 )
 
 const (
-	ExtendS          = ConversionExtendS
-	ExtendU          = ConversionExtendU
 	Demote           = ConversionMote
 	Promote          = ConversionMote
 	TruncS           = ConversionTruncS
@@ -180,4 +176,19 @@ const (
 	ConvertU         = ConversionConvertU
 	ReinterpretInt   = ConversionReinterpret
 	ReinterpretFloat = ConversionReinterpret
+)
+
+// Extension
+
+const (
+	ExtensionMOVSX8  = 1
+	ExtensionMOVSX16 = 2
+	ExtensionMOVSXD  = 3
+)
+
+const (
+	ExtendU   = 0
+	ExtendS8  = ExtensionMOVSX8
+	ExtendS16 = ExtensionMOVSX16
+	ExtendS   = ExtensionMOVSXD
 )

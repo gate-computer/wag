@@ -132,6 +132,10 @@ type MacroAssembler interface {
 	// Exit may do anything.  It MUST NOT generate over 16 bytes of code.
 	Exit(p *gen.Prog)
 
+	// Extend may allocate registers, use RegResult and update condition flags.
+	// The source operand may be RegResult or condition flags.
+	Extend(f *gen.Func, props uint32, result wa.Type, source operand.O) operand.O
+
 	// Routines may do anything.
 	Routines(p *gen.Prog)
 

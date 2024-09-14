@@ -327,9 +327,9 @@ func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	case opcode.I32TruncUF64:
 		genConvert(f, load, op, wa.I32, wa.F64, uint64(prop.TruncU))
 	case opcode.I64ExtendSI32:
-		genConvert(f, load, op, wa.I64, wa.I32, uint64(prop.ExtendS))
+		genExtend(f, wa.I64, wa.I32, prop.ExtendS)
 	case opcode.I64ExtendUI32:
-		genConvert(f, load, op, wa.I64, wa.I32, uint64(prop.ExtendU))
+		genExtend(f, wa.I64, wa.I32, prop.ExtendU)
 	case opcode.I64TruncSF32:
 		genConvert(f, load, op, wa.I64, wa.F32, uint64(prop.TruncS))
 	case opcode.I64TruncUF32:
@@ -366,8 +366,16 @@ func genOp(f *gen.Func, load *loader.L, op opcode.Opcode) {
 		genConvert(f, load, op, wa.F32, wa.I32, uint64(prop.ReinterpretInt))
 	case opcode.F64ReinterpretI64:
 		genConvert(f, load, op, wa.F64, wa.I64, uint64(prop.ReinterpretInt))
-	case 0xc0, 0xc1, 0xc2, 0xc3, 0xc4: // Sign-extension.
-		genUnsupported(f, load, op)
+	case opcode.I32Extend8S:
+		genExtend(f, wa.I32, wa.I32, prop.ExtendS8)
+	case opcode.I32Extend16S:
+		genExtend(f, wa.I32, wa.I32, prop.ExtendS16)
+	case opcode.I64Extend8S:
+		genExtend(f, wa.I64, wa.I64, prop.ExtendS8)
+	case opcode.I64Extend16S:
+		genExtend(f, wa.I64, wa.I64, prop.ExtendS16)
+	case opcode.I64Extend32S:
+		genExtend(f, wa.I64, wa.I64, prop.ExtendS)
 	case 0xd0, 0xd1, 0xd2: // Reference types.
 		genUnsupported(f, load, op)
 	case opcode.MiscPrefix:

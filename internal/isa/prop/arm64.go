@@ -135,7 +135,6 @@ const (
 // Conversion
 
 const (
-	ConversionExtend     = 0
 	ConversionMote       = 1
 	ConversionFloatToInt = 2
 	ConversionIntToFloat = 3
@@ -144,8 +143,6 @@ const (
 )
 
 const (
-	ExtendS          = ConversionExtend | uint64(in.ExtendS)<<8
-	ExtendU          = ConversionExtend | uint64(in.ExtendU)<<8
 	Demote           = ConversionMote | uint64(in.UnaryFloatCvtTo32)<<8
 	Promote          = ConversionMote | uint64(in.UnaryFloatCvtTo64)<<8
 	TruncS           = ConversionFloatToInt | uint64(in.TruncFloatS)<<8
@@ -154,4 +151,13 @@ const (
 	ConvertU         = ConversionIntToFloat | uint64(in.ConvertIntU)<<8
 	ReinterpretInt   = ConversionIntToFloat | uint64(in.ReinterpretInt)<<8
 	ReinterpretFloat = ConversionFloatToInt | uint64(in.ReinterpretFloat)<<8
+)
+
+// Extension
+
+const (
+	ExtendU   = uint32(in.UXTW)
+	ExtendS8  = uint32(in.SXTB)
+	ExtendS16 = uint32(in.SXTH)
+	ExtendS   = uint32(in.SXTW)
 )

@@ -19,13 +19,6 @@ func (MacroAssembler) Convert(f *gen.Func, props uint64, resultType wa.Type, sou
 	var o outbuf
 
 	switch props & prop.MaskConversion {
-	case prop.ConversionExtend:
-		r := o.allocResultReg(f, source)
-		o.insn(in.Bitfield(props>>8).Opcode().RdRnI6sI6r(r, r, 31, 0, wa.Size64))
-		o.copy(f.Text.Extend(o.size))
-
-		return operand.Reg(resultType, r)
-
 	case prop.ConversionMote:
 		r := o.allocResultReg(f, source)
 		o.insn(in.UnaryFloat(props>>8).Opcode().RdRn(r, r, source.Size()))
@@ -69,4 +62,14 @@ func (MacroAssembler) TruncSat(f *gen.Func, props uint64, resultType wa.Type, so
 
 	f.Regs.Free(wa.F64, sourceReg)
 	return operand.Reg(resultType, resultReg)
+}
+
+func (MacroAssembler) Extend(f *gen.Func, props uint32, resultType wa.Type, source operand.O) operand.O {
+	var o outbuf
+
+	r := o.allocResultReg(f, source)
+	o.insn(in.RegRegNSf(props).RdRn(r, r, resultType.Size()))
+	o.copy(f.Text.Extend(o.size))
+
+	return operand.Reg(resultType, r)
 }

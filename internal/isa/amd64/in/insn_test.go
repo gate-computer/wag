@@ -178,15 +178,15 @@ func TestInsnRMint(test *testing.T) {
 		{mn: "mov", op: MOV},
 		{mn: "lea", op: LEA, skipRegReg: true, noPtrPrefix: true},
 		{mn: "imul", op: IMUL},
-		{mn: "movzx", op: MOVZX8, memSize: "byte", skipRegReg: true},
-		{mn: "movzx", op: MOVZX16, memSize: "word", skipRegReg: true},
+		{mn: "movzx", op: MOVZX8, op2RegNames: regNamesI8, memSize: "byte"},
+		{mn: "movzx", op: MOVZX16, op2RegNames: regNamesI16, memSize: "word"},
 		{mn: "popcnt", op: POPCNT},
 		{mn: "tzcnt", op: TZCNT},
 		{mn: "lzcnt", op: LZCNT},
 		{mn: "bsf", op: BSF},
 		{mn: "bsr", op: BSR},
-		{mn: "movsx", op: MOVSX8, memSize: "byte", skipRegReg: true},
-		{mn: "movsx", op: MOVSX16, memSize: "word", skipRegReg: true},
+		{mn: "movsx", op: MOVSX8, op2RegNames: regNamesI8, memSize: "byte"},
+		{mn: "movsx", op: MOVSX16, op2RegNames: regNamesI16, memSize: "word"},
 	} {
 		types := i.types
 		if types == nil {
