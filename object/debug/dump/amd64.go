@@ -43,22 +43,22 @@ func rewriteText(insns []gapstone.Instruction, targets map[uint]string, textAddr
 		insn := &insns[i]
 
 		insn.OpStr = strings.Replace(insn.OpStr, "%al", "resultb", -1)
-		insn.OpStr = strings.Replace(insn.OpStr, "%ah", "resultw", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%ax", "resultw", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%eax", "result", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%rax", "result", -1)
 
 		insn.OpStr = strings.Replace(insn.OpStr, "%cl", "scratchb", -1)
-		insn.OpStr = strings.Replace(insn.OpStr, "%ch", "scratchw", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%cx", "scratchw", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%ecx", "scratch", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%rcx", "scratch", -1)
 
 		insn.OpStr = strings.Replace(insn.OpStr, "%dl", "zerob", -1)
-		insn.OpStr = strings.Replace(insn.OpStr, "%dh", "zerow", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%dx", "zerow", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%edx", "zero", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%rdx", "zero", -1)
 
 		insn.OpStr = strings.Replace(insn.OpStr, "%bl", "stacklimitb", -1)
-		insn.OpStr = strings.Replace(insn.OpStr, "%bh", "stacklimitw", -1)
+		insn.OpStr = strings.Replace(insn.OpStr, "%bx", "stacklimitw", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%ebx", "stacklimit", -1)
 		insn.OpStr = strings.Replace(insn.OpStr, "%rbx", "stacklimit", -1)
 
