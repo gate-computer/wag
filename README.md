@@ -38,8 +38,8 @@ Status
 
 - Supports WebAssembly version 1 (wasm32).
 
-- Supports non-trapping float-to-int conversions extension and partially bulk
-  memory operations extension.
+- Supports non-trapping float-to-int conversions extension, sign-extension
+  instructions extension, and partially bulk memory operations extension.
 
 - Supports x86-64 and ARM64 code generation.
 
