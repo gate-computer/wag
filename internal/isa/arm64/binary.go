@@ -24,7 +24,7 @@ func (MacroAssembler) Binary(f *gen.Func, props uint64, a, b operand.O) operand.
 
 	switch props & prop.MaskBinary {
 	case prop.BinaryIntCmp:
-		o.insn(in.SUBSe.RdRnI3ExtRm(RegDiscard, aReg, 0, in.UXTX, bReg, a.Size()))
+		o.insn(in.SUBSe.RdRnI3ExtRm(RegDiscard, aReg, 0, in.UX, bReg, a.Size()))
 		o.copy(f.Text.Extend(o.size))
 
 		f.Regs.Free2(a.Type, aReg, bReg)

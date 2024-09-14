@@ -85,24 +85,24 @@ const (
 type Ext uint32
 
 const (
-	UXTB = Ext(0 << 13)
-	UXTH = Ext(1 << 13)
-	UXTW = Ext(2 << 13)
-	UXTX = Ext(3 << 13)
-	SXTB = Ext(4 << 13)
-	SXTH = Ext(5 << 13)
-	SXTW = Ext(6 << 13)
-	SXTX = Ext(7 << 13)
+	UB = Ext(0 << 13)
+	UH = Ext(1 << 13)
+	UW = Ext(2 << 13)
+	UX = Ext(3 << 13)
+	SB = Ext(4 << 13)
+	SH = Ext(5 << 13)
+	SW = Ext(6 << 13)
+	SX = Ext(7 << 13)
 )
 
 func SizeZeroExt(t wa.Size) Ext {
 	bit3 := uint32(t & 8)
-	return UXTW | Ext(bit3<<10)
+	return UW | Ext(bit3<<10)
 }
 
 func SizeSignExt(t wa.Size) Ext {
 	bit3 := uint32(t & 8)
-	return SXTW | Ext(bit3<<10)
+	return SW | Ext(bit3<<10)
 }
 
 type (

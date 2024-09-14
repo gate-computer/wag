@@ -68,7 +68,7 @@ func (o *outbuf) access(f *gen.Func, op in.Memory, dataReg reg.R, index operand.
 
 	o.moveUintImm32(RegScratch2, offset)
 	o.insn(in.ADDs.RdRnI6RmS2(RegScratch, RegScratch, 0, RegScratch2, 0, wa.Size64))
-	o.insn(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UXTX, RegScratch))
+	o.insn(op.OpcodeReg().RtRnSOptionRm(dataReg, RegMemoryBase, in.Unscaled, in.UX, RegScratch))
 
 	f.MapCallAddr(o.addr(&f.Text)) // Address of instruction pointer during SIGSEGV handling.
 }

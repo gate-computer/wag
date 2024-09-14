@@ -101,7 +101,7 @@ func (MacroAssembler) BranchStub(p *gen.Prog) int32 {
 func (MacroAssembler) BranchIndirect(f *gen.Func, addr reg.R) {
 	var o outbuf
 
-	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, addr, wa.Size64))
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UW, addr, wa.Size64))
 	o.insn(in.BR.Rn(RegScratch))
 	o.copy(f.Text.Extend(o.size))
 
@@ -179,7 +179,7 @@ func (o *outbuf) compareBounds(indexReg reg.R, upperBound int32) {
 		// TODO: optimize (make the move sequence conditional)
 		o.moveUintImm32(RegScratch, n)
 		o.insn(in.TBNZ.RtI14Bit(indexReg, 3, 31)) // Jump to end if index is negative.
-		o.insn(in.SUBSe.RdRnI3ExtRm(RegDiscard, indexReg, 0, in.UXTW, RegScratch, wa.Size32))
+		o.insn(in.SUBSe.RdRnI3ExtRm(RegDiscard, indexReg, 0, in.UW, RegScratch, wa.Size32))
 	}
 
 	o.insn(in.Bc.CondI19(in.LT, 2)) // Skip next instruction.
@@ -204,13 +204,13 @@ func (MacroAssembler) CallIndirect(f *gen.Func, sigIndex int32, r reg.R) {
 	o.trap(f, trap.IndirectCallIndexOutOfBounds)
 
 	o.insn(in.ADDi.RdRnI12S2(RegScratch, RegTextBase, rodata.TableAddr, 0, wa.Size64))
-	o.insn(in.LDRr.RtRnSOptionRm(r, RegScratch, in.Scaled, in.UXTW, r, wa.I64))
+	o.insn(in.LDRr.RtRnSOptionRm(r, RegScratch, in.Scaled, in.UW, r, wa.I64))
 	o.moveUintImm32(RegScratch, uint32(sigIndex))
 	o.insn(in.SUBSs.RdRnI6RmS2(RegDiscard, RegScratch, 32, r, in.LSR, wa.Size64))
 	o.insn(in.Bc.CondI19(in.EQ, 2)) // Skip trap instruction.
 	o.trap(f, trap.IndirectCallSignatureMismatch)
 
-	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, r, wa.Size64))
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UW, r, wa.Size64))
 	o.insn(in.BLR.Rn(RegScratch))
 	o.copy(f.Text.Extend(o.size))
 
@@ -264,7 +264,7 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 
 	o.insn(in.PopReg(RegScratch, wa.I32))
 	o.insn(in.CBZ.RtI19(RegScratch, 3, wa.Size32)) // Skip 2 next instructions.
-	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.Size64))
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UW, RegScratch, wa.Size64))
 	o.insn(in.BLR.Rn(RegScratch))
 	p.Map.PutCallSite(uint32(o.addr(&p.Text)), obj.Word) // Depth includes entry address.
 
@@ -274,7 +274,7 @@ func (MacroAssembler) Enter(p *gen.Prog) {
 
 	o.insn(in.PopReg(RegScratch, wa.I32))
 	o.insn(in.CBZ.RtI19(RegScratch, 3, wa.Size32)) // Skip 2 next instructions.
-	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UXTW, RegScratch, wa.Size64))
+	o.insn(in.ADDe.RdRnI3ExtRm(RegScratch, RegTextBase, 0, in.UW, RegScratch, wa.Size64))
 	o.insn(in.BLR.Rn(RegScratch))
 	p.Map.PutCallSite(uint32(o.addr(&p.Text)), 0) // No function addresses remain on stack.
 
