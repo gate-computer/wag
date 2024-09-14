@@ -141,7 +141,9 @@ func Text(w io.Writer, text []byte, textAddr uintptr, funcAddrs []uint32, ns *se
 			fmt.Fprintf(w, addrFmt, addr)
 		}
 
-		fmt.Fprint(w, "\t", strings.TrimSpace(fmt.Sprintf("%s\t%s", insn.Mnemonic, insn.OpStr)), "\n")
+		fmt.Fprint(w, "\t", strings.TrimSpace(fmt.Sprintf("%s\t%s", insn.Mnemonic, insn.OpStr)))
+		fmt.Fprintf(w, "\t\t\t; %x", insn.Bytes)
+		fmt.Fprint(w, "\n")
 
 		prevWasPad = false
 	}
