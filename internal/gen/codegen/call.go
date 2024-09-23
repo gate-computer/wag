@@ -72,7 +72,6 @@ func opCallInImportFunc(f *gen.Func, funcIndex uint32) {
 	sig := f.ImportContext.Types[f.ImportContext.Funcs[funcIndex]]
 	checkCallOperandCount(f, sig)
 	asm.CallImportVector(f, imp.VectorIndex)
-	f.MapCallAddr(f.Text.Addr)
 	opFinalizeCall(f, sig)
 }
 
@@ -177,7 +176,9 @@ func opCallMemoryRoutine(f *gen.Func, load *loader.L, op opcode.MiscOpcode, rout
 	}
 
 	asm.Call(&f.Prog, routineAddr)
-	f.MapCallAddr(f.Text.Addr)
+	if f.ImportContext == nil {
+		f.MapCallAddr(f.Text.Addr)
+	}
 
 	opDropCallOperands(f, 3)
 }
