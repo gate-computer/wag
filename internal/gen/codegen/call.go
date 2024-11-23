@@ -79,8 +79,8 @@ func genCallIndirect(f *gen.Func, load *loader.L, op opcode.Opcode) {
 	sigIndex := checkIndirectCallTypeIndex(f, op, load.Varuint32())
 	sigIndex = f.Module.GetCanonicalTypeIndex(sigIndex)
 
-	if load.Byte() != 0 {
-		pan.Panic(module.Errorf("%s: reserved byte is not zero", op))
+	if i := load.Varuint32(); i != 0 {
+		pan.Panic(module.Errorf("%s: table index %d not supported", op, i))
 	}
 
 	funcIndex := popOperand(f, wa.I32)
