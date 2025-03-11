@@ -5,6 +5,9 @@
 // Package buffer implements compile.CodeBuffer and compile.DataBuffer.
 package buffer
 
+// ErrSizeLimit (or its wrapper) is propagated by buffer methods by panicking,
+// or returned by compiler functions when used with panicking buffer
+// implementations.
 var ErrSizeLimit error = err{}
 
 type err struct{}

@@ -6,6 +6,7 @@ github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5x
 github.com/godbus/dbus/v5 v5.1.0 h1:4KLkAxT3aOY8Li4FRJe/KvhoNFFxo0m6fNuFUO8QJUk=
 github.com/godbus/dbus/v5 v5.1.0/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
+github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/knightsc/gapstone v0.0.0-20211014144438-5e0e64002a6e h1:6J5obSn9umEThiYzWzndcPOZR0Qj/sVCZpH6V1G7yNE=
 github.com/knightsc/gapstone v0.0.0-20211014144438-5e0e64002a6e/go.mod h1:1K5hEzsMBLTPdRJKEHqBFJ8Zt2VRqDhomcQ11KH0WW4=
 golang.org/x/sys v0.25.0 h1:r+8e+loiHxRqhXVl6ML1nO3l1+oFoWbnlu2Ehimmi34=
@@ -14,10 +15,8 @@ google.golang.org/protobuf v1.34.2 h1:6xV6lTsCfpGD21XK49h7MhtcApnLqkfYgPcdHftf6h
 google.golang.org/protobuf v1.34.2/go.mod h1:qYOHts0dSfpeUzUFpOMr/WGzszTmLH+DiWniOlNbLDw=
 import.name/lock v0.0.0-20211205191324-f24933776f0b h1:BGZe3RGI6lRASOz5fdX9i00k9f5BXdWMG4DG7qohCAY=
 import.name/lock v0.0.0-20211205191324-f24933776f0b/go.mod h1:A/P+1darHq1WWQZaqhNcXx0mdLynmjtDPIu6g0ZxuX8=
-import.name/make v0.0.0-20220104073727-8e6e5ea95bef h1:Qz57EU65fEJtsfZj+LM5gO+lf5ShciwqBDNUpTNMU7E=
-import.name/make v0.0.0-20220104073727-8e6e5ea95bef/go.mod h1:lJxYlYvf7VgXqrXO0XjrpDOdBfVluCfJHS/g9bK+/qw=
-import.name/pan v0.2.0 h1:wSKQfOXNKHhol1Hf3gyo6kmoAmFe0vp3Y0jsSpykPqQ=
-import.name/pan v0.2.0/go.mod h1:jzAC3o4KYbMoLWPgtxfDXjtZxa+JikGUdbQGgaDqf7U=
+import.name/pan v0.3.0 h1:AOyiNu/zWV3BHyDspOkpdzdWdBrlb87+LGH4fSwy3k4=
+import.name/pan v0.3.0/go.mod h1:jzAC3o4KYbMoLWPgtxfDXjtZxa+JikGUdbQGgaDqf7U=
 kernel.org/pub/linux/libs/security/libcap/cap v1.2.66 h1:3P0DgIuplTGQ4dQdbBSVN0bALFZ4KtE1PndMh1SyEIM=
 kernel.org/pub/linux/libs/security/libcap/cap v1.2.66/go.mod h1:uBDKZw0kXu6ULhetpF19Z7izd74o3u0nO2dXIPQGmb0=
 kernel.org/pub/linux/libs/security/libcap/psx v1.2.66 h1:ikIhPzfkSSAEwBOU+2DWhoF+xnGUhvlMTfQjBVhvzQY=

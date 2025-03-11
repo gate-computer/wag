@@ -17,9 +17,9 @@ import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
-	"import.name/pan"
 )
 
 const (

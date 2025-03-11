@@ -14,11 +14,9 @@ import (
 	"gate.computer/wag/internal/count"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
-	"import.name/pan"
-
-	. "import.name/pan/mustcheck"
 )
 
 // rootLib has a dummy function.
@@ -44,7 +42,7 @@ type Library struct {
 
 func (m *Module) AsLibrary() (lib Library, err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	lib = m.asLibrary()
@@ -82,7 +80,7 @@ func (m *Module) asLibrary() Library {
 
 func (lib *Library) LoadSections(r Loader) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	lib.loadSections(loader.Get(r))
@@ -124,7 +122,7 @@ func (lib *Library) loadSections(load *loader.L) {
 	}
 
 	data := new(DataConfig)
-	Check(LoadDataSection(data, load, mod))
+	pan.Check(LoadDataSection(data, load, mod))
 	if len(data.GlobalsMemory.Bytes()) > 0 {
 		pan.Panic(module.Error("library contains data"))
 	}

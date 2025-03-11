@@ -10,9 +10,9 @@ import (
 	"gate.computer/wag/internal/gen/storage"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
-	"import.name/pan"
 )
 
 func loadLocalIndex(f *gen.Func, load *loader.L, op opcode.Opcode) uint32 {

@@ -7,8 +7,6 @@ package buffer
 import (
 	"encoding/binary"
 	"errors"
-
-	"import.name/pan"
 )
 
 // Dynamic is a variable-capacity buffer.  The default value is a valid buffer.
@@ -72,7 +70,7 @@ func (d *Dynamic) Extend(addLen int) []byte {
 
 	if size := offset + addLen; size <= cap(d.buf) {
 		if size < offset { // Check for overflow
-			pan.Panic(errors.New("buffer size out of range"))
+			panic(errors.New("buffer size out of range"))
 		}
 
 		d.buf = d.buf[:size]

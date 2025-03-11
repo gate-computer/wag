@@ -13,9 +13,8 @@ import (
 	"gate.computer/wag/buffer"
 	werrors "gate.computer/wag/errors"
 	"gate.computer/wag/errors/errordata"
-	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/module"
-	"import.name/pan"
+	"gate.computer/wag/internal/pan"
 )
 
 func TestPublicError(t *testing.T) {
@@ -40,7 +39,7 @@ func TestModuleError(t *testing.T) {
 }
 
 func TestInternalErrorEOF(t *testing.T) {
-	err := internal.Error(pan.Wrap(io.EOF))
+	err := pan.Error(pan.Wrap(io.EOF))
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Error(err)
 	}
@@ -130,7 +129,7 @@ func TestModuleErrorData(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = errordata.Deconstruct(internal.Error(pan.Wrap(io.EOF))).Reconstruct()
+	err = errordata.Deconstruct(pan.Error(pan.Wrap(io.EOF))).Reconstruct()
 	if werrors.AsModuleError(err) == nil {
 		t.Error(err)
 	}

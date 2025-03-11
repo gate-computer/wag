@@ -7,9 +7,9 @@ package initexpr
 import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/wa"
 	"gate.computer/wag/wa/opcode"
-	"import.name/pan"
 )
 
 func Read(m *module.M, load *loader.L) (importIndex int, valueBits uint64, t wa.Type) {

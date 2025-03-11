@@ -83,12 +83,10 @@ import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/internal/section"
 	"gate.computer/wag/internal/typedecode"
 	"gate.computer/wag/wa"
-	"import.name/pan"
-
-	. "import.name/pan/mustcheck"
 )
 
 // Some limits have been chosen based on the backends' limitations:
@@ -210,7 +208,7 @@ type Module struct {
 // data.
 func LoadInitialSections(config *ModuleConfig, r Loader) (m Module, err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	m = loadInitialSections(config, loader.Get(r))
@@ -228,7 +226,7 @@ func loadInitialSections(config *ModuleConfig, load *loader.L) (m Module) {
 	}
 
 	var header module.Header
-	Check(encodingbinary.Read(load, encodingbinary.LittleEndian, &header))
+	pan.Check(encodingbinary.Read(load, encodingbinary.LittleEndian, &header))
 	if header.MagicNumber != module.MagicNumber {
 		pan.Panic(module.Error("not a WebAssembly module"))
 	}
@@ -245,7 +243,7 @@ func loadInitialSections(config *ModuleConfig, load *loader.L) (m Module) {
 		if err == io.EOF {
 			return
 		}
-		Check(err)
+		pan.Check(err)
 
 		id := module.SectionID(sectionID)
 
@@ -286,7 +284,7 @@ var initialSectionLoaders = [module.SectionElement + 1]func(*Module, *ModuleConf
 
 func loadCustomSection(m *Module, config *ModuleConfig, payloadSize uint32, load *loader.L) bool {
 	if config.CustomSectionLoader == nil {
-		Must(io.CopyN(io.Discard, load, int64(payloadSize)))
+		pan.Must(io.CopyN(io.Discard, load, int64(payloadSize)))
 		return false
 	}
 
@@ -294,7 +292,7 @@ func loadCustomSection(m *Module, config *ModuleConfig, payloadSize uint32, load
 	if err == section.Unwrapped {
 		return true
 	}
-	Check(err)
+	pan.Check(err)
 	return false
 }
 
@@ -684,7 +682,7 @@ type CodeConfig struct {
 // If CodeBuffer panics with an error, it will be returned by this function.
 func LoadCodeSection(config *CodeConfig, r Loader, mod Module, lib Library) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	loadCodeSection(config, loader.Get(r), mod, &lib.l)
@@ -750,7 +748,7 @@ type DataConfig struct {
 // If DataBuffer panics with an error, it will be returned by this function.
 func LoadDataSection(config *DataConfig, r Loader, mod Module) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	loadDataSection(config, loader.Get(r), mod)
@@ -805,7 +803,7 @@ func loadDataSection(config *DataConfig, load *loader.L, mod Module) {
 // ValidateDataSection reads a WebAssembly module's data section.
 func ValidateDataSection(config *Config, r Loader, mod Module) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	validateDataSection(config, loader.Get(r), mod)
@@ -835,7 +833,7 @@ func validateDataSection(config *Config, load *loader.L, mod Module) {
 // LoadCustomSections reads WebAssembly module's extension sections.
 func LoadCustomSections(config *Config, r Loader) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	loadCustomSections(config, loader.Get(r))

@@ -7,7 +7,7 @@ package link
 import (
 	"errors"
 
-	"import.name/pan"
+	"gate.computer/wag/internal/pan"
 )
 
 type L struct {

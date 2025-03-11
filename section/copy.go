@@ -10,6 +10,7 @@ import (
 
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/loader"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/internal/section"
 )
 
@@ -26,7 +27,7 @@ func CopyStandardSection(w io.Writer, l Loader, id ID, customLoader func(r Reade
 	if internal.DontPanic() {
 		defer func() {
 			if x := recover(); x != nil {
-				err = internal.Error(x)
+				err = pan.Error(x)
 			}
 		}()
 	}
@@ -51,7 +52,7 @@ func SkipCustomSections(l Loader, customLoader func(Reader, uint32) error) (err 
 	if internal.DontPanic() {
 		defer func() {
 			if x := recover(); x != nil {
-				err = internal.Error(x)
+				err = pan.Error(x)
 			}
 		}()
 	}

@@ -11,7 +11,7 @@ import (
 	"gate.computer/wag/internal"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
-	"import.name/pan"
+	"gate.computer/wag/internal/pan"
 )
 
 const (
@@ -40,7 +40,7 @@ type NameSection struct {
 // Load "name" section.
 func (ns *NameSection) Load(_ string, r Reader, length uint32) (err error) {
 	if internal.DontPanic() {
-		defer func() { err = internal.Error(recover()) }()
+		defer func() { err = pan.Error(recover()) }()
 	}
 
 	load, ok := r.(*loader.L)

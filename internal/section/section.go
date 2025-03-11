@@ -12,9 +12,7 @@ import (
 	"gate.computer/wag/binary"
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
-	"import.name/pan"
-
-	. "import.name/pan/mustcheck"
+	"gate.computer/wag/internal/pan"
 )
 
 var Unwrapped = errors.New("section unwrapped") //lint:ignore ST1012 special
@@ -40,7 +38,7 @@ func Find(
 		if err == io.EOF {
 			return sectionOffset, 0
 		}
-		Check(err)
+		pan.Check(err)
 
 		id := module.SectionID(sectionID)
 
@@ -55,9 +53,9 @@ func Find(
 				if err == Unwrapped {
 					partial = true
 				}
-				Check(err)
+				pan.Check(err)
 			} else {
-				Must(io.CopyN(io.Discard, load, int64(payloadSize)))
+				pan.Must(io.CopyN(io.Discard, load, int64(payloadSize)))
 			}
 
 			CheckConsumption(load, payloadOffset, payloadSize, partial)
@@ -85,7 +83,7 @@ func LoadPayloadSize(
 	}
 
 	if mapper != nil {
-		Check(mapper.PutSection(byte(id), sectionOffset, uint32(sectionSize), payloadSize))
+		pan.Check(mapper.PutSection(byte(id), sectionOffset, uint32(sectionSize), payloadSize))
 	}
 
 	return payloadSize

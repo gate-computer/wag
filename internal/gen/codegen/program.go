@@ -20,9 +20,9 @@ import (
 	"gate.computer/wag/internal/loader"
 	"gate.computer/wag/internal/module"
 	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/object/abi"
 	"gate.computer/wag/trap"
-	"import.name/pan"
 )
 
 func GenProgram(

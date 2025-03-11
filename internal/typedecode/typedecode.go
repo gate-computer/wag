@@ -6,8 +6,8 @@ package typedecode
 
 import (
 	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/wa"
-	"import.name/pan"
 )
 
 var valueTypes = [4]wa.Type{

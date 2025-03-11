@@ -13,8 +13,8 @@ import (
 	"gate.computer/wag/internal/gen/link"
 	"gate.computer/wag/internal/isa/arm64/in"
 	"gate.computer/wag/internal/module"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/wa"
-	"import.name/pan"
 )
 
 const (

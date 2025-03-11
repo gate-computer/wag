@@ -14,8 +14,8 @@ import (
 	"gate.computer/wag/internal/gen/regalloc"
 	"gate.computer/wag/internal/gen/storage"
 	"gate.computer/wag/internal/obj"
+	"gate.computer/wag/internal/pan"
 	"gate.computer/wag/wa"
-	"import.name/pan"
 )
 
 type Block struct {
